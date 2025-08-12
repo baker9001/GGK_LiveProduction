@@ -5,11 +5,12 @@ import {
   Building2, Users, MapPin, Edit, ChevronDown, ChevronRight,
   Plus, X, Save, Trash2, School, Briefcase, GraduationCap,
   Calendar, BookOpen, Grid3x3, Search, Filter, Settings,
-  ChevronUp, Activity, TrendingUp, UserCheck
+  ChevronUp, Activity, TrendingUp, UserCheck, AlertCircle, Loader2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 import { toast } from '../../../components/shared/Toast';
+import { Button } from '../../../components/shared/Button';
 
 // Types
 interface Organisation {
@@ -71,6 +72,8 @@ interface Section {
   capacity: number;
   current_students: number;
   class_teacher?: string;
+  room_number?: string;
+  building?: string;
 }
 
 // Color themes for different org types
@@ -101,35 +104,57 @@ export default function OrganisationManagement() {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedOrg, setSelectedOrg] = useState<Organisation | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingOrg, setEditingOrg] = useState<Organisation | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDepartments, setShowDepartments] = useState(false);
   const [showPositions, setShowPositions] = useState(false);
   const [showGrades, setShowGrades] = useState(false);
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+
+  // Fetch user's company ID
+  useEffect(() => {
+    const fetchUserCompany = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: entityUser } = await supabase
+            .from('entity_users')
+            .select('company_id')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (entityUser) {
+            setUserCompanyId(entityUser.company_id);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user company:', error);
+      }
+    };
+    
+    fetchUserCompany();
+  }, []);
 
   // Fetch organisation hierarchy
-  const { data: organisations, isLoading } = useQuery<Organisation[]>(
-    ['organisations'],
+  const { data: organisations, isLoading, error: orgError, refetch } = useQuery<Organisation[]>(
+    ['organisations', userCompanyId],
     async () => {
-      // Get current user's company
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: entityUser } = await supabase
-        .from('entity_users')
-        .select('company_id')
-        .eq('user_id', userData.user?.id)
-        .single();
+      if (!userCompanyId) {
+        throw new Error('No company associated with user');
+      }
 
-      if (!entityUser) throw new Error('Company not found');
-
-      // Fetch organisation hierarchy
+      // Fetch organisation hierarchy from database
       const { data, error } = await supabase
         .from('organisation_units')
         .select('*')
-        .eq('company_id', entityUser.company_id)
+        .eq('company_id', userCompanyId)
         .order('parent_id', { ascending: true })
         .order('name');
 
       if (error) throw error;
+      if (!data || data.length === 0) return [];
 
       // Build hierarchy
       const buildHierarchy = (items: any[], parentId: string | null = null): Organisation[] => {
@@ -141,12 +166,24 @@ export default function OrganisationManagement() {
           }));
       };
 
-      return buildHierarchy(data || []);
+      const hierarchy = buildHierarchy(data);
+      
+      // Auto-expand root nodes
+      if (hierarchy.length > 0) {
+        setExpandedNodes(new Set(hierarchy.map(org => org.id)));
+      }
+      
+      return hierarchy;
+    },
+    {
+      enabled: !!userCompanyId,
+      retry: 2,
+      refetchOnWindowFocus: false
     }
   );
 
   // Fetch departments for selected org
-  const { data: departments } = useQuery<Department[]>(
+  const { data: departments, isLoading: loadingDepts } = useQuery<Department[]>(
     ['departments', selectedOrg?.id],
     async () => {
       if (!selectedOrg) return [];
@@ -160,11 +197,14 @@ export default function OrganisationManagement() {
       if (error) throw error;
       return data || [];
     },
-    { enabled: !!selectedOrg && showDepartments }
+    { 
+      enabled: !!selectedOrg && showDepartments,
+      retry: 1
+    }
   );
 
   // Fetch positions for selected org
-  const { data: positions } = useQuery<Position[]>(
+  const { data: positions, isLoading: loadingPositions } = useQuery<Position[]>(
     ['positions', selectedOrg?.id],
     async () => {
       if (!selectedOrg) return [];
@@ -178,11 +218,14 @@ export default function OrganisationManagement() {
       if (error) throw error;
       return data || [];
     },
-    { enabled: !!selectedOrg && showPositions }
+    { 
+      enabled: !!selectedOrg && showPositions,
+      retry: 1
+    }
   );
 
   // Fetch grades for school
-  const { data: grades } = useQuery<Grade[]>(
+  const { data: grades, isLoading: loadingGrades } = useQuery<Grade[]>(
     ['grades', selectedOrg?.id],
     async () => {
       if (!selectedOrg || selectedOrg.type !== 'school') return [];
@@ -194,10 +237,11 @@ export default function OrganisationManagement() {
         .order('level');
 
       if (gradesError) throw gradesError;
+      if (!gradesData || gradesData.length === 0) return [];
 
       // Fetch sections for each grade
       const gradesWithSections = await Promise.all(
-        (gradesData || []).map(async (grade) => {
+        gradesData.map(async (grade) => {
           const { data: sections } = await supabase
             .from('grade_sections')
             .select('*')
@@ -213,7 +257,84 @@ export default function OrganisationManagement() {
 
       return gradesWithSections;
     },
-    { enabled: !!selectedOrg && selectedOrg.type === 'school' && showGrades }
+    { 
+      enabled: !!selectedOrg && selectedOrg.type === 'school' && showGrades,
+      retry: 1
+    }
+  );
+
+  // Create new organisation mutation
+  const createOrgMutation = useMutation(
+    async (orgData: Partial<Organisation>) => {
+      const { data, error } = await supabase
+        .from('organisation_units')
+        .insert([{
+          ...orgData,
+          company_id: userCompanyId
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['organisations']);
+        toast.success('Organisation created successfully');
+        setShowModal(false);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to create organisation');
+      }
+    }
+  );
+
+  // Update organisation mutation
+  const updateOrgMutation = useMutation(
+    async ({ id, ...updates }: Partial<Organisation>) => {
+      const { data, error } = await supabase
+        .from('organisation_units')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['organisations']);
+        toast.success('Organisation updated successfully');
+        setEditMode(false);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to update organisation');
+      }
+    }
+  );
+
+  // Delete organisation mutation
+  const deleteOrgMutation = useMutation(
+    async (id: string) => {
+      const { error } = await supabase
+        .from('organisation_units')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['organisations']);
+        toast.success('Organisation deleted successfully');
+        setShowDetailsPanel(false);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to delete organisation');
+      }
+    }
   );
 
   const toggleNode = (id: string) => {
@@ -232,6 +353,12 @@ export default function OrganisationManagement() {
     setEditMode(false);
   };
 
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this organisation and all its sub-units? This action cannot be undone.')) {
+      deleteOrgMutation.mutate(id);
+    }
+  };
+
   // Organisation Card Component
   const OrgCard: React.FC<{ org: Organisation; level: number }> = ({ org, level }) => {
     const isExpanded = expandedNodes.has(org.id);
@@ -242,7 +369,7 @@ export default function OrganisationManagement() {
     return (
       <div className="org-node">
         <div className={`
-          org-card relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 
+          org-card group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 
           ${selectedOrg?.id === org.id ? theme.border : 'border-gray-200 dark:border-gray-700'}
           hover:shadow-lg transition-all duration-200 cursor-pointer
           ${level === 0 ? 'min-w-[300px]' : 'min-w-[250px]'}
@@ -280,16 +407,16 @@ export default function OrganisationManagement() {
                   handleOrgClick(org);
                   setEditMode(true);
                 }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-all"
               >
-                <Edit className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                <Edit className="w-4 h-4" />
               </button>
             </div>
 
             {/* Stats */}
             <div className="text-sm text-gray-600 dark:text-gray-400">
               <span className="font-medium text-gray-900 dark:text-white">
-                {org.employee_count}
+                {org.employee_count || 0}
               </span> Employees
               {org.student_count && (
                 <span className="ml-3">
@@ -322,19 +449,44 @@ export default function OrganisationManagement() {
         {hasChildren && isExpanded && (
           <div className="org-children mt-8 ml-12 relative">
             {/* Connection line */}
-            <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-gray-300 dark:bg-gray-600" />
+            <div 
+              className="absolute bg-gray-300 dark:bg-gray-600" 
+              style={{ 
+                top: '-2rem',
+                left: '50%',
+                width: '2px',
+                height: '2rem',
+                transform: 'translateX(-50%)'
+              }}
+            />
             
             <div className="flex gap-6 relative">
               {/* Horizontal connection line */}
               {org.children!.length > 1 && (
-                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-300 dark:bg-gray-600" 
-                     style={{ top: '-0.125rem' }} />
+                <div 
+                  className="absolute bg-gray-300 dark:bg-gray-600" 
+                  style={{ 
+                    top: '-1px',
+                    left: '0',
+                    right: '0',
+                    height: '2px'
+                  }}
+                />
               )}
               
-              {org.children!.map((child, index) => (
+              {org.children!.map((child) => (
                 <div key={child.id} className="relative">
                   {/* Vertical connection from horizontal line to card */}
-                  <div className="absolute left-1/2 -top-2 w-0.5 h-2 bg-gray-300 dark:bg-gray-600" />
+                  <div 
+                    className="absolute bg-gray-300 dark:bg-gray-600" 
+                    style={{ 
+                      left: '50%',
+                      top: '-8px',
+                      width: '2px',
+                      height: '8px',
+                      transform: 'translateX(-50%)'
+                    }}
+                  />
                   <OrgCard org={child} level={level + 1} />
                 </div>
               ))}
@@ -406,15 +558,15 @@ export default function OrganisationManagement() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Employees</span>
-                  <span className="text-sm font-medium">{selectedOrg.employee_count}</span>
+                  <span className="text-sm font-medium">{selectedOrg.employee_count || 0}</span>
                 </div>
-                {selectedOrg.student_count && (
+                {selectedOrg.student_count !== undefined && (
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Students</span>
                     <span className="text-sm font-medium">{selectedOrg.student_count}</span>
                   </div>
                 )}
-                {selectedOrg.teacher_count && (
+                {selectedOrg.teacher_count !== undefined && (
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Teachers</span>
                     <span className="text-sm font-medium">{selectedOrg.teacher_count}</span>
@@ -504,93 +656,128 @@ export default function OrganisationManagement() {
               </div>
 
               {/* Departments List */}
-              {showDepartments && departments && (
+              {showDepartments && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium">Departments ({departments.length})</h4>
-                    <button className="text-xs text-blue-600 hover:text-blue-700">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {departments.map(dept => (
-                    <div key={dept.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-sm">{dept.name}</p>
-                          <p className="text-xs text-gray-500">{dept.code}</p>
-                          {dept.head_of_department && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Head: {dept.head_of_department}
-                            </p>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          {dept.employee_count} employees
-                        </span>
-                      </div>
+                  {loadingDepts ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
                     </div>
-                  ))}
+                  ) : departments && departments.length > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium">Departments ({departments.length})</h4>
+                        <button className="text-xs text-blue-600 hover:text-blue-700">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {departments.map(dept => (
+                        <div key={dept.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-sm">{dept.name}</p>
+                              <p className="text-xs text-gray-500">{dept.code}</p>
+                              {dept.head_of_department && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Head: {dept.head_of_department}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {dept.employee_count} employees
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No departments found</p>
+                  )}
                 </div>
               )}
 
               {/* Positions List */}
-              {showPositions && positions && (
+              {showPositions && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium">Positions ({positions.length})</h4>
-                    <button className="text-xs text-blue-600 hover:text-blue-700">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {positions.map(position => (
-                    <div key={position.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-sm">{position.title}</p>
-                          <p className="text-xs text-gray-500">Level {position.level}</p>
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          {position.employee_count} employees
-                        </span>
-                      </div>
+                  {loadingPositions ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
                     </div>
-                  ))}
+                  ) : positions && positions.length > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium">Positions ({positions.length})</h4>
+                        <button className="text-xs text-blue-600 hover:text-blue-700">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {positions.map(position => (
+                        <div key={position.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium text-sm">{position.title}</p>
+                              <p className="text-xs text-gray-500">Level {position.level}</p>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {position.employee_count} employees
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No positions found</p>
+                  )}
                 </div>
               )}
 
               {/* Grades List */}
-              {showGrades && grades && (
+              {showGrades && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium">Grades & Classes ({grades.length})</h4>
-                    <button className="text-xs text-blue-600 hover:text-blue-700">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {grades.map(grade => (
-                    <div key={grade.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                      <div className="mb-2">
-                        <p className="font-medium text-sm">{grade.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {grade.student_count} students • {grade.sections.length} sections
-                        </p>
-                      </div>
-                      {grade.sections.length > 0 && (
-                        <div className="space-y-1 ml-3 border-l-2 border-gray-200 dark:border-gray-600 pl-3">
-                          {grade.sections.map(section => (
-                            <div key={section.id} className="flex justify-between text-xs">
-                              <span className="text-gray-600 dark:text-gray-400">
-                                Section {section.name}
-                              </span>
-                              <span className="text-gray-500">
-                                {section.current_students}/{section.capacity} students
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                  {loadingGrades ? (
+                    <div className="text-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
                     </div>
-                  ))}
+                  ) : grades && grades.length > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium">Grades & Classes ({grades.length})</h4>
+                        <button className="text-xs text-blue-600 hover:text-blue-700">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {grades.map(grade => (
+                        <div key={grade.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                          <div className="mb-2">
+                            <p className="font-medium text-sm">{grade.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {grade.student_count} students • {grade.sections.length} sections
+                            </p>
+                          </div>
+                          {grade.sections.length > 0 && (
+                            <div className="space-y-1 ml-3 border-l-2 border-gray-200 dark:border-gray-600 pl-3">
+                              {grade.sections.map(section => (
+                                <div key={section.id} className="flex justify-between text-xs">
+                                  <span className="text-gray-600 dark:text-gray-400">
+                                    Section {section.name}
+                                    {section.class_teacher && (
+                                      <span className="text-gray-500 ml-2">
+                                        ({section.class_teacher})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-gray-500">
+                                    {section.current_students}/{section.capacity} students
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No grades found</p>
+                  )}
                 </div>
               )}
             </div>
@@ -601,15 +788,22 @@ export default function OrganisationManagement() {
         <div className="p-6 border-t dark:border-gray-700">
           <div className="flex gap-3">
             <button
-              onClick={() => setEditMode(true)}
+              onClick={() => {
+                if (editMode) {
+                  updateOrgMutation.mutate(selectedOrg);
+                } else {
+                  setEditMode(true);
+                }
+              }}
               className={`flex-1 px-4 py-2 ${theme.bg} text-white rounded-lg hover:opacity-90 transition`}
             >
-              Edit Organisation
+              {editMode ? 'Save Changes' : 'Edit Organisation'}
             </button>
             <button
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+              onClick={() => handleDelete(selectedOrg.id)}
+              className="px-4 py-2 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition"
             >
-              View Reports
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -617,12 +811,35 @@ export default function OrganisationManagement() {
     );
   };
 
-  if (isLoading) {
+  // Loading state
+  if (!userCompanyId || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading organisation structure...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
+          <p className="mt-4 text-gray-600 dark:text-gray-400">
+            {!userCompanyId ? 'Identifying your company...' : 'Loading organisation structure...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (orgError && !organisations) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Unable to Load Organisation Data
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {orgError.message || 'An error occurred while loading your organisation structure.'}
+          </p>
+          <Button onClick={() => refetch()} variant="primary">
+            Try Again
+          </Button>
         </div>
       </div>
     );
@@ -643,15 +860,16 @@ export default function OrganisationManagement() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                <Search className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                <Filter className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                <Settings className="w-5 h-5" />
-              </button>
+              <Button
+                onClick={() => {
+                  setEditingOrg(null);
+                  setShowModal(true);
+                }}
+                leftIcon={<Plus className="w-4 h-4" />}
+                variant="primary"
+              >
+                Add Organisation
+              </Button>
             </div>
           </div>
         </div>
@@ -669,10 +887,22 @@ export default function OrganisationManagement() {
           ) : (
             <div className="text-center py-12">
               <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">No organisations found</p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                Start by adding your company structure
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No Organisations Found
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Start building your organisation structure by adding your first unit
               </p>
+              <Button
+                onClick={() => {
+                  setEditingOrg(null);
+                  setShowModal(true);
+                }}
+                leftIcon={<Plus className="w-4 h-4" />}
+                variant="primary"
+              >
+                Create First Organisation
+              </Button>
             </div>
           )}
         </div>
@@ -681,37 +911,43 @@ export default function OrganisationManagement() {
       {/* Details Panel */}
       <DetailsPanel />
 
-      <style jsx>{`
-        .org-node {
-          position: relative;
-        }
-        
-        .org-card {
-          position: relative;
-          z-index: 10;
-        }
-        
-        .org-children {
-          position: relative;
-        }
-        
-        /* Connection lines styling */
-        .org-children::before {
-          content: '';
-          position: absolute;
-          top: -2rem;
-          left: 50%;
-          width: 1px;
-          height: 2rem;
-          background-color: rgb(209 213 219);
-        }
-        
-        @media (prefers-color-scheme: dark) {
-          .org-children::before {
-            background-color: rgb(75 85 99);
-          }
-        }
-      `}</style>
+      {/* Add/Edit Modal - Placeholder for now */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full">
+            <div className="p-6 border-b dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {editingOrg ? 'Edit Organisation' : 'Add Organisation'}
+              </h3>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 dark:text-gray-400">
+                Organisation form will be implemented here
+              </p>
+            </div>
+            <div className="p-6 border-t dark:border-gray-700 flex justify-end gap-3">
+              <Button
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingOrg(null);
+                }}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  // Implement save logic
+                  setShowModal(false);
+                }}
+                variant="primary"
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
