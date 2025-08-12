@@ -1,3 +1,6 @@
+//home/project/src/components/shared/ModuleNavigation.tsx
+
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Settings, Building, GraduationCap, Users } from 'lucide-react';
