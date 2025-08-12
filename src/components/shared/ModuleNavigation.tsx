@@ -16,7 +16,7 @@ interface Module {
   comingSoon?: boolean;
 }
 
-const ALL_MODULES: Module[] = [
+const MODULES: Module[] = [
   {
     id: 'system-admin',
     name: 'System Admin',
