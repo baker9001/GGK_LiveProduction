@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Loader2, FlaskConical } from 'lucide-react';
+import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Loader2, FlaskConical, Mail } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -41,6 +41,7 @@ type AdminUser = {
   role_name: string;
   status: 'active' | 'inactive';
   created_at: string;
+  email_verified?: boolean;
 };
 
 type Role = {
@@ -147,10 +148,25 @@ export default function UsersTab() {
 
       if (error) throw error;
 
-      return data?.map(user => ({
-        ...user,
-        role_name: user.roles?.name || 'Unknown'
-      })) || [];
+      // Check verification status from users table
+      const enhancedData = await Promise.all(
+        (data || []).map(async (user) => {
+          // Get verification status from users table
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email_verified')
+            .eq('id', user.id)
+            .single();
+
+          return {
+            ...user,
+            role_name: user.roles?.name || 'Unknown',
+            email_verified: userData?.email_verified || false
+          };
+        })
+      );
+
+      return enhancedData;
     },
     {
       keepPreviousData: true,
@@ -181,7 +197,7 @@ export default function UsersTab() {
       let testUser;
       
       if (generalUser && !userError) {
-        // User exists in general users table (teacher, student, etc.)
+        // User exists in general users table
         const userRole = mapUserTypeToRole(generalUser.user_type || 'viewer');
         
         // Try to get name from metadata, otherwise use admin name
@@ -212,7 +228,7 @@ export default function UsersTab() {
           name: adminUser.name,
           email: adminUser.email,
           role: roleMapping[adminUser.role_name] || 'VIEWER',
-          userType: 'admin'
+          userType: 'system'
         };
       }
 
@@ -223,6 +239,41 @@ export default function UsersTab() {
     } catch (error) {
       console.error('Error starting test mode:', error);
       toast.error('Failed to start test mode');
+    }
+  };
+
+  // Resend verification email
+  const resendVerificationEmail = async (user: AdminUser) => {
+    try {
+      // Use regular auth.signUp to trigger verification email
+      const { error } = await supabase.auth.signUp({
+        email: user.email,
+        password: Math.random().toString(36).slice(-12), // Random password, user will reset it
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/verify`,
+          data: {
+            name: user.name,
+            user_type: 'system'
+          }
+        }
+      });
+
+      if (error && error.message.includes('already registered')) {
+        // User exists, use resend
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email: user.email
+        });
+        
+        if (resendError) throw resendError;
+      } else if (error) {
+        throw error;
+      }
+      
+      toast.success('Verification email sent successfully');
+    } catch (error) {
+      console.error('Error resending verification:', error);
+      toast.error('Failed to send verification email');
     }
   };
 
@@ -242,13 +293,13 @@ export default function UsersTab() {
       const validatedData = adminUserSchema.parse(data);
       
       if (editingUser) {
-        // Check if email is being changed
+        // UPDATE EXISTING USER
         const emailChanged = editingUser.email !== validatedData.email;
         
         if (emailChanged) {
           // Check if the new email already exists
           const { data: existingUser, error: queryError } = await supabase
-            .from('admin_users')
+            .from('users')
             .select('id')
             .eq('email', validatedData.email)
             .neq('id', editingUser.id)
@@ -263,7 +314,8 @@ export default function UsersTab() {
           }
         }
 
-        const { error } = await supabase
+        // Update admin_users table
+        const { error: adminError } = await supabase
           .from('admin_users')
           .update({
             name: validatedData.name,
@@ -273,12 +325,36 @@ export default function UsersTab() {
           })
           .eq('id', editingUser.id);
 
-        if (error) throw error;
+        if (adminError) throw adminError;
+
+        // Update users table
+        const { error: usersError } = await supabase
+          .from('users')
+          .update({
+            email: validatedData.email,
+            is_active: validatedData.status === 'active',
+            updated_at: new Date().toISOString(),
+            raw_user_meta_data: {
+              name: validatedData.name,
+              full_name: validatedData.name
+            }
+          })
+          .eq('id', editingUser.id);
+
+        if (usersError) console.error('Failed to update users table:', usersError);
+
+        // If email changed and user is active, they need to re-verify
+        if (emailChanged && validatedData.status === 'active') {
+          toast.info('User will need to verify their new email address');
+        }
+
         return { ...editingUser, ...validatedData };
+        
       } else {
-        // Check if email exists before creating new user
+        // CREATE NEW USER
+        // Check if email exists
         const { data: existingUser, error: queryError } = await supabase
-          .from('admin_users')
+          .from('users')
           .select('id')
           .eq('email', validatedData.email)
           .maybeSingle();
@@ -291,24 +367,84 @@ export default function UsersTab() {
           throw new Error('This email is already in use');
         }
 
-        // Hash the password before storing
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(validatedData.password!, salt);
+        // Generate a unique ID for the user
+        const userId = crypto.randomUUID();
 
-        const { data: newUser, error } = await supabase
-          .from('admin_users')
-          .insert([{
-            name: validatedData.name,
-            email: validatedData.email,
-            role_id: validatedData.role_id,
-            status: validatedData.status,
-            password_hash: hashedPassword
-          }])
-          .select()
-          .single();
+        try {
+          // 1. Insert into users table (centralized)
+          const { error: usersError } = await supabase
+            .from('users')
+            .insert({
+              id: userId,
+              email: validatedData.email,
+              user_type: 'system', // Changed from 'admin' to 'system' as requested
+              is_active: validatedData.status === 'active',
+              email_verified: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              raw_user_meta_data: {
+                name: validatedData.name,
+                full_name: validatedData.name,
+                user_type: 'system'
+              }
+            });
 
-        if (error) throw error;
-        return newUser;
+          if (usersError) throw usersError;
+
+          // 2. Hash password and insert into admin_users table
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(validatedData.password!, salt);
+
+          const { data: newAdminUser, error: adminError } = await supabase
+            .from('admin_users')
+            .insert({
+              id: userId,
+              name: validatedData.name,
+              email: validatedData.email,
+              role_id: validatedData.role_id,
+              status: validatedData.status,
+              password_hash: hashedPassword
+            })
+            .select()
+            .single();
+
+          if (adminError) {
+            // Rollback users table if admin_users insert fails
+            await supabase.from('users').delete().eq('id', userId);
+            throw adminError;
+          }
+
+          // 3. Send verification email using Supabase Auth (if user is active)
+          if (validatedData.status === 'active') {
+            // Use signUp to create auth user and send verification email
+            const { error: authError } = await supabase.auth.signUp({
+              email: validatedData.email,
+              password: validatedData.password!,
+              options: {
+                emailRedirectTo: `${window.location.origin}/auth/verify`,
+                data: {
+                  id: userId, // Link to our users table
+                  name: validatedData.name,
+                  user_type: 'system'
+                }
+              }
+            });
+
+            if (authError && !authError.message.includes('already registered')) {
+              console.error('Auth signup error:', authError);
+              toast.warning('User created but verification email may not have been sent');
+            } else {
+              toast.success('User created and verification email sent');
+            }
+          } else {
+            toast.success('User created as inactive (no verification email sent)');
+          }
+
+          return newAdminUser;
+        } catch (error) {
+          console.error('Error creating user:', error);
+          throw error;
+        }
       }
     },
     {
@@ -357,25 +493,20 @@ export default function UsersTab() {
 
       const validatedData = passwordChangeSchema.parse(data);
       
-      // Get current user data to verify current password
-      const { data: userData, error: fetchError } = await supabase
-        .from('admin_users')
-        .select('password_hash')
-        .eq('id', editingUser.id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
       // Hash new password
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(validatedData.password, salt);
 
+      // Update password in admin_users table
       const { error } = await supabase
         .from('admin_users')
         .update({ password_hash: hashedPassword })
         .eq('id', editingUser.id);
 
       if (error) throw error;
+      
+      toast.info('Password updated. User can also reset password via email if needed.');
+      
       return editingUser;
     },
     {
@@ -406,12 +537,26 @@ export default function UsersTab() {
   // Delete users mutation
   const deleteMutation = useMutation(
     async (users: AdminUser[]) => {
-      const { error } = await supabase
-        .from('admin_users')
-        .delete()
-        .in('id', users.map(u => u.id));
+      for (const user of users) {
+        // Delete from admin_users
+        const { error: adminError } = await supabase
+          .from('admin_users')
+          .delete()
+          .eq('id', user.id);
 
-      if (error) throw error;
+        if (adminError) throw adminError;
+
+        // Delete from users table
+        const { error: usersError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', user.id);
+
+        if (usersError) console.error('Failed to delete from users table:', usersError);
+        
+        // Note: Supabase Auth user will remain but won't be able to login without users table record
+      }
+      
       return users;
     },
     {
@@ -493,7 +638,19 @@ export default function UsersTab() {
       id: 'status',
       header: 'Status',
       cell: (row: AdminUser) => (
-        <StatusBadge status={row.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={row.status} />
+          {row.status === 'active' && !row.email_verified && (
+            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full">
+              Unverified
+            </span>
+          )}
+          {row.status === 'active' && row.email_verified && (
+            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full">
+              Verified
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -510,6 +667,17 @@ export default function UsersTab() {
 
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
+      {/* Resend Verification Button - Only for active, unverified users */}
+      {row.status === 'active' && !row.email_verified && (
+        <button
+          onClick={() => resendVerificationEmail(row)}
+          className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
+          title="Resend verification email"
+        >
+          <Mail className="h-4 w-4" />
+        </button>
+      )}
+      
       {/* Test Mode Button - Only show for SSA and not in test mode */}
       {isSSA && !inTestMode && row.status === 'active' && (
         <button
@@ -563,7 +731,7 @@ export default function UsersTab() {
           }}
           leftIcon={<Plus className="h-4 w-4" />}
         >
-          Add Admin User
+          Add System User
         </Button>
       </div>
 
@@ -633,19 +801,19 @@ export default function UsersTab() {
         data={users}
         columns={columns}
         keyField="id"
-        caption="List of admin users with their roles and status"
-        ariaLabel="Admin users data table"
+        caption="List of system users with their roles and status"
+        ariaLabel="System users data table"
         loading={isLoading}
         isFetching={isFetching}
         renderActions={renderActions}
         onDelete={handleDelete}
-        emptyMessage="No admin users found"
+        emptyMessage="No system users found"
       />
 
       {/* Create/Edit User Form */}
       <SlideInForm
         key={editingUser?.id || 'new'}
-        title={editingUser ? 'Edit Admin User' : 'Create Admin User'}
+        title={editingUser ? 'Edit System User' : 'Create System User'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
@@ -702,6 +870,7 @@ export default function UsersTab() {
               label="Password"
               required
               error={formErrors.password}
+              helpText="User will receive a verification email and can change this password"
             >
               <div className="relative">
                 <Input
@@ -744,6 +913,7 @@ export default function UsersTab() {
             label="Status"
             required
             error={formErrors.status}
+            helpText="Active users will receive a verification email"
           >
             <Select
               id="status"
