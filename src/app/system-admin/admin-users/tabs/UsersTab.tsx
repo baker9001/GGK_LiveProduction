@@ -1,0 +1,847 @@
+// /src/app/system-admin/admin-users/tabs/UsersTab.tsx
+
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Loader2, FlaskConical } from 'lucide-react';
+import { supabase } from '../../../../lib/supabase';
+import { DataTable } from '../../../../components/shared/DataTable';
+import { FilterCard } from '../../../../components/shared/FilterCard';
+import { SlideInForm } from '../../../../components/shared/SlideInForm';
+import { FormField, Input, Select } from '../../../../components/shared/FormField';
+import { StatusBadge } from '../../../../components/shared/StatusBadge';
+import { Button } from '../../../../components/shared/Button';
+import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { toast } from '../../../../components/shared/Toast';
+import { startTestMode, isInTestMode, getRealAdminUser, mapUserTypeToRole } from '../../../../lib/auth';
+import bcrypt from 'bcryptjs';
+
+const adminUserSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  role_id: z.string().uuid('Please select a role'),
+  status: z.enum(['active', 'inactive'])
+});
+
+const passwordChangeSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"]
+});
+
+type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  role_id: string;
+  role_name: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+};
+
+type Role = {
+  id: string;
+  name: string;
+};
+
+interface FilterState {
+  name: string;
+  email: string;
+  role: string;
+  status: string[];
+}
+
+interface FormState {
+  name: string;
+  email: string;
+  role_id: string;
+  status: 'active' | 'inactive';
+}
+
+export default function UsersTab() {
+  const queryClient = useQueryClient();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    name: '',
+    email: '',
+    role: '',
+    status: []
+  });
+  
+  // Check if we're in test mode and if current user is SSA
+  const inTestMode = isInTestMode();
+  const realAdmin = getRealAdminUser();
+  const isSSA = realAdmin?.role === 'SSA';
+  
+  // Confirmation dialog state
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
+
+  // Form state
+  const [formState, setFormState] = useState<FormState>({
+    name: '',
+    email: '',
+    role_id: '',
+    status: 'active'
+  });
+
+  // Fetch roles with React Query
+  const { data: roles = [] } = useQuery<Role[]>(
+    ['roles'],
+    async () => {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    }
+  );
+
+  // Fetch users with React Query
+  const { 
+    data: users = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery<AdminUser[]>(
+    ['admin-users', filters],
+    async () => {
+      let query = supabase
+        .from('admin_users')
+        .select(`
+          *,
+          roles (
+            id,
+            name
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (filters.name) {
+        query = query.ilike('name', `%${filters.name}%`);
+      }
+      if (filters.email) {
+        query = query.ilike('email', `%${filters.email}%`);
+      }
+      if (filters.role) {
+        query = query.eq('role_id', filters.role);
+      }
+      if (filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return data?.map(user => ({
+        ...user,
+        role_name: user.roles?.name || 'Unknown'
+      })) || [];
+    },
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
+
+  // Function to handle test mode
+  const handleTestAsUser = async (adminUser: AdminUser) => {
+    if (!isSSA) {
+      toast.error('Only Super Admins can use test mode');
+      return;
+    }
+
+    if (inTestMode) {
+      toast.error('Already in test mode. Exit current test mode first.');
+      return;
+    }
+
+    try {
+      // First try to find this user in the general users table
+      const { data: generalUser, error: userError } = await supabase
+        .from('users')
+        .select('id, email, user_type, raw_user_meta_data')
+        .eq('email', adminUser.email)
+        .maybeSingle();
+
+      let testUser;
+      
+      if (generalUser && !userError) {
+        // User exists in general users table (teacher, student, etc.)
+        const userRole = mapUserTypeToRole(generalUser.user_type || 'viewer');
+        
+        // Try to get name from metadata, otherwise use admin name
+        let userName = adminUser.name;
+        if (generalUser.raw_user_meta_data?.name) {
+          userName = generalUser.raw_user_meta_data.name;
+        } else if (generalUser.raw_user_meta_data?.full_name) {
+          userName = generalUser.raw_user_meta_data.full_name;
+        }
+        
+        testUser = {
+          id: generalUser.id,
+          name: userName,
+          email: generalUser.email,
+          role: userRole,
+          userType: generalUser.user_type
+        };
+      } else {
+        // Admin user only - map admin role
+        const roleMapping: Record<string, any> = {
+          'Super Admin': 'SSA',
+          'Support Admin': 'SUPPORT',
+          'Viewer': 'VIEWER'
+        };
+
+        testUser = {
+          id: adminUser.id,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: roleMapping[adminUser.role_name] || 'VIEWER',
+          userType: 'admin'
+        };
+      }
+
+      // Start test mode
+      startTestMode(testUser);
+      
+      toast.success(`Starting test mode as ${testUser.name}`);
+    } catch (error) {
+      console.error('Error starting test mode:', error);
+      toast.error('Failed to start test mode');
+    }
+  };
+
+  // Create/update user mutation
+  const userMutation = useMutation(
+    async (formData: FormData) => {
+      const passwordValue = formData.get('password') as string | null;
+      
+      const data = {
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        ...(passwordValue !== null && { password: passwordValue }),
+        role_id: formData.get('role_id') as string,
+        status: formData.get('status') as 'active' | 'inactive'
+      };
+
+      const validatedData = adminUserSchema.parse(data);
+      
+      if (editingUser) {
+        // Check if email is being changed
+        const emailChanged = editingUser.email !== validatedData.email;
+        
+        if (emailChanged) {
+          // Check if the new email already exists
+          const { data: existingUser, error: queryError } = await supabase
+            .from('admin_users')
+            .select('id')
+            .eq('email', validatedData.email)
+            .neq('id', editingUser.id)
+            .maybeSingle();
+
+          if (queryError) {
+            throw new Error('Failed to check email availability');
+          }
+
+          if (existingUser) {
+            throw new Error('This email is already in use');
+          }
+        }
+
+        const { error } = await supabase
+          .from('admin_users')
+          .update({
+            name: validatedData.name,
+            email: validatedData.email,
+            role_id: validatedData.role_id,
+            status: validatedData.status
+          })
+          .eq('id', editingUser.id);
+
+        if (error) throw error;
+        return { ...editingUser, ...validatedData };
+      } else {
+        // Check if email exists before creating new user
+        const { data: existingUser, error: queryError } = await supabase
+          .from('admin_users')
+          .select('id')
+          .eq('email', validatedData.email)
+          .maybeSingle();
+
+        if (queryError) {
+          throw new Error('Failed to check email availability');
+        }
+
+        if (existingUser) {
+          throw new Error('This email is already in use');
+        }
+
+        // Hash the password before storing
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(validatedData.password!, salt);
+
+        const { data: newUser, error } = await supabase
+          .from('admin_users')
+          .insert([{
+            name: validatedData.name,
+            email: validatedData.email,
+            role_id: validatedData.role_id,
+            status: validatedData.status,
+            password_hash: hashedPassword
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return newUser;
+      }
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['admin-users']);
+        setIsFormOpen(false);
+        setEditingUser(null);
+        setFormState({
+          name: '',
+          email: '',
+          role_id: '',
+          status: 'active'
+        });
+        setFormErrors({});
+        toast.success(`User ${editingUser ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error: any) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving user:', error);
+          setFormErrors({ 
+            form: error.message || 'Failed to save user. Please try again.' 
+          });
+          toast.error('Failed to save user');
+        }
+      }
+    }
+  );
+
+  // Password change mutation
+  const passwordMutation = useMutation(
+    async (formData: FormData) => {
+      if (!editingUser) return;
+
+      const data = {
+        password: formData.get('password') as string,
+        confirmPassword: formData.get('confirmPassword') as string,
+      };
+
+      const validatedData = passwordChangeSchema.parse(data);
+      
+      // Get current user data to verify current password
+      const { data: userData, error: fetchError } = await supabase
+        .from('admin_users')
+        .select('password_hash')
+        .eq('id', editingUser.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Hash new password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(validatedData.password, salt);
+
+      const { error } = await supabase
+        .from('admin_users')
+        .update({ password_hash: hashedPassword })
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+      return editingUser;
+    },
+    {
+      onSuccess: () => {
+        setIsPasswordFormOpen(false);
+        setEditingUser(null);
+        setFormErrors({});
+        toast.success('Password updated successfully');
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error updating password:', error);
+          setFormErrors({ form: 'Failed to update password. Please try again.' });
+          toast.error('Failed to update password');
+        }
+      }
+    }
+  );
+
+  // Delete users mutation
+  const deleteMutation = useMutation(
+    async (users: AdminUser[]) => {
+      const { error } = await supabase
+        .from('admin_users')
+        .delete()
+        .in('id', users.map(u => u.id));
+
+      if (error) throw error;
+      return users;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['admin-users']);
+        setIsConfirmDialogOpen(false);
+        setUsersToDelete([]);
+        toast.success('User(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting users:', error);
+        toast.error('Failed to delete user(s)');
+        setIsConfirmDialogOpen(false);
+        setUsersToDelete([]);
+      }
+    }
+  );
+
+  // Update form state when editing user changes
+  useEffect(() => {
+    if (editingUser) {
+      setFormState({
+        name: editingUser.name,
+        email: editingUser.email,
+        role_id: editingUser.role_id,
+        status: editingUser.status
+      });
+    } else {
+      setFormState({
+        name: '',
+        email: '',
+        role_id: '',
+        status: 'active'
+      });
+    }
+  }, [editingUser]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    userMutation.mutate(new FormData(e.currentTarget));
+  };
+
+  const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    passwordMutation.mutate(new FormData(e.currentTarget));
+  };
+
+  const handleDelete = (users: AdminUser[]) => {
+    setUsersToDelete(users);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    deleteMutation.mutate(usersToDelete);
+  };
+
+  const cancelDelete = () => {
+    setIsConfirmDialogOpen(false);
+    setUsersToDelete([]);
+  };
+
+  const columns = [
+    {
+      id: 'name',
+      header: 'Name',
+      accessorKey: 'name',
+    },
+    {
+      id: 'email',
+      header: 'Email',
+      accessorKey: 'email',
+    },
+    {
+      id: 'role',
+      header: 'Role',
+      accessorKey: 'role_name',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row: AdminUser) => (
+        <StatusBadge status={row.status} />
+      ),
+    },
+    {
+      id: 'created_at',
+      header: 'Created At',
+      accessorKey: 'created_at',
+      cell: (row: AdminUser) => (
+        <span className="text-sm text-gray-900 dark:text-gray-100">
+          {new Date(row.created_at).toLocaleDateString()}
+        </span>
+      ),
+    },
+  ];
+
+  const renderActions = (row: AdminUser) => (
+    <div className="flex items-center justify-end space-x-2">
+      {/* Test Mode Button - Only show for SSA and not in test mode */}
+      {isSSA && !inTestMode && row.status === 'active' && (
+        <button
+          onClick={() => handleTestAsUser(row)}
+          className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 p-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-colors"
+          title="Test as this user"
+        >
+          <FlaskConical className="h-4 w-4" />
+        </button>
+      )}
+      
+      <button
+        onClick={() => {
+          setEditingUser(row);
+          setIsFormOpen(true);
+        }}
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        title="Edit"
+      >
+        <Edit2 className="h-4 w-4" />
+      </button>
+      
+      <button
+        onClick={() => {
+          setEditingUser(row);
+          setIsPasswordFormOpen(true);
+        }}
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        title="Change Password"
+      >
+        <Key className="h-4 w-4" />
+      </button>
+      
+      <button
+        onClick={() => handleDelete([row])}
+        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+        title="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-end items-center">
+        <Button
+          onClick={() => {
+            setEditingUser(null);
+            setIsFormOpen(true);
+          }}
+          leftIcon={<Plus className="h-4 w-4" />}
+        >
+          Add Admin User
+        </Button>
+      </div>
+
+      <FilterCard
+        title="Filters"
+        onApply={() => {}} // No need for explicit apply with React Query
+        onClear={() => {
+          setFilters({
+            name: '',
+            email: '',
+            role: '',
+            status: []
+          });
+        }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            id="name"
+            label="Name"
+          >
+            <Input
+              id="name"
+              placeholder="Search by name..."
+              value={filters.name}
+              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+            />
+          </FormField>
+
+          <FormField
+            id="email"
+            label="Email"
+          >
+            <Input
+              id="email"
+              placeholder="Search by email..."
+              value={filters.email}
+              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
+            />
+          </FormField>
+
+          <SearchableMultiSelect
+            label="Role"
+            options={roles.map(role => ({
+              value: role.id,
+              label: role.name
+            }))}
+            selectedValues={filters.role ? [filters.role] : []}
+            onChange={(values) => setFilters({ ...filters, role: values[0] || '' })}
+            isMulti={false}
+            placeholder="Select role..."
+          />
+
+          <SearchableMultiSelect
+            label="Status"
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+            selectedValues={filters.status}
+            onChange={(values) => setFilters({ ...filters, status: values })}
+            placeholder="Select status..."
+          />
+        </div>
+      </FilterCard>
+
+      <DataTable
+        data={users}
+        columns={columns}
+        keyField="id"
+        caption="List of admin users with their roles and status"
+        ariaLabel="Admin users data table"
+        loading={isLoading}
+        isFetching={isFetching}
+        renderActions={renderActions}
+        onDelete={handleDelete}
+        emptyMessage="No admin users found"
+      />
+
+      {/* Create/Edit User Form */}
+      <SlideInForm
+        key={editingUser?.id || 'new'}
+        title={editingUser ? 'Edit Admin User' : 'Create Admin User'}
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingUser(null);
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('form');
+          if (form) form.requestSubmit();
+        }}
+        loading={userMutation.isLoading}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <FormField
+            id="name"
+            label="Name"
+            required
+            error={formErrors.name}
+          >
+            <Input
+              id="name"
+              name="name"
+              placeholder="Enter name"
+              value={formState.name}
+              onChange={(e) => setFormState({ ...formState, name: e.target.value })}
+            />
+          </FormField>
+
+          <FormField
+            id="email"
+            label="Email"
+            required
+            error={formErrors.email}
+          >
+            <Input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="Enter email"
+              value={formState.email}
+              onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+            />
+          </FormField>
+
+          {!editingUser && (
+            <FormField
+              id="password"
+              label="Password"
+              required
+              error={formErrors.password}
+            >
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  placeholder="Enter password"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </FormField>
+          )}
+
+          <FormField
+            id="role_id"
+            label="Role"
+            required
+            error={formErrors.role_id}
+          >
+            <Select
+              id="role_id"
+              name="role_id"
+              options={roles.map(role => ({
+                value: role.id,
+                label: role.name
+              }))}
+              value={formState.role_id}
+              onChange={(value) => setFormState({ ...formState, role_id: value })}
+            />
+          </FormField>
+
+          <FormField
+            id="status"
+            label="Status"
+            required
+            error={formErrors.status}
+          >
+            <Select
+              id="status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={formState.status}
+              onChange={(value) => setFormState({ ...formState, status: value as 'active' | 'inactive' })}
+            />
+          </FormField>
+        </form>
+      </SlideInForm>
+
+      {/* Change Password Form */}
+      <SlideInForm
+        key={`${editingUser?.id || 'new'}-password`}
+        title={`Change Password for ${editingUser?.name}`}
+        isOpen={isPasswordFormOpen}
+        onClose={() => {
+          setIsPasswordFormOpen(false);
+          setEditingUser(null);
+          setFormErrors({});
+          setShowPassword(false);
+          setShowConfirmPassword(false);
+        }}
+        onSave={() => {
+          const form = document.querySelector('form[name="passwordForm"]');
+          if (form) form.requestSubmit();
+        }}
+        loading={passwordMutation.isLoading}
+      >
+        <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <FormField
+            id="password"
+            label="New Password"
+            required
+            error={formErrors.password}
+          >
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                name="password"
+                placeholder="Enter new password"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </FormField>
+
+          <FormField
+            id="confirmPassword"
+            label="Confirm Password"
+            required
+            error={formErrors.confirmPassword}
+          >
+            <div className="relative">
+              <Input
+                type={showConfirmPassword ? "text" : "password"}
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder="Confirm new password"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </FormField>
+        </form>
+      </SlideInForm>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        title="Delete User"
+        message={`Are you sure you want to delete ${usersToDelete.length} user(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+    </div>
+  );
+}

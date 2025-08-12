@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix for calendar icon in dark mode - enhanced version */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) !important;
+  color: white !important;
+  opacity: 0.8 !important;
+}
+
+/* Set color scheme for date inputs in dark mode */
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Additional fixes for Firefox */
+.dark input[type="date"]::-moz-calendar-picker-indicator {
+  filter: invert(1) !important;
+  color: white !important;
+}
+
+/* Force calendar icon to be visible in dark mode */
+.dark input[type="date"] {
+  position: relative;
+}
+
+.dark input[type="date"]::-webkit-datetime-edit {
+  color: white;
+}
+
+/* Hide native calendar icon */
+.hide-native-calendar-icon::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.hide-native-calendar-icon::-moz-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+}
+
+/* Ensure date inputs with custom icons have proper spacing */
+.date-input-with-icon {
+  padding-right: 2.5rem !important;
+}

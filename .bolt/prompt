@@ -1,0 +1,12 @@
+For all designs I ask you to make, have them be beautiful, not cookie cutter. Make webpages that are fully featured and worthy for production.
+
+By default, this template supports JSX syntax with Tailwind CSS classes, React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.
+
+Use icons from lucide-react for logos. 
+
+Responsive Design Check
+Area	Responsive Design Rule
+Layout/Grid	Use Tailwind grid/flex utilities with breakpoints (md, lg, xl)
+Sidebar/Menu	Must collapse on small screens (hidden md:block, etc.)
+Tables & Forms	Should stack on small screens using Tailwind classes
+Cards/Widgets	Avoid fixed widths; use w-full, max-w-* as needed
