@@ -67,24 +67,24 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
     switch (currentUser.role) {
       case 'SSA':
         // Super Admin sees ALL modules
-        return ALL_MODULES;
+        return MODULES;
         
       case 'ENTITY_ADMIN':
         // Entity Admin sees ONLY Entity Module
-        return ALL_MODULES.filter(m => m.id === 'entity-module');
+        return MODULES.filter(m => m.id === 'entity-module');
         
       case 'STUDENT':
         // Student sees ONLY Student Module
-        return ALL_MODULES.filter(m => m.id === 'student-module');
+        return MODULES.filter(m => m.id === 'student-module');
         
       case 'TEACHER':
         // Teacher sees ONLY Teachers Module
-        return ALL_MODULES.filter(m => m.id === 'teachers-module');
+        return MODULES.filter(m => m.id === 'teachers-module');
         
       case 'SUPPORT':
       case 'VIEWER':
         // Support and Viewer see only System Admin
-        return ALL_MODULES.filter(m => m.id === 'system-admin');
+        return MODULES.filter(m => m.id === 'system-admin');
         
       default:
         // Unknown roles see nothing
@@ -102,10 +102,6 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
     }
     return location.pathname.startsWith(module.path.replace('/dashboard', ''));
   };
-
-  // Debug logging (can be removed in production)
-  console.log('ModuleNavigation - Current User:', currentUser);
-  console.log('ModuleNavigation - Visible Modules:', visibleModules);
 
   return (
     <div className={cn('border-b-2 border-gray-200 dark:border-gray-700 pb-4 mb-4 pt-4', className)}>
