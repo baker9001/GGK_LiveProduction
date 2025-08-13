@@ -161,7 +161,7 @@ export default function UsersTab() {
             .from('users')
             .select('email_verified')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
 
           return {
             ...user,
