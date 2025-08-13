@@ -76,7 +76,7 @@ type Country = {
   id: string;
   name: string;
   region_id: string;
-  status: 'Active' | 'Inactive';
+  status: 'active' | 'inactive';
 };
 
 interface FormState {
@@ -176,7 +176,7 @@ export default function CompaniesTab() {
       let query = supabase
         .from('countries')
         .select('id, name, region_id, status')
-        .eq('status', 'Active')
+        .or('status.eq.active,status.eq.Active') // Check both cases for compatibility
         .order('name');
 
       // Apply region filter if regions are selected
@@ -186,7 +186,12 @@ export default function CompaniesTab() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      
+      // Normalize status to lowercase for consistency
+      return (data || []).map(country => ({
+        ...country,
+        status: country.status?.toLowerCase() as 'active' | 'inactive'
+      }));
     },
     {
       staleTime: 5 * 60 * 1000, // 5 minutes
@@ -203,11 +208,16 @@ export default function CompaniesTab() {
         .from('countries')
         .select('id, name, region_id, status')
         .eq('region_id', formState.region_id)
-        .eq('status', 'Active')
+        .or('status.eq.active,status.eq.Active') // Check both cases for compatibility
         .order('name');
 
       if (error) throw error;
-      return data || [];
+      
+      // Normalize status to lowercase for consistency
+      return (data || []).map(country => ({
+        ...country,
+        status: country.status?.toLowerCase() as 'active' | 'inactive'
+      }));
     },
     {
       enabled: !!formState.region_id,
