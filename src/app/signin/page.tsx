@@ -61,7 +61,7 @@ export default function SignInPage() {
     };
 
     try {
-      // Query admin user with role information
+      // Step 1: Query admin user with role information
       const { data: user, error: queryError } = await supabase
         .from('admin_users')
         .select(`
@@ -84,13 +84,60 @@ export default function SignInPage() {
         throw new Error('Invalid credentials');
       }
 
-      // Compare password with hashed password
+      // Step 2: Compare password with hashed password
       const isValidPassword = await bcrypt.compare(data.password, user.password_hash);
       if (!isValidPassword) {
         throw new Error('Invalid credentials');
       }
 
-      // Map role name to UserRole type
+      // Step 3: Create or sign in with Supabase Auth
+      // First, try to sign in
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password
+      });
+
+      if (signInError) {
+        console.log('Supabase sign-in failed, attempting to create user:', signInError.message);
+        
+        // If sign-in fails, try to create the user in Supabase Auth
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            emailRedirectTo: window.location.origin + '/auth/callback',
+            data: {
+              name: user.name,
+              user_type: 'system',
+              role: user.roles?.name || 'Viewer'
+            }
+          }
+        });
+
+        if (signUpError) {
+          console.error('Failed to create Supabase auth user:', signUpError);
+          // Continue anyway - the custom auth will work for UI
+          // but API calls might fail
+        } else {
+          console.log('Created new Supabase auth user');
+          
+          // Now try to sign in again
+          const { data: retryAuthData, error: retryError } = await supabase.auth.signInWithPassword({
+            email: data.email,
+            password: data.password
+          });
+
+          if (retryError) {
+            console.error('Still failed to sign in after creating user:', retryError);
+          } else {
+            console.log('Successfully signed in with Supabase after creating user');
+          }
+        }
+      } else {
+        console.log('Successfully signed in with Supabase');
+      }
+
+      // Step 4: Map role name to UserRole type
       const roleMapping: Record<string, UserRole> = {
         'Super Admin': 'SSA',
         'Support Admin': 'SUPPORT',
@@ -99,7 +146,7 @@ export default function SignInPage() {
 
       const userRole = roleMapping[user.roles?.name] || 'VIEWER';
 
-      // Create user object
+      // Step 5: Create user object for custom auth
       const authenticatedUser: User = {
         id: user.id,
         name: user.name,
@@ -107,9 +154,17 @@ export default function SignInPage() {
         role: userRole
       };
 
-      // Set authentication state
+      // Step 6: Set custom authentication state
       setAuthenticatedUser(authenticatedUser);
       setSuccess(true);
+
+      // Step 7: Verify Supabase session was created
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('Supabase session created successfully');
+      } else {
+        console.warn('Warning: No Supabase session created. API calls may fail.');
+      }
 
       // Redirect after a brief delay to show success state
       setTimeout(() => {
@@ -149,10 +204,12 @@ export default function SignInPage() {
         throw new Error('Failed to check dev user');
       }
 
+      const devPassword = 'dev_password'; // Default dev password
+
       if (!user) {
         // Create dev admin user if it doesn't exist
         const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('dev_password', salt);
+        const hashedPassword = await bcrypt.hash(devPassword, salt);
 
         // Get SSA role ID
         const { data: ssaRole } = await supabase
@@ -184,6 +241,25 @@ export default function SignInPage() {
 
         if (insertError) throw insertError;
 
+        // Create Supabase auth user for dev
+        await supabase.auth.signUp({
+          email: 'bakir.alramadi@gmail.com',
+          password: devPassword,
+          options: {
+            data: {
+              name: 'Baker R.',
+              user_type: 'system',
+              role: 'Super Admin'
+            }
+          }
+        });
+
+        // Sign in with Supabase
+        await supabase.auth.signInWithPassword({
+          email: 'bakir.alramadi@gmail.com',
+          password: devPassword
+        });
+
         // Create user object for new user
         const authenticatedUser: User = {
           id: newUser.id,
@@ -194,6 +270,35 @@ export default function SignInPage() {
 
         setAuthenticatedUser(authenticatedUser);
       } else {
+        // Sign in with Supabase for existing dev user
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: 'bakir.alramadi@gmail.com',
+          password: devPassword
+        });
+
+        if (signInError) {
+          console.log('Supabase sign-in failed for dev user, attempting to create:', signInError.message);
+          
+          // Try to create if doesn't exist
+          await supabase.auth.signUp({
+            email: 'bakir.alramadi@gmail.com',
+            password: devPassword,
+            options: {
+              data: {
+                name: user.name,
+                user_type: 'system',
+                role: user.roles?.name || 'Super Admin'
+              }
+            }
+          });
+
+          // Try signing in again
+          await supabase.auth.signInWithPassword({
+            email: 'bakir.alramadi@gmail.com',
+            password: devPassword
+          });
+        }
+
         // Map role name to UserRole type
         const roleMapping: Record<string, UserRole> = {
           'Super Admin': 'SSA',
@@ -212,6 +317,14 @@ export default function SignInPage() {
         };
 
         setAuthenticatedUser(authenticatedUser);
+      }
+
+      // Verify Supabase session was created
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('Dev user Supabase session created successfully');
+      } else {
+        console.warn('Warning: No Supabase session for dev user. API calls may fail.');
       }
 
       setSuccess(true);
