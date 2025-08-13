@@ -1,10 +1,13 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/MetadataTab.tsx
 
 /**
- * MetadataTab Component - CORRECTED VERSION
+ * MetadataTab Component - PRODUCTION VERSION
  * 
- * Fixes the critical bug where program_id, provider_id, and subject_id were not being set
- * while preserving all the sophisticated features of the original.
+ * Critical fixes applied:
+ * 1. Entity IDs (program_id, provider_id, subject_id) properly extracted and saved
+ * 2. Multi-source entity ID resolution with fallbacks
+ * 3. Comprehensive validation before paper creation
+ * 4. Enhanced error handling and logging
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -29,7 +32,6 @@ interface MetadataTabProps {
 }
 
 interface ExtractedMetadata {
-  // Core fields from JSON
   examBoard: string;
   qualification: string;
   subject: string;
@@ -39,8 +41,6 @@ interface ExtractedMetadata {
   examSession: string;
   paperDuration: string;
   totalMarks: number;
-  
-  // Derived fields for database
   subjectCode: string;
   paperNumber: string;
   variantNumber: string;
@@ -59,7 +59,6 @@ interface MatchingResult {
   suggestions: string[];
 }
 
-// Entity IDs interface for clarity
 interface EntityIds {
   program_id?: string;
   provider_id?: string;
@@ -137,8 +136,6 @@ export function MetadataTab({
   const [isAutoMatching, setIsAutoMatching] = useState(false);
   const [showCreateNew, setShowCreateNew] = useState(false);
   const [manualOverride, setManualOverride] = useState(false);
-  
-  // CRITICAL FIX: Add state for entity IDs
   const [sessionEntityIds, setSessionEntityIds] = useState<EntityIds | null>(null);
   const [entityIdsStatus, setEntityIdsStatus] = useState<'loading' | 'found' | 'missing' | 'error'>('loading');
 
@@ -150,20 +147,30 @@ export function MetadataTab({
     }
   }, [parsedData]);
 
-  // CRITICAL FIX: Load entity IDs from import session
+  // Load entity IDs from import session
   useEffect(() => {
     if (importSession?.metadata?.entity_ids) {
-      console.log('[GGK] Found entity IDs in import session:', importSession.metadata.entity_ids);
+      console.log('Found entity IDs in import session:', importSession.metadata.entity_ids);
       setSessionEntityIds(importSession.metadata.entity_ids);
       setEntityIdsStatus('found');
       
-      // Pre-select data structure if available
       if (importSession.metadata.entity_ids.data_structure_id) {
         setDataStructureId(importSession.metadata.entity_ids.data_structure_id);
         setRegionId(importSession.metadata.entity_ids.region_id || '');
       }
+    } else if (importSession?.metadata?.academic_structure) {
+      // Try to extract from academic structure
+      const academicStructure = importSession.metadata.academic_structure;
+      if (academicStructure?.entity_ids) {
+        console.log('Found entity IDs in academic structure:', academicStructure.entity_ids);
+        setSessionEntityIds(academicStructure.entity_ids);
+        setEntityIdsStatus('found');
+      } else {
+        console.warn('No entity IDs found in import session');
+        setEntityIdsStatus('missing');
+      }
     } else {
-      console.warn('[GGK] No entity IDs found in import session');
+      console.warn('No entity IDs found in import session');
       setEntityIdsStatus('missing');
     }
   }, [importSession]);
@@ -180,10 +187,8 @@ export function MetadataTab({
     
     if (norm1 === norm2) return 1;
     
-    // Check if one contains the other
     if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.8;
     
-    // Simple character-based similarity
     const longer = norm1.length > norm2.length ? norm1 : norm2;
     const shorter = norm1.length > norm2.length ? norm2 : norm1;
     const editDistance = getEditDistance(shorter, longer);
@@ -219,7 +224,6 @@ export function MetadataTab({
     const errors: string[] = [];
     
     try {
-      // Extract core fields from JSON
       const extracted: ExtractedMetadata = {
         examBoard: parsedData.exam_board || '',
         qualification: parsedData.qualification || '',
@@ -256,14 +260,12 @@ export function MetadataTab({
       // Extract paper details from paper code
       const paperCodeParts = extracted.paperCode.split('/');
       if (paperCodeParts.length >= 2) {
-        // If no subject code yet, try to extract from paper code
         if (!extracted.subjectCode && paperCodeParts[0].match(/^\d+$/)) {
           extracted.subjectCode = paperCodeParts[0];
         }
         
         extracted.paperNumber = paperCodeParts[1];
         
-        // Extract variant from paper number (last digit for 2-digit papers)
         if (extracted.paperNumber.length >= 2) {
           extracted.variantNumber = extracted.paperNumber.slice(-1);
         }
@@ -366,10 +368,9 @@ export function MetadataTab({
 
       if (error) throw error;
       
-      console.log('[GGK] Loaded data structures with IDs:', data);
+      console.log('Loaded data structures with IDs:', data);
       setDataStructures(data || []);
 
-      // Trigger auto-matching after data structures are loaded
       if (metadata && data && data.length > 0 && !manualOverride) {
         autoMatchDataStructure(data);
       }
@@ -437,7 +438,6 @@ export function MetadataTab({
           currentMatchedOn.push(`Program: ${ds.programs.name}`);
         }
 
-        // Check if this is the best match so far
         if (score > bestScore) {
           bestScore = score;
           bestMatch = ds;
@@ -446,12 +446,10 @@ export function MetadataTab({
         }
       }
 
-      // Set matching result
       if (bestMatch && bestScore > 0.5) {
         setDataStructureId(bestMatch.id);
         setRegionId(bestMatch.regions.id);
         
-        // Add suggestions if not a perfect match
         if (bestScore < 0.9) {
           if (metadata.subjectCode && bestMatch.edu_subjects.code !== metadata.subjectCode) {
             suggestions.push(`Subject code mismatch: expected "${metadata.subjectCode}", found "${bestMatch.edu_subjects.code}"`);
@@ -469,7 +467,6 @@ export function MetadataTab({
           suggestions
         });
       } else {
-        // No good match found
         setShowCreateNew(true);
         setMatchingResult({
           dataStructureId: null,
@@ -497,7 +494,6 @@ export function MetadataTab({
     setDataStructureId(value);
     setManualOverride(true);
     
-    // Auto-select region based on data structure
     const selectedDs = dataStructures.find(ds => ds.id === value);
     if (selectedDs) {
       setRegionId(selectedDs.regions.id);
@@ -541,17 +537,13 @@ export function MetadataTab({
 
     setSaving(true);
     try {
-      // CRITICAL FIX: Get entity IDs from the selected data structure
+      // Get entity IDs from the selected data structure
       const selectedDataStructure = dataStructures.find(ds => ds.id === dataStructureId);
       if (!selectedDataStructure) {
         throw new Error('Selected data structure not found');
       }
 
-      // CRITICAL FIX: Extract entity IDs - Priority order:
-      // 1. From selected data structure (most reliable)
-      // 2. From import session (if available)
-      // 3. Error if neither available
-      
+      // Extract entity IDs with multiple fallback sources
       let program_id = selectedDataStructure.program_id || selectedDataStructure.programs?.id;
       let provider_id = selectedDataStructure.provider_id || selectedDataStructure.providers?.id;
       let subject_id = selectedDataStructure.subject_id || selectedDataStructure.edu_subjects?.id;
@@ -560,18 +552,18 @@ export function MetadataTab({
       // Fallback to session entity IDs if available
       if (!program_id && sessionEntityIds?.program_id) {
         program_id = sessionEntityIds.program_id;
-        console.log('[GGK] Using program_id from session:', program_id);
+        console.log('Using program_id from session:', program_id);
       }
       if (!provider_id && sessionEntityIds?.provider_id) {
         provider_id = sessionEntityIds.provider_id;
-        console.log('[GGK] Using provider_id from session:', provider_id);
+        console.log('Using provider_id from session:', provider_id);
       }
       if (!subject_id && sessionEntityIds?.subject_id) {
         subject_id = sessionEntityIds.subject_id;
-        console.log('[GGK] Using subject_id from session:', subject_id);
+        console.log('Using subject_id from session:', subject_id);
       }
 
-      // CRITICAL VALIDATION
+      // Validate all required entity IDs are present
       if (!program_id || !provider_id || !subject_id) {
         const missing = [];
         if (!program_id) missing.push('program_id');
@@ -581,7 +573,7 @@ export function MetadataTab({
         throw new Error(`Cannot create paper: Missing entity IDs: ${missing.join(', ')}. Please ensure the data structure has all required entities.`);
       }
 
-      console.log('[GGK] Creating paper with entity IDs:', {
+      console.log('Creating paper with entity IDs:', {
         program_id,
         provider_id,
         subject_id,
@@ -589,7 +581,7 @@ export function MetadataTab({
         data_structure_id: dataStructureId
       });
 
-      // Create the paper record WITH ENTITY IDs
+      // Create the paper record with all entity IDs
       const paperData = {
         paper_code: metadata.paperCode,
         subject_code: metadata.subjectCode,
@@ -599,14 +591,14 @@ export function MetadataTab({
         exam_session: metadata.examSession,
         exam_year: metadata.examYear,
         
-        // CRITICAL FIX: Include entity IDs
-        program_id: program_id,          // ✅ NOW INCLUDED
-        provider_id: provider_id,        // ✅ NOW INCLUDED
-        subject_id: subject_id,          // ✅ NOW INCLUDED
-        region_id: region_id,            // ✅ NOW INCLUDED
+        // Entity IDs - Critical for database relationships
+        program_id: program_id,
+        provider_id: provider_id,
+        subject_id: subject_id,
+        region_id: region_id,
         data_structure_id: dataStructureId,
         
-        // Text fields for denormalization/display
+        // Text fields for display
         program: metadata.program,
         provider: metadata.provider,
         subject: metadata.subject,
@@ -618,7 +610,7 @@ export function MetadataTab({
         status: status,
         notes: notes,
         
-        // Add import session reference if available
+        // Add import session reference
         import_session_id: importSession?.id || null
       };
 
@@ -627,7 +619,7 @@ export function MetadataTab({
         .from('papers_setup')
         .select('id')
         .eq('paper_code', metadata.paperCode)
-        .maybeSingle(); // Use maybeSingle to avoid error when no rows
+        .maybeSingle();
 
       if (checkError && checkError.code !== 'PGRST116') {
         throw checkError;
@@ -664,9 +656,8 @@ export function MetadataTab({
       }
 
       if (paperError) {
-        console.error('[GGK] Error saving paper:', paperError);
+        console.error('Error saving paper:', paperError);
         
-        // Check for specific constraint violations
         if (paperError.message?.includes('null value in column')) {
           const details = paperError.details || paperError.message;
           throw new Error(`Database constraint violation: ${details}. Please ensure all required entity IDs are set.`);
@@ -697,14 +688,14 @@ export function MetadataTab({
         .eq('id', importSession.id);
 
       if (sessionError) {
-        console.error('[GGK] Error updating session:', sessionError);
+        console.error('Error updating session:', sessionError);
         // Don't throw - paper was created successfully
       }
 
       toast.success('Paper metadata saved successfully');
       onSave(paper.id, paper);
     } catch (error: any) {
-      console.error('[GGK] Error saving metadata:', error);
+      console.error('Error saving metadata:', error);
       toast.error(error.message || 'Failed to save paper metadata');
     } finally {
       setSaving(false);
@@ -826,7 +817,7 @@ export function MetadataTab({
         </div>
       </div>
 
-      {/* Auto-matching Status - Rest of the component remains the same */}
+      {/* Auto-matching Status */}
       {matchingResult && (
         <div className={cn(
           "rounded-lg p-4 border",
@@ -867,6 +858,17 @@ export function MetadataTab({
                   </ul>
                 </div>
               )}
+              
+              {matchingResult.suggestions.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Suggestions:</p>
+                  <ul className="list-disc list-inside text-xs text-gray-700 dark:text-gray-300">
+                    {matchingResult.suggestions.map((suggestion, index) => (
+                      <li key={index}>{suggestion}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -892,6 +894,11 @@ export function MetadataTab({
               label: `${ds.programs.name} - ${ds.providers.name} - ${ds.edu_subjects.name}`
             }))}
           />
+          {!dataStructureId && showCreateNew && (
+            <p className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+              No matching data structure found. Please select one manually or create a new one.
+            </p>
+          )}
         </div>
 
         {/* Region Selection */}
@@ -910,7 +917,7 @@ export function MetadataTab({
           />
         </div>
 
-        {/* Status and Notes remain the same */}
+        {/* Status Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Status
@@ -926,6 +933,7 @@ export function MetadataTab({
           />
         </div>
 
+        {/* Notes */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Notes
