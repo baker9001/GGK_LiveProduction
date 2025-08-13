@@ -1,5 +1,7 @@
 // /src/lib/auth.ts
 
+import { supabase } from './supabase';
+
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
 export interface User {
@@ -23,18 +25,62 @@ export function getAuthenticatedUser(): User | null {
   return storedUser ? JSON.parse(storedUser) : null;
 }
 
-export function clearAuthenticatedUser(): void {
+// Updated to also clear Supabase session
+export async function clearAuthenticatedUser(): Promise<void> {
+  // Clear custom authentication
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(TEST_USER_KEY); // CRITICAL: Clear test mode on logout
   
   // Clear any other session data
   sessionStorage.clear();
   
+  // Clear Supabase session
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out from Supabase:', error);
+    } else {
+      console.log('Successfully signed out from Supabase');
+    }
+  } catch (error) {
+    console.error('Error during Supabase signout:', error);
+  }
+  
   console.log('User logged out, test mode cleared');
+}
+
+// Synchronous version for backward compatibility
+export function clearAuthenticatedUserSync(): void {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(TEST_USER_KEY);
+  sessionStorage.clear();
+  console.log('User logged out (sync), test mode cleared');
 }
 
 export function isAuthenticated(): boolean {
   return !!getAuthenticatedUser();
+}
+
+// Async version that also checks Supabase session
+export async function isAuthenticatedAsync(): Promise<boolean> {
+  // Check custom auth
+  const customUser = getAuthenticatedUser();
+  if (!customUser) {
+    return false;
+  }
+  
+  // Also check if Supabase session exists
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.warn('Custom auth exists but no Supabase session. API calls may fail.');
+      // You might want to prompt re-authentication here
+    }
+    return true;
+  } catch (error) {
+    console.error('Error checking Supabase session:', error);
+    return !!customUser; // Fall back to custom auth status
+  }
 }
 
 export function getUserRole(): UserRole | null {
@@ -150,4 +196,81 @@ export async function logImpersonationActivity(
     reason,
     timestamp: new Date().toISOString()
   });
+}
+
+// NEW SUPABASE INTEGRATION FUNCTIONS
+
+// Refresh Supabase session if needed
+export async function refreshSession(): Promise<boolean> {
+  try {
+    const { data: { session }, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.error('Failed to refresh session:', error);
+      return false;
+    }
+    
+    if (session) {
+      console.log('Session refreshed successfully');
+      return true;
+    }
+    
+    // No session to refresh
+    return false;
+  } catch (error) {
+    console.error('Error refreshing session:', error);
+    return false;
+  }
+}
+
+// Check and refresh session periodically
+export function setupSessionRefresh(): void {
+  // Refresh session every 30 minutes
+  setInterval(async () => {
+    const isAuth = await isAuthenticatedAsync();
+    if (isAuth) {
+      await refreshSession();
+    }
+  }, 30 * 60 * 1000); // 30 minutes
+}
+
+// Initialize session refresh on app start
+if (typeof window !== 'undefined') {
+  setupSessionRefresh();
+}
+
+// Helper function to ensure Supabase session exists
+export async function ensureSupabaseSession(): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      console.warn('No Supabase session found');
+      
+      // Check if we have custom auth
+      const customUser = getAuthenticatedUser();
+      if (customUser) {
+        console.warn('Custom auth exists but no Supabase session. User may need to re-login.');
+        // You could redirect to login here if needed
+        // window.location.href = '/signin';
+        return false;
+      }
+    }
+    
+    return !!session;
+  } catch (error) {
+    console.error('Error checking Supabase session:', error);
+    return false;
+  }
+}
+
+// Get current Supabase session
+export async function getSupabaseSession() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
+  } catch (error) {
+    console.error('Error getting Supabase session:', error);
+    return null;
+  }
 }
