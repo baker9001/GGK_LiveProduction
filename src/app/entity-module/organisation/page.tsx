@@ -1,119 +1,158 @@
-// /src/app/entity-module/organisation/page.tsx
+// src/app/entity-module/organisation/page.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Building2, Users, MapPin, Edit, ChevronDown, ChevronRight,
-  Plus, X, Save, Trash2, School, Briefcase, GraduationCap,
-  Calendar, BookOpen, Grid3x3, Search, Filter, Settings,
-  ChevronUp, Activity, TrendingUp, UserCheck, AlertCircle, Loader2
+  Building2, School, MapPin, Edit, ChevronDown, ChevronRight,
+  Plus, X, Save, Trash2, Briefcase, GraduationCap,
+  Calendar, Users, Search, Filter, Settings,
+  Activity, AlertCircle, Loader2, Phone, Mail,
+  Globe, Home, Hash, Clock, User
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
-import { toast } from '../../../components/shared/Toast';
-import { Button } from '../../../components/shared/Button';
+import { toast } from 'react-hot-toast';
 
-// Types
-interface Organisation {
+// ===== TYPE DEFINITIONS =====
+interface Company {
   id: string;
-  parent_id: string | null;
-  company_id: string;
   name: string;
   code: string;
-  type: 'headquarters' | 'region' | 'school' | 'branch' | 'department' | 'division';
+  description: string;
   status: 'active' | 'inactive';
-  employee_count: number;
-  student_count?: number;
-  teacher_count?: number;
-  address?: string;
-  city?: string;
-  country?: string;
-  manager_name?: string;
-  manager_title?: string;
-  color_theme?: string;
-  icon_type?: string;
-  description?: string;
   created_at: string;
-  children?: Organisation[];
+  // Additional fields
+  additional?: CompanyAdditional;
+  schools?: SchoolData[];
+}
+
+interface CompanyAdditional {
+  id?: string;
+  company_id: string;
+  organization_type?: 'education_group' | 'single_institution' | 'franchise' | 'partnership';
+  fiscal_year_start?: number;
+  main_phone?: string;
+  main_email?: string;
+  website?: string;
+  head_office_address?: string;
+  head_office_city?: string;
+  head_office_country?: string;
+  registration_number?: string;
+  tax_id?: string;
+  logo_url?: string;
+}
+
+interface SchoolData {
+  id: string;
+  name: string;
+  code: string;
+  company_id: string;
+  description: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  additional?: SchoolAdditional;
+  branches?: BranchData[];
+}
+
+interface SchoolAdditional {
+  id?: string;
+  school_id: string;
+  school_type?: 'primary' | 'secondary' | 'other';
+  curriculum_type?: string[];
+  total_capacity?: number;
+  teachers_count?: number;
+  principal_name?: string;
+  principal_email?: string;
+  principal_phone?: string;
+  campus_address?: string;
+  campus_city?: string;
+  campus_state?: string;
+  campus_postal_code?: string;
+  latitude?: number;
+  longitude?: number;
+  established_date?: string;
+  academic_year_start?: number;
+  academic_year_end?: number;
+  has_library?: boolean;
+  has_laboratory?: boolean;
+  has_sports_facilities?: boolean;
+  has_cafeteria?: boolean;
+}
+
+interface BranchData {
+  id: string;
+  name: string;
+  code: string;
+  school_id: string;
+  description: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  additional?: BranchAdditional;
+}
+
+interface BranchAdditional {
+  id?: string;
+  branch_id: string;
+  student_capacity?: number;
+  current_students?: number;
+  teachers_count?: number;
+  branch_head_name?: string;
+  branch_head_email?: string;
+  branch_head_phone?: string;
+  building_name?: string;
+  floor_details?: string;
+  opening_time?: string;
+  closing_time?: string;
+  working_days?: string[];
 }
 
 interface Department {
   id: string;
-  organisation_id: string;
+  company_id: string;
+  school_id?: string;
+  branch_id?: string;
   name: string;
   code: string;
+  department_type?: 'academic' | 'administrative' | 'support' | 'operations';
+  parent_department_id?: string;
   head_of_department?: string;
+  head_email?: string;
   employee_count: number;
   status: 'active' | 'inactive';
 }
 
-interface Position {
-  id: string;
-  organisation_id: string;
-  department_id?: string;
-  title: string;
-  level: number;
-  reports_to?: string;
-  employee_count: number;
-}
-
-interface Grade {
+interface AcademicYear {
   id: string;
   school_id: string;
-  name: string;
-  level: number;
-  student_count: number;
-  sections: Section[];
+  year_name: string;
+  start_date: string;
+  end_date: string;
+  total_terms: number;
+  current_term?: number;
+  is_current: boolean;
+  status: 'planned' | 'active' | 'completed';
 }
 
-interface Section {
-  id: string;
-  grade_id: string;
-  name: string;
-  capacity: number;
-  current_students: number;
-  class_teacher?: string;
-  room_number?: string;
-  building?: string;
-}
-
-// Color themes for different org types
-const orgThemes = {
-  headquarters: { bg: 'bg-blue-500', light: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-600' },
-  region: { bg: 'bg-indigo-500', light: 'bg-indigo-50', border: 'border-indigo-500', text: 'text-indigo-600' },
-  school: { bg: 'bg-green-500', light: 'bg-green-50', border: 'border-green-500', text: 'text-green-600' },
-  branch: { bg: 'bg-purple-500', light: 'bg-purple-50', border: 'border-purple-500', text: 'text-purple-600' },
-  department: { bg: 'bg-orange-500', light: 'bg-orange-50', border: 'border-orange-500', text: 'text-orange-600' },
-  division: { bg: 'bg-pink-500', light: 'bg-pink-50', border: 'border-pink-500', text: 'text-pink-600' }
-};
-
-// Icon mapping for org types
-const getOrgIcon = (type: string) => {
-  switch (type) {
-    case 'headquarters': return Building2;
-    case 'region': return MapPin;
-    case 'school': return School;
-    case 'branch': return Building2;
-    case 'department': return Briefcase;
-    case 'division': return Grid3x3;
-    default: return Building2;
-  }
-};
-
+// ===== MAIN COMPONENT =====
 export default function OrganisationManagement() {
   const queryClient = useQueryClient();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [selectedOrg, setSelectedOrg] = useState<Organisation | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [editingOrg, setEditingOrg] = useState<Organisation | null>(null);
+  const [modalType, setModalType] = useState<'school' | 'branch' | 'department' | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showDepartments, setShowDepartments] = useState(false);
-  const [showPositions, setShowPositions] = useState(false);
-  const [showGrades, setShowGrades] = useState(false);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+  const [companyData, setCompanyData] = useState<Company | null>(null);
 
-  // Fetch user's company ID
+  // Tab states for detail panel
+  const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
+
+  // Form states
+  const [formData, setFormData] = useState<any>({});
+
+  // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
@@ -121,59 +160,107 @@ export default function OrganisationManagement() {
         if (user) {
           const { data: entityUser } = await supabase
             .from('entity_users')
-            .select('company_id')
+            .select('company_id, is_company_admin')
             .eq('user_id', user.id)
             .single();
           
-          if (entityUser) {
+          if (entityUser && entityUser.company_id) {
             setUserCompanyId(entityUser.company_id);
           }
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
+        toast.error('Failed to identify your company');
       }
     };
     
     fetchUserCompany();
   }, []);
 
-  // Fetch organisation hierarchy
-  const { data: organisations, isLoading, error: orgError, refetch } = useQuery<Organisation[]>(
-    ['organisations', userCompanyId],
+  // ===== FETCH ORGANIZATION DATA =====
+  const { data: organizationData, isLoading, error, refetch } = useQuery(
+    ['organization', userCompanyId],
     async () => {
       if (!userCompanyId) {
         throw new Error('No company associated with user');
       }
 
-      // Fetch organisation hierarchy from database
-      const { data, error } = await supabase
-        .from('organisation_units')
+      // Fetch company data
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', userCompanyId)
+        .single();
+
+      if (companyError) throw companyError;
+
+      // Fetch company additional data
+      const { data: companyAdditional } = await supabase
+        .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
-        .order('parent_id', { ascending: true })
+        .single();
+
+      // Fetch schools
+      const { data: schools, error: schoolsError } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('company_id', userCompanyId)
         .order('name');
 
-      if (error) throw error;
-      if (!data || data.length === 0) return [];
+      if (schoolsError) throw schoolsError;
 
-      // Build hierarchy
-      const buildHierarchy = (items: any[], parentId: string | null = null): Organisation[] => {
-        return items
-          .filter(item => item.parent_id === parentId)
-          .map(item => ({
-            ...item,
-            children: buildHierarchy(items, item.id)
-          }));
+      // Fetch schools additional data and branches for each school
+      const schoolsWithDetails = await Promise.all(
+        (schools || []).map(async (school) => {
+          const { data: schoolAdditional } = await supabase
+            .from('schools_additional')
+            .select('*')
+            .eq('school_id', school.id)
+            .single();
+
+          const { data: branches } = await supabase
+            .from('branches')
+            .select('*')
+            .eq('school_id', school.id)
+            .order('name');
+
+          // Fetch branch additional data
+          const branchesWithDetails = await Promise.all(
+            (branches || []).map(async (branch) => {
+              const { data: branchAdditional } = await supabase
+                .from('branches_additional')
+                .select('*')
+                .eq('branch_id', branch.id)
+                .single();
+
+              return {
+                ...branch,
+                additional: branchAdditional
+              };
+            })
+          );
+
+          return {
+            ...school,
+            additional: schoolAdditional,
+            branches: branchesWithDetails
+          };
+        })
+      );
+
+      const fullCompanyData: Company = {
+        ...company,
+        additional: companyAdditional,
+        schools: schoolsWithDetails
       };
 
-      const hierarchy = buildHierarchy(data);
+      setCompanyData(fullCompanyData);
       
-      // Auto-expand root nodes
-      if (hierarchy.length > 0) {
-        setExpandedNodes(new Set(hierarchy.map(org => org.id)));
-      }
+      // Auto-expand company node
+      setExpandedNodes(new Set([company.id]));
       
-      return hierarchy;
+      return fullCompanyData;
     },
     {
       enabled: !!userCompanyId,
@@ -182,161 +269,192 @@ export default function OrganisationManagement() {
     }
   );
 
-  // Fetch departments for selected org
-  const { data: departments, isLoading: loadingDepts } = useQuery<Department[]>(
-    ['departments', selectedOrg?.id],
+  // ===== FETCH DEPARTMENTS =====
+  const { data: departments } = useQuery(
+    ['departments', selectedItem?.id, selectedType],
     async () => {
-      if (!selectedOrg) return [];
+      if (!selectedItem) return [];
       
-      const { data, error } = await supabase
-        .from('organisation_departments')
-        .select('*')
-        .eq('organisation_id', selectedOrg.id)
-        .order('name');
-
+      let query = supabase.from('entity_departments').select('*');
+      
+      if (selectedType === 'company') {
+        query = query.eq('company_id', selectedItem.id).is('school_id', null).is('branch_id', null);
+      } else if (selectedType === 'school') {
+        query = query.eq('school_id', selectedItem.id);
+      } else if (selectedType === 'branch') {
+        query = query.eq('branch_id', selectedItem.id);
+      }
+      
+      const { data, error } = await query.order('name');
+      
       if (error) throw error;
       return data || [];
     },
-    { 
-      enabled: !!selectedOrg && showDepartments,
-      retry: 1
+    {
+      enabled: !!selectedItem && activeTab === 'departments'
     }
   );
 
-  // Fetch positions for selected org
-  const { data: positions, isLoading: loadingPositions } = useQuery<Position[]>(
-    ['positions', selectedOrg?.id],
+  // ===== FETCH ACADEMIC YEARS =====
+  const { data: academicYears } = useQuery(
+    ['academicYears', selectedItem?.id],
     async () => {
-      if (!selectedOrg) return [];
+      if (!selectedItem || selectedType !== 'school') return [];
       
       const { data, error } = await supabase
-        .from('organisation_positions')
+        .from('academic_years')
         .select('*')
-        .eq('organisation_id', selectedOrg.id)
-        .order('level', { ascending: false });
-
+        .eq('school_id', selectedItem.id)
+        .order('start_date', { ascending: false });
+      
       if (error) throw error;
       return data || [];
     },
-    { 
-      enabled: !!selectedOrg && showPositions,
-      retry: 1
+    {
+      enabled: selectedType === 'school' && activeTab === 'academic'
     }
   );
 
-  // Fetch grades for school
-  const { data: grades, isLoading: loadingGrades } = useQuery<Grade[]>(
-    ['grades', selectedOrg?.id],
-    async () => {
-      if (!selectedOrg || selectedOrg.type !== 'school') return [];
-      
-      const { data: gradesData, error: gradesError } = await supabase
-        .from('school_grades')
-        .select('*')
-        .eq('school_id', selectedOrg.id)
-        .order('level');
+  // ===== MUTATIONS =====
+  
+  // Update Company Additional Info
+  const updateCompanyMutation = useMutation(
+    async (data: CompanyAdditional) => {
+      const { data: existing } = await supabase
+        .from('companies_additional')
+        .select('id')
+        .eq('company_id', data.company_id)
+        .single();
 
-      if (gradesError) throw gradesError;
-      if (!gradesData || gradesData.length === 0) return [];
-
-      // Fetch sections for each grade
-      const gradesWithSections = await Promise.all(
-        gradesData.map(async (grade) => {
-          const { data: sections } = await supabase
-            .from('grade_sections')
-            .select('*')
-            .eq('grade_id', grade.id)
-            .order('name');
-
-          return {
-            ...grade,
-            sections: sections || []
-          };
-        })
-      );
-
-      return gradesWithSections;
+      if (existing) {
+        const { error } = await supabase
+          .from('companies_additional')
+          .update(data)
+          .eq('company_id', data.company_id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('companies_additional')
+          .insert([data]);
+        if (error) throw error;
+      }
     },
-    { 
-      enabled: !!selectedOrg && selectedOrg.type === 'school' && showGrades,
-      retry: 1
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['organization']);
+        toast.success('Company information updated successfully');
+        setEditMode(false);
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to update company information');
+      }
     }
   );
 
-  // Create new organisation mutation
-  const createOrgMutation = useMutation(
-    async (orgData: Partial<Organisation>) => {
-      const { data, error } = await supabase
-        .from('organisation_units')
+  // Create School
+  const createSchoolMutation = useMutation(
+    async (data: Partial<SchoolData>) => {
+      const { data: school, error } = await supabase
+        .from('schools')
         .insert([{
-          ...orgData,
-          company_id: userCompanyId
+          name: data.name,
+          code: data.code,
+          company_id: userCompanyId,
+          description: data.description,
+          status: data.status || 'active'
         }])
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+
+      // Insert additional data if provided
+      if (data.additional) {
+        await supabase
+          .from('schools_additional')
+          .insert([{
+            ...data.additional,
+            school_id: school.id
+          }]);
+      }
+
+      return school;
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['organisations']);
-        toast.success('Organisation created successfully');
+        queryClient.invalidateQueries(['organization']);
+        toast.success('School created successfully');
         setShowModal(false);
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to create organisation');
+        toast.error(error.message || 'Failed to create school');
       }
     }
   );
 
-  // Update organisation mutation
-  const updateOrgMutation = useMutation(
-    async ({ id, ...updates }: Partial<Organisation>) => {
-      const { data, error } = await supabase
-        .from('organisation_units')
-        .update(updates)
-        .eq('id', id)
+  // Create Branch
+  const createBranchMutation = useMutation(
+    async (data: Partial<BranchData>) => {
+      const { data: branch, error } = await supabase
+        .from('branches')
+        .insert([{
+          name: data.name,
+          code: data.code,
+          school_id: data.school_id,
+          description: data.description,
+          status: data.status || 'active'
+        }])
         .select()
         .single();
 
       if (error) throw error;
-      return data;
+
+      // Insert additional data if provided
+      if (data.additional) {
+        await supabase
+          .from('branches_additional')
+          .insert([{
+            ...data.additional,
+            branch_id: branch.id
+          }]);
+      }
+
+      return branch;
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['organisations']);
-        toast.success('Organisation updated successfully');
-        setEditMode(false);
+        queryClient.invalidateQueries(['organization']);
+        toast.success('Branch created successfully');
+        setShowModal(false);
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to update organisation');
+        toast.error(error.message || 'Failed to create branch');
       }
     }
   );
 
-  // Delete organisation mutation
-  const deleteOrgMutation = useMutation(
-    async (id: string) => {
+  // Create Department
+  const createDepartmentMutation = useMutation(
+    async (data: Partial<Department>) => {
       const { error } = await supabase
-        .from('organisation_units')
-        .delete()
-        .eq('id', id);
+        .from('entity_departments')
+        .insert([data]);
 
       if (error) throw error;
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['organisations']);
-        toast.success('Organisation deleted successfully');
-        setShowDetailsPanel(false);
+        queryClient.invalidateQueries(['departments']);
+        toast.success('Department created successfully');
+        setShowModal(false);
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to delete organisation');
+        toast.error(error.message || 'Failed to create department');
       }
     }
   );
 
+  // ===== UI HELPER FUNCTIONS =====
   const toggleNode = (id: string) => {
     const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(id)) {
@@ -347,504 +465,536 @@ export default function OrganisationManagement() {
     setExpandedNodes(newExpanded);
   };
 
-  const handleOrgClick = (org: Organisation) => {
-    setSelectedOrg(org);
+  const handleItemClick = (item: any, type: 'company' | 'school' | 'branch') => {
+    setSelectedItem(item);
+    setSelectedType(type);
     setShowDetailsPanel(true);
     setEditMode(false);
+    setActiveTab('details');
+    setFormData(item.additional || {});
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this organisation and all its sub-units? This action cannot be undone.')) {
-      deleteOrgMutation.mutate(id);
+  const handleSaveDetails = () => {
+    if (selectedType === 'company') {
+      updateCompanyMutation.mutate({
+        ...formData,
+        company_id: selectedItem.id
+      });
     }
+    // Add similar handlers for school and branch updates
   };
 
-  // Organisation Card Component
-  const OrgCard: React.FC<{ org: Organisation; level: number }> = ({ org, level }) => {
-    const isExpanded = expandedNodes.has(org.id);
-    const hasChildren = org.children && org.children.length > 0;
-    const theme = orgThemes[org.type] || orgThemes.department;
-    const Icon = getOrgIcon(org.type);
+  // ===== RENDER ORGANIZATION TREE =====
+  const renderOrganizationTree = () => {
+    if (!companyData) return null;
 
     return (
-      <div className="org-node">
-        <div className={`
-          org-card group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 
-          ${selectedOrg?.id === org.id ? theme.border : 'border-gray-200 dark:border-gray-700'}
-          hover:shadow-lg transition-all duration-200 cursor-pointer
-          ${level === 0 ? 'min-w-[300px]' : 'min-w-[250px]'}
-        `}
-        onClick={() => handleOrgClick(org)}>
-          {/* Color bar at top */}
-          <div className={`h-1 ${theme.bg} rounded-t-lg`} />
-          
-          <div className="p-4">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 ${theme.light} rounded-lg flex items-center justify-center`}>
-                  <Icon className={`w-5 h-5 ${theme.text}`} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">
-                    {org.name}
-                  </h3>
-                  {org.manager_name && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {org.manager_name}
-                    </p>
-                  )}
-                  {org.manager_title && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {org.manager_title}
-                    </p>
-                  )}
-                </div>
-              </div>
+      <div className="space-y-2">
+        {/* Company Level */}
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+          <div 
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => handleItemClick(companyData, 'company')}
+          >
+            <div className="flex items-center">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleOrgClick(org);
-                  setEditMode(true);
+                  toggleNode(companyData.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-all"
+                className="mr-2"
               >
-                <Edit className="w-4 h-4" />
+                {expandedNodes.has(companyData.id) ? 
+                  <ChevronDown className="w-5 h-5" /> : 
+                  <ChevronRight className="w-5 h-5" />
+                }
               </button>
-            </div>
-
-            {/* Stats */}
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-medium text-gray-900 dark:text-white">
-                {org.employee_count || 0}
-              </span> Employees
-              {org.student_count && (
-                <span className="ml-3">
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {org.student_count}
-                  </span> Students
-                </span>
-              )}
-            </div>
-
-            {/* Expand indicator */}
-            {hasChildren && (
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleNode(org.id);
-                  }}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                >
-                  {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  <span>{org.children?.length} sub-units</span>
-                </button>
+              <Building2 className="w-5 h-5 text-blue-500 mr-3" />
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  {companyData.name}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {companyData.code} • {companyData.schools?.length || 0} schools
+                </p>
               </div>
-            )}
+            </div>
+            <span className={`px-2 py-1 text-xs rounded-full ${
+              companyData.status === 'active' 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+            }`}>
+              {companyData.status}
+            </span>
           </div>
-        </div>
 
-        {/* Children */}
-        {hasChildren && isExpanded && (
-          <div className="org-children mt-8 ml-12 relative">
-            {/* Connection line */}
-            <div 
-              className="absolute bg-gray-300 dark:bg-gray-600" 
-              style={{ 
-                top: '-2rem',
-                left: '50%',
-                width: '2px',
-                height: '2rem',
-                transform: 'translateX(-50%)'
-              }}
-            />
-            
-            <div className="flex gap-6 relative">
-              {/* Horizontal connection line */}
-              {org.children!.length > 1 && (
-                <div 
-                  className="absolute bg-gray-300 dark:bg-gray-600" 
-                  style={{ 
-                    top: '-1px',
-                    left: '0',
-                    right: '0',
-                    height: '2px'
-                  }}
-                />
-              )}
-              
-              {org.children!.map((child) => (
-                <div key={child.id} className="relative">
-                  {/* Vertical connection from horizontal line to card */}
+          {/* Schools */}
+          {expandedNodes.has(companyData.id) && companyData.schools && (
+            <div className="ml-8 mt-4 space-y-2">
+              {companyData.schools.map((school) => (
+                <div key={school.id} className="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
                   <div 
-                    className="absolute bg-gray-300 dark:bg-gray-600" 
-                    style={{ 
-                      left: '50%',
-                      top: '-8px',
-                      width: '2px',
-                      height: '8px',
-                      transform: 'translateX(-50%)'
-                    }}
-                  />
-                  <OrgCard org={child} level={level + 1} />
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => handleItemClick(school, 'school')}
+                  >
+                    <div className="flex items-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleNode(school.id);
+                        }}
+                        className="mr-2"
+                      >
+                        {expandedNodes.has(school.id) ? 
+                          <ChevronDown className="w-4 h-4" /> : 
+                          <ChevronRight className="w-4 h-4" />
+                        }
+                      </button>
+                      <School className="w-4 h-4 text-green-500 mr-2" />
+                      <div>
+                        <h4 className="font-medium text-gray-800 dark:text-gray-200">
+                          {school.name}
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {school.code} • {school.branches?.length || 0} branches
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      school.status === 'active' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    }`}>
+                      {school.status}
+                    </span>
+                  </div>
+
+                  {/* Branches */}
+                  {expandedNodes.has(school.id) && school.branches && (
+                    <div className="ml-8 mt-3 space-y-2">
+                      {school.branches.map((branch) => (
+                        <div 
+                          key={branch.id} 
+                          className="border border-gray-50 dark:border-gray-600 rounded-lg p-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                          onClick={() => handleItemClick(branch, 'branch')}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <MapPin className="w-4 h-4 text-purple-500 mr-2" />
+                              <div>
+                                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  {branch.name}
+                                </h5>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {branch.code}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              branch.status === 'active' 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                              {branch.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
+              
+              {/* Add School Button */}
+              <button
+                onClick={() => {
+                  setModalType('school');
+                  setShowModal(true);
+                }}
+                className="w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-green-500 hover:text-green-500 transition flex items-center justify-center"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add School
+              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   };
 
-  // Details Panel Component
-  const DetailsPanel = () => {
-    if (!selectedOrg) return null;
-
-    const theme = orgThemes[selectedOrg.type] || orgThemes.department;
-    const Icon = getOrgIcon(selectedOrg.type);
+  // ===== RENDER DETAILS PANEL =====
+  const renderDetailsPanel = () => {
+    if (!selectedItem || !showDetailsPanel) return null;
 
     return (
-      <div className={`
-        fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl 
-        transform transition-transform duration-300 z-50
-        ${showDetailsPanel ? 'translate-x-0' : 'translate-x-full'}
-      `}>
-        {/* Header */}
-        <div className={`p-6 border-b dark:border-gray-700 ${theme.light}`}>
+      <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl z-50 overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 ${theme.bg} rounded-lg flex items-center justify-center`}>
-                <Icon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {selectedOrg.name}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{selectedOrg.code}</p>
-              </div>
-            </div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
+            </h2>
             <button
               onClick={() => setShowDetailsPanel(false)}
-              className="text-gray-500 hover:text-gray-700"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
+          
+          {/* Tabs */}
+          <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`pb-2 px-1 ${activeTab === 'details' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => setActiveTab('departments')}
+              className={`pb-2 px-1 ${activeTab === 'departments' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Departments
+            </button>
+            {selectedType === 'school' && (
+              <button
+                onClick={() => setActiveTab('academic')}
+                className={`pb-2 px-1 ${activeTab === 'academic' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                  : 'text-gray-600 dark:text-gray-400'}`}
+              >
+                Academic
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Basic Info */}
-          <div className="p-6 space-y-4">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Organisation Details
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Type</span>
-                  <span className="text-sm font-medium capitalize">{selectedOrg.type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    selectedOrg.status === 'active' 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
-                  }`}>
-                    {selectedOrg.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Employees</span>
-                  <span className="text-sm font-medium">{selectedOrg.employee_count || 0}</span>
-                </div>
-                {selectedOrg.student_count !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Students</span>
-                    <span className="text-sm font-medium">{selectedOrg.student_count}</span>
-                  </div>
-                )}
-                {selectedOrg.teacher_count !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Teachers</span>
-                    <span className="text-sm font-medium">{selectedOrg.teacher_count}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Location */}
-            {(selectedOrg.address || selectedOrg.city || selectedOrg.country) && (
+        <div className="p-4">
+          {activeTab === 'details' && (
+            <div className="space-y-4">
+              {/* Basic Info */}
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                  Location
-                </h3>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {selectedOrg.address && <p>{selectedOrg.address}</p>}
-                  {(selectedOrg.city || selectedOrg.country) && (
-                    <p>{[selectedOrg.city, selectedOrg.country].filter(Boolean).join(', ')}</p>
-                  )}
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Basic Information</h3>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">Name</label>
+                    <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">Code</label>
+                    <p className="text-gray-900 dark:text-white">{selectedItem.code}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">Status</label>
+                    <p className="text-gray-900 dark:text-white capitalize">{selectedItem.status}</p>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Management */}
-            {(selectedOrg.manager_name || selectedOrg.manager_title) && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                  Management
-                </h3>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  {selectedOrg.manager_name && <p className="font-medium">{selectedOrg.manager_name}</p>}
-                  {selectedOrg.manager_title && <p className="text-gray-500">{selectedOrg.manager_title}</p>}
+              {/* Additional Info Form */}
+              {selectedType === 'company' && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Contact Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Main Phone</label>
+                      {editMode ? (
+                        <input
+                          type="text"
+                          value={formData.main_phone || ''}
+                          onChange={(e) => setFormData({...formData, main_phone: e.target.value})}
+                          className="w-full px-3 py-1 border rounded dark:bg-gray-700 dark:border-gray-600"
+                        />
+                      ) : (
+                        <p className="text-gray-900 dark:text-white">
+                          {selectedItem.additional?.main_phone || 'Not set'}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Main Email</label>
+                      {editMode ? (
+                        <input
+                          type="email"
+                          value={formData.main_email || ''}
+                          onChange={(e) => setFormData({...formData, main_email: e.target.value})}
+                          className="w-full px-3 py-1 border rounded dark:bg-gray-700 dark:border-gray-600"
+                        />
+                      ) : (
+                        <p className="text-gray-900 dark:text-white">
+                          {selectedItem.additional?.main_email || 'Not set'}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Website</label>
+                      {editMode ? (
+                        <input
+                          type="text"
+                          value={formData.website || ''}
+                          onChange={(e) => setFormData({...formData, website: e.target.value})}
+                          className="w-full px-3 py-1 border rounded dark:bg-gray-700 dark:border-gray-600"
+                        />
+                      ) : (
+                        <p className="text-gray-900 dark:text-white">
+                          {selectedItem.additional?.website || 'Not set'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Tabs for Departments, Positions, Grades */}
-            <div className="border-t dark:border-gray-700 pt-4">
-              <div className="flex gap-2 mb-4">
-                {selectedOrg.type !== 'school' ? (
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                {editMode ? (
                   <>
                     <button
-                      onClick={() => {
-                        setShowDepartments(!showDepartments);
-                        setShowPositions(false);
-                        setShowGrades(false);
-                      }}
-                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition ${
-                        showDepartments 
-                          ? `${theme.bg} text-white` 
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      }`}
+                      onClick={handleSaveDetails}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     >
-                      Departments
+                      <Save className="w-4 h-4 inline mr-2" />
+                      Save
                     </button>
                     <button
                       onClick={() => {
-                        setShowPositions(!showPositions);
-                        setShowDepartments(false);
-                        setShowGrades(false);
+                        setEditMode(false);
+                        setFormData(selectedItem.additional || {});
                       }}
-                      className={`flex-1 px-3 py-2 text-xs rounded-lg transition ${
-                        showPositions 
-                          ? `${theme.bg} text-white` 
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                      }`}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
-                      Positions
+                      Cancel
                     </button>
                   </>
                 ) : (
                   <button
-                    onClick={() => {
-                      setShowGrades(!showGrades);
-                      setShowDepartments(false);
-                      setShowPositions(false);
-                    }}
-                    className={`flex-1 px-3 py-2 text-xs rounded-lg transition ${
-                      showGrades 
-                        ? `${theme.bg} text-white` 
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
+                    onClick={() => setEditMode(true)}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
-                    Grades & Classes
+                    <Edit className="w-4 h-4 inline mr-2" />
+                    Edit Details
                   </button>
                 )}
               </div>
-
-              {/* Departments List */}
-              {showDepartments && (
-                <div className="space-y-2">
-                  {loadingDepts ? (
-                    <div className="text-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
-                    </div>
-                  ) : departments && departments.length > 0 ? (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium">Departments ({departments.length})</h4>
-                        <button className="text-xs text-blue-600 hover:text-blue-700">
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {departments.map(dept => (
-                        <div key={dept.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-medium text-sm">{dept.name}</p>
-                              <p className="text-xs text-gray-500">{dept.code}</p>
-                              {dept.head_of_department && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Head: {dept.head_of_department}
-                                </p>
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {dept.employee_count} employees
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No departments found</p>
-                  )}
-                </div>
-              )}
-
-              {/* Positions List */}
-              {showPositions && (
-                <div className="space-y-2">
-                  {loadingPositions ? (
-                    <div className="text-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
-                    </div>
-                  ) : positions && positions.length > 0 ? (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium">Positions ({positions.length})</h4>
-                        <button className="text-xs text-blue-600 hover:text-blue-700">
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {positions.map(position => (
-                        <div key={position.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-medium text-sm">{position.title}</p>
-                              <p className="text-xs text-gray-500">Level {position.level}</p>
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {position.employee_count} employees
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No positions found</p>
-                  )}
-                </div>
-              )}
-
-              {/* Grades List */}
-              {showGrades && (
-                <div className="space-y-2">
-                  {loadingGrades ? (
-                    <div className="text-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
-                    </div>
-                  ) : grades && grades.length > 0 ? (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium">Grades & Classes ({grades.length})</h4>
-                        <button className="text-xs text-blue-600 hover:text-blue-700">
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {grades.map(grade => (
-                        <div key={grade.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                          <div className="mb-2">
-                            <p className="font-medium text-sm">{grade.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {grade.student_count} students • {grade.sections.length} sections
-                            </p>
-                          </div>
-                          {grade.sections.length > 0 && (
-                            <div className="space-y-1 ml-3 border-l-2 border-gray-200 dark:border-gray-600 pl-3">
-                              {grade.sections.map(section => (
-                                <div key={section.id} className="flex justify-between text-xs">
-                                  <span className="text-gray-600 dark:text-gray-400">
-                                    Section {section.name}
-                                    {section.class_teacher && (
-                                      <span className="text-gray-500 ml-2">
-                                        ({section.class_teacher})
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="text-gray-500">
-                                    {section.current_students}/{section.capacity} students
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No grades found</p>
-                  )}
-                </div>
-              )}
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Actions */}
-        <div className="p-6 border-t dark:border-gray-700">
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                if (editMode) {
-                  updateOrgMutation.mutate(selectedOrg);
-                } else {
-                  setEditMode(true);
-                }
-              }}
-              className={`flex-1 px-4 py-2 ${theme.bg} text-white rounded-lg hover:opacity-90 transition`}
-            >
-              {editMode ? 'Save Changes' : 'Edit Organisation'}
-            </button>
-            <button
-              onClick={() => handleDelete(selectedOrg.id)}
-              className="px-4 py-2 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+          {activeTab === 'departments' && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
+                <button
+                  onClick={() => {
+                    setModalType('department');
+                    setShowModal(true);
+                  }}
+                  className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {departments && departments.length > 0 ? (
+                  departments.map((dept) => (
+                    <div key={dept.id} className="p-3 border rounded dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {dept.code} • {dept.employee_count} employees
+                          </p>
+                        </div>
+                        <span className={`px-2 py-1 text-xs rounded ${
+                          dept.status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {dept.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                    No departments found
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'academic' && selectedType === 'school' && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
+                <button className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {academicYears && academicYears.length > 0 ? (
+                  academicYears.map((year) => (
+                    <div key={year.id} className="p-3 border rounded dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
+                          </p>
+                        </div>
+                        {year.is_current && (
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                    No academic years found
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ===== RENDER CREATE MODAL =====
+  const renderCreateModal = () => {
+    if (!showModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Create New {modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}
+          </h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Name *
+              </label>
+              <input
+                type="text"
+                value={formData.name || ''}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                placeholder="Enter name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Code *
+              </label>
+              <input
+                type="text"
+                value={formData.code || ''}
+                onChange={(e) => setFormData({...formData, code: e.target.value})}
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                placeholder="Enter code"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Description
+              </label>
+              <textarea
+                value={formData.description || ''}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                rows={3}
+                placeholder="Enter description"
+              />
+            </div>
+            
+            <div className="flex space-x-3 pt-4">
+              <button
+                onClick={() => {
+                  if (modalType === 'school') {
+                    createSchoolMutation.mutate(formData);
+                  } else if (modalType === 'branch') {
+                    createBranchMutation.mutate({
+                      ...formData,
+                      school_id: selectedItem?.id
+                    });
+                  } else if (modalType === 'department') {
+                    createDepartmentMutation.mutate({
+                      ...formData,
+                      company_id: userCompanyId!,
+                      school_id: selectedType === 'school' ? selectedItem?.id : undefined,
+                      branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
+                    });
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setFormData({});
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
-  // Loading state
+  // ===== LOADING STATE =====
   if (!userCompanyId || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
           <p className="mt-4 text-gray-600 dark:text-gray-400">
-            {!userCompanyId ? 'Identifying your company...' : 'Loading organisation structure...'}
+            {!userCompanyId ? 'Identifying your company...' : 'Loading organization structure...'}
           </p>
         </div>
       </div>
     );
   }
 
-  // Error state
-  if (orgError && !organisations) {
+  // ===== ERROR STATE =====
+  if (error) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Unable to Load Organisation Data
+            Unable to Load Organization Data
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {orgError.message || 'An error occurred while loading your organisation structure.'}
+            {(error as Error).message || 'An error occurred while loading your organization structure.'}
           </p>
-          <Button onClick={() => refetch()} variant="primary">
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
             Try Again
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
+  // ===== MAIN RENDER =====
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
@@ -853,101 +1003,99 @@ export default function OrganisationManagement() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Organisation Management
+                Organization Management
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Manage organizational structure, hierarchies, and relationships
+                Manage your organizational structure, schools, and branches
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                onClick={() => {
-                  setEditingOrg(null);
-                  setShowModal(true);
-                }}
-                leftIcon={<Plus className="w-4 h-4" />}
-                variant="primary"
-              >
-                Add Organisation
-              </Button>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+              />
+              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                <Filter className="w-5 h-5" />
+              </button>
+              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                <Settings className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Organisation Chart */}
-      <div className="p-6 overflow-x-auto">
-        <div className="inline-block min-w-full">
-          {organisations && organisations.length > 0 ? (
-            <div className="flex flex-col items-center">
-              {organisations.map(org => (
-                <OrgCard key={org.id} org={org} level={0} />
-              ))}
+      {/* Main Content */}
+      <div className="p-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.length || 0}
+                </p>
+              </div>
+              <School className="w-8 h-8 text-green-500" />
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No Organisations Found
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-6">
-                Start building your organisation structure by adding your first unit
-              </p>
-              <Button
-                onClick={() => {
-                  setEditingOrg(null);
-                  setShowModal(true);
-                }}
-                leftIcon={<Plus className="w-4 h-4" />}
-                variant="primary"
-              >
-                Create First Organisation
-              </Button>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
+                </p>
+              </div>
+              <MapPin className="w-8 h-8 text-purple-500" />
             </div>
-          )}
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Units</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
+                </p>
+              </div>
+              <Activity className="w-8 h-8 text-blue-500" />
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc, school) => 
+                    acc + (school.additional?.teachers_count || 0), 0) || 0}
+                </p>
+              </div>
+              <Users className="w-8 h-8 text-orange-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Organization Tree */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Organization Structure
+          </h2>
+          {renderOrganizationTree()}
         </div>
       </div>
 
       {/* Details Panel */}
-      <DetailsPanel />
-
-      {/* Add/Edit Modal - Placeholder for now */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full">
-            <div className="p-6 border-b dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingOrg ? 'Edit Organisation' : 'Add Organisation'}
-              </h3>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-600 dark:text-gray-400">
-                Organisation form will be implemented here
-              </p>
-            </div>
-            <div className="p-6 border-t dark:border-gray-700 flex justify-end gap-3">
-              <Button
-                onClick={() => {
-                  setShowModal(false);
-                  setEditingOrg(null);
-                }}
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  // Implement save logic
-                  setShowModal(false);
-                }}
-                variant="primary"
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderDetailsPanel()}
+      
+      {/* Create Modal */}
+      {renderCreateModal()}
     </div>
   );
 }
