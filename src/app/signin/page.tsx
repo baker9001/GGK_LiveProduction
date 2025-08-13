@@ -14,6 +14,16 @@ interface LoginFormData {
   password: string;
 }
 
+// Generate a strong, unique password for Supabase based on user email
+// This is separate from the password stored in admin_users table
+function generateSupabasePassword(email: string, userId: string): string {
+  // Create a strong, unique password that Supabase will accept
+  // This combines multiple factors to ensure uniqueness and strength
+  const baseString = `GGK_${email}_${userId}_SecureAuth2024!`;
+  const hash = btoa(baseString).replace(/[^a-zA-Z0-9]/g, '');
+  return `${hash.substring(0, 20)}@Ggk2024!`; // Ensures uppercase, lowercase, number, special char
+}
+
 export default function SignInPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -84,57 +94,88 @@ export default function SignInPage() {
         throw new Error('Invalid credentials');
       }
 
-      // Step 2: Compare password with hashed password
+      // Step 2: Compare password with hashed password in admin_users table
       const isValidPassword = await bcrypt.compare(data.password, user.password_hash);
       if (!isValidPassword) {
         throw new Error('Invalid credentials');
       }
 
-      // Step 3: Create or sign in with Supabase Auth
-      // First, try to sign in
+      // Step 3: Create or sign in with Supabase Auth using a secure password
+      // Generate a strong, unique password for Supabase
+      const supabasePassword = generateSupabasePassword(user.email, user.id);
+      
+      // First, try to sign in with the generated password
       const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password
+        email: user.email,
+        password: supabasePassword
       });
 
       if (signInError) {
-        console.log('Supabase sign-in failed, attempting to create user:', signInError.message);
+        console.log('Supabase sign-in failed, creating new Supabase user...');
         
-        // If sign-in fails, try to create the user in Supabase Auth
+        // If sign-in fails, create the user in Supabase Auth with the strong password
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password,
+          email: user.email,
+          password: supabasePassword,
           options: {
             emailRedirectTo: window.location.origin + '/auth/callback',
             data: {
               name: user.name,
               user_type: 'system',
-              role: user.roles?.name || 'Viewer'
+              role: user.roles?.name || 'Viewer',
+              admin_user_id: user.id // Link to admin_users table
             }
           }
         });
 
         if (signUpError) {
           console.error('Failed to create Supabase auth user:', signUpError);
-          // Continue anyway - the custom auth will work for UI
-          // but API calls might fail
-        } else {
-          console.log('Created new Supabase auth user');
           
-          // Now try to sign in again
-          const { data: retryAuthData, error: retryError } = await supabase.auth.signInWithPassword({
-            email: data.email,
-            password: data.password
+          // If it's still a weak password error, try an even stronger one
+          if (signUpError.message?.includes('weak')) {
+            const strongerPassword = `${supabasePassword}_${Date.now()}`;
+            
+            const { data: retrySignUp, error: retrySignUpError } = await supabase.auth.signUp({
+              email: user.email,
+              password: strongerPassword,
+              options: {
+                emailRedirectTo: window.location.origin + '/auth/callback',
+                data: {
+                  name: user.name,
+                  user_type: 'system',
+                  role: user.roles?.name || 'Viewer',
+                  admin_user_id: user.id
+                }
+              }
+            });
+            
+            if (!retrySignUpError) {
+              console.log('Created Supabase user with stronger password');
+              
+              // Sign in with the stronger password
+              await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: strongerPassword
+              });
+            }
+          }
+        } else {
+          console.log('Created new Supabase auth user successfully');
+          
+          // Now sign in with the new account
+          const { data: newAuthData, error: newSignInError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: supabasePassword
           });
 
-          if (retryError) {
-            console.error('Still failed to sign in after creating user:', retryError);
+          if (newSignInError) {
+            console.warn('Could not sign in after creating user:', newSignInError);
           } else {
-            console.log('Successfully signed in with Supabase after creating user');
+            console.log('Successfully signed in with new Supabase account');
           }
         }
       } else {
-        console.log('Successfully signed in with Supabase');
+        console.log('Successfully signed in with existing Supabase account');
       }
 
       // Step 4: Map role name to UserRole type
@@ -163,7 +204,7 @@ export default function SignInPage() {
       if (session) {
         console.log('Supabase session created successfully');
       } else {
-        console.warn('Warning: No Supabase session created. API calls may fail.');
+        console.warn('Warning: No Supabase session. API calls may fail. This is OK if custom auth works.');
       }
 
       // Redirect after a brief delay to show success state
@@ -204,8 +245,8 @@ export default function SignInPage() {
         throw new Error('Failed to check dev user');
       }
 
-      const devPassword = 'dev_password'; // Default dev password
-
+      const devPassword = 'dev_password'; // Password for admin_users table
+      
       if (!user) {
         // Create dev admin user if it doesn't exist
         const salt = await bcrypt.genSalt(10);
@@ -241,24 +282,29 @@ export default function SignInPage() {
 
         if (insertError) throw insertError;
 
-        // Create Supabase auth user for dev
-        await supabase.auth.signUp({
+        // Create Supabase auth user with strong password
+        const supabasePassword = generateSupabasePassword('bakir.alramadi@gmail.com', newUser.id);
+        
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: 'bakir.alramadi@gmail.com',
-          password: devPassword,
+          password: supabasePassword,
           options: {
             data: {
               name: 'Baker R.',
               user_type: 'system',
-              role: 'Super Admin'
+              role: 'Super Admin',
+              admin_user_id: newUser.id
             }
           }
         });
 
-        // Sign in with Supabase
-        await supabase.auth.signInWithPassword({
-          email: 'bakir.alramadi@gmail.com',
-          password: devPassword
-        });
+        if (!signUpError) {
+          // Sign in with Supabase
+          await supabase.auth.signInWithPassword({
+            email: 'bakir.alramadi@gmail.com',
+            password: supabasePassword
+          });
+        }
 
         // Create user object for new user
         const authenticatedUser: User = {
@@ -270,33 +316,42 @@ export default function SignInPage() {
 
         setAuthenticatedUser(authenticatedUser);
       } else {
-        // Sign in with Supabase for existing dev user
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        // User exists, create/sign in with Supabase
+        const supabasePassword = generateSupabasePassword('bakir.alramadi@gmail.com', user.id);
+        
+        // Try to sign in first
+        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
           email: 'bakir.alramadi@gmail.com',
-          password: devPassword
+          password: supabasePassword
         });
 
         if (signInError) {
-          console.log('Supabase sign-in failed for dev user, attempting to create:', signInError.message);
+          console.log('Creating Supabase account for dev user...');
           
-          // Try to create if doesn't exist
-          await supabase.auth.signUp({
+          // Create if doesn't exist
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: 'bakir.alramadi@gmail.com',
-            password: devPassword,
+            password: supabasePassword,
             options: {
               data: {
                 name: user.name,
                 user_type: 'system',
-                role: user.roles?.name || 'Super Admin'
+                role: user.roles?.name || 'Super Admin',
+                admin_user_id: user.id
               }
             }
           });
 
-          // Try signing in again
-          await supabase.auth.signInWithPassword({
-            email: 'bakir.alramadi@gmail.com',
-            password: devPassword
-          });
+          if (!signUpError) {
+            // Try signing in again
+            await supabase.auth.signInWithPassword({
+              email: 'bakir.alramadi@gmail.com',
+              password: supabasePassword
+            });
+            console.log('Created and signed in with Supabase account');
+          }
+        } else {
+          console.log('Signed in with existing Supabase account');
         }
 
         // Map role name to UserRole type
@@ -324,7 +379,7 @@ export default function SignInPage() {
       if (session) {
         console.log('Dev user Supabase session created successfully');
       } else {
-        console.warn('Warning: No Supabase session for dev user. API calls may fail.');
+        console.warn('Warning: No Supabase session for dev user.');
       }
 
       setSuccess(true);
