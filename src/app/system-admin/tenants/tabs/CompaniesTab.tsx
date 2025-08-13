@@ -1,8 +1,12 @@
 // /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
+// Complete standardized company management with ALL features preserved
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key } from 'lucide-react';
+import { 
+  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
+  Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key 
+} from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -16,7 +20,9 @@ import { SearchableMultiSelect } from '../../../../components/shared/SearchableM
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
+import { userService, entityUserSchema, UserServiceError } from '../../../../services/userService';
 
+// ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   code: z.string().optional(),
@@ -28,20 +34,25 @@ const companySchema = z.object({
   status: z.enum(['active', 'inactive'])
 });
 
-// Tenant Admin Schema
 const tenantAdminSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
   position: z.string().optional(),
   department: z.string().optional(),
   employee_id: z.string().optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string()
-}).refine((data) => data.password === data.confirmPassword, {
+  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  confirmPassword: z.string().optional()
+}).refine((data) => {
+  if (data.password && data.password !== data.confirmPassword) {
+    throw new Error('Passwords don\'t match');
+  }
+  return true;
+}, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
 
+// ===== TYPE DEFINITIONS =====
 interface FilterState {
   search: string;
   region_ids: string[];
@@ -49,7 +60,7 @@ interface FilterState {
   status: string[];
 }
 
-type Company = {
+interface Company {
   id: string;
   name: string;
   code: string | null;
@@ -64,20 +75,20 @@ type Company = {
   created_at: string;
   admin_count?: number;
   entity_users?: any[];
-};
+}
 
-type Region = {
+interface Region {
   id: string;
   name: string;
   status: 'active' | 'inactive';
-};
+}
 
-type Country = {
+interface Country {
   id: string;
   name: string;
   region_id: string;
   status: 'active' | 'inactive';
-};
+}
 
 interface FormState {
   name: string;
@@ -100,6 +111,28 @@ interface TenantAdminFormData {
   confirmPassword: string;
 }
 
+interface CompanyAdmin {
+  id: string;
+  user_id: string;
+  company_id: string;
+  position?: string;
+  department?: string;
+  employee_id?: string;
+  hire_date?: string;
+  is_company_admin: boolean;
+  created_at: string;
+  updated_at: string;
+  users?: {
+    id: string;
+    email: string;
+    phone?: string;
+    user_type: string;
+    is_active: boolean;
+    last_sign_in_at?: string;
+  };
+}
+
+// ===== MAIN COMPONENT =====
 export default function CompaniesTab() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -133,7 +166,7 @@ export default function CompaniesTab() {
   // View/Manage Admins state
   const [isViewAdminsOpen, setIsViewAdminsOpen] = useState(false);
   const [selectedCompanyForView, setSelectedCompanyForView] = useState<Company | null>(null);
-  const [companyAdmins, setCompanyAdmins] = useState<any[]>([]);
+  const [companyAdmins, setCompanyAdmins] = useState<CompanyAdmin[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [returnToViewAfterAdd, setReturnToViewAfterAdd] = useState(false);
   const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
@@ -150,6 +183,8 @@ export default function CompaniesTab() {
     status: 'active'
   });
 
+  // ===== QUERIES =====
+  
   // Fetch regions
   const { data: regions = [] } = useQuery<Region[]>(
     ['regions'],
@@ -164,11 +199,11 @@ export default function CompaniesTab() {
       return data || [];
     },
     {
-      staleTime: 10 * 60 * 1000, // 10 minutes
+      staleTime: 10 * 60 * 1000,
     }
   );
 
-  // Fetch countries based on selected regions for filter
+  // Fetch countries for filter
   const { data: filterCountries = [] } = useQuery<Country[]>(
     ['filter-countries', filters.region_ids],
     async () => {
@@ -195,7 +230,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Fetch countries for the form based on selected region
+  // Fetch countries for form
   const { data: formCountries = [] } = useQuery<Country[]>(
     ['form-countries', formState.region_id],
     async () => {
@@ -268,10 +303,9 @@ export default function CompaniesTab() {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
 
-      // Fetch related data separately
+      // Fetch related data separately for performance
       const companyIds = data?.map(item => item.id) || [];
       const regionIds = [...new Set(data?.map(item => item.region_id) || [])].filter(Boolean);
       const countryIds = [...new Set(data?.map(item => item.country_id) || [])].filter(Boolean);
@@ -310,7 +344,9 @@ export default function CompaniesTab() {
     }
   );
 
-  // Create/update company mutation
+  // ===== MUTATIONS =====
+  
+  // Company mutation
   const mutation = useMutation(
     async (formData: FormState) => {
       const data = {
@@ -358,7 +394,7 @@ export default function CompaniesTab() {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
             if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
+              errors[err.path[0] as string] = err.message;
             }
           });
           setFormErrors(errors);
@@ -371,172 +407,98 @@ export default function CompaniesTab() {
     }
   );
 
-  // Create tenant admin mutation - FIXED to properly use Supabase Auth
+  // Standardized tenant admin mutation
   const tenantAdminMutation = useMutation(
     async (formData: TenantAdminFormData) => {
-      // Validate with zod
-      tenantAdminSchema.parse(formData);
+      try {
+        // Validate input
+        const validatedData = tenantAdminSchema.parse(formData);
 
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        throw new Error('Please enter a valid email address');
-      }
+        if (!selectedCompanyForAdmin?.id) {
+          throw new UserServiceError('No company selected');
+        }
 
-      if (!selectedCompanyForAdmin?.id) {
-        throw new Error('No company selected');
-      }
+        const companyId = selectedCompanyForAdmin.id;
 
-      const companyId = selectedCompanyForAdmin.id;
-
-      // Step 1: Check if email already exists in auth.users via the users table
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', formData.email)
-        .maybeSingle();
-
-      if (existingUser) {
-        // User exists, check if they're already linked to this company
-        const { data: existingEntityUser } = await supabase
-          .from('entity_users')
-          .select('id')
-          .eq('user_id', existingUser.id)
-          .eq('company_id', companyId)
+        // Check if user already exists and get their status
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', validatedData.email.toLowerCase())
           .maybeSingle();
 
-        if (existingEntityUser) {
-          throw new Error('This user is already associated with this company');
-        }
+        if (existingUser) {
+          // User exists - check if already linked to this company
+          const { data: existingLink } = await supabase
+            .from('entity_users')
+            .select('id')
+            .eq('user_id', existingUser.id)
+            .eq('company_id', companyId)
+            .maybeSingle();
 
-        // Link existing user to company as admin
-        const { error: linkError } = await supabase
-          .from('entity_users')
-          .insert([{
-            user_id: existingUser.id,
-            company_id: companyId,
-            position: formData.position || 'Administrator',
-            department: formData.department || 'Management',
-            employee_id: formData.employee_id || null,
-            hire_date: new Date().toISOString().split('T')[0],
-            is_company_admin: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }]);
-
-        if (linkError) throw linkError;
-
-        return { type: 'linked', user: existingUser };
-      }
-
-      // Step 2: Create new user using Supabase Auth
-      // Use signUp to create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.email.split('@')[0],
-            phone: formData.phone,
-            user_type: 'entity',
-            company_id: companyId,
-            position: formData.position,
-            department: formData.department
-          },
-          emailRedirectTo: undefined // Disable email confirmation for admin-created users
-        }
-      });
-
-      if (authError) {
-        console.error('Auth error:', authError);
-        
-        // Check if it's a rate limit or email issue
-        if (authError.message?.includes('rate limit') || authError.message?.includes('email')) {
-          // For development/testing, inform the user
-          throw new Error('Unable to send confirmation email. User creation may be rate limited. Please try again later.');
-        }
-        throw authError;
-      }
-
-      if (!authData?.user) {
-        throw new Error('Failed to create user account');
-      }
-
-      const userId = authData.user.id;
-
-      // Step 3: Create or update users table record
-      // Check if trigger already created the user record
-      let { data: userRecord } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!userRecord) {
-        // Create user record if trigger didn't
-        const { data: newUserRecord, error: createUserError } = await supabase
-          .from('users')
-          .insert([{
-            id: userId,
-            email: formData.email,
-            phone: formData.phone || null,
-            user_type: 'entity',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            last_sign_in_at: null,
-            raw_app_meta_data: authData.user.app_metadata || {},
-            raw_user_meta_data: authData.user.user_metadata || {}
-          }])
-          .select()
-          .single();
-
-        if (createUserError) {
-          console.error('Failed to create user record:', createUserError);
-          // Try to clean up auth user
-          try {
-            // Note: We can't delete auth users from client-side
-            // This would need a server-side function
-          } catch (e) {
-            console.error('Failed to clean up auth user:', e);
+          if (existingLink) {
+            throw new UserServiceError('This user is already associated with this company');
           }
-          throw new Error(`Failed to create user record: ${createUserError.message}`);
+
+          // Link existing user to company as admin
+          const { error: linkError } = await supabase
+            .from('entity_users')
+            .insert([{
+              user_id: existingUser.id,
+              company_id: companyId,
+              position: validatedData.position || 'Administrator',
+              department: validatedData.department || 'Management',
+              employee_id: validatedData.employee_id || null,
+              hire_date: new Date().toISOString().split('T')[0],
+              is_company_admin: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]);
+
+          if (linkError) throw linkError;
+
+          return { 
+            type: 'linked', 
+            user: existingUser,
+            company: selectedCompanyForAdmin
+          };
         }
-        userRecord = newUserRecord;
-      }
 
-      // Step 4: Create entity_users record
-      const { data: entityUser, error: entityError } = await supabase
-        .from('entity_users')
-        .insert([{
-          user_id: userId,
+        // User doesn't exist - create new using standardized service
+        if (!validatedData.password) {
+          throw new UserServiceError('Password is required for new users');
+        }
+
+        // Use standardized service for user creation
+        const newUser = await userService.createEntityUser({
+          email: validatedData.email,
+          name: validatedData.email.split('@')[0], // Default name from email
+          password: validatedData.password,
           company_id: companyId,
-          position: formData.position || 'Administrator',
-          department: formData.department || 'Management',
-          employee_id: formData.employee_id || null,
-          hire_date: new Date().toISOString().split('T')[0],
+          position: validatedData.position || 'Administrator',
+          department: validatedData.department || 'Management',
+          employee_id: validatedData.employee_id,
           is_company_admin: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+          phone: validatedData.phone,
+          is_active: true
+        });
 
-      if (entityError) {
-        console.error('Failed to create entity_users record:', entityError);
-        
-        // Clean up: delete user record
-        await supabase.from('users').delete().eq('id', userId);
-        
-        throw new Error(`Failed to link user to company: ${entityError.message}`);
+        return { 
+          type: 'created', 
+          user: newUser,
+          company: selectedCompanyForAdmin
+        };
+
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          throw { validationErrors: error.flatten().fieldErrors };
+        }
+        throw error;
       }
-
-      return { type: 'created', user: authData.user };
     },
     {
       onSuccess: (result) => {
-        const companyName = selectedCompanyForAdmin?.name;
-        const companyId = selectedCompanyForAdmin?.id;
+        const companyName = result.company?.name;
         
         queryClient.invalidateQueries(['companies']);
         setIsAdminFormOpen(false);
@@ -545,8 +507,8 @@ export default function CompaniesTab() {
         resetAdminForm();
         
         // Return to View Admins modal if we came from there
-        if (returnToViewAfterAdd && selectedCompanyForView && companyId) {
-          fetchCompanyAdmins(companyId);
+        if (returnToViewAfterAdd && selectedCompanyForView && result.company?.id) {
+          fetchCompanyAdmins(result.company.id);
           setIsViewAdminsOpen(true);
           setReturnToViewAfterAdd(false);
         }
@@ -558,14 +520,15 @@ export default function CompaniesTab() {
         }
       },
       onError: (error: any) => {
-        if (error instanceof z.ZodError) {
+        if (error.validationErrors) {
           const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
+          Object.entries(error.validationErrors).forEach(([key, value]) => {
+            errors[key] = Array.isArray(value) ? value[0] : value as string;
           });
           setAdminFormErrors(errors);
+        } else if (error instanceof UserServiceError) {
+          setAdminFormErrors({ form: error.message });
+          toast.error(error.message);
         } else {
           console.error('Error creating tenant admin:', error);
           const errorMessage = error.message || 'Failed to create tenant admin';
@@ -591,7 +554,7 @@ export default function CompaniesTab() {
         }
       }
 
-      // Delete companies from database
+      // Delete companies from database (cascade will handle related records)
       const { error } = await supabase
         .from('companies')
         .delete()
@@ -616,67 +579,6 @@ export default function CompaniesTab() {
     }
   );
 
-  // Reset admin form
-  const resetAdminForm = () => {
-    setAdminFormState({
-      email: '',
-      phone: '',
-      position: '',
-      department: '',
-      employee_id: '',
-      password: '',
-      confirmPassword: ''
-    });
-    setAdminFormErrors({});
-  };
-
-  // Fetch company admins
-  const fetchCompanyAdmins = async (companyId: string) => {
-    setLoadingAdmins(true);
-    try {
-      // First fetch entity_users
-      const { data: entityUsers, error: entityError } = await supabase
-        .from('entity_users')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('is_company_admin', true)
-        .order('created_at', { ascending: false });
-
-      if (entityError) throw entityError;
-
-      if (!entityUsers || entityUsers.length === 0) {
-        setCompanyAdmins([]);
-        return;
-      }
-
-      // Then fetch user details separately
-      const userIds = entityUsers.map(eu => eu.user_id);
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .in('id', userIds);
-
-      if (usersError) throw usersError;
-
-      // Create a map of users
-      const userMap = new Map(users?.map(u => [u.id, u]) || []);
-
-      // Combine the data
-      const adminsWithUsers = entityUsers.map(entityUser => ({
-        ...entityUser,
-        users: userMap.get(entityUser.user_id) || null
-      }));
-
-      setCompanyAdmins(adminsWithUsers);
-    } catch (error) {
-      console.error('Error fetching company admins:', error);
-      toast.error('Failed to fetch company admins');
-      setCompanyAdmins([]);
-    } finally {
-      setLoadingAdmins(false);
-    }
-  };
-
   // Update admin mutation
   const updateAdminMutation = useMutation(
     async ({ entityUserId, data }: { entityUserId: string; data: any }) => {
@@ -694,21 +596,12 @@ export default function CompaniesTab() {
 
       if (entityError) throw entityError;
 
-      // Update user record (email and phone)
+      // Update user record via standardized service if email/phone changed
       if (data.email || data.phone !== undefined) {
-        const updates: any = {
-          updated_at: new Date().toISOString()
-        };
-        
-        if (data.email) updates.email = data.email;
-        if (data.phone !== undefined) updates.phone = data.phone;
-        
-        const { error: userError } = await supabase
-          .from('users')
-          .update(updates)
-          .eq('id', data.user_id);
-
-        if (userError) throw userError;
+        await userService.updateUser(data.user_id, {
+          email: data.email,
+          phone: data.phone
+        });
       }
 
       return { success: true };
@@ -732,14 +625,12 @@ export default function CompaniesTab() {
   // Remove admin mutation
   const removeAdminMutation = useMutation(
     async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
-      // Remove from entity_users
       const { error } = await supabase
         .from('entity_users')
         .delete()
         .eq('id', entityUserId);
 
       if (error) throw error;
-
       return { entityUserId };
     },
     {
@@ -757,39 +648,66 @@ export default function CompaniesTab() {
     }
   );
 
-  // Update form state when editing company changes
-  React.useEffect(() => {
-    if (editingCompany) {
-      setFormState({
-        name: editingCompany.name,
-        code: editingCompany.code || '',
-        region_id: editingCompany.region_id,
-        country_id: editingCompany.country_id,
-        logo: editingCompany.logo || '',
-        address: editingCompany.address || '',
-        notes: editingCompany.notes || '',
-        status: editingCompany.status
-      });
-    } else {
-      setFormState({
-        name: '',
-        code: '',
-        region_id: '',
-        country_id: '',
-        logo: '',
-        address: '',
-        notes: '',
-        status: 'active'
-      });
-    }
-  }, [editingCompany]);
+  // ===== HELPER FUNCTIONS =====
+  
+  const resetAdminForm = () => {
+    setAdminFormState({
+      email: '',
+      phone: '',
+      position: '',
+      department: '',
+      employee_id: '',
+      password: '',
+      confirmPassword: ''
+    });
+    setAdminFormErrors({});
+  };
 
-  // Reset admin form when modal closes
-  React.useEffect(() => {
-    if (!isAdminFormOpen) {
-      resetAdminForm();
+  const fetchCompanyAdmins = async (companyId: string) => {
+    setLoadingAdmins(true);
+    try {
+      // Fetch entity_users with user details
+      const { data: entityUsers, error: entityError } = await supabase
+        .from('entity_users')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_company_admin', true)
+        .order('created_at', { ascending: false });
+
+      if (entityError) throw entityError;
+
+      if (!entityUsers || entityUsers.length === 0) {
+        setCompanyAdmins([]);
+        return;
+      }
+
+      // Fetch user details
+      const userIds = entityUsers.map(eu => eu.user_id);
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .in('id', userIds);
+
+      if (usersError) throw usersError;
+
+      // Create user map
+      const userMap = new Map(users?.map(u => [u.id, u]) || []);
+
+      // Combine data
+      const adminsWithUsers = entityUsers.map(entityUser => ({
+        ...entityUser,
+        users: userMap.get(entityUser.user_id) || null
+      }));
+
+      setCompanyAdmins(adminsWithUsers);
+    } catch (error) {
+      console.error('Error fetching company admins:', error);
+      toast.error('Failed to fetch company admins');
+      setCompanyAdmins([]);
+    } finally {
+      setLoadingAdmins(false);
     }
-  }, [isAdminFormOpen]);
+  };
 
   const getLogoUrl = (path: string | null) => {
     if (!path) return null;
@@ -848,6 +766,44 @@ export default function CompaniesTab() {
     setCompaniesToDelete([]);
   };
 
+  // ===== EFFECTS =====
+  
+  // Update form state when editing company changes
+  React.useEffect(() => {
+    if (editingCompany) {
+      setFormState({
+        name: editingCompany.name,
+        code: editingCompany.code || '',
+        region_id: editingCompany.region_id,
+        country_id: editingCompany.country_id,
+        logo: editingCompany.logo || '',
+        address: editingCompany.address || '',
+        notes: editingCompany.notes || '',
+        status: editingCompany.status
+      });
+    } else {
+      setFormState({
+        name: '',
+        code: '',
+        region_id: '',
+        country_id: '',
+        logo: '',
+        address: '',
+        notes: '',
+        status: 'active'
+      });
+    }
+  }, [editingCompany]);
+
+  // Reset admin form when modal closes
+  React.useEffect(() => {
+    if (!isAdminFormOpen) {
+      resetAdminForm();
+    }
+  }, [isAdminFormOpen]);
+
+  // ===== TABLE COLUMNS =====
+  
   const columns = [
     {
       id: 'logo',
@@ -945,6 +901,8 @@ export default function CompaniesTab() {
     },
   ];
 
+  // ===== RENDER =====
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -965,6 +923,7 @@ export default function CompaniesTab() {
         </Button>
       </div>
 
+      {/* Filter Card */}
       <FilterCard
         title="Filters"
         onApply={() => {}}
@@ -978,10 +937,7 @@ export default function CompaniesTab() {
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <FormField
-            id="search"
-            label="Search"
-          >
+          <FormField id="search" label="Search">
             <Input
               id="search"
               placeholder="Search by name or code..."
@@ -992,10 +948,7 @@ export default function CompaniesTab() {
 
           <SearchableMultiSelect
             label="Region"
-            options={regions.map(r => ({
-              value: r.id,
-              label: r.name
-            }))}
+            options={regions.map(r => ({ value: r.id, label: r.name }))}
             selectedValues={filters.region_ids}
             onChange={(values) => setFilters({ ...filters, region_ids: values, country_ids: [] })}
             placeholder="Select regions..."
@@ -1003,10 +956,7 @@ export default function CompaniesTab() {
 
           <SearchableMultiSelect
             label="Country"
-            options={filterCountries.map(c => ({
-              value: c.id,
-              label: c.name
-            }))}
+            options={filterCountries.map(c => ({ value: c.id, label: c.name }))}
             selectedValues={filters.country_ids}
             onChange={(values) => setFilters({ ...filters, country_ids: values })}
             disabled={filters.region_ids.length === 0}
@@ -1026,6 +976,7 @@ export default function CompaniesTab() {
         </div>
       </FilterCard>
 
+      {/* Data Table */}
       <DataTable
         data={companies}
         columns={columns}
@@ -1036,7 +987,6 @@ export default function CompaniesTab() {
         isFetching={isFetching}
         renderActions={(company) => (
           <div className="flex items-center justify-end gap-1">
-            {/* View/Manage Admins Button */}
             <button
               onClick={() => {
                 setSelectedCompanyForView(company);
@@ -1052,7 +1002,6 @@ export default function CompaniesTab() {
               )}
             </button>
             
-            {/* Add Tenant Admin Button */}
             <button
               onClick={() => {
                 setSelectedCompanyForAdmin(company);
@@ -1064,7 +1013,6 @@ export default function CompaniesTab() {
               <UserPlus className="h-4 w-4" />
             </button>
             
-            {/* Edit Button */}
             <button
               onClick={() => {
                 setEditingCompany(company);
@@ -1076,7 +1024,6 @@ export default function CompaniesTab() {
               <Edit className="h-4 w-4" />
             </button>
             
-            {/* Delete Button */}
             <button
               onClick={() => handleDelete([company])}
               className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -1089,6 +1036,7 @@ export default function CompaniesTab() {
         emptyMessage="No companies found"
       />
 
+      {/* Company Form Modal */}
       <SlideInForm
         key={editingCompany?.id || 'new'}
         title={editingCompany ? 'Edit Company' : 'Create Company'}
@@ -1099,7 +1047,7 @@ export default function CompaniesTab() {
           setFormErrors({});
         }}
         onSave={() => {
-          const form = document.querySelector('form#company-form');
+          const form = document.querySelector('form#company-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
         loading={mutation.isLoading}
@@ -1111,12 +1059,7 @@ export default function CompaniesTab() {
             </div>
           )}
 
-          <FormField
-            id="name"
-            label="Name"
-            required
-            error={formErrors.name}
-          >
+          <FormField id="name" label="Name" required error={formErrors.name}>
             <Input
               id="name"
               name="name"
@@ -1126,11 +1069,7 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="code"
-            label="Code"
-            error={formErrors.code}
-          >
+          <FormField id="code" label="Code" error={formErrors.code}>
             <Input
               id="code"
               name="code"
@@ -1140,12 +1079,7 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="region_id"
-            label="Region"
-            required
-            error={formErrors.region_id}
-          >
+          <FormField id="region_id" label="Region" required error={formErrors.region_id}>
             <Select
               id="region_id"
               name="region_id"
@@ -1158,12 +1092,7 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="country_id"
-            label="Country"
-            required
-            error={formErrors.country_id}
-          >
+          <FormField id="country_id" label="Country" required error={formErrors.country_id}>
             <Select
               id="country_id"
               name="country_id"
@@ -1177,31 +1106,18 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="logo"
-            label="Company Logo"
-          >
-            <input
-              type="hidden"
-              name="logo"
-              value={formState.logo}
-            />
+          <FormField id="logo" label="Company Logo">
+            <input type="hidden" name="logo" value={formState.logo} />
             <ImageUpload
               id="logo"
               bucket="company-logos"
               value={formState.logo}
               publicUrl={formState.logo ? getLogoUrl(formState.logo) : null}
-              onChange={(path) => {
-                setFormState(prev => ({ ...prev, logo: path || '' }));
-              }}
+              onChange={(path) => setFormState(prev => ({ ...prev, logo: path || '' }))}
             />
           </FormField>
 
-          <FormField
-            id="address"
-            label="Address"
-            error={formErrors.address}
-          >
+          <FormField id="address" label="Address" error={formErrors.address}>
             <Textarea
               id="address"
               name="address"
@@ -1212,11 +1128,7 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="notes"
-            label="Notes"
-            error={formErrors.notes}
-          >
+          <FormField id="notes" label="Notes" error={formErrors.notes}>
             <Textarea
               id="notes"
               name="notes"
@@ -1227,12 +1139,7 @@ export default function CompaniesTab() {
             />
           </FormField>
 
-          <FormField
-            id="status"
-            label="Status"
-            required
-            error={formErrors.status}
-          >
+          <FormField id="status" label="Status" required error={formErrors.status}>
             <Select
               id="status"
               name="status"
@@ -1247,7 +1154,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form */}
+      {/* Tenant Admin Form Modal */}
       <SlideInForm
         key={selectedCompanyForAdmin?.id || 'admin-new'}
         title={`Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
@@ -1259,7 +1166,7 @@ export default function CompaniesTab() {
           setReturnToViewAfterAdd(false);
         }}
         onSave={() => {
-          const form = document.querySelector('form#admin-form');
+          const form = document.querySelector('form#admin-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
         loading={tenantAdminMutation.isLoading}
@@ -1276,12 +1183,7 @@ export default function CompaniesTab() {
           <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Account Information</h3>
             
-            <FormField
-              id="tenant-email"
-              label="Email Address"
-              required
-              error={adminFormErrors.email}
-            >
+            <FormField id="tenant-email" label="Email Address" required error={adminFormErrors.email}>
               <Input
                 id="tenant-email"
                 type="email"
@@ -1291,11 +1193,7 @@ export default function CompaniesTab() {
               />
             </FormField>
 
-            <FormField
-              id="tenant-phone"
-              label="Phone Number"
-              error={adminFormErrors.phone}
-            >
+            <FormField id="tenant-phone" label="Phone Number" error={adminFormErrors.phone}>
               <PhoneInput
                 value={adminFormState.phone}
                 onChange={(value) => setAdminFormState(prev => ({ ...prev, phone: value }))}
@@ -1308,11 +1206,7 @@ export default function CompaniesTab() {
           <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Employee Information</h3>
             
-            <FormField
-              id="tenant-position"
-              label="Position"
-              error={adminFormErrors.position}
-            >
+            <FormField id="tenant-position" label="Position" error={adminFormErrors.position}>
               <Input
                 id="tenant-position"
                 type="text"
@@ -1322,11 +1216,7 @@ export default function CompaniesTab() {
               />
             </FormField>
 
-            <FormField
-              id="tenant-department"
-              label="Department"
-              error={adminFormErrors.department}
-            >
+            <FormField id="tenant-department" label="Department" error={adminFormErrors.department}>
               <Input
                 id="tenant-department"
                 type="text"
@@ -1336,11 +1226,7 @@ export default function CompaniesTab() {
               />
             </FormField>
 
-            <FormField
-              id="tenant-employee-id"
-              label="Employee ID"
-              error={adminFormErrors.employee_id}
-            >
+            <FormField id="tenant-employee-id" label="Employee ID" error={adminFormErrors.employee_id}>
               <Input
                 id="tenant-employee-id"
                 type="text"
@@ -1351,15 +1237,15 @@ export default function CompaniesTab() {
             </FormField>
           </div>
 
-          {/* Password Section */}
+          {/* Password Section - Only for new users */}
           <div className="space-y-4 pb-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
             
-            <FormField
-              id="tenant-password"
-              label="Password"
-              required
+            <FormField 
+              id="tenant-password" 
+              label="Password" 
               error={adminFormErrors.password}
+              helpText="Leave blank if linking an existing user"
             >
               <Input
                 id="tenant-password"
@@ -1370,20 +1256,17 @@ export default function CompaniesTab() {
               />
             </FormField>
 
-            <FormField
-              id="tenant-confirm-password"
-              label="Confirm Password"
-              required
-              error={adminFormErrors.confirmPassword}
-            >
-              <Input
-                id="tenant-confirm-password"
-                type="password"
-                value={adminFormState.confirmPassword}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                placeholder="Re-enter password"
-              />
-            </FormField>
+            {adminFormState.password && (
+              <FormField id="tenant-confirm-password" label="Confirm Password" required error={adminFormErrors.confirmPassword}>
+                <Input
+                  id="tenant-confirm-password"
+                  type="password"
+                  value={adminFormState.confirmPassword}
+                  onChange={(e) => setAdminFormState(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  placeholder="Re-enter password"
+                />
+              </FormField>
+            )}
           </div>
 
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -1407,17 +1290,6 @@ export default function CompaniesTab() {
           </div>
         </form>
       </SlideInForm>
-
-      {/* Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        title="Delete Company"
-        message={`Are you sure you want to delete ${companiesToDelete.length} company(s)? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
 
       {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
@@ -1733,6 +1605,17 @@ export default function CompaniesTab() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        title="Delete Company"
+        message={`Are you sure you want to delete ${companiesToDelete.length} company(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }
