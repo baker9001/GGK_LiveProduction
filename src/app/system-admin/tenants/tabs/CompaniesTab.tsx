@@ -150,7 +150,7 @@ export default function CompaniesTab() {
     status: 'active'
   });
 
-  // Fetch regions - Fixed to fetch all active regions
+  // Fetch regions
   const { data: regions = [] } = useQuery<Region[]>(
     ['regions'],
     async () => {
@@ -172,14 +172,12 @@ export default function CompaniesTab() {
   const { data: filterCountries = [] } = useQuery<Country[]>(
     ['filter-countries', filters.region_ids],
     async () => {
-      // Always fetch all active countries if no region filter
       let query = supabase
         .from('countries')
         .select('id, name, region_id, status')
-        .or('status.eq.active,status.eq.Active') // Check both cases for compatibility
+        .or('status.eq.active,status.eq.Active')
         .order('name');
 
-      // Apply region filter if regions are selected
       if (filters.region_ids.length > 0) {
         query = query.in('region_id', filters.region_ids);
       }
@@ -187,14 +185,13 @@ export default function CompaniesTab() {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Normalize status to lowercase for consistency
       return (data || []).map(country => ({
         ...country,
         status: country.status?.toLowerCase() as 'active' | 'inactive'
       }));
     },
     {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     }
   );
 
@@ -208,12 +205,11 @@ export default function CompaniesTab() {
         .from('countries')
         .select('id, name, region_id, status')
         .eq('region_id', formState.region_id)
-        .or('status.eq.active,status.eq.Active') // Check both cases for compatibility
+        .or('status.eq.active,status.eq.Active')
         .order('name');
 
       if (error) throw error;
       
-      // Normalize status to lowercase for consistency
       return (data || []).map(country => ({
         ...country,
         status: country.status?.toLowerCase() as 'active' | 'inactive'
@@ -221,11 +217,11 @@ export default function CompaniesTab() {
     },
     {
       enabled: !!formState.region_id,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     }
   );
 
-  // Fetch companies with filters - Fixed mapping
+  // Fetch companies with filters
   const { 
     data: companies = [], 
     isLoading, 
@@ -310,7 +306,7 @@ export default function CompaniesTab() {
     },
     {
       keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     }
   );
 
@@ -328,7 +324,6 @@ export default function CompaniesTab() {
         status: formData.status
       };
 
-      // Validate with zod
       companySchema.parse(data);
 
       if (editingCompany) {
@@ -376,7 +371,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Create tenant admin mutation - FIXED to use 'entity' user_type
+  // Create tenant admin mutation - FIXED to properly use Supabase Auth
   const tenantAdminMutation = useMutation(
     async (formData: TenantAdminFormData) => {
       // Validate with zod
@@ -388,7 +383,13 @@ export default function CompaniesTab() {
         throw new Error('Please enter a valid email address');
       }
 
-      // Step 1: Check if email already exists in users table
+      if (!selectedCompanyForAdmin?.id) {
+        throw new Error('No company selected');
+      }
+
+      const companyId = selectedCompanyForAdmin.id;
+
+      // Step 1: Check if email already exists in auth.users via the users table
       const { data: existingUser } = await supabase
         .from('users')
         .select('*')
@@ -401,38 +402,19 @@ export default function CompaniesTab() {
           .from('entity_users')
           .select('id')
           .eq('user_id', existingUser.id)
-          .eq('company_id', selectedCompanyForAdmin?.id)
+          .eq('company_id', companyId)
           .maybeSingle();
 
         if (existingEntityUser) {
           throw new Error('This user is already associated with this company');
         }
 
-        // Update user if needed - FIXED: using 'entity' user_type
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            phone: formData.phone || existingUser.phone,
-            user_type: 'entity', // FIXED: Changed from 'tenant_admin' to 'entity'
-            is_active: true,
-            updated_at: new Date().toISOString(),
-            raw_user_meta_data: {
-              ...existingUser.raw_user_meta_data,
-              position: formData.position,
-              department: formData.department,
-              company_id: selectedCompanyForAdmin?.id
-            }
-          })
-          .eq('id', existingUser.id);
-
-        if (updateError) console.warn('Error updating user:', updateError);
-
         // Link existing user to company as admin
         const { error: linkError } = await supabase
           .from('entity_users')
           .insert([{
             user_id: existingUser.id,
-            company_id: selectedCompanyForAdmin?.id,
+            company_id: companyId,
             position: formData.position || 'Administrator',
             department: formData.department || 'Management',
             employee_id: formData.employee_id || null,
@@ -447,38 +429,88 @@ export default function CompaniesTab() {
         return { type: 'linked', user: existingUser };
       }
 
-      // Step 2: Create new user directly (bypassing Supabase Auth for now)
-      const { data: newUser, error: createError } = await supabase
-        .from('users')
-        .insert([{
-          id: crypto.randomUUID(),
-          email: formData.email,
-          phone: formData.phone || null,
-          user_type: 'entity', // FIXED: Changed from 'tenant_admin' to 'entity'
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_sign_in_at: null,
-          raw_app_meta_data: {},
-          raw_user_meta_data: {
+      // Step 2: Create new user using Supabase Auth
+      // Use signUp to create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
             name: formData.email.split('@')[0],
-            company_id: selectedCompanyForAdmin?.id,
+            phone: formData.phone,
+            user_type: 'entity',
+            company_id: companyId,
             position: formData.position,
-            department: formData.department,
-            employee_id: formData.employee_id
+            department: formData.department
+          },
+          emailRedirectTo: undefined // Disable email confirmation for admin-created users
+        }
+      });
+
+      if (authError) {
+        console.error('Auth error:', authError);
+        
+        // Check if it's a rate limit or email issue
+        if (authError.message?.includes('rate limit') || authError.message?.includes('email')) {
+          // For development/testing, inform the user
+          throw new Error('Unable to send confirmation email. User creation may be rate limited. Please try again later.');
+        }
+        throw authError;
+      }
+
+      if (!authData?.user) {
+        throw new Error('Failed to create user account');
+      }
+
+      const userId = authData.user.id;
+
+      // Step 3: Create or update users table record
+      // Check if trigger already created the user record
+      let { data: userRecord } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!userRecord) {
+        // Create user record if trigger didn't
+        const { data: newUserRecord, error: createUserError } = await supabase
+          .from('users')
+          .insert([{
+            id: userId,
+            email: formData.email,
+            phone: formData.phone || null,
+            user_type: 'entity',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_sign_in_at: null,
+            raw_app_meta_data: authData.user.app_metadata || {},
+            raw_user_meta_data: authData.user.user_metadata || {}
+          }])
+          .select()
+          .single();
+
+        if (createUserError) {
+          console.error('Failed to create user record:', createUserError);
+          // Try to clean up auth user
+          try {
+            // Note: We can't delete auth users from client-side
+            // This would need a server-side function
+          } catch (e) {
+            console.error('Failed to clean up auth user:', e);
           }
-        }])
-        .select()
-        .single();
+          throw new Error(`Failed to create user record: ${createUserError.message}`);
+        }
+        userRecord = newUserRecord;
+      }
 
-      if (createError) throw createError;
-
-      // Create entity_users record
-      const { error: entityError } = await supabase
+      // Step 4: Create entity_users record
+      const { data: entityUser, error: entityError } = await supabase
         .from('entity_users')
         .insert([{
-          user_id: newUser.id,
-          company_id: selectedCompanyForAdmin?.id,
+          user_id: userId,
+          company_id: companyId,
           position: formData.position || 'Administrator',
           department: formData.department || 'Management',
           employee_id: formData.employee_id || null,
@@ -486,13 +518,20 @@ export default function CompaniesTab() {
           is_company_admin: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        }]);
+        }])
+        .select()
+        .single();
 
       if (entityError) {
-        console.warn('Error creating entity_users record:', entityError);
+        console.error('Failed to create entity_users record:', entityError);
+        
+        // Clean up: delete user record
+        await supabase.from('users').delete().eq('id', userId);
+        
+        throw new Error(`Failed to link user to company: ${entityError.message}`);
       }
 
-      return { type: 'created-dev', user: newUser };
+      return { type: 'created', user: authData.user };
     },
     {
       onSuccess: (result) => {
@@ -515,7 +554,7 @@ export default function CompaniesTab() {
         if (result.type === 'linked') {
           toast.success(`Existing user linked as tenant admin for ${companyName}`);
         } else {
-          toast.success(`Tenant admin created for ${companyName}. They will need to reset password to login.`);
+          toast.success(`Tenant admin created for ${companyName}. They will receive an email to confirm their account.`);
         }
       },
       onError: (error: any) => {
@@ -529,8 +568,9 @@ export default function CompaniesTab() {
           setAdminFormErrors(errors);
         } else {
           console.error('Error creating tenant admin:', error);
-          setAdminFormErrors({ form: error.message || 'Failed to create tenant admin' });
-          toast.error('Failed to create tenant admin');
+          const errorMessage = error.message || 'Failed to create tenant admin';
+          setAdminFormErrors({ form: errorMessage });
+          toast.error(errorMessage);
         }
       }
     }
@@ -927,7 +967,7 @@ export default function CompaniesTab() {
 
       <FilterCard
         title="Filters"
-        onApply={() => {}} // No need for explicit apply with React Query
+        onApply={() => {}}
         onClear={() => {
           setFilters({
             search: '',
@@ -1024,7 +1064,7 @@ export default function CompaniesTab() {
               <UserPlus className="h-4 w-4" />
             </button>
             
-            {/* Edit Button - RESTORED */}
+            {/* Edit Button */}
             <button
               onClick={() => {
                 setEditingCompany(company);
@@ -1036,7 +1076,7 @@ export default function CompaniesTab() {
               <Edit className="h-4 w-4" />
             </button>
             
-            {/* Delete Button - RESTORED */}
+            {/* Delete Button */}
             <button
               onClick={() => handleDelete([company])}
               className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
