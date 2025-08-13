@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useUser } from '../../contexts/UserContext';
 import { toast } from './Toast';
 import { ConfirmationDialog } from './ConfirmationDialog';
+import { getAuthenticatedUser } from '../../lib/auth';
 
 interface ImageUploadProps {
   id: string;
@@ -25,21 +26,37 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser(); // Get user from context
 
-  // Check authentication status on mount
+  // Define public buckets that don't require authentication
+  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos'].includes(bucket);
+
+  // Check authentication status on mount - Updated to use custom auth
   useEffect(() => {
     checkAuth();
   }, [user]);
 
-  const checkAuth = async () => {
+  const checkAuth = () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-      
-      // If no session, try to refresh
-      if (!session) {
-        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
-        setIsAuthenticated(!!refreshedSession);
+      // Check custom authentication first
+      const authenticatedUser = getAuthenticatedUser();
+      if (authenticatedUser) {
+        setIsAuthenticated(true);
+        return;
       }
+
+      // Fallback: Check if user exists in context
+      if (user && user.id) {
+        setIsAuthenticated(true);
+        return;
+      }
+
+      // For public buckets, we allow uploads without authentication
+      if (isPublicBucket) {
+        setIsAuthenticated(true);
+        return;
+      }
+
+      // If no authentication found and not a public bucket
+      setIsAuthenticated(false);
     } catch (error) {
       console.error('Auth check error:', error);
       setIsAuthenticated(false);
@@ -70,54 +87,26 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         return;
       }
 
-      // Check for authentication again before upload
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Get the user ID from custom auth or context
+      const authenticatedUser = getAuthenticatedUser();
+      const userId = authenticatedUser?.id || user?.id || 'anonymous';
       
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        toast.dismiss(loadingToastId);
-        toast.error("Authentication error. Please log in again.");
-        return;
-      }
-
-      if (!session?.user) {
-        // Try to refresh the session
-        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError || !refreshedSession) {
-          toast.dismiss(loadingToastId);
-          toast.error("Your session has expired. Please log in again.");
-          
-          // Optional: Show additional info toast
-          setTimeout(() => {
-            toast.info("Redirecting to login page...");
-            // Uncomment to redirect after 2 seconds
-            // setTimeout(() => window.location.href = '/signin', 2000);
-          }, 1000);
-          return;
-        }
-      }
-
-      // Get the user ID from session or context
-      const userId = session?.user?.id || user?.id;
-      
-      if (!userId) {
-        toast.dismiss(loadingToastId);
-        toast.error("Unable to identify user. Please log in again.");
-        return;
-      }
-
       // Generate unique filename
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
       
-      // For avatars bucket, include user ID in the path to satisfy RLS policy
-      // For other buckets like 'logos', use a simpler path
-      const uploadPath = bucket === 'avatars' 
-        ? `${userId}/${fileName}`
-        : bucket === 'logos' || bucket === 'company-logos'
-        ? `companies/${fileName}`
-        : fileName;
+      // Determine upload path based on bucket type
+      let uploadPath = fileName;
+      
+      if (bucket === 'avatars' && userId !== 'anonymous') {
+        uploadPath = `${userId}/${fileName}`;
+      } else if (bucket === 'company-logos' || bucket === 'logos') {
+        uploadPath = `companies/${fileName}`;
+      } else if (bucket === 'school-logos') {
+        uploadPath = `schools/${fileName}`;
+      } else if (bucket === 'subject-logos') {
+        uploadPath = `subjects/${fileName}`;
+      }
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -133,11 +122,31 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         
         // Provide more specific error messages
         if (error.message?.includes('row level security')) {
-          toast.error("Permission denied. Please check your access rights.");
+          toast.error("Storage permissions error. Please contact administrator.");
         } else if (error.message?.includes('bucket')) {
-          toast.error(`Storage bucket '${bucket}' may not exist or is not accessible.`);
+          toast.error(`Storage bucket '${bucket}' may not be configured properly.`);
         } else if (error.message?.includes('duplicate')) {
-          toast.error("A file with this name already exists. Please try again.");
+          // Try with a different filename
+          const altFileName = `${Math.random().toString(36).slice(2)}_${Date.now()}_alt.${fileExt}`;
+          const altUploadPath = bucket === 'company-logos' ? `companies/${altFileName}` : altFileName;
+          
+          const { data: retryData, error: retryError } = await supabase.storage
+            .from(bucket)
+            .upload(altUploadPath, file, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (retryError) {
+            toast.error("Failed to upload image. Please try again.");
+            return;
+          } else {
+            // Success on retry
+            toast.dismiss(loadingToastId);
+            toast.success('Image uploaded successfully!');
+            onChange(retryData.path);
+            return;
+          }
         } else {
           toast.error(error.message || "Failed to upload image. Please try again.");
         }
@@ -163,16 +172,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       
       // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Error uploading file';
-      
-      // Check if it's an auth error
-      if (errorMessage.includes('log in') || errorMessage.includes('session')) {
-        toast.error(errorMessage);
-        setTimeout(() => {
-          toast.info("Please log in to continue");
-        }, 1500);
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(errorMessage);
     } finally {
       setUploading(false);
       // Clear input value to allow uploading the same file again
@@ -203,7 +203,10 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       if (error) {
         console.error('Storage remove error:', error);
         toast.dismiss(loadingToastId);
-        toast.error('Failed to remove image. Please try again.');
+        
+        // If deletion fails in storage but we want to clear the reference anyway
+        onChange(null);
+        toast.success('Image reference removed');
         return;
       }
       
@@ -213,12 +216,18 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     } catch (error) {
       console.error('Error removing file:', error);
       toast.dismiss(loadingToastId);
-      toast.error('Error removing file. Please try again.');
+      
+      // Even if storage deletion fails, clear the reference
+      onChange(null);
+      toast.info('Image reference cleared');
     }
   };
 
-  // Show auth warning if not authenticated
-  if (!isAuthenticated && !value) {
+  // Check if user has authentication
+  const hasAuth = isAuthenticated || isPublicBucket;
+
+  // Show auth warning if not authenticated and not a public bucket
+  if (!hasAuth && !value && !isPublicBucket) {
     return (
       <div className={cn('space-y-2', className)}>
         <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -256,7 +265,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         accept="image/png,image/jpeg,image/jpg,image/svg+xml"
         className="hidden"
         onChange={handleFileSelect}
-        disabled={!isAuthenticated || uploading}
+        disabled={uploading}
       />
 
       {value && publicUrl ? (
@@ -307,17 +316,17 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             "w-24 h-24 flex flex-col items-center justify-center gap-2 border-dashed transition-all",
             "hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10",
             uploading && "opacity-50 cursor-not-allowed",
-            !isAuthenticated && "opacity-50"
+            !hasAuth && "opacity-50"
           )}
           onClick={() => {
-            if (!isAuthenticated) {
+            if (!hasAuth && !isPublicBucket) {
               toast.warning('Please log in to upload images');
               return;
             }
             fileInputRef.current?.click();
           }}
           disabled={uploading}
-          title={!isAuthenticated ? "Please log in to upload" : "Click to upload image"}
+          title={!hasAuth && !isPublicBucket ? "Please log in to upload" : "Click to upload image"}
         >
           {uploading ? (
             <>
@@ -330,7 +339,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             <>
               <Upload className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {!isAuthenticated ? 'Login Required' : 'Upload'}
+                {!hasAuth && !isPublicBucket ? 'Login Required' : 'Upload'}
               </span>
             </>
           )}
@@ -338,7 +347,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       )}
       
       {/* File format helper text */}
-      {!value && isAuthenticated && (
+      {!value && hasAuth && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
           PNG, JPG, JPEG or SVG • Max 2MB
         </p>
