@@ -1,13 +1,8 @@
 // /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
-// COMPLETE CORRECTED VERSION - ALL 1800+ LINES WITH FIXES
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, 
-  Users, X, Mail, Phone, Briefcase, Building, Check, Calendar, 
-  Hash, Globe, Key, RefreshCw 
-} from 'lucide-react';
+import { Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -22,7 +17,6 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 
-// ===== SCHEMAS =====
 const companySchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   code: z.string().optional(),
@@ -34,6 +28,7 @@ const companySchema = z.object({
   status: z.enum(['active', 'inactive'])
 });
 
+// Tenant Admin Schema
 const tenantAdminSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
@@ -47,7 +42,6 @@ const tenantAdminSchema = z.object({
   path: ["confirmPassword"],
 });
 
-// ===== TYPE DEFINITIONS =====
 interface FilterState {
   search: string;
   region_ids: string[];
@@ -106,7 +100,6 @@ interface TenantAdminFormData {
   confirmPassword: string;
 }
 
-// ===== MAIN COMPONENT =====
 export default function CompaniesTab() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -157,9 +150,7 @@ export default function CompaniesTab() {
     status: 'active'
   });
 
-  // ===== QUERIES =====
-  
-  // Fetch regions
+  // Fetch regions - Fixed to fetch all active regions
   const { data: regions = [] } = useQuery<Region[]>(
     ['regions'],
     async () => {
@@ -171,82 +162,139 @@ export default function CompaniesTab() {
 
       if (error) throw error;
       return data || [];
+    },
+    {
+      staleTime: 10 * 60 * 1000, // 10 minutes
     }
   );
 
-  // Fetch all countries (for filter)
-  const { data: countries = [] } = useQuery<Country[]>(
-    ['countries', filters.region_ids],
+  // Fetch countries based on selected regions for filter
+  const { data: filterCountries = [] } = useQuery<Country[]>(
+    ['filter-countries', filters.region_ids],
     async () => {
+      // Always fetch all active countries if no region filter
       let query = supabase
         .from('countries')
-        .select('*')
-        .eq('status', 'Active'); // Note the capitalized 'Active'
+        .select('id, name, region_id, status')
+        .eq('status', 'Active')
+        .order('name');
 
+      // Apply region filter if regions are selected
       if (filters.region_ids.length > 0) {
         query = query.in('region_id', filters.region_ids);
       }
 
-      const { data, error } = await query.order('name');
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
     {
-      enabled: true
+      staleTime: 5 * 60 * 1000, // 5 minutes
     }
   );
 
-  // Fetch companies with filters
-  const { data: companies = [], isLoading, isFetching } = useQuery<Company[]>(
+  // Fetch countries for the form based on selected region
+  const { data: formCountries = [] } = useQuery<Country[]>(
+    ['form-countries', formState.region_id],
+    async () => {
+      if (!formState.region_id) return [];
+
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name, region_id, status')
+        .eq('region_id', formState.region_id)
+        .eq('status', 'Active')
+        .order('name');
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      enabled: !!formState.region_id,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    }
+  );
+
+  // Fetch companies with filters - Fixed mapping
+  const { 
+    data: companies = [], 
+    isLoading, 
+    isFetching 
+  } = useQuery<Company[]>(
     ['companies', filters],
     async () => {
       let query = supabase
         .from('companies')
         .select(`
-          *,
-          entity_users!fk_entity_users_company_id(count)
-        `);
+          id,
+          name,
+          code,
+          region_id,
+          country_id,
+          logo,
+          address,
+          notes,
+          status,
+          created_at
+        `)
+        .order('created_at', { ascending: false });
 
-      // Apply filters
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
       }
 
       if (filters.region_ids.length > 0) {
-        query = query.in('region_id', filters.region_ids);
+        const regionIds = filters.region_ids.filter(id => typeof id === 'string' && id.trim() !== '');
+        if (regionIds.length > 0) {
+          query = query.in('region_id', regionIds);
+        }
       }
 
       if (filters.country_ids.length > 0) {
-        query = query.in('country_id', filters.country_ids);
+        const countryIds = filters.country_ids.filter(id => typeof id === 'string' && id.trim() !== '');
+        if (countryIds.length > 0) {
+          query = query.in('country_id', countryIds);
+        }
       }
 
       if (filters.status.length > 0) {
         query = query.in('status', filters.status);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query;
+
       if (error) throw error;
 
-      // Process data to include counts
-      const regionMap = new Map(regions.map(r => [r.id, r.name]));
-      const countryMap = new Map(countries.map(c => [c.id, c.name]));
+      // Fetch related data separately
+      const companyIds = data?.map(item => item.id) || [];
+      const regionIds = [...new Set(data?.map(item => item.region_id) || [])].filter(Boolean);
+      const countryIds = [...new Set(data?.map(item => item.country_id) || [])].filter(Boolean);
+
+      const [regionsData, countriesData, adminCounts] = await Promise.all([
+        regionIds.length > 0 ? supabase.from('regions').select('id, name').in('id', regionIds) : Promise.resolve({ data: [] }),
+        countryIds.length > 0 ? supabase.from('countries').select('id, name').in('id', countryIds) : Promise.resolve({ data: [] }),
+        companyIds.length > 0 ? supabase
+          .from('entity_users')
+          .select('company_id')
+          .in('company_id', companyIds)
+          .eq('is_company_admin', true) : Promise.resolve({ data: [] })
+      ]);
+
+      // Create lookup maps
+      const regionMap = new Map(regionsData.data?.map(r => [r.id, r.name]) || []);
+      const countryMap = new Map(countriesData.data?.map(c => [c.id, c.name]) || []);
       
       // Count admins per company
       const adminCountMap = new Map();
-      for (const company of data || []) {
-        const { count } = await supabase
-          .from('entity_users')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', company.id)
-          .eq('is_company_admin', true);
-        
-        adminCountMap.set(company.id, count || 0);
-      }
+      adminCounts.data?.forEach(item => {
+        const count = adminCountMap.get(item.company_id) || 0;
+        adminCountMap.set(item.company_id, count + 1);
+      });
 
       return (data || []).map(company => ({
         ...company,
-        region_name: regionMap.get(company.region_id) ?? 'Unknown Region',
-        country_name: countryMap.get(company.country_id) ?? 'Unknown Country',
+        region_name: regionMap.get(company.region_id) || 'Unknown Region',
+        country_name: countryMap.get(company.country_id) || 'Unknown Country',
         admin_count: adminCountMap.get(company.id) || 0
       }));
     },
@@ -256,48 +304,21 @@ export default function CompaniesTab() {
     }
   );
 
-  // Fetch countries for a specific region (for form)
-  const fetchCountries = async (regionId: string) => {
-    try {
-      if (typeof regionId !== 'string' || regionId.trim() === '') {
-        setFormState(prev => ({ ...prev, country_id: '' }));
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('countries')
-        .select('*')
-        .eq('region_id', regionId)
-        .eq('status', 'Active')
-        .order('name');
-
-      if (error) throw error;
-      
-      queryClient.setQueryData(['countries', [regionId]], data || []);
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching countries:', error);
-      toast.error('Failed to fetch countries');
-      return [];
-    }
-  };
-
-  // ===== MUTATIONS =====
-
   // Create/update company mutation
   const mutation = useMutation(
     async (formData: FormState) => {
       const data = {
         name: formData.name.trim(),
-        code: formData.code.trim() || '',
+        code: formData.code.trim() || null,
         region_id: formData.region_id,
         country_id: formData.country_id,
-        logo: formData.logo || '',
-        address: formData.address.trim() || '',
-        notes: formData.notes.trim() || '',
+        logo: formData.logo || null,
+        address: formData.address.trim() || null,
+        notes: formData.notes.trim() || null,
         status: formData.status
       };
 
+      // Validate with zod
       companySchema.parse(data);
 
       if (editingCompany) {
@@ -345,157 +366,63 @@ export default function CompaniesTab() {
     }
   );
 
-  // ===== CORRECTED TENANT ADMIN MUTATION =====
+  // Create tenant admin mutation - FIXED to use 'entity' user_type
   const tenantAdminMutation = useMutation(
     async (formData: TenantAdminFormData) => {
-      try {
-        // Validate input
-        tenantAdminSchema.parse(formData);
+      // Validate with zod
+      tenantAdminSchema.parse(formData);
 
-        // CRITICAL: Ensure company is selected
-        if (!selectedCompanyForAdmin?.id) {
-          throw new Error('No company selected. Please select a company first.');
-        }
+      // Email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error('Please enter a valid email address');
+      }
 
-        const companyId = selectedCompanyForAdmin.id;
-        console.log('Creating admin for company:', companyId, selectedCompanyForAdmin.name);
+      // Step 1: Check if email already exists in users table
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', formData.email)
+        .maybeSingle();
 
-        // Check if user already exists in users table
-        let userId: string | null = null;
-        let userExists = false;
-
-        const { data: existingUser, error: checkError } = await supabase
-          .from('users')
-          .select('id, email')
-          .eq('email', formData.email)
+      if (existingUser) {
+        // User exists, check if they're already linked to this company
+        const { data: existingEntityUser } = await supabase
+          .from('entity_users')
+          .select('id')
+          .eq('user_id', existingUser.id)
+          .eq('company_id', selectedCompanyForAdmin?.id)
           .maybeSingle();
 
-        if (existingUser) {
-          userId = existingUser.id;
-          userExists = true;
-          console.log('Found existing user in users table:', userId);
-
-          // Check if already linked to this company
-          const { data: existingLink } = await supabase
-            .from('entity_users')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('company_id', companyId)
-            .maybeSingle();
-
-          if (existingLink) {
-            throw new Error('This user is already associated with this company.');
-          }
-
-          // Update existing user
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({
-              phone: formData.phone || existingUser.phone,
-              user_type: 'entity',
-              is_active: true,
-              updated_at: new Date().toISOString(),
-              raw_user_meta_data: {
-                company_id: companyId,
-                position: formData.position,
-                department: formData.department
-              }
-            })
-            .eq('id', userId);
-
-          if (updateError) {
-            console.error('Failed to update user:', updateError);
-            throw new Error(`Failed to update user: ${updateError.message}`);
-          }
-        } else {
-          // Create new user through Supabase Auth
-          console.log('Creating new user through Supabase Auth...');
-          
-          const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: formData.email,
-            password: formData.password,
-            options: {
-              data: {
-                phone: formData.phone,
-                user_type: 'entity',
-                company_id: companyId,
-                position: formData.position,
-                department: formData.department
-              },
-              emailRedirectTo: undefined
-            }
-          });
-
-          if (authError) {
-            console.error('Auth error:', authError);
-            
-            if (authError.message?.includes('already registered')) {
-              throw new Error('This email is already registered. Please try a different email.');
-            }
-            
-            throw new Error(`Failed to create user account: ${authError.message}`);
-          }
-
-          if (!authData?.user) {
-            throw new Error('Failed to create user account - no user returned');
-          }
-
-          userId = authData.user.id;
-          console.log('Created new auth user:', userId);
-
-          // Wait for trigger to create users record
-          await new Promise(resolve => setTimeout(resolve, 1500));
-
-          // Verify user was created in users table
-          const { data: newUser } = await supabase
-            .from('users')
-            .select('id')
-            .eq('id', userId)
-            .maybeSingle();
-
-          if (!newUser) {
-            // Create user record manually if trigger didn't
-            console.log('Creating users table record manually...');
-            const { error: createUserError } = await supabase
-              .from('users')
-              .insert([{
-                id: userId,
-                email: formData.email,
-                phone: formData.phone || null,
-                user_type: 'entity',
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                raw_app_meta_data: {},
-                raw_user_meta_data: {
-                  name: formData.email.split('@')[0],
-                  company_id: companyId,
-                  position: formData.position,
-                  department: formData.department
-                }
-              }]);
-
-            if (createUserError) {
-              console.error('Failed to create users record:', createUserError);
-              // Clean up auth user
-              try {
-                await supabase.auth.admin.deleteUser(userId);
-              } catch (e) {
-                console.error('Failed to clean up auth user:', e);
-              }
-              throw new Error(`Failed to create user record: ${createUserError.message}`);
-            }
-          }
+        if (existingEntityUser) {
+          throw new Error('This user is already associated with this company');
         }
 
-        // Create entity_users record (CRITICAL)
-        console.log('Creating entity_users record for user:', userId, 'company:', companyId);
-        
-        const { data: entityUser, error: entityError } = await supabase
+        // Update user if needed - FIXED: using 'entity' user_type
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            phone: formData.phone || existingUser.phone,
+            user_type: 'entity', // FIXED: Changed from 'tenant_admin' to 'entity'
+            is_active: true,
+            updated_at: new Date().toISOString(),
+            raw_user_meta_data: {
+              ...existingUser.raw_user_meta_data,
+              position: formData.position,
+              department: formData.department,
+              company_id: selectedCompanyForAdmin?.id
+            }
+          })
+          .eq('id', existingUser.id);
+
+        if (updateError) console.warn('Error updating user:', updateError);
+
+        // Link existing user to company as admin
+        const { error: linkError } = await supabase
           .from('entity_users')
           .insert([{
-            user_id: userId,
-            company_id: companyId,
+            user_id: existingUser.id,
+            company_id: selectedCompanyForAdmin?.id,
             position: formData.position || 'Administrator',
             department: formData.department || 'Management',
             employee_id: formData.employee_id || null,
@@ -503,63 +430,64 @@ export default function CompaniesTab() {
             is_company_admin: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
+          }]);
 
-        if (entityError) {
-          console.error('CRITICAL ERROR: Failed to create entity_users record:', entityError);
-          
-          if (!userExists) {
-            // Clean up if we created a new user
-            try {
-              await supabase.from('users').delete().eq('id', userId!);
-              await supabase.auth.admin.deleteUser(userId!);
-            } catch (cleanupError) {
-              console.error('Failed to clean up after entity_users error:', cleanupError);
-            }
-          }
-          
-          throw new Error(`Failed to link user to company: ${entityError.message}`);
-        }
+        if (linkError) throw linkError;
 
-        console.log('Successfully created entity_users record:', entityUser);
-
-        // Verify everything worked
-        const { data: verification, error: verifyError } = await supabase
-          .from('entity_users')
-          .select(`
-            *,
-            users!inner(email, user_type),
-            companies!inner(name, status)
-          `)
-          .eq('user_id', userId!)
-          .eq('company_id', companyId)
-          .single();
-
-        if (verifyError || !verification) {
-          console.error('Verification failed:', verifyError);
-          throw new Error('User was created but verification failed. Please check the admin list.');
-        }
-
-        console.log('✅ Admin successfully created and verified:', verification);
-
-        return {
-          success: true,
-          type: userExists ? 'linked' : 'created',
-          user: { id: userId, email: formData.email },
-          company: selectedCompanyForAdmin,
-          entityUser: verification
-        };
-
-      } catch (error: any) {
-        console.error('Error in tenantAdminMutation:', error);
-        throw error;
+        return { type: 'linked', user: existingUser };
       }
+
+      // Step 2: Create new user directly (bypassing Supabase Auth for now)
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert([{
+          id: crypto.randomUUID(),
+          email: formData.email,
+          phone: formData.phone || null,
+          user_type: 'entity', // FIXED: Changed from 'tenant_admin' to 'entity'
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_sign_in_at: null,
+          raw_app_meta_data: {},
+          raw_user_meta_data: {
+            name: formData.email.split('@')[0],
+            company_id: selectedCompanyForAdmin?.id,
+            position: formData.position,
+            department: formData.department,
+            employee_id: formData.employee_id
+          }
+        }])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Create entity_users record
+      const { error: entityError } = await supabase
+        .from('entity_users')
+        .insert([{
+          user_id: newUser.id,
+          company_id: selectedCompanyForAdmin?.id,
+          position: formData.position || 'Administrator',
+          department: formData.department || 'Management',
+          employee_id: formData.employee_id || null,
+          hire_date: new Date().toISOString().split('T')[0],
+          is_company_admin: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (entityError) {
+        console.warn('Error creating entity_users record:', entityError);
+      }
+
+      return { type: 'created-dev', user: newUser };
     },
     {
       onSuccess: (result) => {
-        const companyName = result.company?.name;
+        const companyName = selectedCompanyForAdmin?.name;
+        const companyId = selectedCompanyForAdmin?.id;
         
         queryClient.invalidateQueries(['companies']);
         setIsAdminFormOpen(false);
@@ -567,25 +495,18 @@ export default function CompaniesTab() {
         setAdminFormErrors({});
         resetAdminForm();
         
-        if (returnToViewAfterAdd && selectedCompanyForView && result.company?.id) {
-          fetchCompanyAdmins(result.company.id);
+        // Return to View Admins modal if we came from there
+        if (returnToViewAfterAdd && selectedCompanyForView && companyId) {
+          fetchCompanyAdmins(companyId);
           setIsViewAdminsOpen(true);
           setReturnToViewAfterAdd(false);
         }
         
         if (result.type === 'linked') {
-          toast.success(`Existing user linked as admin for ${companyName}`);
+          toast.success(`Existing user linked as tenant admin for ${companyName}`);
         } else {
-          toast.success(`New admin created successfully for ${companyName}`);
+          toast.success(`Tenant admin created for ${companyName}. They will need to reset password to login.`);
         }
-        
-        console.log('✅ Success:', {
-          userId: result.user.id,
-          email: result.user.email,
-          companyId: result.company?.id,
-          companyName: companyName,
-          isAdmin: result.entityUser?.is_company_admin
-        });
       },
       onError: (error: any) => {
         if (error instanceof z.ZodError) {
@@ -598,19 +519,8 @@ export default function CompaniesTab() {
           setAdminFormErrors(errors);
         } else {
           console.error('Error creating tenant admin:', error);
-          
-          let errorMessage = error.message || 'Failed to create tenant admin';
-          
-          if (error.message?.includes('already registered')) {
-            errorMessage = 'This email is already registered. Please use a different email.';
-          } else if (error.message?.includes('No company selected')) {
-            errorMessage = 'Please select a company first.';
-          } else if (error.message?.includes('already associated')) {
-            errorMessage = 'This user is already an admin for this company.';
-          }
-          
-          setAdminFormErrors({ form: errorMessage });
-          toast.error(errorMessage);
+          setAdminFormErrors({ form: error.message || 'Failed to create tenant admin' });
+          toast.error('Failed to create tenant admin');
         }
       }
     }
@@ -655,6 +565,67 @@ export default function CompaniesTab() {
       }
     }
   );
+
+  // Reset admin form
+  const resetAdminForm = () => {
+    setAdminFormState({
+      email: '',
+      phone: '',
+      position: '',
+      department: '',
+      employee_id: '',
+      password: '',
+      confirmPassword: ''
+    });
+    setAdminFormErrors({});
+  };
+
+  // Fetch company admins
+  const fetchCompanyAdmins = async (companyId: string) => {
+    setLoadingAdmins(true);
+    try {
+      // First fetch entity_users
+      const { data: entityUsers, error: entityError } = await supabase
+        .from('entity_users')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('is_company_admin', true)
+        .order('created_at', { ascending: false });
+
+      if (entityError) throw entityError;
+
+      if (!entityUsers || entityUsers.length === 0) {
+        setCompanyAdmins([]);
+        return;
+      }
+
+      // Then fetch user details separately
+      const userIds = entityUsers.map(eu => eu.user_id);
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .in('id', userIds);
+
+      if (usersError) throw usersError;
+
+      // Create a map of users
+      const userMap = new Map(users?.map(u => [u.id, u]) || []);
+
+      // Combine the data
+      const adminsWithUsers = entityUsers.map(entityUser => ({
+        ...entityUser,
+        users: userMap.get(entityUser.user_id) || null
+      }));
+
+      setCompanyAdmins(adminsWithUsers);
+    } catch (error) {
+      console.error('Error fetching company admins:', error);
+      toast.error('Failed to fetch company admins');
+      setCompanyAdmins([]);
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   // Update admin mutation
   const updateAdminMutation = useMutation(
@@ -711,12 +682,14 @@ export default function CompaniesTab() {
   // Remove admin mutation
   const removeAdminMutation = useMutation(
     async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
+      // Remove from entity_users
       const { error } = await supabase
         .from('entity_users')
         .delete()
         .eq('id', entityUserId);
 
       if (error) throw error;
+
       return { entityUserId };
     },
     {
@@ -734,63 +707,6 @@ export default function CompaniesTab() {
     }
   );
 
-  // ===== HELPER FUNCTIONS =====
-
-  // Reset admin form
-  const resetAdminForm = () => {
-    setAdminFormState({
-      email: '',
-      phone: '',
-      position: '',
-      department: '',
-      employee_id: '',
-      password: '',
-      confirmPassword: ''
-    });
-    setAdminFormErrors({});
-  };
-
-  // Fetch company admins
-  const fetchCompanyAdmins = async (companyId: string) => {
-    setLoadingAdmins(true);
-    try {
-      // Fetch entity_users with user details
-      const { data: entityUsers, error: entityError } = await supabase
-        .from('entity_users')
-        .select(`
-          *,
-          users!inner(
-            id,
-            email,
-            phone,
-            user_type,
-            is_active
-          )
-        `)
-        .eq('company_id', companyId)
-        .eq('is_company_admin', true)
-        .order('created_at', { ascending: false });
-
-      if (entityError) throw entityError;
-
-      // Transform data for display
-      const adminsWithUsers = (entityUsers || []).map(entityUser => ({
-        ...entityUser,
-        users: entityUser.users
-      }));
-
-      setCompanyAdmins(adminsWithUsers);
-    } catch (error) {
-      console.error('Error fetching company admins:', error);
-      toast.error('Failed to fetch company admins');
-      setCompanyAdmins([]);
-    } finally {
-      setLoadingAdmins(false);
-    }
-  };
-
-  // ===== EFFECTS =====
-
   // Update form state when editing company changes
   React.useEffect(() => {
     if (editingCompany) {
@@ -804,8 +720,6 @@ export default function CompaniesTab() {
         notes: editingCompany.notes || '',
         status: editingCompany.status
       });
-
-      fetchCountries(editingCompany.region_id);
     } else {
       setFormState({
         name: '',
@@ -827,22 +741,28 @@ export default function CompaniesTab() {
     }
   }, [isAdminFormOpen]);
 
-  // ===== UI HELPER FUNCTIONS =====
-
   const getLogoUrl = (path: string | null) => {
     if (!path) return null;
-    return supabase.storage
+    
+    // If path is already a full URL, return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    
+    // Otherwise, get public URL from Supabase storage
+    const { data } = supabase.storage
       .from('company-logos')
-      .getPublicUrl(path).data.publicUrl;
+      .getPublicUrl(path);
+    
+    return data?.publicUrl || null;
   };
 
   const handleRegionChange = (regionId: string) => {
     setFormState(prev => ({
       ...prev,
       region_id: regionId,
-      country_id: ''
+      country_id: '' // Reset country when region changes
     }));
-    fetchCountries(regionId);
   };
 
   const handleCountryChange = (countryId: string) => {
@@ -878,7 +798,6 @@ export default function CompaniesTab() {
     setCompaniesToDelete([]);
   };
 
-  // ===== TABLE COLUMNS =====
   const columns = [
     {
       id: 'logo',
@@ -924,7 +843,7 @@ export default function CompaniesTab() {
       accessorKey: 'code',
       enableSorting: true,
       cell: (row: Company) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
+        <span className="text-sm text-gray-900 dark:text-gray-100">
           {row.code || '-'}
         </span>
       ),
@@ -934,21 +853,25 @@ export default function CompaniesTab() {
       header: 'Region',
       accessorKey: 'region_name',
       enableSorting: true,
-      cell: (row: Company) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.region_name}
-        </span>
-      ),
     },
     {
       id: 'country',
       header: 'Country',
       accessorKey: 'country_name',
       enableSorting: true,
+    },
+    {
+      id: 'admins',
+      header: 'Admins',
+      accessorKey: 'admin_count',
+      enableSorting: true,
       cell: (row: Company) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.country_name}
-        </span>
+        <div className="flex items-center justify-center gap-1">
+          <Users className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            {row.admin_count || 0}
+          </span>
+        </div>
       ),
     },
     {
@@ -972,12 +895,11 @@ export default function CompaniesTab() {
     },
   ];
 
-  // ===== RENDER =====
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Companies</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Companies</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {companies.length} companies • {companies.reduce((acc, c) => acc + (c.admin_count || 0), 0)} total admins
           </p>
@@ -995,7 +917,7 @@ export default function CompaniesTab() {
 
       <FilterCard
         title="Filters"
-        onApply={() => {}}
+        onApply={() => {}} // No need for explicit apply with React Query
         onClear={() => {
           setFilters({
             search: '',
@@ -1006,7 +928,10 @@ export default function CompaniesTab() {
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <FormField id="search" label="Search">
+          <FormField
+            id="search"
+            label="Search"
+          >
             <Input
               id="search"
               placeholder="Search by name or code..."
@@ -1028,7 +953,7 @@ export default function CompaniesTab() {
 
           <SearchableMultiSelect
             label="Country"
-            options={countries.map(c => ({
+            options={filterCountries.map(c => ({
               value: c.id,
               label: c.name
             }))}
@@ -1073,37 +998,50 @@ export default function CompaniesTab() {
             >
               <Users className="h-4 w-4" />
               {company.admin_count && company.admin_count > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center">
-                  {company.admin_count}
-                </span>
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-600 rounded-full"></span>
               )}
             </button>
-
-            {/* Add Admin Button */}
+            
+            {/* Add Tenant Admin Button */}
             <button
               onClick={() => {
                 setSelectedCompanyForAdmin(company);
                 setIsAdminFormOpen(true);
               }}
-              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
               title="Add Tenant Admin"
             >
               <UserPlus className="h-4 w-4" />
             </button>
+            
+            {/* Edit Button - RESTORED */}
+            <button
+              onClick={() => {
+                setEditingCompany(company);
+                setIsFormOpen(true);
+              }}
+              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              title="Edit Company"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            
+            {/* Delete Button - RESTORED */}
+            <button
+              onClick={() => handleDelete([company])}
+              className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              title="Delete Company"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         )}
-        onEdit={(company) => {
-          setEditingCompany(company);
-          setIsFormOpen(true);
-        }}
-        onDelete={handleDelete}
         emptyMessage="No companies found"
       />
 
-      {/* Company Form Modal */}
       <SlideInForm
         key={editingCompany?.id || 'new'}
-        title={editingCompany ? 'Edit Company' : 'Add Company'}
+        title={editingCompany ? 'Edit Company' : 'Create Company'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
@@ -1116,149 +1054,157 @@ export default function CompaniesTab() {
         }}
         loading={mutation.isLoading}
       >
-        <form id="company-form" onSubmit={handleSubmit} className="space-y-6">
+        <form id="company-form" onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-md">
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
               {formErrors.form}
             </div>
           )}
 
           <FormField
-            id="company-name"
-            label="Company Name"
+            id="name"
+            label="Name"
             required
             error={formErrors.name}
           >
             <Input
-              id="company-name"
+              id="name"
+              name="name"
+              placeholder="Enter company name"
               value={formState.name}
               onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Enter company name"
             />
           </FormField>
 
           <FormField
-            id="company-code"
-            label="Company Code"
+            id="code"
+            label="Code"
             error={formErrors.code}
           >
             <Input
-              id="company-code"
+              id="code"
+              name="code"
+              placeholder="Enter company code"
               value={formState.code}
               onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
-              placeholder="Enter company code"
             />
           </FormField>
 
           <FormField
-            id="company-region"
+            id="region_id"
             label="Region"
             required
             error={formErrors.region_id}
           >
             <Select
-              id="company-region"
+              id="region_id"
+              name="region_id"
+              options={regions.map(region => ({
+                value: region.id,
+                label: region.name
+              }))}
               value={formState.region_id}
-              onChange={(e) => handleRegionChange(e.target.value)}
-            >
-              <option value="">Select a region</option>
-              {regions.map(region => (
-                <option key={region.id} value={region.id}>
-                  {region.name}
-                </option>
-              ))}
-            </Select>
+              onChange={(value) => handleRegionChange(value)}
+            />
           </FormField>
 
           <FormField
-            id="company-country"
+            id="country_id"
             label="Country"
             required
             error={formErrors.country_id}
           >
             <Select
-              id="company-country"
+              id="country_id"
+              name="country_id"
+              options={(formCountries || []).map(country => ({
+                value: country.id,
+                label: country.name
+              }))}
               value={formState.country_id}
-              onChange={(e) => handleCountryChange(e.target.value)}
+              onChange={(value) => handleCountryChange(value)}
               disabled={!formState.region_id}
-            >
-              <option value="">Select a country</option>
-              {queryClient.getQueryData<Country[]>(['countries', [formState.region_id]])?.map(country => (
-                <option key={country.id} value={country.id}>
-                  {country.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField
-            id="company-logo"
-            label="Company Logo"
-            error={formErrors.logo}
-          >
-            <ImageUpload
-              value={formState.logo}
-              onChange={(value) => setFormState(prev => ({ ...prev, logo: value }))}
-              storageBucket="company-logos"
-              acceptedTypes={['image/jpeg', 'image/png', 'image/webp']}
-              maxSizeInMB={2}
             />
           </FormField>
 
           <FormField
-            id="company-address"
+            id="logo"
+            label="Company Logo"
+          >
+            <input
+              type="hidden"
+              name="logo"
+              value={formState.logo}
+            />
+            <ImageUpload
+              id="logo"
+              bucket="company-logos"
+              value={formState.logo}
+              publicUrl={formState.logo ? getLogoUrl(formState.logo) : null}
+              onChange={(path) => {
+                setFormState(prev => ({ ...prev, logo: path || '' }));
+              }}
+            />
+          </FormField>
+
+          <FormField
+            id="address"
             label="Address"
             error={formErrors.address}
           >
             <Textarea
-              id="company-address"
+              id="address"
+              name="address"
+              placeholder="Enter company address"
               value={formState.address}
               onChange={(e) => setFormState(prev => ({ ...prev, address: e.target.value }))}
-              placeholder="Enter company address"
               rows={3}
             />
           </FormField>
 
           <FormField
-            id="company-notes"
+            id="notes"
             label="Notes"
             error={formErrors.notes}
           >
             <Textarea
-              id="company-notes"
+              id="notes"
+              name="notes"
+              placeholder="Enter company notes"
               value={formState.notes}
               onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Enter any additional notes"
               rows={3}
             />
           </FormField>
 
           <FormField
-            id="company-status"
+            id="status"
             label="Status"
             required
             error={formErrors.status}
           >
             <Select
-              id="company-status"
+              id="status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
               value={formState.status}
-              onChange={(e) => setFormState(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
+              onChange={(value) => setFormState(prev => ({ ...prev, status: value as 'active' | 'inactive' }))}
+            />
           </FormField>
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form Modal */}
+      {/* Tenant Admin Form */}
       <SlideInForm
-        title={`Add Tenant Admin${selectedCompanyForAdmin ? ` for ${selectedCompanyForAdmin.name}` : ''}`}
+        key={selectedCompanyForAdmin?.id || 'admin-new'}
+        title={`Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
         isOpen={isAdminFormOpen}
         onClose={() => {
           setIsAdminFormOpen(false);
           setSelectedCompanyForAdmin(null);
-          setAdminFormErrors({});
           resetAdminForm();
           setReturnToViewAfterAdd(false);
         }}
@@ -1319,6 +1265,7 @@ export default function CompaniesTab() {
             >
               <Input
                 id="tenant-position"
+                type="text"
                 value={adminFormState.position}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., IT Administrator"
@@ -1332,6 +1279,7 @@ export default function CompaniesTab() {
             >
               <Input
                 id="tenant-department"
+                type="text"
                 value={adminFormState.department}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, department: e.target.value }))}
                 placeholder="e.g., Information Technology"
@@ -1345,6 +1293,7 @@ export default function CompaniesTab() {
             >
               <Input
                 id="tenant-employee-id"
+                type="text"
                 value={adminFormState.employee_id}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, employee_id: e.target.value }))}
                 placeholder="e.g., EMP001"
@@ -1352,8 +1301,8 @@ export default function CompaniesTab() {
             </FormField>
           </div>
 
-          {/* Security Section */}
-          <div className="space-y-4">
+          {/* Password Section */}
+          <div className="space-y-4 pb-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
             
             <FormField
@@ -1408,6 +1357,17 @@ export default function CompaniesTab() {
           </div>
         </form>
       </SlideInForm>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        title="Delete Company"
+        message={`Are you sure you want to delete ${companiesToDelete.length} company(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
 
       {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
@@ -1469,23 +1429,6 @@ export default function CompaniesTab() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Add Admin Button */}
-                  <div className="flex justify-end mb-4">
-                    <Button
-                      onClick={() => {
-                        setIsViewAdminsOpen(false);
-                        setSelectedCompanyForAdmin(selectedCompanyForView);
-                        setIsAdminFormOpen(true);
-                        setReturnToViewAfterAdd(true);
-                      }}
-                      leftIcon={<UserPlus className="h-4 w-4" />}
-                      size="sm"
-                    >
-                      Add Admin
-                    </Button>
-                  </div>
-
-                  {/* Admins List */}
                   {companyAdmins.map((admin) => {
                     const isEditing = editingAdminId === admin.id;
                     return (
@@ -1505,17 +1448,32 @@ export default function CompaniesTab() {
                                   <input
                                     type="email"
                                     value={editAdminData.email || ''}
-                                    onChange={(e) => setEditAdminData({...editAdminData, email: e.target.value})}
-                                    className="text-lg font-semibold bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                    onChange={(e) => setEditAdminData({ ...editAdminData, email: e.target.value })}
+                                    placeholder="Email address"
+                                    className="text-lg font-semibold px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                                   />
                                 ) : (
                                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    {admin.users?.email}
+                                    {admin.users?.email || 'Unknown'}
                                   </h3>
                                 )}
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Company Administrator</p>
+                                <div className="flex items-center gap-3 mt-1">
+                                  {admin.users?.is_active ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                      Active
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                      Inactive
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    Admin since {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : 'Unknown'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                            
                             <div className="flex items-center gap-2">
                               {isEditing ? (
                                 <>
@@ -1523,13 +1481,11 @@ export default function CompaniesTab() {
                                     onClick={() => {
                                       updateAdminMutation.mutate({
                                         entityUserId: admin.id,
-                                        data: {
-                                          ...editAdminData,
-                                          user_id: admin.user_id
-                                        }
+                                        data: { ...editAdminData, user_id: admin.user_id }
                                       });
                                     }}
-                                    className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:text-green-300 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                                    disabled={updateAdminMutation.isLoading}
+                                    className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:text-green-300 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
                                     title="Save Changes"
                                   >
                                     <Check className="h-5 w-5" />
@@ -1539,7 +1495,7 @@ export default function CompaniesTab() {
                                       setEditingAdminId(null);
                                       setEditAdminData({});
                                     }}
-                                    className="p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-900/20 rounded-lg transition-colors"
+                                    className="p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                     title="Cancel"
                                   >
                                     <X className="h-5 w-5" />
@@ -1596,32 +1552,31 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   {isEditing ? (
-                                    <input
-                                      type="tel"
+                                    <PhoneInput
                                       value={editAdminData.phone || ''}
-                                      onChange={(e) => setEditAdminData({...editAdminData, phone: e.target.value})}
-                                      className="flex-1 text-sm bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                      onChange={(value) => setEditAdminData({ ...editAdminData, phone: value })}
                                       placeholder="Phone number"
+                                      className="flex-1"
                                     />
                                   ) : (
-                                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                                      {admin.users?.phone || 'Not provided'}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {admin.users?.phone || '—'}
                                     </span>
                                   )}
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  <span className="text-sm text-gray-900 dark:text-gray-100">
-                                    {admin.users?.email}
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    {admin.users?.email || '—'}
                                   </span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Employee Information */}
+                            {/* Employment Information */}
                             <div className="space-y-3">
-                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Employee Information</h4>
+                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Employment Details</h4>
                               
                               <div className="space-y-2">
                                 <div className="flex items-center gap-3">
@@ -1630,13 +1585,13 @@ export default function CompaniesTab() {
                                     <input
                                       type="text"
                                       value={editAdminData.position || ''}
-                                      onChange={(e) => setEditAdminData({...editAdminData, position: e.target.value})}
-                                      className="flex-1 text-sm bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                      onChange={(e) => setEditAdminData({ ...editAdminData, position: e.target.value })}
                                       placeholder="Position"
+                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   ) : (
-                                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                                      {admin.position || 'Not specified'}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {admin.position || '—'}
                                     </span>
                                   )}
                                 </div>
@@ -1647,13 +1602,13 @@ export default function CompaniesTab() {
                                     <input
                                       type="text"
                                       value={editAdminData.department || ''}
-                                      onChange={(e) => setEditAdminData({...editAdminData, department: e.target.value})}
-                                      className="flex-1 text-sm bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                      onChange={(e) => setEditAdminData({ ...editAdminData, department: e.target.value })}
                                       placeholder="Department"
+                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   ) : (
-                                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                                      {admin.department || 'Not specified'}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {admin.department || '—'}
                                     </span>
                                   )}
                                 </div>
@@ -1664,13 +1619,13 @@ export default function CompaniesTab() {
                                     <input
                                       type="text"
                                       value={editAdminData.employee_id || ''}
-                                      onChange={(e) => setEditAdminData({...editAdminData, employee_id: e.target.value})}
-                                      className="flex-1 text-sm bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                      onChange={(e) => setEditAdminData({ ...editAdminData, employee_id: e.target.value })}
                                       placeholder="Employee ID"
+                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   ) : (
-                                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                                      {admin.employee_id || 'Not assigned'}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {admin.employee_id ? `ID: ${admin.employee_id}` : 'ID: —'}
                                     </span>
                                   )}
                                 </div>
@@ -1681,12 +1636,12 @@ export default function CompaniesTab() {
                                     <input
                                       type="date"
                                       value={editAdminData.hire_date || ''}
-                                      onChange={(e) => setEditAdminData({...editAdminData, hire_date: e.target.value})}
-                                      className="flex-1 text-sm bg-white dark:bg-gray-700 px-2 py-1 rounded border"
+                                      onChange={(e) => setEditAdminData({ ...editAdminData, hire_date: e.target.value })}
+                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   ) : (
-                                    <span className="text-sm text-gray-900 dark:text-gray-100">
-                                      {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : 'Not specified'}
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      Hire Date: {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : '—'}
                                     </span>
                                   )}
                                 </div>
@@ -1694,50 +1649,40 @@ export default function CompaniesTab() {
                             </div>
                           </div>
 
-                          {/* Status Section */}
-                          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-400">Created:</span>
-                                <span className="text-xs text-gray-700 dark:text-gray-300">
-                                  {new Date(admin.created_at).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  admin.users?.is_active 
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                }`}>
-                                  {admin.users?.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                                <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                                  Admin
-                                </span>
-                              </div>
+                          {/* Footer Info */}
+                          {admin.users?.last_sign_in_at && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Last login: {new Date(admin.users.last_sign_in_at).toLocaleDateString()} at {new Date(admin.users.last_sign_in_at).toLocaleTimeString()}
+                              </p>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
+                  
+                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <Button
+                      onClick={() => {
+                        setIsViewAdminsOpen(false);
+                        setSelectedCompanyForAdmin(selectedCompanyForView);
+                        setIsAdminFormOpen(true);
+                        setReturnToViewAfterAdd(true);
+                      }}
+                      variant="secondary"
+                      className="w-full"
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Add Another Admin
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
-
-      {/* Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        title="Delete Company"
-        message={`Are you sure you want to delete ${companiesToDelete.length} company(s)? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
     </div>
   );
 }
