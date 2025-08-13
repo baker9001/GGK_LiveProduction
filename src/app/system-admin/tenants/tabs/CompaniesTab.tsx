@@ -204,7 +204,7 @@ export default function CompaniesTab() {
         .from('companies')
         .select(`
           *,
-          entity_users!entity_users_company_id_fkey(count)
+          entity_users(count)
         `);
 
       // Apply filters
