@@ -1,61 +1,91 @@
 // /src/services/userService.ts
-// Enhanced client-side service for interacting with the universal user API
+// Standardized client-side service for all user operations
 
 import { supabase } from '../lib/supabase';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import { toast } from '../components/shared/Toast';
 
 // ===== TYPE DEFINITIONS =====
 export type UserType = 'system' | 'student' | 'teacher' | 'entity' | 'parent';
+export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
-export interface CreateUserData {
-  email: string;
-  name: string;
-  user_type: UserType;
-  password?: string;
-  is_active?: boolean;
-  send_verification?: boolean;
-  
-  // Type-specific fields
-  role_id?: string;
-  company_id?: string;
-  school_id?: string; 
-  branch_id?: string;
-  department_id?: string;
-  student_ids?: string[];
-  
-  // Additional profile data
-  phone?: string;
-  address?: string;
-  date_of_birth?: string;
-  position?: string;
-  department?: string;
-  employee_id?: string;
-  teacher_code?: string;
-  student_code?: string;
-  enrollment_number?: string;
-  grade_level?: string;
-  section?: string;
-  parent_name?: string;
-  parent_contact?: string;
-  parent_email?: string;
-}
+// ===== VALIDATION SCHEMAS =====
+export const userEmailSchema = z.string()
+  .email('Invalid email address')
+  .transform(email => email.toLowerCase());
 
-export interface UpdateUserData extends Partial<CreateUserData> {
-  userId: string;
-}
+export const userPasswordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number');
 
-export interface UserFilter {
-  user_type?: UserType;
-  email?: string;
-  name?: string;
-  is_active?: boolean;
-  company_id?: string;
-  school_id?: string;
-  branch_id?: string;
-  limit?: number;
-  offset?: number;
-}
+export const userPhoneSchema = z.string()
+  .regex(/^[+]?[\d\s-()]+$/, 'Invalid phone number')
+  .optional()
+  .nullable();
 
+// Base user schema
+export const baseUserSchema = z.object({
+  email: userEmailSchema,
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
+  user_type: z.enum(['system', 'student', 'teacher', 'entity', 'parent']),
+  password: userPasswordSchema.optional(),
+  phone: userPhoneSchema,
+  is_active: z.boolean().default(true),
+  send_verification: z.boolean().default(true),
+});
+
+// System admin user schema
+export const systemUserSchema = baseUserSchema.extend({
+  user_type: z.literal('system'),
+  role_id: z.string().uuid('Invalid role ID'),
+});
+
+// Entity user schema
+export const entityUserSchema = baseUserSchema.extend({
+  user_type: z.literal('entity'),
+  company_id: z.string().uuid('Invalid company ID'),
+  position: z.string().optional().default('Staff'),
+  department: z.string().optional().default('General'),
+  employee_id: z.string().optional(),
+  is_company_admin: z.boolean().default(false),
+});
+
+// Teacher schema
+export const teacherSchema = baseUserSchema.extend({
+  user_type: z.literal('teacher'),
+  company_id: z.string().uuid('Invalid company ID'),
+  school_id: z.string().uuid('Invalid school ID').optional(),
+  branch_id: z.string().uuid('Invalid branch ID').optional(),
+  department_id: z.string().uuid('Invalid department ID').optional(),
+  teacher_code: z.string().optional(),
+});
+
+// Student schema
+export const studentSchema = baseUserSchema.extend({
+  user_type: z.literal('student'),
+  company_id: z.string().uuid('Invalid company ID'),
+  school_id: z.string().uuid('Invalid school ID').optional(),
+  branch_id: z.string().uuid('Invalid branch ID').optional(),
+  class_id: z.string().uuid('Invalid class ID').optional(),
+  student_code: z.string().optional(),
+  enrollment_number: z.string().optional(),
+  grade_level: z.string().optional(),
+  section: z.string().optional(),
+  parent_name: z.string().optional(),
+  parent_contact: z.string().optional(),
+  parent_email: z.string().email().optional(),
+});
+
+// Parent schema
+export const parentSchema = baseUserSchema.extend({
+  user_type: z.literal('parent'),
+  student_ids: z.array(z.string().uuid()).min(1, 'At least one student must be selected'),
+  address: z.string().optional(),
+});
+
+// ===== INTERFACES =====
 export interface UserResponse {
   id: string;
   email: string;
@@ -66,27 +96,14 @@ export interface UserResponse {
   phone?: string;
   created_at: string;
   updated_at: string;
-  // Type-specific additional fields
-  role?: string;
-  company?: string;
-  school?: string;
-  position?: string;
-  department?: string;
-  code?: string;
-  grade?: string;
-  children_count?: number;
+  metadata?: Record<string, any>;
 }
 
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-export interface BatchCreateResult {
-  success: UserResponse[];
-  failed: Array<{ data: CreateUserData; error: string }>;
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  details?: any;
 }
 
 // ===== ERROR HANDLING =====
@@ -102,240 +119,108 @@ export class UserServiceError extends Error {
 }
 
 // ===== USER SERVICE CLASS =====
-class UserService {
-  private baseUrl = '/api/users';
-  private requestCache = new Map<string, Promise<any>>();
-  private cacheTimeout = 5000; // 5 seconds
+export class UserService {
+  private static instance: UserService;
+  private readonly baseUrl = '/api/users';
 
-  // Get authorization header
-  private async getAuthHeader(): Promise<HeadersInit> {
+  private constructor() {}
+
+  static getInstance(): UserService {
+    if (!UserService.instance) {
+      UserService.instance = new UserService();
+    }
+    return UserService.instance;
+  }
+
+  // Get auth token
+  private async getAuthToken(): Promise<string> {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new UserServiceError('No active session', 401);
+    if (!session?.access_token) {
+      throw new UserServiceError('Not authenticated', 401);
     }
-    
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
-    };
+    return session.access_token;
   }
 
-  // Cached request wrapper
-  private async cachedRequest<T>(key: string, request: () => Promise<T>): Promise<T> {
-    const cached = this.requestCache.get(key);
-    if (cached) {
-      return cached;
-    }
-
-    const promise = request();
-    this.requestCache.set(key, promise);
-    
-    setTimeout(() => {
-      this.requestCache.delete(key);
-    }, this.cacheTimeout);
-
-    return promise;
-  }
-
-  // Create a new user
-  async createUser(data: CreateUserData): Promise<UserResponse> {
+  // Make authenticated request
+  private async makeRequest<T>(
+    method: string,
+    endpoint: string = '',
+    body?: any
+  ): Promise<ApiResponse<T>> {
     try {
-      const headers = await this.getAuthHeader();
+      const token = await this.getAuthToken();
       
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: body ? JSON.stringify(body) : undefined
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
         throw new UserServiceError(
-          error.error || 'Failed to create user',
+          data.error || 'Request failed',
           response.status,
-          error.details
+          data.details
         );
       }
 
-      const result = await response.json();
-      return result.user;
+      return { success: true, data };
     } catch (error) {
-      if (error instanceof UserServiceError) throw error;
-      console.error('Error creating user:', error);
-      throw new UserServiceError('Failed to create user');
-    }
-  }
-
-  // Update an existing user
-  async updateUser(data: UpdateUserData): Promise<{ success: boolean; message: string }> {
-    try {
-      const headers = await this.getAuthHeader();
-      
-      const response = await fetch(this.baseUrl, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(data)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new UserServiceError(
-          error.error || 'Failed to update user',
-          response.status,
-          error.details
-        );
+      if (error instanceof UserServiceError) {
+        throw error;
       }
-
-      return await response.json();
-    } catch (error) {
-      if (error instanceof UserServiceError) throw error;
-      console.error('Error updating user:', error);
-      throw new UserServiceError('Failed to update user');
+      throw new UserServiceError('Network error', 500, error);
     }
   }
 
-  // Delete a user
-  async deleteUser(userId: string): Promise<{ success: boolean }> {
-    try {
-      const headers = await this.getAuthHeader();
-      
-      const response = await fetch(`${this.baseUrl}?userId=${userId}`, {
-        method: 'DELETE',
-        headers
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new UserServiceError(
-          error.error || 'Failed to delete user',
-          response.status
-        );
-      }
-
-      return await response.json();
-    } catch (error) {
-      if (error instanceof UserServiceError) throw error;
-      console.error('Error deleting user:', error);
-      throw new UserServiceError('Failed to delete user');
+  // ===== CREATE USER METHODS =====
+  
+  // Generic create user (validates based on user type)
+  async createUser(userData: any): Promise<UserResponse> {
+    // Validate based on user type
+    let validatedData: any;
+    
+    switch (userData.user_type) {
+      case 'system':
+        validatedData = systemUserSchema.parse(userData);
+        break;
+      case 'entity':
+        validatedData = entityUserSchema.parse(userData);
+        break;
+      case 'teacher':
+        validatedData = teacherSchema.parse(userData);
+        break;
+      case 'student':
+        validatedData = studentSchema.parse(userData);
+        break;
+      case 'parent':
+        validatedData = parentSchema.parse(userData);
+        break;
+      default:
+        throw new UserServiceError('Invalid user type');
     }
+
+    const response = await this.makeRequest<UserResponse>('POST', '', validatedData);
+    
+    if (!response.success || !response.data) {
+      throw new UserServiceError(response.error || 'Failed to create user');
+    }
+
+    return response.data;
   }
 
-  // Get users with filters
-  async getUsers(filters: UserFilter = {}): Promise<PaginatedResponse<UserResponse>> {
-    try {
-      const headers = await this.getAuthHeader();
-      
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-
-      const cacheKey = `users-${params.toString()}`;
-      
-      return await this.cachedRequest(cacheKey, async () => {
-        const response = await fetch(`${this.baseUrl}?${params.toString()}`, {
-          method: 'GET',
-          headers
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new UserServiceError(
-            error.error || 'Failed to fetch users',
-            response.status
-          );
-        }
-
-        return await response.json();
-      });
-    } catch (error) {
-      if (error instanceof UserServiceError) throw error;
-      console.error('Error fetching users:', error);
-      throw new UserServiceError('Failed to fetch users');
-    }
-  }
-
-  // Get a single user by ID
-  async getUserById(userId: string): Promise<UserResponse | null> {
-    try {
-      const { data } = await this.getUsers({ limit: 1 });
-      return data.find(user => user.id === userId) || null;
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      return null;
-    }
-  }
-
-  // Resend verification email
-  async resendVerificationEmail(userId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const headers = await this.getAuthHeader();
-      
-      const response = await fetch(this.baseUrl, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ userId })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new UserServiceError(
-          error.error || 'Failed to send verification email',
-          response.status
-        );
-      }
-
-      return await response.json();
-    } catch (error) {
-      if (error instanceof UserServiceError) throw error;
-      console.error('Error resending verification:', error);
-      throw new UserServiceError('Failed to send verification email');
-    }
-  }
-
-  // Batch create users
-  async batchCreateUsers(users: CreateUserData[]): Promise<BatchCreateResult> {
-    const results: BatchCreateResult = {
-      success: [],
-      failed: []
-    };
-
-    // Process in chunks to avoid overwhelming the server
-    const chunkSize = 5;
-    const chunks = [];
-    for (let i = 0; i < users.length; i += chunkSize) {
-      chunks.push(users.slice(i, i + chunkSize));
-    }
-
-    for (const chunk of chunks) {
-      await Promise.all(
-        chunk.map(async (userData) => {
-          try {
-            const user = await this.createUser(userData);
-            results.success.push(user);
-          } catch (error) {
-            results.failed.push({
-              data: userData,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-          }
-        })
-      );
-    }
-
-    return results;
-  }
-
-  // Type-specific helper methods
-
-  // Create system user (admin)
-  async createSystemUser(data: {
+  // Create system admin
+  async createSystemAdmin(data: {
     email: string;
     name: string;
     password: string;
     role_id: string;
+    phone?: string;
     is_active?: boolean;
   }): Promise<UserResponse> {
     return this.createUser({
@@ -348,11 +233,12 @@ class UserService {
   async createEntityUser(data: {
     email: string;
     name: string;
-    password?: string;
+    password: string;
     company_id: string;
     position?: string;
     department?: string;
     employee_id?: string;
+    is_company_admin?: boolean;
     phone?: string;
     is_active?: boolean;
   }): Promise<UserResponse> {
@@ -362,319 +248,173 @@ class UserService {
     });
   }
 
-  // Create teacher
-  async createTeacher(data: {
+  // Create or link entity admin (special case for existing users)
+  async createOrLinkEntityAdmin(data: {
     email: string;
-    name: string;
     password?: string;
     company_id: string;
-    school_id?: string;
-    branch_id?: string;
-    department_id?: string;
-    teacher_code?: string;
+    position?: string;
+    department?: string;
+    employee_id?: string;
     phone?: string;
-    is_active?: boolean;
   }): Promise<UserResponse> {
-    return this.createUser({
-      ...data,
-      user_type: 'teacher'
-    });
-  }
-
-  // Create student
-  async createStudent(data: {
-    email: string;
-    name: string;
-    password?: string;
-    company_id: string;
-    school_id?: string;
-    branch_id?: string;
-    student_code?: string;
-    enrollment_number?: string;
-    grade_level?: string;
-    section?: string;
-    parent_name?: string;
-    parent_contact?: string;
-    parent_email?: string;
-    phone?: string;
-    is_active?: boolean;
-  }): Promise<UserResponse> {
-    return this.createUser({
-      ...data,
-      user_type: 'student'
-    });
-  }
-
-  // Create parent
-  async createParent(data: {
-    email: string;
-    name: string;
-    password?: string;
-    student_ids: string[];
-    phone?: string;
-    address?: string;
-    is_active?: boolean;
-  }): Promise<UserResponse> {
-    return this.createUser({
-      ...data,
-      user_type: 'parent'
-    });
-  }
-
-  // Get users by company
-  async getUsersByCompany(companyId: string, userType?: UserType): Promise<UserResponse[]> {
-    const filters: UserFilter = { company_id: companyId };
-    if (userType) {
-      filters.user_type = userType;
-    }
-    
-    const { data } = await this.getUsers(filters);
-    return data;
-  }
-
-  // Get users by school
-  async getUsersBySchool(schoolId: string, userType?: UserType): Promise<UserResponse[]> {
-    const filters: UserFilter = { school_id: schoolId };
-    if (userType) {
-      filters.user_type = userType;
-    }
-    
-    const { data } = await this.getUsers(filters);
-    return data;
-  }
-
-  // Search users
-  async searchUsers(query: string, userType?: UserType): Promise<UserResponse[]> {
-    const filters: UserFilter = {
-      name: query,
-      user_type: userType
-    };
-    
-    const { data } = await this.getUsers(filters);
-    
-    // Also search by email if no results found by name
-    if (data.length === 0) {
-      const emailResults = await this.getUsers({
-        email: query,
-        user_type: userType
-      });
-      return emailResults.data;
-    }
-    
-    return data;
-  }
-
-  // Validate email availability
-  async isEmailAvailable(email: string, excludeUserId?: string): Promise<boolean> {
     try {
-      const { data } = await supabase
+      // First check if user exists
+      const { data: existingUser } = await supabase
         .from('users')
-        .select('id')
-        .eq('email', email.toLowerCase())
+        .select('id, email, user_type')
+        .eq('email', data.email.toLowerCase())
         .maybeSingle();
 
-      if (!data) return true;
-      if (excludeUserId && data.id === excludeUserId) return true;
-      
-      return false;
-    } catch (error) {
-      console.error('Error checking email availability:', error);
-      return false;
-    }
-  }
+      if (existingUser) {
+        // User exists, just link to company
+        const { error: linkError } = await supabase
+          .from('entity_users')
+          .insert({
+            user_id: existingUser.id,
+            company_id: data.company_id,
+            position: data.position || 'Administrator',
+            department: data.department || 'Management',
+            employee_id: data.employee_id,
+            is_company_admin: true,
+            hire_date: new Date().toISOString().split('T')[0]
+          });
 
-  // Get user statistics
-  async getUserStatistics(companyId?: string): Promise<{
-    total: number;
-    byType: Record<UserType, number>;
-    active: number;
-    inactive: number;
-    verified: number;
-    unverified: number;
-  }> {
-    try {
-      let query = supabase
-        .from('users')
-        .select('user_type, is_active, email_verified');
+        if (linkError) {
+          if (linkError.message?.includes('duplicate')) {
+            throw new UserServiceError('User is already an admin for this company');
+          }
+          throw new UserServiceError(`Failed to link user: ${linkError.message}`);
+        }
 
-      if (companyId) {
-        // Filter by company across different user types
-        const companyUserIds = await this.getCompanyUserIds(companyId);
-        query = query.in('id', companyUserIds);
+        return {
+          ...existingUser,
+          name: existingUser.email.split('@')[0],
+          is_active: true,
+          email_verified: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as UserResponse;
       }
 
-      const { data, error } = await query;
-      
-      if (error) throw error;
+      // User doesn't exist, create new
+      if (!data.password) {
+        throw new UserServiceError('Password is required for new users');
+      }
 
-      const stats = {
-        total: data?.length || 0,
-        byType: {} as Record<UserType, number>,
-        active: 0,
-        inactive: 0,
-        verified: 0,
-        unverified: 0
-      };
-
-      data?.forEach(user => {
-        // Count by type
-        stats.byType[user.user_type as UserType] = (stats.byType[user.user_type as UserType] || 0) + 1;
-        
-        // Count active/inactive
-        if (user.is_active) {
-          stats.active++;
-        } else {
-          stats.inactive++;
-        }
-        
-        // Count verified/unverified
-        if (user.email_verified) {
-          stats.verified++;
-        } else {
-          stats.unverified++;
-        }
+      return this.createEntityUser({
+        ...data,
+        name: data.email.split('@')[0], // Default name from email
+        is_company_admin: true
       });
-
-      return stats;
     } catch (error) {
-      console.error('Error fetching user statistics:', error);
-      throw new UserServiceError('Failed to fetch user statistics');
+      if (error instanceof UserServiceError) {
+        throw error;
+      }
+      throw new UserServiceError('Failed to create or link admin', 500, error);
     }
   }
 
-  // Helper: Get all user IDs for a company
-  private async getCompanyUserIds(companyId: string): Promise<string[]> {
-    const userIds: string[] = [];
+  // ===== UPDATE USER METHODS =====
+  
+  async updateUser(userId: string, updates: any): Promise<UserResponse> {
+    const response = await this.makeRequest<UserResponse>('PUT', '', {
+      userId,
+      ...updates
+    });
+
+    if (!response.success || !response.data) {
+      throw new UserServiceError(response.error || 'Failed to update user');
+    }
+
+    return response.data;
+  }
+
+  // ===== DELETE USER METHODS =====
+  
+  async deleteUser(userId: string): Promise<void> {
+    const response = await this.makeRequest('DELETE', `?userId=${userId}`);
     
-    // Get entity users
-    const { data: entityUsers } = await supabase
-      .from('entity_users')
-      .select('user_id')
-      .eq('company_id', companyId);
+    if (!response.success) {
+      throw new UserServiceError(response.error || 'Failed to delete user');
+    }
+  }
+
+  async deleteUsers(userIds: string[]): Promise<void> {
+    // Delete users one by one (can be optimized to batch delete)
+    for (const userId of userIds) {
+      await this.deleteUser(userId);
+    }
+  }
+
+  // ===== UTILITY METHODS =====
+  
+  // Check if email is available
+  async isEmailAvailable(email: string, excludeUserId?: string): Promise<boolean> {
+    const { data } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (!data) return true;
+    if (excludeUserId && data.id === excludeUserId) return true;
     
-    userIds.push(...(entityUsers?.map(u => u.user_id) || []));
+    return false;
+  }
+
+  // Validate password strength
+  validatePassword(password: string): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
     
-    // Get teachers
-    const { data: teachers } = await supabase
-      .from('teachers')
-      .select('user_id')
-      .eq('company_id', companyId);
+    if (password.length < 8) {
+      errors.push('Password must be at least 8 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      errors.push('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      errors.push('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      errors.push('Password must contain at least one number');
+    }
     
-    userIds.push(...(teachers?.map(t => t.user_id) || []));
-    
-    // Get students
-    const { data: students } = await supabase
-      .from('students')
-      .select('user_id')
-      .eq('company_id', companyId);
-    
-    userIds.push(...(students?.map(s => s.user_id) || []));
-    
-    return userIds;
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+
+  // Send verification email
+  async sendVerificationEmail(userId: string): Promise<void> {
+    try {
+      const { data: user } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single();
+
+      if (!user) {
+        throw new UserServiceError('User not found');
+      }
+
+      // This would typically call a backend endpoint to send the email
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth/verify`
+      });
+
+      if (error) {
+        throw new UserServiceError('Failed to send verification email');
+      }
+    } catch (error) {
+      if (error instanceof UserServiceError) {
+        throw error;
+      }
+      throw new UserServiceError('Failed to send verification email', 500, error);
+    }
   }
 }
 
 // Export singleton instance
-export const userService = new UserService();
-
-// ===== REACT HOOKS =====
-
-// Hook to fetch users
-export function useUsers(filters?: UserFilter) {
-  return useQuery({
-    queryKey: ['users', filters],
-    queryFn: () => userService.getUsers(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-  });
-}
-
-// Hook to fetch a single user
-export function useUser(userId: string) {
-  return useQuery({
-    queryKey: ['user', userId],
-    queryFn: () => userService.getUserById(userId),
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-// Hook to create a user
-export function useCreateUser() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: CreateUserData) => userService.createUser(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user-statistics'] });
-    },
-  });
-}
-
-// Hook to update a user
-export function useUpdateUser() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (data: UpdateUserData) => userService.updateUser(data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user', variables.userId] });
-      queryClient.invalidateQueries({ queryKey: ['user-statistics'] });
-    },
-  });
-}
-
-// Hook to delete a user
-export function useDeleteUser() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (userId: string) => userService.deleteUser(userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user-statistics'] });
-    },
-  });
-}
-
-// Hook to resend verification email
-export function useResendVerification() {
-  return useMutation({
-    mutationFn: (userId: string) => userService.resendVerificationEmail(userId),
-  });
-}
-
-// Hook for user statistics
-export function useUserStatistics(companyId?: string) {
-  return useQuery({
-    queryKey: ['user-statistics', companyId],
-    queryFn: () => userService.getUserStatistics(companyId),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-  });
-}
-
-// Hook for batch user creation
-export function useBatchCreateUsers() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (users: CreateUserData[]) => userService.batchCreateUsers(users),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user-statistics'] });
-    },
-  });
-}
-
-// Hook to validate email availability
-export function useEmailAvailability(email: string, excludeUserId?: string) {
-  return useQuery({
-    queryKey: ['email-availability', email, excludeUserId],
-    queryFn: () => userService.isEmailAvailable(email, excludeUserId),
-    enabled: !!email && email.includes('@'),
-    staleTime: 30 * 1000, // 30 seconds
-  });
-}
+export const userService = UserService.getInstance();
