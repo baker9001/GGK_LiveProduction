@@ -1,280 +1,125 @@
 // /src/app/system-admin/admin-users/tabs/UsersTab.tsx
-// Complete updated version using the universal user API
+// Standardized System Admin user management with enhanced user service
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { z } from 'zod';
-import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Loader2, FlaskConical, Mail } from 'lucide-react';
-import { supabase } from '../../../../lib/supabase';
+import { Plus, Eye, EyeOff, RefreshCw, Loader2 } from 'lucide-react';
 import { DataTable } from '../../../../components/shared/DataTable';
-import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
-import { FormField, Input, Select } from '../../../../components/shared/FormField';
-import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
-import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { FormField, Input, Select } from '../../../../components/shared/FormField';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
-import { startTestMode, isInTestMode, getRealAdminUser, mapUserTypeToRole } from '../../../../lib/auth';
-import bcrypt from 'bcryptjs';
-import { 
-  userService,
-  type CreateUserData,
-  type UpdateUserData,
-  type UserResponse 
-} from '../../../../services/userService';
+import { supabase } from '../../../../lib/supabase';
+import { userService, systemUserSchema, UserServiceError, type UserResponse } from '../../../../services/userService';
+import { z } from 'zod';
 
-const adminUserSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
-  role_id: z.string().uuid('Please select a role'),
-  status: z.enum(['active', 'inactive'])
-});
-
-const passwordChangeSchema = z.object({
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string()
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
-
-type AdminUser = {
+// ===== TYPE DEFINITIONS =====
+interface AdminUser {
   id: string;
   name: string;
   email: string;
-  role_id?: string;
-  role_name?: string;
-  role?: string;
-  status?: 'active' | 'inactive';
-  is_active: boolean;
+  status: 'active' | 'inactive';
+  role_id: string;
   created_at: string;
-  email_verified: boolean;
-};
+  roles?: {
+    id: string;
+    name: string;
+  };
+  email_verified?: boolean;
+}
 
-type Role = {
+interface Role {
   id: string;
   name: string;
-};
-
-interface FilterState {
-  name: string;
-  email: string;
-  role: string;
-  status: string[];
+  description: string;
 }
 
 interface FormState {
   name: string;
   email: string;
+  password?: string;
   role_id: string;
   status: 'active' | 'inactive';
 }
 
+// ===== MAIN COMPONENT =====
 export default function UsersTab() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    name: '',
-    email: '',
-    role: '',
-    status: []
-  });
-  
-  // Check if we're in test mode and if current user is SSA
-  const inTestMode = isInTestMode();
-  const realAdmin = getRealAdminUser();
-  const isSSA = realAdmin?.role === 'SSA';
-  
-  // Confirmation dialog state
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
-
-  // Form state
   const [formState, setFormState] = useState<FormState>({
     name: '',
     email: '',
+    password: '',
     role_id: '',
     status: 'active'
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
 
-  // Fetch roles with React Query
-  const { data: roles = [] } = useQuery<Role[]>(
+  // ===== QUERIES =====
+  
+  // Fetch admin users
+  const { data: users = [], isLoading, isFetching } = useQuery(
+    ['admin-users'],
+    async () => {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select(`
+          id,
+          name,
+          email,
+          status,
+          role_id,
+          created_at,
+          roles:role_id (
+            id,
+            name,
+            description
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Check email verification status from users table
+      const userIds = data.map(u => u.id);
+      const { data: verificationStatus } = await supabase
+        .from('users')
+        .select('id, email_verified')
+        .in('id', userIds);
+
+      const verificationMap = new Map(
+        verificationStatus?.map(v => [v.id, v.email_verified])
+      );
+
+      return data.map(user => ({
+        ...user,
+        email_verified: verificationMap.get(user.id) || false
+      }));
+    }
+  );
+
+  // Fetch roles
+  const { data: roles = [] } = useQuery(
     ['roles'],
     async () => {
       const { data, error } = await supabase
         .from('roles')
-        .select('id, name')
+        .select('*')
         .order('name');
-      
+
       if (error) throw error;
-      return data || [];
-    },
-    {
-      staleTime: 10 * 60 * 1000, // 10 minutes
+      return data;
     }
   );
 
-  // Fetch users using the universal API
-  const { 
-    data: users = [], 
-    isLoading, 
-    isFetching,
-    refetch
-  } = useQuery<AdminUser[]>(
-    ['admin-users', filters],
-    async () => {
-      // Build filter object for the API
-      const apiFilters: any = {
-        user_type: 'system'
-      };
-
-      if (filters.name) {
-        apiFilters.name = filters.name;
-      }
-      if (filters.email) {
-        apiFilters.email = filters.email;
-      }
-      if (filters.status.length > 0) {
-        // Convert status to is_active for API
-        if (filters.status.length === 1) {
-          apiFilters.is_active = filters.status[0] === 'active';
-        }
-        // If both statuses selected, don't filter
-      }
-
-      const response = await userService.getUsers(apiFilters);
-      
-      // Transform the response to match expected format
-      const transformedUsers = await Promise.all(
-        response.data.map(async (user: UserResponse) => {
-          // Get role information
-          let roleData = null;
-          if (user.user_type === 'system') {
-            const { data: adminData } = await supabase
-              .from('admin_users')
-              .select('role_id, roles(id, name)')
-              .eq('id', user.id)
-              .single();
-            
-            roleData = adminData;
-          }
-
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role_id: roleData?.role_id,
-            role_name: roleData?.roles?.name || user.role || 'Unknown',
-            role: user.role,
-            status: user.is_active ? 'active' as const : 'inactive' as const,
-            is_active: user.is_active,
-            created_at: user.created_at,
-            email_verified: user.email_verified
-          };
-        })
-      );
-
-      // Filter by role if specified
-      let filteredUsers = transformedUsers;
-      if (filters.role) {
-        filteredUsers = filteredUsers.filter(user => user.role_id === filters.role);
-      }
-
-      return filteredUsers;
-    },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    }
-  );
-
-  // Function to handle test mode
-  const handleTestAsUser = async (adminUser: AdminUser) => {
-    if (!isSSA) {
-      toast.error('Only Super Admins can use test mode');
-      return;
-    }
-
-    if (inTestMode) {
-      toast.error('Already in test mode. Exit current test mode first.');
-      return;
-    }
-
-    try {
-      // First try to find this user in the general users table
-      const { data: generalUser, error: userError } = await supabase
-        .from('users')
-        .select('id, email, user_type, raw_user_meta_data')
-        .eq('email', adminUser.email)
-        .maybeSingle();
-
-      let testUser;
-      
-      if (generalUser && !userError) {
-        // User exists in general users table
-        const userRole = mapUserTypeToRole(generalUser.user_type || 'viewer');
-        
-        // Try to get name from metadata, otherwise use admin name
-        let userName = adminUser.name;
-        if (generalUser.raw_user_meta_data?.name) {
-          userName = generalUser.raw_user_meta_data.name;
-        } else if (generalUser.raw_user_meta_data?.full_name) {
-          userName = generalUser.raw_user_meta_data.full_name;
-        }
-        
-        testUser = {
-          id: generalUser.id,
-          name: userName,
-          email: generalUser.email,
-          role: userRole,
-          userType: generalUser.user_type
-        };
-      } else {
-        // Admin user only - map admin role
-        const roleMapping: Record<string, any> = {
-          'Super Admin': 'SSA',
-          'Support Admin': 'SUPPORT',
-          'Viewer': 'VIEWER'
-        };
-
-        testUser = {
-          id: adminUser.id,
-          name: adminUser.name,
-          email: adminUser.email,
-          role: roleMapping[adminUser.role_name] || 'VIEWER',
-          userType: 'system'
-        };
-      }
-
-      // Start test mode
-      startTestMode(testUser);
-      
-      toast.success(`Starting test mode as ${testUser.name}`);
-    } catch (error) {
-      console.error('Error starting test mode:', error);
-      toast.error('Failed to start test mode');
-    }
-  };
-
-  // Resend verification email using the API
-  const resendVerificationEmail = async (user: AdminUser) => {
-    try {
-      await userService.resendVerificationEmail(user.id);
-      toast.success('Verification email sent successfully');
-    } catch (error) {
-      console.error('Error resending verification:', error);
-      toast.error('Failed to send verification email');
-    }
-  };
-
-  // Create/update user mutation using the universal API
+  // ===== MUTATIONS =====
+  
+  // Create/update user mutation using standardized service
   const userMutation = useMutation(
     async (formData: FormData) => {
       const passwordValue = formData.get('password') as string | null;
@@ -282,148 +127,155 @@ export default function UsersTab() {
       const data = {
         name: formData.get('name') as string,
         email: formData.get('email') as string,
-        ...(passwordValue !== null && { password: passwordValue }),
         role_id: formData.get('role_id') as string,
-        status: formData.get('status') as 'active' | 'inactive'
+        status: formData.get('status') as 'active' | 'inactive',
+        ...(passwordValue && { password: passwordValue })
       };
 
-      const validatedData = adminUserSchema.parse(data);
-      
-      if (editingUser) {
-        // UPDATE EXISTING USER using the API
-        const updateData: UpdateUserData = {
-          userId: editingUser.id,
-          name: validatedData.name,
-          email: validatedData.email,
-          role_id: validatedData.role_id,
-          is_active: validatedData.status === 'active'
-        };
+      try {
+        if (editingUser) {
+          // UPDATE EXISTING USER
+          
+          // Check if email is being changed
+          const emailChanged = editingUser.email !== data.email;
+          
+          if (emailChanged) {
+            const emailAvailable = await userService.isEmailAvailable(data.email, editingUser.id);
+            if (!emailAvailable) {
+              throw new UserServiceError('Email already exists');
+            }
+          }
 
-        const result = await userService.updateUser(updateData);
-        
-        // If email changed and user is active, they need to re-verify
-        if (editingUser.email !== validatedData.email && validatedData.status === 'active') {
-          toast.info('User will need to verify their new email address');
-        }
+          // Update via API
+          await userService.updateUser(editingUser.id, {
+            name: data.name,
+            email: data.email,
+            is_active: data.status === 'active'
+          });
 
-        return result;
-        
-      } else {
-        // CREATE NEW USER using the API
-        const createData: CreateUserData = {
-          name: validatedData.name,
-          email: validatedData.email,
-          password: validatedData.password!,
-          user_type: 'system',
-          role_id: validatedData.role_id,
-          is_active: validatedData.status === 'active',
-          send_verification: validatedData.status === 'active'
-        };
+          // Update role in admin_users table
+          const { error: roleError } = await supabase
+            .from('admin_users')
+            .update({
+              role_id: data.role_id,
+              status: data.status,
+              name: data.name,
+              email: data.email
+            })
+            .eq('id', editingUser.id);
 
-        const result = await userService.createUser(createData);
-        
-        if (validatedData.status === 'active') {
-          toast.success('User created and verification email sent');
+          if (roleError) throw roleError;
+
+          return { ...editingUser, ...data, type: 'update' };
         } else {
-          toast.success('User created as inactive (no verification email sent)');
-        }
+          // CREATE NEW USER via standardized service
+          
+          // Validate with schema
+          const validatedData = systemUserSchema.parse({
+            ...data,
+            user_type: 'system',
+            is_active: data.status === 'active'
+          });
 
-        return result;
+          // Check email availability
+          const emailAvailable = await userService.isEmailAvailable(validatedData.email);
+          if (!emailAvailable) {
+            throw new UserServiceError('Email already exists');
+          }
+
+          // Create user via API
+          const newUser = await userService.createSystemAdmin({
+            email: validatedData.email,
+            name: validatedData.name,
+            password: validatedData.password!,
+            role_id: validatedData.role_id,
+            is_active: validatedData.is_active
+          });
+
+          // Also create in admin_users table for backward compatibility
+          const { error: adminError } = await supabase
+            .from('admin_users')
+            .insert({
+              id: newUser.id,
+              name: validatedData.name,
+              email: validatedData.email,
+              role_id: validatedData.role_id,
+              status: data.status,
+              password_hash: 'handled_by_api' // Placeholder as API handles this
+            });
+
+          if (adminError && !adminError.message?.includes('duplicate')) {
+            console.error('Error creating admin_users record:', adminError);
+          }
+
+          return { ...newUser, type: 'create' };
+        }
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach(err => {
+            if (err.path.length > 0) {
+              errors[err.path[0] as string] = err.message;
+            }
+          });
+          throw { validationErrors: errors };
+        }
+        throw error;
       }
     },
     {
-      onSuccess: () => {
+      onSuccess: (data) => {
         queryClient.invalidateQueries(['admin-users']);
         setIsFormOpen(false);
         setEditingUser(null);
+        setFormErrors({});
         setFormState({
           name: '',
           email: '',
+          password: '',
           role_id: '',
           status: 'active'
         });
-        setFormErrors({});
-        toast.success(`User ${editingUser ? 'updated' : 'created'} successfully`);
+        
+        const action = data.type === 'update' ? 'updated' : 'created';
+        toast.success(`User ${action} successfully`);
       },
       onError: (error: any) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
+        if (error.validationErrors) {
+          setFormErrors(error.validationErrors);
+        } else if (error instanceof UserServiceError) {
+          setFormErrors({ form: error.message });
+          toast.error(error.message);
         } else {
           console.error('Error saving user:', error);
-          setFormErrors({ 
-            form: error.message || 'Failed to save user. Please try again.' 
-          });
+          setFormErrors({ form: error.message || 'Failed to save user. Please try again.' });
           toast.error('Failed to save user');
         }
       }
     }
   );
 
-  // Password change mutation (still direct to database as API doesn't handle this yet)
-  const passwordMutation = useMutation(
-    async (formData: FormData) => {
-      if (!editingUser) return;
-
-      const data = {
-        password: formData.get('password') as string,
-        confirmPassword: formData.get('confirmPassword') as string,
-      };
-
-      const validatedData = passwordChangeSchema.parse(data);
-      
-      // Hash new password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(validatedData.password, salt);
-
-      // Update password in admin_users table
-      const { error } = await supabase
-        .from('admin_users')
-        .update({ password_hash: hashedPassword })
-        .eq('id', editingUser.id);
-
-      if (error) throw error;
-      
-      toast.info('Password updated. User can also reset password via email if needed.');
-      
-      return editingUser;
+  // Resend verification email
+  const resendVerificationMutation = useMutation(
+    async (user: AdminUser) => {
+      await userService.sendVerificationEmail(user.id);
     },
     {
       onSuccess: () => {
-        setIsPasswordFormOpen(false);
-        setEditingUser(null);
-        setFormErrors({});
-        toast.success('Password updated successfully');
+        toast.success('Verification email sent successfully');
       },
       onError: (error) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else {
-          console.error('Error updating password:', error);
-          setFormErrors({ form: 'Failed to update password. Please try again.' });
-          toast.error('Failed to update password');
-        }
+        console.error('Error sending verification:', error);
+        toast.error('Failed to send verification email');
       }
     }
   );
 
-  // Delete users mutation using the API
+  // Delete users mutation using standardized service
   const deleteMutation = useMutation(
     async (users: AdminUser[]) => {
-      for (const user of users) {
-        await userService.deleteUser(user.id);
-      }
+      // Delete via API (handles all cleanup)
+      await userService.deleteUsers(users.map(u => u.id));
       return users;
     },
     {
@@ -442,33 +294,61 @@ export default function UsersTab() {
     }
   );
 
+  // Password reset mutation
+  const resetPasswordMutation = useMutation(
+    async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      // Validate password
+      const validation = userService.validatePassword(newPassword);
+      if (!validation.valid) {
+        throw new UserServiceError(validation.errors.join(', '));
+      }
+
+      // Update password via API
+      await userService.updateUser(userId, { password: newPassword });
+    },
+    {
+      onSuccess: () => {
+        toast.success('Password updated successfully');
+      },
+      onError: (error) => {
+        console.error('Error updating password:', error);
+        if (error instanceof UserServiceError) {
+          toast.error(error.message);
+        } else {
+          toast.error('Failed to update password');
+        }
+      }
+    }
+  );
+
+  // ===== EFFECTS =====
+  
   // Update form state when editing user changes
   useEffect(() => {
     if (editingUser) {
       setFormState({
         name: editingUser.name,
         email: editingUser.email,
-        role_id: editingUser.role_id || '',
-        status: editingUser.status || (editingUser.is_active ? 'active' : 'inactive')
+        role_id: editingUser.role_id,
+        status: editingUser.status
       });
     } else {
       setFormState({
         name: '',
         email: '',
+        password: '',
         role_id: '',
         status: 'active'
       });
     }
   }, [editingUser]);
 
+  // ===== HANDLERS =====
+  
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setFormErrors({});
     userMutation.mutate(new FormData(e.currentTarget));
-  };
-
-  const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    passwordMutation.mutate(new FormData(e.currentTarget));
   };
 
   const handleDelete = (users: AdminUser[]) => {
@@ -485,201 +365,126 @@ export default function UsersTab() {
     setUsersToDelete([]);
   };
 
+  const handleResendVerification = (user: AdminUser) => {
+    resendVerificationMutation.mutate(user);
+  };
+
+  // ===== TABLE COLUMNS =====
+  
   const columns = [
     {
       id: 'name',
       header: 'Name',
       accessorKey: 'name',
+      enableSorting: true,
+      cell: (row: AdminUser) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-gray-900 dark:text-white">
+            {row.name}
+          </span>
+          {!row.email_verified && (
+            <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full">
+              Unverified
+            </span>
+          )}
+        </div>
+      )
     },
     {
       id: 'email',
       header: 'Email',
       accessorKey: 'email',
+      enableSorting: true,
+      cell: (row: AdminUser) => (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 dark:text-gray-300">{row.email}</span>
+          {!row.email_verified && (
+            <button
+              onClick={() => handleResendVerification(row)}
+              className="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              title="Resend verification email"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )
     },
     {
       id: 'role',
       header: 'Role',
-      accessorKey: 'role_name',
+      accessorKey: 'roles.name',
+      enableSorting: true,
+      cell: (row: AdminUser) => (
+        <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 rounded-full">
+          {row.roles?.name || 'No Role'}
+        </span>
+      ),
     },
     {
       id: 'status',
       header: 'Status',
+      accessorKey: 'status',
+      enableSorting: true,
       cell: (row: AdminUser) => (
-        <div className="flex items-center gap-2">
-          <StatusBadge status={row.status || (row.is_active ? 'active' : 'inactive')} />
-          {row.is_active && !row.email_verified && (
-            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full">
-              Unverified
-            </span>
-          )}
-          {row.is_active && row.email_verified && (
-            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full">
-              Verified
-            </span>
-          )}
-        </div>
+        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+          row.status === 'active'
+            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+        }`}>
+          {row.status}
+        </span>
       ),
     },
     {
       id: 'created_at',
       header: 'Created At',
       accessorKey: 'created_at',
+      enableSorting: true,
       cell: (row: AdminUser) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
+        <span className="text-sm text-gray-600 dark:text-gray-400">
           {new Date(row.created_at).toLocaleDateString()}
         </span>
       ),
     },
   ];
 
-  const renderActions = (row: AdminUser) => (
-    <div className="flex items-center justify-end space-x-2">
-      {/* Resend Verification Button - Only for active, unverified users */}
-      {row.is_active && !row.email_verified && (
-        <button
-          onClick={() => resendVerificationEmail(row)}
-          className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
-          title="Resend verification email"
-        >
-          <Mail className="h-4 w-4" />
-        </button>
-      )}
-      
-      {/* Test Mode Button - Only show for SSA and not in test mode */}
-      {isSSA && !inTestMode && row.is_active && (
-        <button
-          onClick={() => handleTestAsUser(row)}
-          className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 p-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-colors"
-          title="Test as this user"
-        >
-          <FlaskConical className="h-4 w-4" />
-        </button>
-      )}
-      
-      <button
-        onClick={() => {
-          setEditingUser(row);
-          setIsFormOpen(true);
-        }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-        title="Edit"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-      
-      <button
-        onClick={() => {
-          setEditingUser(row);
-          setIsPasswordFormOpen(true);
-        }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-        title="Change Password"
-      >
-        <Key className="h-4 w-4" />
-      </button>
-      
-      <button
-        onClick={() => handleDelete([row])}
-        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-        title="Delete"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  );
-
+  // ===== RENDER =====
+  
   return (
     <div className="space-y-6">
-      <div className="flex justify-end items-center">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">System Users</h2>
         <Button
           onClick={() => {
             setEditingUser(null);
+            setFormErrors({});
             setIsFormOpen(true);
           }}
           leftIcon={<Plus className="h-4 w-4" />}
         >
-          Add System User
+          Add User
         </Button>
       </div>
-
-      <FilterCard
-        title="Filters"
-        onApply={() => {}} // No need for explicit apply with React Query
-        onClear={() => {
-          setFilters({
-            name: '',
-            email: '',
-            role: '',
-            status: []
-          });
-        }}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            id="name"
-            label="Name"
-          >
-            <Input
-              id="name"
-              placeholder="Search by name..."
-              value={filters.name}
-              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-            />
-          </FormField>
-
-          <FormField
-            id="email"
-            label="Email"
-          >
-            <Input
-              id="email"
-              placeholder="Search by email..."
-              value={filters.email}
-              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
-            />
-          </FormField>
-
-          <SearchableMultiSelect
-            label="Role"
-            options={roles.map(role => ({
-              value: role.id,
-              label: role.name
-            }))}
-            selectedValues={filters.role ? [filters.role] : []}
-            onChange={(values) => setFilters({ ...filters, role: values[0] || '' })}
-            isMulti={false}
-            placeholder="Select role..."
-          />
-
-          <SearchableMultiSelect
-            label="Status"
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' }
-            ]}
-            selectedValues={filters.status}
-            onChange={(values) => setFilters({ ...filters, status: values })}
-            placeholder="Select status..."
-          />
-        </div>
-      </FilterCard>
 
       <DataTable
         data={users}
         columns={columns}
         keyField="id"
-        caption="List of system users with their roles and status"
+        caption="List of system administrators and their roles"
         ariaLabel="System users data table"
         loading={isLoading}
         isFetching={isFetching}
-        renderActions={renderActions}
+        onEdit={(user) => {
+          setEditingUser(user);
+          setFormErrors({});
+          setIsFormOpen(true);
+        }}
         onDelete={handleDelete}
-        emptyMessage="No system users found"
+        emptyMessage="No users found"
       />
 
-      {/* Create/Edit User Form */}
       <SlideInForm
-        key={editingUser?.id || 'new'}
         title={editingUser ? 'Edit System User' : 'Create System User'}
         isOpen={isFormOpen}
         onClose={() => {
@@ -728,6 +533,7 @@ export default function UsersTab() {
               placeholder="Enter email"
               value={formState.email}
               onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+              disabled={editingUser !== null} // Email cannot be changed after creation in this UI
             />
           </FormField>
 
@@ -737,7 +543,7 @@ export default function UsersTab() {
               label="Password"
               required
               error={formErrors.password}
-              helpText="User will receive a verification email and can change this password"
+              helpText="Minimum 8 characters with uppercase, lowercase, and number"
             >
               <div className="relative">
                 <Input
@@ -745,6 +551,7 @@ export default function UsersTab() {
                   id="password"
                   name="password"
                   placeholder="Enter password"
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
@@ -771,7 +578,7 @@ export default function UsersTab() {
                 label: role.name
               }))}
               value={formState.role_id}
-              onChange={(value) => setFormState({ ...formState, role_id: value })}
+              onChange={(e) => setFormState({ ...formState, role_id: e.target.value })}
             />
           </FormField>
 
@@ -780,7 +587,6 @@ export default function UsersTab() {
             label="Status"
             required
             error={formErrors.status}
-            helpText="Active users will receive a verification email"
           >
             <Select
               id="status"
@@ -790,94 +596,21 @@ export default function UsersTab() {
                 { value: 'inactive', label: 'Inactive' }
               ]}
               value={formState.status}
-              onChange={(value) => setFormState({ ...formState, status: value as 'active' | 'inactive' })}
+              onChange={(e) => setFormState({ ...formState, status: e.target.value as 'active' | 'inactive' })}
             />
           </FormField>
         </form>
       </SlideInForm>
 
-      {/* Change Password Form */}
-      <SlideInForm
-        key={`${editingUser?.id || 'new'}-password`}
-        title={`Change Password for ${editingUser?.name}`}
-        isOpen={isPasswordFormOpen}
-        onClose={() => {
-          setIsPasswordFormOpen(false);
-          setEditingUser(null);
-          setFormErrors({});
-          setShowPassword(false);
-          setShowConfirmPassword(false);
-        }}
-        onSave={() => {
-          const form = document.querySelector('form[name="passwordForm"]');
-          if (form) form.requestSubmit();
-        }}
-        loading={passwordMutation.isLoading}
-      >
-        <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-              {formErrors.form}
-            </div>
-          )}
-
-          <FormField
-            id="password"
-            label="New Password"
-            required
-            error={formErrors.password}
-          >
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                name="password"
-                placeholder="Enter new password"
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </FormField>
-
-          <FormField
-            id="confirmPassword"
-            label="Confirm Password"
-            required
-            error={formErrors.confirmPassword}
-          >
-            <div className="relative">
-              <Input
-                type={showConfirmPassword ? "text" : "password"}
-                id="confirmPassword"
-                name="confirmPassword"
-                placeholder="Confirm new password"
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </FormField>
-        </form>
-      </SlideInForm>
-
-      {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
-        title="Delete User"
+        title="Delete Users"
         message={`Are you sure you want to delete ${usersToDelete.length} user(s)? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
+        variant="danger"
       />
     </div>
   );
