@@ -158,7 +158,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
         }
       }
       
-      // Fetch entity users
+      // Fetch entity users - FIXED: Specify the foreign key to use
       if (selectedUserType === 'all' || selectedUserType === 'entity') {
         const { data: entityUsers, error: entityError } = await supabase
           .from('entity_users')
@@ -173,7 +173,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
               created_at,
               raw_user_meta_data
             ),
-            companies(
+            companies!entity_users_company_id_fkey(
               name
             )
           `)
@@ -327,7 +327,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
               >
                 {type === 'all' ? 'All Users' : 
                  type === 'entity' ? 'Entity Users' :
-                 type.charAt(0).toUpperCase() + type.slice(1)}
+                 type.charAt(0).toUpperCase() + type.slice(1) + 's'}
               </button>
             ))}
           </div>
