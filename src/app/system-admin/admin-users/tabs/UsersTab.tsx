@@ -1,4 +1,5 @@
 // /src/app/system-admin/admin-users/tabs/UsersTab.tsx
+// Complete updated version using the universal user API
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +17,12 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 import { startTestMode, isInTestMode, getRealAdminUser, mapUserTypeToRole } from '../../../../lib/auth';
 import bcrypt from 'bcryptjs';
+import { 
+  userService,
+  type CreateUserData,
+  type UpdateUserData,
+  type UserResponse 
+} from '../../../../services/userService';
 
 const adminUserSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -37,11 +44,13 @@ type AdminUser = {
   id: string;
   name: string;
   email: string;
-  role_id: string;
-  role_name: string;
-  status: 'active' | 'inactive';
+  role_id?: string;
+  role_name?: string;
+  role?: string;
+  status?: 'active' | 'inactive';
+  is_active: boolean;
   created_at: string;
-  email_verified?: boolean;
+  email_verified: boolean;
 };
 
 type Role = {
@@ -112,61 +121,73 @@ export default function UsersTab() {
     }
   );
 
-  // Fetch users with React Query
+  // Fetch users using the universal API
   const { 
     data: users = [], 
     isLoading, 
-    isFetching 
+    isFetching,
+    refetch
   } = useQuery<AdminUser[]>(
     ['admin-users', filters],
     async () => {
-      let query = supabase
-        .from('admin_users')
-        .select(`
-          *,
-          roles (
-            id,
-            name
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Build filter object for the API
+      const apiFilters: any = {
+        user_type: 'system'
+      };
 
       if (filters.name) {
-        query = query.ilike('name', `%${filters.name}%`);
+        apiFilters.name = filters.name;
       }
       if (filters.email) {
-        query = query.ilike('email', `%${filters.email}%`);
-      }
-      if (filters.role) {
-        query = query.eq('role_id', filters.role);
+        apiFilters.email = filters.email;
       }
       if (filters.status.length > 0) {
-        query = query.in('status', filters.status);
+        // Convert status to is_active for API
+        if (filters.status.length === 1) {
+          apiFilters.is_active = filters.status[0] === 'active';
+        }
+        // If both statuses selected, don't filter
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Check verification status from users table
-      const enhancedData = await Promise.all(
-        (data || []).map(async (user) => {
-          // Get verification status from users table
-          const { data: userData } = await supabase
-            .from('users')
-            .select('email_verified')
-            .eq('id', user.id)
-            .single();
+      const response = await userService.getUsers(apiFilters);
+      
+      // Transform the response to match expected format
+      const transformedUsers = await Promise.all(
+        response.data.map(async (user: UserResponse) => {
+          // Get role information
+          let roleData = null;
+          if (user.user_type === 'system') {
+            const { data: adminData } = await supabase
+              .from('admin_users')
+              .select('role_id, roles(id, name)')
+              .eq('id', user.id)
+              .single();
+            
+            roleData = adminData;
+          }
 
           return {
-            ...user,
-            role_name: user.roles?.name || 'Unknown',
-            email_verified: userData?.email_verified || false
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role_id: roleData?.role_id,
+            role_name: roleData?.roles?.name || user.role || 'Unknown',
+            role: user.role,
+            status: user.is_active ? 'active' as const : 'inactive' as const,
+            is_active: user.is_active,
+            created_at: user.created_at,
+            email_verified: user.email_verified
           };
         })
       );
 
-      return enhancedData;
+      // Filter by role if specified
+      let filteredUsers = transformedUsers;
+      if (filters.role) {
+        filteredUsers = filteredUsers.filter(user => user.role_id === filters.role);
+      }
+
+      return filteredUsers;
     },
     {
       keepPreviousData: true,
@@ -242,34 +263,10 @@ export default function UsersTab() {
     }
   };
 
-  // Resend verification email
+  // Resend verification email using the API
   const resendVerificationEmail = async (user: AdminUser) => {
     try {
-      // Use regular auth.signUp to trigger verification email
-      const { error } = await supabase.auth.signUp({
-        email: user.email,
-        password: Math.random().toString(36).slice(-12), // Random password, user will reset it
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/verify`,
-          data: {
-            name: user.name,
-            user_type: 'system'
-          }
-        }
-      });
-
-      if (error && error.message.includes('already registered')) {
-        // User exists, use resend
-        const { error: resendError } = await supabase.auth.resend({
-          type: 'signup',
-          email: user.email
-        });
-        
-        if (resendError) throw resendError;
-      } else if (error) {
-        throw error;
-      }
-      
+      await userService.resendVerificationEmail(user.id);
       toast.success('Verification email sent successfully');
     } catch (error) {
       console.error('Error resending verification:', error);
@@ -277,7 +274,7 @@ export default function UsersTab() {
     }
   };
 
-  // Create/update user mutation
+  // Create/update user mutation using the universal API
   const userMutation = useMutation(
     async (formData: FormData) => {
       const passwordValue = formData.get('password') as string | null;
@@ -293,158 +290,45 @@ export default function UsersTab() {
       const validatedData = adminUserSchema.parse(data);
       
       if (editingUser) {
-        // UPDATE EXISTING USER
-        const emailChanged = editingUser.email !== validatedData.email;
+        // UPDATE EXISTING USER using the API
+        const updateData: UpdateUserData = {
+          userId: editingUser.id,
+          name: validatedData.name,
+          email: validatedData.email,
+          role_id: validatedData.role_id,
+          is_active: validatedData.status === 'active'
+        };
+
+        const result = await userService.updateUser(updateData);
         
-        if (emailChanged) {
-          // Check if the new email already exists
-          const { data: existingUser, error: queryError } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', validatedData.email)
-            .neq('id', editingUser.id)
-            .maybeSingle();
-
-          if (queryError) {
-            throw new Error('Failed to check email availability');
-          }
-
-          if (existingUser) {
-            throw new Error('This email is already in use');
-          }
-        }
-
-        // Update admin_users table
-        const { error: adminError } = await supabase
-          .from('admin_users')
-          .update({
-            name: validatedData.name,
-            email: validatedData.email,
-            role_id: validatedData.role_id,
-            status: validatedData.status
-          })
-          .eq('id', editingUser.id);
-
-        if (adminError) throw adminError;
-
-        // Update users table
-        const { error: usersError } = await supabase
-          .from('users')
-          .update({
-            email: validatedData.email,
-            is_active: validatedData.status === 'active',
-            updated_at: new Date().toISOString(),
-            raw_user_meta_data: {
-              name: validatedData.name,
-              full_name: validatedData.name
-            }
-          })
-          .eq('id', editingUser.id);
-
-        if (usersError) console.error('Failed to update users table:', usersError);
-
         // If email changed and user is active, they need to re-verify
-        if (emailChanged && validatedData.status === 'active') {
+        if (editingUser.email !== validatedData.email && validatedData.status === 'active') {
           toast.info('User will need to verify their new email address');
         }
 
-        return { ...editingUser, ...validatedData };
+        return result;
         
       } else {
-        // CREATE NEW USER
-        // Check if email exists
-        const { data: existingUser, error: queryError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', validatedData.email)
-          .maybeSingle();
+        // CREATE NEW USER using the API
+        const createData: CreateUserData = {
+          name: validatedData.name,
+          email: validatedData.email,
+          password: validatedData.password!,
+          user_type: 'system',
+          role_id: validatedData.role_id,
+          is_active: validatedData.status === 'active',
+          send_verification: validatedData.status === 'active'
+        };
 
-        if (queryError) {
-          throw new Error('Failed to check email availability');
+        const result = await userService.createUser(createData);
+        
+        if (validatedData.status === 'active') {
+          toast.success('User created and verification email sent');
+        } else {
+          toast.success('User created as inactive (no verification email sent)');
         }
 
-        if (existingUser) {
-          throw new Error('This email is already in use');
-        }
-
-        // Generate a unique ID for the user
-        const userId = crypto.randomUUID();
-
-        try {
-          // 1. Insert into users table (centralized)
-          const { error: usersError } = await supabase
-            .from('users')
-            .insert({
-              id: userId,
-              email: validatedData.email,
-              user_type: 'system', // Changed from 'admin' to 'system' as requested
-              is_active: validatedData.status === 'active',
-              email_verified: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              raw_user_meta_data: {
-                name: validatedData.name,
-                full_name: validatedData.name,
-                user_type: 'system'
-              }
-            });
-
-          if (usersError) throw usersError;
-
-          // 2. Hash password and insert into admin_users table
-          const salt = await bcrypt.genSalt(10);
-          const hashedPassword = await bcrypt.hash(validatedData.password!, salt);
-
-          const { data: newAdminUser, error: adminError } = await supabase
-            .from('admin_users')
-            .insert({
-              id: userId,
-              name: validatedData.name,
-              email: validatedData.email,
-              role_id: validatedData.role_id,
-              status: validatedData.status,
-              password_hash: hashedPassword
-            })
-            .select()
-            .single();
-
-          if (adminError) {
-            // Rollback users table if admin_users insert fails
-            await supabase.from('users').delete().eq('id', userId);
-            throw adminError;
-          }
-
-          // 3. Send verification email using Supabase Auth (if user is active)
-          if (validatedData.status === 'active') {
-            // Use signUp to create auth user and send verification email
-            const { error: authError } = await supabase.auth.signUp({
-              email: validatedData.email,
-              password: validatedData.password!,
-              options: {
-                emailRedirectTo: `${window.location.origin}/auth/verify`,
-                data: {
-                  id: userId, // Link to our users table
-                  name: validatedData.name,
-                  user_type: 'system'
-                }
-              }
-            });
-
-            if (authError && !authError.message.includes('already registered')) {
-              console.error('Auth signup error:', authError);
-              toast.warning('User created but verification email may not have been sent');
-            } else {
-              toast.success('User created and verification email sent');
-            }
-          } else {
-            toast.success('User created as inactive (no verification email sent)');
-          }
-
-          return newAdminUser;
-        } catch (error) {
-          console.error('Error creating user:', error);
-          throw error;
-        }
+        return result;
       }
     },
     {
@@ -481,7 +365,7 @@ export default function UsersTab() {
     }
   );
 
-  // Password change mutation
+  // Password change mutation (still direct to database as API doesn't handle this yet)
   const passwordMutation = useMutation(
     async (formData: FormData) => {
       if (!editingUser) return;
@@ -534,29 +418,12 @@ export default function UsersTab() {
     }
   );
 
-  // Delete users mutation
+  // Delete users mutation using the API
   const deleteMutation = useMutation(
     async (users: AdminUser[]) => {
       for (const user of users) {
-        // Delete from admin_users
-        const { error: adminError } = await supabase
-          .from('admin_users')
-          .delete()
-          .eq('id', user.id);
-
-        if (adminError) throw adminError;
-
-        // Delete from users table
-        const { error: usersError } = await supabase
-          .from('users')
-          .delete()
-          .eq('id', user.id);
-
-        if (usersError) console.error('Failed to delete from users table:', usersError);
-        
-        // Note: Supabase Auth user will remain but won't be able to login without users table record
+        await userService.deleteUser(user.id);
       }
-      
       return users;
     },
     {
@@ -581,8 +448,8 @@ export default function UsersTab() {
       setFormState({
         name: editingUser.name,
         email: editingUser.email,
-        role_id: editingUser.role_id,
-        status: editingUser.status
+        role_id: editingUser.role_id || '',
+        status: editingUser.status || (editingUser.is_active ? 'active' : 'inactive')
       });
     } else {
       setFormState({
@@ -639,13 +506,13 @@ export default function UsersTab() {
       header: 'Status',
       cell: (row: AdminUser) => (
         <div className="flex items-center gap-2">
-          <StatusBadge status={row.status} />
-          {row.status === 'active' && !row.email_verified && (
+          <StatusBadge status={row.status || (row.is_active ? 'active' : 'inactive')} />
+          {row.is_active && !row.email_verified && (
             <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full">
               Unverified
             </span>
           )}
-          {row.status === 'active' && row.email_verified && (
+          {row.is_active && row.email_verified && (
             <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full">
               Verified
             </span>
@@ -668,7 +535,7 @@ export default function UsersTab() {
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
       {/* Resend Verification Button - Only for active, unverified users */}
-      {row.status === 'active' && !row.email_verified && (
+      {row.is_active && !row.email_verified && (
         <button
           onClick={() => resendVerificationEmail(row)}
           className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
@@ -679,7 +546,7 @@ export default function UsersTab() {
       )}
       
       {/* Test Mode Button - Only show for SSA and not in test mode */}
-      {isSSA && !inTestMode && row.status === 'active' && (
+      {isSSA && !inTestMode && row.is_active && (
         <button
           onClick={() => handleTestAsUser(row)}
           className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 p-1 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-colors"
