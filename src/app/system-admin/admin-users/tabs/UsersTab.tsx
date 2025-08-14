@@ -48,10 +48,13 @@ import {
   Mail, 
   Copy, 
   Check, 
+  CheckCircle,
+  XCircle,
   FlaskConical, 
   Loader2,
   RefreshCw,
-  Shield 
+  Shield,
+  Printer
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -80,6 +83,7 @@ const adminUserSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain uppercase letter')
     .regex(/[a-z]/, 'Password must contain lowercase letter')
     .regex(/[0-9]/, 'Password must contain number')
+    .regex(/[!@#$%^&*]/, 'Password must contain special character')
     .optional(),
   role_id: z.string().uuid('Please select a role'),
   status: z.enum(['active', 'inactive'])
@@ -94,6 +98,43 @@ const passwordChangeSchema = z.object({
     .regex(/[!@#$%^&*]/, 'Password must contain special character'),
   sendEmail: z.boolean().optional()
 });
+
+// Password validation helper
+interface PasswordRequirement {
+  label: string;
+  test: (password: string) => boolean;
+  met: boolean;
+}
+
+function getPasswordRequirements(password: string): PasswordRequirement[] {
+  return [
+    {
+      label: 'At least 8 characters',
+      test: (p) => p.length >= 8,
+      met: password.length >= 8
+    },
+    {
+      label: 'Contains uppercase letter (A-Z)',
+      test: (p) => /[A-Z]/.test(p),
+      met: /[A-Z]/.test(password)
+    },
+    {
+      label: 'Contains lowercase letter (a-z)',
+      test: (p) => /[a-z]/.test(p),
+      met: /[a-z]/.test(password)
+    },
+    {
+      label: 'Contains number (0-9)',
+      test: (p) => /[0-9]/.test(p),
+      met: /[0-9]/.test(password)
+    },
+    {
+      label: 'Contains special character (!@#$%^&*)',
+      test: (p) => /[!@#$%^&*]/.test(p),
+      met: /[!@#$%^&*]/.test(password)
+    }
+  ];
+}
 
 // ===== TYPE DEFINITIONS =====
 interface AdminUser {
@@ -401,43 +442,66 @@ export default function UsersTab() {
       const validatedData = adminUserSchema.parse(validationData);
 
       if (editingUser) {
-        // UPDATE USER - only update profile data
+        // UPDATE USER - update both users and admin_users tables
         const response = await makeAPICall('PUT', '', {
           userId: editingUser.id,
           name: validatedData.name,
           email: validatedData.email,
           role_id: validatedData.role_id,
-          is_active: validatedData.status === 'active'
+          is_active: validatedData.status === 'active',
+          user_type: 'system' // Ensure user_type is set
         });
+        
+        // Also update admin_users table directly
+        try {
+          const { error: adminError } = await supabase
+            .from('admin_users')
+            .update({
+              name: validatedData.name,
+              email: validatedData.email,
+              role_id: validatedData.role_id,
+              status: validatedData.status,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', editingUser.id);
+          
+          if (adminError && !adminError.message?.includes('duplicate')) {
+            console.error('Error updating admin_users:', adminError);
+          }
+        } catch (error) {
+          console.error('Error updating admin_users table:', error);
+        }
 
         return response || { success: true };
       } else {
         // CREATE NEW USER with centralized auth
+        const passwordToUse = !generatePassword ? validatedData.password : generateComplexPassword();
+        
         const response = await makeAPICall('POST', '', {
           name: validatedData.name,
           email: validatedData.email,
-          password: !generatePassword ? validatedData.password : undefined,
+          password: passwordToUse,
           user_type: 'system',
           role_id: validatedData.role_id,
           is_active: validatedData.status === 'active',
           send_verification: true
         });
 
-        // Store generated password if returned
-        if (response?.user?.temporary_password) {
-          setGeneratedPassword(response.user.temporary_password);
+        // Store generated password if created
+        if (response?.user || response?.success) {
+          setGeneratedPassword(passwordToUse);
         }
 
-        return response || { success: true };
+        return response || { success: true, user: { temporary_password: passwordToUse } };
       }
     },
     {
       onSuccess: (data) => {
         queryClient.invalidateQueries(['admin-users']);
         
-        if (!editingUser && data?.user?.temporary_password) {
-          // Show password modal for new users with generated password
-          toast.success('User created successfully. Copy the temporary password!');
+        if (!editingUser && (data?.user?.temporary_password || generatedPassword)) {
+          // Show password modal for new users
+          toast.success('User created successfully. Copy the password!');
         } else {
           setIsFormOpen(false);
           setEditingUser(null);
@@ -452,8 +516,8 @@ export default function UsersTab() {
           const message = data?.message || `User ${editingUser ? 'updated' : 'created'} successfully`;
           toast.success(message);
           
-          // Show additional info about verification
-          if (!editingUser && data?.user) {
+          // Show additional info about verification for new users
+          if (!editingUser) {
             toast.info('Verification email has been sent to the user', {
               duration: 5000
             });
@@ -1138,7 +1202,15 @@ export default function UsersTab() {
                   type="checkbox"
                   id="generatePassword"
                   checked={generatePassword}
-                  onChange={(e) => setGeneratePassword(e.target.checked)}
+                  onChange={(e) => {
+                    setGeneratePassword(e.target.checked);
+                    if (e.target.checked) {
+                      const newPassword = generateComplexPassword();
+                      setFormState({ ...formState, password: newPassword });
+                    } else {
+                      setFormState({ ...formState, password: '' });
+                    }
+                  }}
                   className="rounded border-gray-300"
                 />
                 <label htmlFor="generatePassword" className="text-sm text-gray-700 dark:text-gray-300">
@@ -1146,33 +1218,72 @@ export default function UsersTab() {
                 </label>
               </div>
 
-              {!generatePassword && (
-                <FormField 
-                  id="password" 
-                  label="Password" 
-                  required 
-                  error={formErrors.password}
-                  helpText="Must be at least 8 characters with uppercase, lowercase, and number"
-                >
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      id="password"
-                      name="password"
-                      placeholder="Enter password"
-                      value={formState.password}
-                      onChange={(e) => setFormState({ ...formState, password: e.target.value })}
-                      autoComplete="new-password"
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+              {generatePassword ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Generated Password:</p>
+                    <div className="flex items-center justify-between">
+                      <code className="text-sm font-mono break-all">{formState.password}</code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newPassword = generateComplexPassword();
+                          setFormState({ ...formState, password: newPassword });
+                        }}
+                        className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex-shrink-0"
+                        title="Generate new password"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                </FormField>
+                  <input type="hidden" name="password" value={formState.password} />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <FormField 
+                    id="password" 
+                    label="Password" 
+                    required 
+                    error={formErrors.password}
+                  >
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        id="password"
+                        name="password"
+                        placeholder="Enter password"
+                        value={formState.password}
+                        onChange={(e) => setFormState({ ...formState, password: e.target.value })}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </FormField>
+                  
+                  {/* Password Requirements Checklist */}
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md space-y-1">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Password Requirements:</p>
+                    {getPasswordRequirements(formState.password).map((req, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        {req.met ? (
+                          <CheckCircle className="h-3 w-3 text-green-500" />
+                        ) : (
+                          <XCircle className="h-3 w-3 text-gray-400" />
+                        )}
+                        <span className={`text-xs ${req.met ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {req.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -1259,7 +1370,15 @@ export default function UsersTab() {
               type="checkbox"
               id="generateNewPassword"
               checked={generateNewPassword}
-              onChange={(e) => setGenerateNewPassword(e.target.checked)}
+              onChange={(e) => {
+                setGenerateNewPassword(e.target.checked);
+                if (e.target.checked) {
+                  const newPassword = generateComplexPassword();
+                  setPasswordFormState({ ...passwordFormState, newPassword: newPassword });
+                } else {
+                  setPasswordFormState({ ...passwordFormState, newPassword: '' });
+                }
+              }}
               className="rounded border-gray-300"
             />
             <label htmlFor="generateNewPassword" className="text-sm text-gray-700 dark:text-gray-300">
@@ -1267,32 +1386,78 @@ export default function UsersTab() {
             </label>
           </div>
 
-          {!generateNewPassword && (
-            <FormField 
-              id="newPassword" 
-              label="New Password" 
-              required 
-              error={formErrors.newPassword}
-              helpText="Must be at least 8 characters with uppercase, lowercase, number, and special character"
-            >
-              <div className="relative">
-                <Input
-                  type={showNewPassword ? "text" : "password"}
-                  id="newPassword"
-                  name="newPassword"
-                  placeholder="Enter new password"
-                  value={passwordFormState.newPassword}
-                  onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                >
-                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+          {generateNewPassword ? (
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Generated Password:</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPassword = generateComplexPassword();
+                      setPasswordFormState({ ...passwordFormState, newPassword: newPassword });
+                    }}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                    title="Generate new password"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                </div>
+                <code className="text-sm font-mono break-all block">{passwordFormState.newPassword}</code>
               </div>
-            </FormField>
+              <input type="hidden" name="newPassword" value={passwordFormState.newPassword} />
+              
+              {/* Password Strength Indicator */}
+              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                <p className="text-xs text-green-700 dark:text-green-400">
+                  ✓ This password meets all security requirements
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <FormField 
+                id="newPassword" 
+                label="New Password" 
+                required 
+                error={formErrors.newPassword}
+              >
+                <div className="relative">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    id="newPassword"
+                    name="newPassword"
+                    placeholder="Enter new password"
+                    value={passwordFormState.newPassword}
+                    onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </FormField>
+              
+              {/* Password Requirements Checklist */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md space-y-1">
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Password Requirements:</p>
+                {getPasswordRequirements(passwordFormState.newPassword).map((req, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    {req.met ? (
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-gray-400" />
+                    )}
+                    <span className={`text-xs ${req.met ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                      {req.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           <div className="flex items-center gap-2">
@@ -1305,14 +1470,14 @@ export default function UsersTab() {
               className="rounded border-gray-300"
             />
             <label htmlFor="sendEmail" className="text-sm text-gray-700 dark:text-gray-300">
-              Send new password to user's email
+              Send new password to user's email ({editingUser?.email})
             </label>
           </div>
 
           <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-700 dark:text-amber-400">
               <strong>Note:</strong> The user will be able to log in immediately with this password. 
-              {passwordFormState.sendEmail && " An email with the new password will be sent to the user."}
+              {passwordFormState.sendEmail && " An email notification will be sent to the user."}
             </p>
           </div>
         </form>
