@@ -6,7 +6,7 @@
  *   - lucide-react
  *   - Custom components
  * 
- * Description: Sign-in page with IGCSE background and proper error handling
+ * Description: Sign-in page with unified glassmorphic design
  */
 
 import React, { useState, useEffect } from 'react';
@@ -22,7 +22,7 @@ import {
   EyeOff,
   ShieldAlert,
   MailWarning,
-  ArrowLeft,
+  ChevronLeft,
   Home
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
@@ -320,17 +320,6 @@ export default function SignInPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
       
-      {/* Back/Home Button */}
-      <div className="absolute top-4 left-4 z-20">
-        <Link
-          to="/"
-          className="inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm text-white rounded-lg hover:bg-white/20 transition-colors duration-200 border border-white/20"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Home
-        </Link>
-      </div>
-      
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
@@ -351,6 +340,15 @@ export default function SignInPage() {
         
         {/* Sign-in Form */}
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+          {/* Back to Home - Inside card for consistency */}
+          <Link
+            to="/"
+            className="inline-flex items-center text-sm text-gray-400 hover:text-[#8CC63F] transition-colors mb-6 group"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1 transition-transform group-hover:-translate-x-1" />
+            Back to home
+          </Link>
+
           {/* Error Messages */}
           {error && (
             <div className="mb-4">
@@ -478,7 +476,7 @@ export default function SignInPage() {
               <div className="text-sm">
                 <Link
                   to="/forgot-password"
-                  className="font-medium text-[#8CC63F] hover:text-[#7AB635]"
+                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
                 >
                   Forgot password?
                 </Link>
