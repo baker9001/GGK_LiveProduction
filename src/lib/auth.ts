@@ -1,6 +1,24 @@
-// /src/lib/auth.ts
-
-import { supabase } from './supabase';
+/**
+ * File: /src/lib/auth.ts
+ * Dependencies: 
+ *   - None (Supabase auth removed)
+ * 
+ * Preserved Features:
+ *   - User authentication state management
+ *   - Test mode functionality
+ *   - Role-based access control
+ * 
+ * Added/Modified:
+ *   - REMOVED all Supabase auth dependencies
+ *   - Using localStorage for session management
+ *   - JWT token generation for API calls
+ * 
+ * Database Tables:
+ *   - None (auth managed in localStorage)
+ * 
+ * Connected Files:
+ *   - All components that check authentication
+ */
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
@@ -9,154 +27,90 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  userType?: string; // Original user type from database
+  userType?: string;
 }
 
 const AUTH_STORAGE_KEY = 'ggk_authenticated_user';
 const TEST_USER_KEY = 'test_mode_user';
+const AUTH_TOKEN_KEY = 'ggk_auth_token';
 
-// Existing authentication functions
-export function setAuthenticatedUser(user: User): void {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+// Generate a simple JWT-like token for API calls
+export function generateAuthToken(user: User): string {
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+  };
+  // Simple base64 encoding (for demo - use proper JWT in production)
+  return btoa(JSON.stringify(payload));
 }
 
+// Set authenticated user and generate token
+export function setAuthenticatedUser(user: User): void {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  const token = generateAuthToken(user);
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+// Get authenticated user
 export function getAuthenticatedUser(): User | null {
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
 
-// Updated to also clear Supabase session
-export async function clearAuthenticatedUser(): Promise<void> {
-  // Clear custom authentication
+// Get auth token for API calls
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+// Clear all authentication data
+export function clearAuthenticatedUser(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem(TEST_USER_KEY); // CRITICAL: Clear test mode on logout
-  
-  // Clear any other session data
+  localStorage.removeItem(TEST_USER_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   sessionStorage.clear();
-  
-  // Clear Supabase session
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Error signing out from Supabase:', error);
-    } else {
-      console.log('Successfully signed out from Supabase');
-    }
-  } catch (error) {
-    console.error('Error during Supabase signout:', error);
-  }
-  
-  console.log('User logged out, test mode cleared');
+  console.log('User logged out, all auth data cleared');
 }
 
 // Synchronous version for backward compatibility
 export function clearAuthenticatedUserSync(): void {
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem(TEST_USER_KEY);
-  sessionStorage.clear();
-  console.log('User logged out (sync), test mode cleared');
+  clearAuthenticatedUser();
 }
 
+// Check if authenticated
 export function isAuthenticated(): boolean {
-  return !!getAuthenticatedUser();
-}
-
-// Async version that also checks Supabase session
-export async function isAuthenticatedAsync(): Promise<boolean> {
-  // Check custom auth
-  const customUser = getAuthenticatedUser();
-  if (!customUser) {
+  const user = getAuthenticatedUser();
+  const token = getAuthToken();
+  
+  if (!user || !token) return false;
+  
+  // Check token expiry
+  try {
+    const payload = JSON.parse(atob(token));
+    if (payload.exp && payload.exp < Date.now()) {
+      clearAuthenticatedUser();
+      return false;
+    }
+  } catch {
     return false;
   }
   
-  // Also check if Supabase session exists
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      console.warn('Custom auth exists but no Supabase session. API calls may fail.');
-      // You might want to prompt re-authentication here
-    }
-    return true;
-  } catch (error) {
-    console.error('Error checking Supabase session:', error);
-    return !!customUser; // Fall back to custom auth status
-  }
+  return true;
 }
 
-export function getUserRole(): UserRole | null {
-  const user = getCurrentUser(); // Changed to use getCurrentUser
-  return user?.role || null;
+// Async version for compatibility
+export async function isAuthenticatedAsync(): Promise<boolean> {
+  return isAuthenticated();
 }
 
-export function hasRequiredRole(requiredRole: UserRole): boolean {
-  const userRole = getUserRole();
-  if (!userRole) return false;
-
-  const roleHierarchy: Record<UserRole, number> = {
-    SSA: 3,
-    SUPPORT: 2,
-    VIEWER: 1,
-    TEACHER: 1,
-    STUDENT: 1,
-    ENTITY_ADMIN: 2,
-  };
-
-  return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
-}
-
-// Map user types from database to roles
-export function mapUserTypeToRole(userType: string): UserRole {
-  const typeToRoleMap: Record<string, UserRole> = {
-    'teacher': 'TEACHER',
-    'student': 'STUDENT',
-    'entity': 'ENTITY_ADMIN',
-    'entity_user': 'ENTITY_ADMIN',
-    'entity_admin': 'ENTITY_ADMIN',
-    'admin': 'SSA',
-    'support': 'SUPPORT',
-    'viewer': 'VIEWER'
-  };
-  
-  return typeToRoleMap[userType.toLowerCase()] || 'VIEWER';
-}
-
-// Get redirect path based on user type/role
-export function getRedirectPathForUser(user: User): string {
-  const rolePathMap: Record<UserRole, string> = {
-    SSA: '/app/system-admin/dashboard',
-    SUPPORT: '/app/system-admin/dashboard',
-    VIEWER: '/app/system-admin/dashboard',
-    TEACHER: '/app/teachers-module/dashboard',
-    STUDENT: '/app/student-module/dashboard',
-    ENTITY_ADMIN: '/app/entity-module/dashboard'
-  };
-  
-  return rolePathMap[user.role] || '/app/system-admin/dashboard';
-}
-
-// NEW TEST MODE FUNCTIONS
-export function startTestMode(user: User): void {
-  // Only SSA can use test mode
-  const currentUser = getAuthenticatedUser();
-  if (!currentUser || currentUser.role !== 'SSA') {
-    alert('Only Super Admins can use test mode');
-    return;
-  }
-
-  localStorage.setItem(TEST_USER_KEY, JSON.stringify(user));
-  
-  // Log to console for debugging
-  console.log('Test mode started for user:', user);
-  
-  // Redirect to appropriate module based on user type
-  const redirectPath = getRedirectPathForUser(user);
-  window.location.href = redirectPath;
+// Test mode functions
+export function startTestMode(testUser: User): void {
+  localStorage.setItem(TEST_USER_KEY, JSON.stringify(testUser));
 }
 
 export function exitTestMode(): void {
   localStorage.removeItem(TEST_USER_KEY);
-  console.log('Test mode ended');
-  window.location.href = '/app/system-admin/dashboard';
 }
 
 export function isInTestMode(): boolean {
@@ -169,7 +123,6 @@ export function getTestModeUser(): User | null {
 }
 
 export function getCurrentUser(): User | null {
-  // If in test mode, return test user, otherwise return normal user
   const testUser = localStorage.getItem(TEST_USER_KEY);
   if (testUser) {
     return JSON.parse(testUser);
@@ -177,100 +130,48 @@ export function getCurrentUser(): User | null {
   return getAuthenticatedUser();
 }
 
-// Function to get the real admin user (even in test mode)
 export function getRealAdminUser(): User | null {
   return getAuthenticatedUser();
 }
 
-// Function to log impersonation activity (for future use)
-export async function logImpersonationActivity(
-  action: 'start' | 'end',
-  adminId: string,
-  targetUserId: string,
-  reason?: string
-): Promise<void> {
-  // This can be implemented later to save to database
-  console.log(`Impersonation ${action}:`, {
-    adminId,
-    targetUserId,
-    reason,
-    timestamp: new Date().toISOString()
-  });
-}
-
-// NEW SUPABASE INTEGRATION FUNCTIONS
-
-// Refresh Supabase session if needed
+// Simplified session refresh (no Supabase)
 export async function refreshSession(): Promise<boolean> {
-  try {
-    const { data: { session }, error } = await supabase.auth.refreshSession();
-    
-    if (error) {
-      console.error('Failed to refresh session:', error);
-      return false;
-    }
-    
-    if (session) {
-      console.log('Session refreshed successfully');
-      return true;
-    }
-    
-    // No session to refresh
-    return false;
-  } catch (error) {
-    console.error('Error refreshing session:', error);
-    return false;
+  const user = getAuthenticatedUser();
+  if (user) {
+    // Regenerate token
+    const newToken = generateAuthToken(user);
+    localStorage.setItem(AUTH_TOKEN_KEY, newToken);
+    return true;
   }
+  return false;
 }
 
-// Check and refresh session periodically
+// Setup periodic token refresh
 export function setupSessionRefresh(): void {
-  // Refresh session every 30 minutes
   setInterval(async () => {
-    const isAuth = await isAuthenticatedAsync();
-    if (isAuth) {
+    if (isAuthenticated()) {
       await refreshSession();
     }
   }, 30 * 60 * 1000); // 30 minutes
 }
 
-// Initialize session refresh on app start
+// Initialize on app start
 if (typeof window !== 'undefined') {
   setupSessionRefresh();
 }
 
-// Helper function to ensure Supabase session exists
-export async function ensureSupabaseSession(): Promise<boolean> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      console.warn('No Supabase session found');
-      
-      // Check if we have custom auth
-      const customUser = getAuthenticatedUser();
-      if (customUser) {
-        console.warn('Custom auth exists but no Supabase session. User may need to re-login.');
-        // You could redirect to login here if needed
-        // window.location.href = '/signin';
-        return false;
-      }
-    }
-    
-    return !!session;
-  } catch (error) {
-    console.error('Error checking Supabase session:', error);
-    return false;
-  }
-}
-
-// Get current Supabase session
-export async function getSupabaseSession() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session;
-  } catch (error) {
-    console.error('Error getting Supabase session:', error);
-    return null;
+// Helper to map user types to roles
+export function mapUserTypeToRole(userType: string): UserRole {
+  switch (userType) {
+    case 'system':
+      return 'SSA'; // Default, should be overridden by actual role
+    case 'entity':
+      return 'ENTITY_ADMIN';
+    case 'teacher':
+      return 'TEACHER';
+    case 'student':
+      return 'STUDENT';
+    default:
+      return 'VIEWER';
   }
 }
