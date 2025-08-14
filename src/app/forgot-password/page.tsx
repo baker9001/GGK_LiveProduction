@@ -14,7 +14,7 @@ function generateResetToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -251,3 +251,5 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+
+export { ForgotPasswordPage as default };
