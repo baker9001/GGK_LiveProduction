@@ -253,3 +253,5 @@ function ForgotPasswordPage() {
 }
 
 export { ForgotPasswordPage as default };
+
+export default ForgotPasswordPage
