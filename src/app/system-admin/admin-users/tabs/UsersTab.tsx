@@ -83,7 +83,6 @@ const adminUserSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain uppercase letter')
     .regex(/[a-z]/, 'Password must contain lowercase letter')
     .regex(/[0-9]/, 'Password must contain number')
-    .regex(/[!@#$%^&*]/, 'Password must contain special character')
     .optional(),
   role_id: z.string().uuid('Please select a role'),
   status: z.enum(['active', 'inactive'])
@@ -99,42 +98,19 @@ const passwordChangeSchema = z.object({
   sendEmail: z.boolean().optional()
 });
 
-// Password validation helper
+// Password complexity requirements
 interface PasswordRequirement {
   label: string;
   test: (password: string) => boolean;
-  met: boolean;
 }
 
-function getPasswordRequirements(password: string): PasswordRequirement[] {
-  return [
-    {
-      label: 'At least 8 characters',
-      test: (p) => p.length >= 8,
-      met: password.length >= 8
-    },
-    {
-      label: 'Contains uppercase letter (A-Z)',
-      test: (p) => /[A-Z]/.test(p),
-      met: /[A-Z]/.test(password)
-    },
-    {
-      label: 'Contains lowercase letter (a-z)',
-      test: (p) => /[a-z]/.test(p),
-      met: /[a-z]/.test(password)
-    },
-    {
-      label: 'Contains number (0-9)',
-      test: (p) => /[0-9]/.test(p),
-      met: /[0-9]/.test(password)
-    },
-    {
-      label: 'Contains special character (!@#$%^&*)',
-      test: (p) => /[!@#$%^&*]/.test(p),
-      met: /[!@#$%^&*]/.test(password)
-    }
-  ];
-}
+const passwordRequirements: PasswordRequirement[] = [
+  { label: 'At least 8 characters', test: (p) => p.length >= 8 },
+  { label: 'Contains uppercase letter (A-Z)', test: (p) => /[A-Z]/.test(p) },
+  { label: 'Contains lowercase letter (a-z)', test: (p) => /[a-z]/.test(p) },
+  { label: 'Contains number (0-9)', test: (p) => /[0-9]/.test(p) },
+  { label: 'Contains special character (!@#$%^&*)', test: (p) => /[!@#$%^&*]/.test(p) }
+];
 
 // ===== TYPE DEFINITIONS =====
 interface AdminUser {
@@ -284,7 +260,33 @@ async function makeAPICall(method: string, endpoint: string = '', body?: any) {
   }
 }
 
-// ===== MAIN COMPONENT =====
+// ===== PASSWORD REQUIREMENTS COMPONENT =====
+const PasswordRequirementsChecker: React.FC<{ password: string }> = ({ password }) => {
+  return (
+    <div className="mt-2 space-y-1">
+      {passwordRequirements.map((req, index) => {
+        const isMet = password ? req.test(password) : false;
+        return (
+          <div 
+            key={index} 
+            className={`flex items-center gap-2 text-xs transition-all ${
+              isMet ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {isMet ? (
+              <CheckCircle className="h-3 w-3" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+            <span>{req.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ===== MAIN COMPONENT ======
 export default function UsersTab() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -442,66 +444,54 @@ export default function UsersTab() {
       const validatedData = adminUserSchema.parse(validationData);
 
       if (editingUser) {
-        // UPDATE USER - update both users and admin_users tables
+        // UPDATE USER - update both users table and admin_users table
         const response = await makeAPICall('PUT', '', {
           userId: editingUser.id,
           name: validatedData.name,
           email: validatedData.email,
           role_id: validatedData.role_id,
-          is_active: validatedData.status === 'active',
-          user_type: 'system' // Ensure user_type is set
+          is_active: validatedData.status === 'active'
         });
         
-        // Also update admin_users table directly
-        try {
-          const { error: adminError } = await supabase
-            .from('admin_users')
-            .update({
-              name: validatedData.name,
-              email: validatedData.email,
-              role_id: validatedData.role_id,
-              status: validatedData.status,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', editingUser.id);
-          
-          if (adminError && !adminError.message?.includes('duplicate')) {
-            console.error('Error updating admin_users:', adminError);
-          }
-        } catch (error) {
-          console.error('Error updating admin_users table:', error);
-        }
+        // Also update admin_users table directly to ensure consistency
+        await supabase
+          .from('admin_users')
+          .update({
+            name: validatedData.name,
+            email: validatedData.email,
+            role_id: validatedData.role_id,
+            status: validatedData.status
+          })
+          .eq('id', editingUser.id);
 
         return response || { success: true };
       } else {
         // CREATE NEW USER with centralized auth
-        const passwordToUse = !generatePassword ? validatedData.password : generateComplexPassword();
-        
         const response = await makeAPICall('POST', '', {
           name: validatedData.name,
           email: validatedData.email,
-          password: passwordToUse,
+          password: !generatePassword ? validatedData.password : undefined,
           user_type: 'system',
           role_id: validatedData.role_id,
           is_active: validatedData.status === 'active',
           send_verification: true
         });
 
-        // Store generated password if created
-        if (response?.user || response?.success) {
-          setGeneratedPassword(passwordToUse);
+        // Store generated password if returned
+        if (response?.user?.temporary_password) {
+          setGeneratedPassword(response.user.temporary_password);
         }
 
-        return response || { success: true, user: { temporary_password: passwordToUse } };
+        return response || { success: true };
       }
     },
     {
       onSuccess: (data) => {
         queryClient.invalidateQueries(['admin-users']);
         
-        if (!editingUser && (data?.user?.temporary_password || generatedPassword)) {
-          // Show password modal for new users
-          toast.success('User created successfully. Copy the password!');
+        if (!editingUser && data?.user?.temporary_password) {
+          // Show password modal for new users with generated password
+          toast.success('User created successfully. Copy the temporary password!');
         } else {
           setIsFormOpen(false);
           setEditingUser(null);
@@ -517,7 +507,7 @@ export default function UsersTab() {
           toast.success(message);
           
           // Show additional info about verification for new users
-          if (!editingUser) {
+          if (!editingUser && data?.user) {
             toast.info('Verification email has been sent to the user', {
               duration: 5000
             });
@@ -824,6 +814,48 @@ export default function UsersTab() {
       setCopiedPassword(true);
       setTimeout(() => setCopiedPassword(false), 2000);
       toast.success('Password copied to clipboard');
+    }
+  };
+  
+  const printPassword = () => {
+    if (generatedPassword && editingUser) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Password for ${editingUser.name}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .header { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
+                .info { margin: 10px 0; }
+                .password { 
+                  font-family: monospace; 
+                  font-size: 16px; 
+                  background: #f3f4f6; 
+                  padding: 10px; 
+                  border: 1px solid #d1d5db;
+                  margin: 20px 0;
+                }
+                .footer { margin-top: 30px; font-size: 12px; color: #6b7280; }
+              </style>
+            </head>
+            <body>
+              <div class="header">GGK Learning System - Password Information</div>
+              <div class="info"><strong>User:</strong> ${editingUser.name}</div>
+              <div class="info"><strong>Email:</strong> ${editingUser.email}</div>
+              <div class="info"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+              <div class="password">${generatedPassword}</div>
+              <div class="footer">
+                Please share this password securely with the user. 
+                They will need to verify their email before logging in.
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
     }
   };
 
@@ -1197,94 +1229,89 @@ export default function UsersTab() {
 
           {!editingUser && (
             <>
-              <div className="flex items-center gap-2 mb-4">
-                <input
-                  type="checkbox"
-                  id="generatePassword"
-                  checked={generatePassword}
-                  onChange={(e) => {
-                    setGeneratePassword(e.target.checked);
-                    if (e.target.checked) {
-                      const newPassword = generateComplexPassword();
-                      setFormState({ ...formState, password: newPassword });
-                    } else {
-                      setFormState({ ...formState, password: '' });
-                    }
-                  }}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor="generatePassword" className="text-sm text-gray-700 dark:text-gray-300">
-                  Auto-generate secure password
-                </label>
-              </div>
-
-              {generatePassword ? (
-                <div className="space-y-3">
-                  <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Generated Password:</p>
-                    <div className="flex items-center justify-between">
-                      <code className="text-sm font-mono break-all">{formState.password}</code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newPassword = generateComplexPassword();
-                          setFormState({ ...formState, password: newPassword });
+              <div className="space-y-4">
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Password Options
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="passwordOption"
+                        checked={generatePassword}
+                        onChange={() => {
+                          setGeneratePassword(true);
+                          setFormState({ ...formState, password: '' });
                         }}
-                        className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex-shrink-0"
-                        title="Generate new password"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </button>
-                    </div>
+                        className="text-[#8CC63F]"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Auto-generate secure password
+                      </span>
+                    </label>
+                    
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="passwordOption"
+                        checked={!generatePassword}
+                        onChange={() => setGeneratePassword(false)}
+                        className="text-[#8CC63F]"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        Set password manually
+                      </span>
+                    </label>
                   </div>
-                  <input type="hidden" name="password" value={formState.password} />
                 </div>
-              ) : (
-                <div className="space-y-3">
+
+                {!generatePassword && (
                   <FormField 
                     id="password" 
                     label="Password" 
                     required 
                     error={formErrors.password}
                   >
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        id="password"
-                        name="password"
-                        placeholder="Enter password"
-                        value={formState.password}
-                        onChange={(e) => setFormState({ ...formState, password: e.target.value })}
-                        autoComplete="new-password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          id="password"
+                          name="password"
+                          placeholder="Enter password"
+                          value={formState.password}
+                          onChange={(e) => setFormState({ ...formState, password: e.target.value })}
+                          autoComplete="new-password"
+                          className={`pr-10 ${
+                            formState.password && 
+                            passwordRequirements.every(req => req.test(formState.password))
+                              ? 'border-green-500 focus:border-green-500'
+                              : ''
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <PasswordRequirementsChecker password={formState.password} />
                     </div>
                   </FormField>
-                  
-                  {/* Password Requirements Checklist */}
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md space-y-1">
-                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Password Requirements:</p>
-                    {getPasswordRequirements(formState.password).map((req, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        {req.met ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <XCircle className="h-3 w-3 text-gray-400" />
-                        )}
-                        <span className={`text-xs ${req.met ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {req.label}
-                        </span>
-                      </div>
-                    ))}
+                )}
+                
+                {generatePassword && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      ✓ A secure password will be automatically generated when you save
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
 
@@ -1361,123 +1388,130 @@ export default function UsersTab() {
 
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-700 dark:text-blue-300">
+              <Shield className="h-4 w-4 inline mr-1" />
               As a Super Admin, you can directly set a new password for this user.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
-            <input
-              type="checkbox"
-              id="generateNewPassword"
-              checked={generateNewPassword}
-              onChange={(e) => {
-                setGenerateNewPassword(e.target.checked);
-                if (e.target.checked) {
-                  const newPassword = generateComplexPassword();
-                  setPasswordFormState({ ...passwordFormState, newPassword: newPassword });
-                } else {
-                  setPasswordFormState({ ...passwordFormState, newPassword: '' });
-                }
-              }}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="generateNewPassword" className="text-sm text-gray-700 dark:text-gray-300">
-              Generate secure password automatically
-            </label>
-          </div>
-
-          {generateNewPassword ? (
-            <div className="space-y-3">
-              <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Generated Password:</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newPassword = generateComplexPassword();
-                      setPasswordFormState({ ...passwordFormState, newPassword: newPassword });
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                    title="Generate new password"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                  </button>
-                </div>
-                <code className="text-sm font-mono break-all block">{passwordFormState.newPassword}</code>
-              </div>
-              <input type="hidden" name="newPassword" value={passwordFormState.newPassword} />
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Password Options
+              </p>
               
-              {/* Password Strength Indicator */}
-              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-                <p className="text-xs text-green-700 dark:text-green-400">
-                  ✓ This password meets all security requirements
-                </p>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={generateNewPassword}
+                    onChange={() => {
+                      setGenerateNewPassword(true);
+                      setPasswordFormState({ ...passwordFormState, newPassword: '' });
+                    }}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Generate secure password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      System will create a strong 12-character password
+                    </p>
+                  </div>
+                </label>
+                
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={!generateNewPassword}
+                    onChange={() => setGenerateNewPassword(false)}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Set custom password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Enter your own password meeting complexity requirements
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
+
+            {!generateNewPassword && (
               <FormField 
                 id="newPassword" 
                 label="New Password" 
                 required 
                 error={formErrors.newPassword}
               >
-                <div className="relative">
-                  <Input
-                    type={showNewPassword ? "text" : "password"}
-                    id="newPassword"
-                    name="newPassword"
-                    placeholder="Enter new password"
-                    value={passwordFormState.newPassword}
-                    onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                  >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      id="newPassword"
+                      name="newPassword"
+                      placeholder="Enter new password"
+                      value={passwordFormState.newPassword}
+                      onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
+                      className={`pr-10 ${
+                        passwordFormState.newPassword && 
+                        passwordRequirements.every(req => req.test(passwordFormState.newPassword))
+                          ? 'border-green-500 focus:border-green-500'
+                          : ''
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <PasswordRequirementsChecker password={passwordFormState.newPassword} />
                 </div>
               </FormField>
-              
-              {/* Password Requirements Checklist */}
-              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md space-y-1">
-                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Password Requirements:</p>
-                {getPasswordRequirements(passwordFormState.newPassword).map((req, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    {req.met ? (
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                    ) : (
-                      <XCircle className="h-3 w-3 text-gray-400" />
-                    )}
-                    <span className={`text-xs ${req.met ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                      {req.label}
-                    </span>
-                  </div>
-                ))}
+            )}
+            
+            {generateNewPassword && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  A strong password will be generated automatically
+                </p>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="sendEmail"
-              name="sendEmail"
-              checked={passwordFormState.sendEmail}
-              onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="sendEmail" className="text-sm text-gray-700 dark:text-gray-300">
-              Send new password to user's email ({editingUser?.email})
-            </label>
+            <div className="border-t pt-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="sendEmail"
+                  name="sendEmail"
+                  checked={passwordFormState.sendEmail}
+                  onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
+                  className="rounded border-gray-300 text-[#8CC63F]"
+                />
+                <div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    Send password to user's email
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Email the new password to {editingUser?.email}
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
 
           <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              <strong>Note:</strong> The user will be able to log in immediately with this password. 
-              {passwordFormState.sendEmail && " An email notification will be sent to the user."}
+              <strong>Note:</strong> The user can log in immediately with the new password.
+              {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
             </p>
           </div>
         </form>
@@ -1494,8 +1528,8 @@ export default function UsersTab() {
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {editingUser 
-                  ? `A new password has been set for ${editingUser.name}. Please copy and share it securely.`
-                  : 'A temporary password has been generated. Please copy and share it securely with the user.'
+                  ? `A new password has been set for ${editingUser.name}.`
+                  : 'A temporary password has been generated.'
                 }
               </p>
               {!editingUser && (
@@ -1505,30 +1539,60 @@ export default function UsersTab() {
               )}
             </div>
 
-            <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md mb-4">
+            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                Generated Password
+              </p>
               <div className="flex items-center justify-between">
-                <code className="text-sm font-mono break-all">{generatedPassword}</code>
-                <button
-                  onClick={copyPassword}
-                  className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex-shrink-0"
-                  title="Copy password"
-                >
-                  {copiedPassword ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
+                <code className="text-base font-mono font-semibold break-all pr-2">
+                  {generatedPassword}
+                </code>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={copyPassword}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    title="Copy password"
+                  >
+                    {copiedPassword ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                  {editingUser && (
+                    <button
+                      onClick={printPassword}
+                      className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                      title="Print password"
+                    >
+                      <Printer className="h-4 w-4" />
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             </div>
 
             <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 border border-amber-200 dark:border-amber-800">
               <p className="text-sm text-amber-700 dark:text-amber-400">
-                <strong>Important:</strong> This password will not be shown again. Make sure to copy it now.
+                <strong>Important:</strong> This password will not be shown again. Make sure to:
               </p>
+              <ul className="mt-2 text-sm text-amber-700 dark:text-amber-400 list-disc list-inside">
+                <li>Copy or print the password now</li>
+                <li>Share it securely with the user</li>
+                <li>Advise the user to change it after first login</li>
+              </ul>
             </div>
 
             <div className="flex justify-end gap-2">
+              {editingUser && (
+                <button
+                  onClick={printPassword}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                >
+                  <Printer className="h-4 w-4" />
+                  Print
+                </button>
+              )}
               <Button onClick={closePasswordModal}>
                 Close
               </Button>
