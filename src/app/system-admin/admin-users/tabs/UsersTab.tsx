@@ -805,6 +805,18 @@ export default function UsersTab() {
       setGeneratePassword(true);
     }
   }, [editingUser]);
+  
+  useEffect(() => {
+    // Reset password form when closing
+    if (!isPasswordFormOpen) {
+      setPasswordFormState({
+        newPassword: '',
+        sendEmail: false
+      });
+      setGenerateNewPassword(true);
+      setShowNewPassword(false);
+    }
+  }, [isPasswordFormOpen]);
 
   // ===== TABLE CONFIGURATION =====
   
