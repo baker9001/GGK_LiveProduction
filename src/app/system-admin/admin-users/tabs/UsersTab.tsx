@@ -85,6 +85,16 @@ const adminUserSchema = z.object({
   status: z.enum(['active', 'inactive'])
 });
 
+const passwordChangeSchema = z.object({
+  newPassword: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain uppercase letter')
+    .regex(/[a-z]/, 'Password must contain lowercase letter')
+    .regex(/[0-9]/, 'Password must contain number')
+    .regex(/[!@#$%^&*]/, 'Password must contain special character'),
+  sendEmail: z.boolean().optional()
+});
+
 // ===== TYPE DEFINITIONS =====
 interface AdminUser {
   id: string;
@@ -112,6 +122,30 @@ interface FilterState {
 }
 
 type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER';
+
+// ===== HELPER FUNCTIONS =====
+function generateComplexPassword(length: number = 12): string {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const allChars = uppercase + lowercase + numbers + special;
+  
+  let password = '';
+  // Ensure at least one of each required character type
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Fill the rest randomly
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
 
 // ===== API HELPER FUNCTION =====
 async function makeAPICall(method: string, endpoint: string = '', body?: any) {
@@ -216,10 +250,13 @@ export default function UsersTab() {
   
   // Form states
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [generatePassword, setGeneratePassword] = useState(true);
+  const [generateNewPassword, setGenerateNewPassword] = useState(true);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
   
@@ -247,6 +284,12 @@ export default function UsersTab() {
     password: '',
     role_id: '',
     status: 'active' as 'active' | 'inactive'
+  });
+
+  // Password form state
+  const [passwordFormState, setPasswordFormState] = useState({
+    newPassword: '',
+    sendEmail: false
   });
 
   // ===== QUERIES =====
@@ -529,6 +572,42 @@ export default function UsersTab() {
     }
   );
 
+  // Change password mutation (direct password change by admin)
+  const changePasswordMutation = useMutation(
+    async (data: { userId: string; password: string; sendEmail: boolean }) => {
+      // Call API to change password directly
+      const response = await makeAPICall('PUT', '/change-password', {
+        userId: data.userId,
+        newPassword: data.password,
+        requirePasswordChange: false, // Admin set password, no need to change
+        sendNotification: data.sendEmail
+      });
+
+      return response || { success: true, password: data.password };
+    },
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(['admin-users']);
+        
+        if (data.password) {
+          // Show the new password to admin
+          setGeneratedPassword(data.password);
+          toast.success('Password changed successfully. Copy the new password!');
+        } else {
+          setIsPasswordFormOpen(false);
+          setEditingUser(null);
+          toast.success('Password changed successfully');
+        }
+        
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        console.error('Error changing password:', error);
+        toast.error(error.message || 'Failed to change password');
+      }
+    }
+  );
+
   // Reset password mutation (sends reset email)
   const resetPasswordMutation = useMutation(
     async (email: string) => {
@@ -625,6 +704,47 @@ export default function UsersTab() {
     userMutation.mutate(new FormData(e.currentTarget));
   };
 
+  const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormErrors({});
+    
+    if (!editingUser) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const newPassword = formData.get('newPassword') as string;
+    const sendEmail = formData.get('sendEmail') === 'on';
+    
+    // Validate password
+    try {
+      passwordChangeSchema.parse({ newPassword, sendEmail });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0] as string] = err.message;
+          }
+        });
+        setFormErrors(errors);
+        return;
+      }
+    }
+    
+    // Use generated password if checkbox is checked
+    const passwordToSet = generateNewPassword ? generateComplexPassword() : newPassword;
+    
+    changePasswordMutation.mutate({
+      userId: editingUser.id,
+      password: passwordToSet,
+      sendEmail
+    });
+    
+    // Store the password for display if generated
+    if (generateNewPassword) {
+      setGeneratedPassword(passwordToSet);
+    }
+  };
+
   const handleDelete = (users: AdminUser[]) => {
     setUsersToDelete(users);
     setIsConfirmDialogOpen(true);
@@ -646,6 +766,7 @@ export default function UsersTab() {
   const closePasswordModal = () => {
     setGeneratedPassword(null);
     setIsFormOpen(false);
+    setIsPasswordFormOpen(false);
     setEditingUser(null);
     setFormState({
       name: '',
@@ -654,6 +775,11 @@ export default function UsersTab() {
       role_id: '',
       status: 'active'
     });
+    setPasswordFormState({
+      newPassword: '',
+      sendEmail: false
+    });
+    setGenerateNewPassword(true);
   };
 
   // ===== EFFECTS =====
@@ -773,7 +899,26 @@ export default function UsersTab() {
         </button>
       )}
       
-      {/* Reset Password */}
+      {/* Change Password (for SSA only) */}
+      {isSSA && row.status === 'active' && (
+        <button
+          onClick={() => {
+            setEditingUser(row);
+            setIsPasswordFormOpen(true);
+            setGenerateNewPassword(true);
+            setPasswordFormState({
+              newPassword: '',
+              sendEmail: false
+            });
+          }}
+          className="text-purple-600 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 p-1 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-colors"
+          title="Change password"
+        >
+          <Key className="h-4 w-4" />
+        </button>
+      )}
+      
+      {/* Send Reset Email */}
       {row.status === 'active' && row.email_verified && (
         <button
           onClick={() => resetPasswordMutation.mutate(row.email)}
@@ -784,7 +929,7 @@ export default function UsersTab() {
           {resetPasswordMutation.isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Key className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" />
           )}
         </button>
       )}
@@ -1062,27 +1207,133 @@ export default function UsersTab() {
         </form>
       </SlideInForm>
 
+      {/* Change Password Form (Admin Direct Change) */}
+      <SlideInForm
+        key={`${editingUser?.id || 'new'}-password`}
+        title={`Change Password for ${editingUser?.name}`}
+        isOpen={isPasswordFormOpen && !generatedPassword}
+        onClose={() => {
+          setIsPasswordFormOpen(false);
+          setEditingUser(null);
+          setFormErrors({});
+          setShowNewPassword(false);
+          setGenerateNewPassword(true);
+          setPasswordFormState({
+            newPassword: '',
+            sendEmail: false
+          });
+        }}
+        onSave={() => {
+          const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+        loading={changePasswordMutation.isLoading}
+      >
+        <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              As a Super Admin, you can directly set a new password for this user.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 mb-4">
+            <input
+              type="checkbox"
+              id="generateNewPassword"
+              checked={generateNewPassword}
+              onChange={(e) => setGenerateNewPassword(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <label htmlFor="generateNewPassword" className="text-sm text-gray-700 dark:text-gray-300">
+              Generate secure password automatically
+            </label>
+          </div>
+
+          {!generateNewPassword && (
+            <FormField 
+              id="newPassword" 
+              label="New Password" 
+              required 
+              error={formErrors.newPassword}
+              helpText="Must be at least 8 characters with uppercase, lowercase, number, and special character"
+            >
+              <div className="relative">
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  id="newPassword"
+                  name="newPassword"
+                  placeholder="Enter new password"
+                  value={passwordFormState.newPassword}
+                  onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </FormField>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="sendEmail"
+              name="sendEmail"
+              checked={passwordFormState.sendEmail}
+              onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
+              className="rounded border-gray-300"
+            />
+            <label htmlFor="sendEmail" className="text-sm text-gray-700 dark:text-gray-300">
+              Send new password to user's email
+            </label>
+          </div>
+
+          <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              <strong>Note:</strong> The user will be able to log in immediately with this password. 
+              {passwordFormState.sendEmail && " An email with the new password will be sent to the user."}
+            </p>
+          </div>
+        </form>
+      </SlideInForm>
+
       {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">User Created Successfully</h3>
+            <h3 className="text-lg font-semibold mb-4">
+              {editingUser ? 'Password Changed Successfully' : 'User Created Successfully'}
+            </h3>
             
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                A temporary password has been generated. Please copy and share it securely with the user.
+                {editingUser 
+                  ? `A new password has been set for ${editingUser.name}. Please copy and share it securely.`
+                  : 'A temporary password has been generated. Please copy and share it securely with the user.'
+                }
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                The user will receive a verification email and must verify their email before logging in.
-              </p>
+              {!editingUser && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  The user will receive a verification email and must verify their email before logging in.
+                </p>
+              )}
             </div>
 
             <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md mb-4">
               <div className="flex items-center justify-between">
-                <code className="text-sm font-mono">{generatedPassword}</code>
+                <code className="text-sm font-mono break-all">{generatedPassword}</code>
                 <button
                   onClick={copyPassword}
-                  className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded flex-shrink-0"
                   title="Copy password"
                 >
                   {copiedPassword ? (
