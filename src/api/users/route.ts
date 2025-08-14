@@ -1,5 +1,5 @@
 // /src/app/api/users/route.ts
-// Enhanced Universal API for managing ALL user types with standardized email verification
+// Complete Universal API for managing ALL user types with Supabase standard authentication
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 // Create admin client with service role key
 const supabaseAdmin = createClient(
-  process.env.vite_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     auth: {
@@ -62,13 +62,11 @@ interface UpdateUserRequest extends Partial<CreateUserRequest> {
   userId: string;
 }
 
-// Enhanced validation schemas with better error messages
+// Enhanced validation schemas
 const createUserSchema = z.object({
   email: z.string().email('Invalid email address').transform(email => email.toLowerCase()),
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
-  user_type: z.enum(['system', 'student', 'teacher', 'entity', 'parent'], {
-    errorMap: () => ({ message: 'Invalid user type' })
-  }),
+  user_type: z.enum(['system', 'student', 'teacher', 'entity', 'parent']),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   is_active: z.boolean().optional().default(true),
   send_verification: z.boolean().optional().default(true),
@@ -94,6 +92,21 @@ const createUserSchema = z.object({
 });
 
 // ===== HELPER FUNCTIONS =====
+
+// Generate random password
+function generateRandomPassword(length: number = 12): string {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += charset.charAt(Math.floor(Math.random() * charset.length));
+  }
+  // Ensure it has at least one uppercase, one lowercase, one number, and one special char
+  if (!/[A-Z]/.test(password)) password = 'A' + password.slice(1);
+  if (!/[a-z]/.test(password)) password = password.slice(0, -1) + 'a';
+  if (!/[0-9]/.test(password)) password = password.slice(0, -2) + '1' + password.slice(-1);
+  if (!/[!@#$%^&*]/.test(password)) password = password.slice(0, -3) + '@' + password.slice(-2);
+  return password;
+}
 
 // Enhanced permission verification with caching
 const permissionCache = new Map<string, { user: any; timestamp: number }>();
@@ -156,23 +169,45 @@ async function verifyPermission(request: NextRequest): Promise<any> {
   }
 }
 
-// Enhanced type-specific entry creation with better error handling
+// Generate unique codes with retry logic
+async function generateUniqueCode(prefix: string, maxRetries = 5): Promise<string> {
+  for (let i = 0; i < maxRetries; i++) {
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    const code = `${prefix}${randomNum}`;
+    
+    // Check if code exists
+    const table = prefix === 'STU' ? 'students' : 'teachers';
+    const column = prefix === 'STU' ? 'student_code' : 'teacher_code';
+    
+    const { data } = await supabaseAdmin
+      .from(table)
+      .select('id')
+      .eq(column, code)
+      .maybeSingle();
+    
+    if (!data) return code;
+  }
+  
+  throw new Error(`Failed to generate unique ${prefix} code after ${maxRetries} attempts`);
+}
+
+async function generateEnrollmentNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const randomNum = Math.floor(10000 + Math.random() * 90000);
+  return `ENR${year}${randomNum}`;
+}
+
+// Enhanced type-specific entry creation
 async function createTypeSpecificEntry(
   userId: string, 
   userType: UserType, 
   data: CreateUserRequest,
-  transaction?: any
+  hashedPassword?: string
 ): Promise<void> {
   try {
     switch (userType) {
       case 'system':
         if (data.role_id) {
-          let hashedPassword = null;
-          if (data.password) {
-            const salt = await bcrypt.genSalt(10);
-            hashedPassword = await bcrypt.hash(data.password, salt);
-          }
-
           const { error } = await supabaseAdmin
             .from('admin_users')
             .insert({
@@ -181,7 +216,7 @@ async function createTypeSpecificEntry(
               email: data.email,
               role_id: data.role_id,
               status: data.is_active ? 'active' : 'inactive',
-              password_hash: hashedPassword
+              password_hash: hashedPassword || null
             });
           
           if (error) throw error;
@@ -207,6 +242,7 @@ async function createTypeSpecificEntry(
             company_id: data.company_id,
             school_id: data.school_id,
             branch_id: data.branch_id,
+            class_id: data.class_id,
             status: data.is_active ? 'active' : 'inactive'
           });
         
@@ -285,89 +321,269 @@ async function createTypeSpecificEntry(
   }
 }
 
-// Generate unique codes with retry logic
-async function generateUniqueCode(prefix: string, maxRetries = 5): Promise<string> {
-  for (let i = 0; i < maxRetries; i++) {
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const code = `${prefix}${randomNum}`;
-    
-    // Check if code exists
-    const table = prefix === 'STU' ? 'students' : 'teachers';
-    const column = prefix === 'STU' ? 'student_code' : 'teacher_code';
-    
-    const { data } = await supabaseAdmin
-      .from(table)
-      .select('id')
-      .eq(column, code)
-      .maybeSingle();
-    
-    if (!data) return code;
+// Get company user IDs for filtering
+async function getCompanyUserIds(companyId: string): Promise<string[]> {
+  const userIds: string[] = [];
+  
+  // Get entity users
+  const { data: entityUsers } = await supabaseAdmin
+    .from('entity_users')
+    .select('user_id')
+    .eq('company_id', companyId);
+  
+  userIds.push(...(entityUsers?.map(u => u.user_id) || []));
+  
+  // Get teachers
+  const { data: teachers } = await supabaseAdmin
+    .from('teachers')
+    .select('user_id')
+    .eq('company_id', companyId);
+  
+  userIds.push(...(teachers?.map(t => t.user_id) || []));
+  
+  // Get students
+  const { data: students } = await supabaseAdmin
+    .from('students')
+    .select('user_id')
+    .eq('company_id', companyId);
+  
+  userIds.push(...(students?.map(s => s.user_id) || []));
+  
+  return userIds;
+}
+
+// Enhance user data with type-specific information
+async function enhanceUserData(users: any[]): Promise<any[]> {
+  return Promise.all(
+    users.map(async (user) => {
+      let additionalInfo = {};
+      
+      // Get type-specific data
+      switch (user.user_type) {
+        case 'system':
+          const { data: adminData } = await supabaseAdmin
+            .from('admin_users')
+            .select('roles(name)')
+            .eq('id', user.id)
+            .single();
+          additionalInfo = { role: adminData?.roles?.name };
+          break;
+          
+        case 'entity':
+          const { data: entityData } = await supabaseAdmin
+            .from('entity_users')
+            .select('position, department, companies(name)')
+            .eq('user_id', user.id)
+            .single();
+          additionalInfo = { 
+            position: entityData?.position,
+            department: entityData?.department,
+            company: entityData?.companies?.name
+          };
+          break;
+          
+        case 'teacher':
+          const { data: teacherData } = await supabaseAdmin
+            .from('teachers')
+            .select('teacher_code, companies(name), schools(name)')
+            .eq('user_id', user.id)
+            .single();
+          additionalInfo = { 
+            code: teacherData?.teacher_code,
+            company: teacherData?.companies?.name,
+            school: teacherData?.schools?.name
+          };
+          break;
+          
+        case 'student':
+          const { data: studentData } = await supabaseAdmin
+            .from('students')
+            .select('student_code, grade_level, schools(name)')
+            .eq('user_id', user.id)
+            .single();
+          additionalInfo = { 
+            code: studentData?.student_code,
+            grade: studentData?.grade_level,
+            school: studentData?.schools?.name
+          };
+          break;
+          
+        case 'parent':
+          const { data: parentData } = await supabaseAdmin
+            .from('parent_students')
+            .select('student_id')
+            .eq('parent_id', user.id);
+          additionalInfo = { 
+            children_count: parentData?.length || 0
+          };
+          break;
+      }
+
+      // Check email verification status from auth
+      let authVerified = false;
+      try {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+        authVerified = authUser?.user?.email_confirmed_at !== null;
+      } catch (error) {
+        // User might not exist in auth
+      }
+
+      return {
+        ...user,
+        name: user.raw_user_meta_data?.name || user.raw_user_meta_data?.full_name || 'Unknown',
+        email_verified: user.email_verified || authVerified,
+        ...additionalInfo
+      };
+    })
+  );
+}
+
+// Update type-specific table
+async function updateTypeSpecificTable(userType: string, userId: string, updates: any): Promise<void> {
+  const commonUpdates = {
+    ...(updates.name && { name: updates.name }),
+    ...(updates.email && { email: updates.email }),
+    ...(typeof updates.is_active !== 'undefined' && { 
+      is_active: updates.is_active,
+      status: updates.is_active ? 'active' : 'inactive' 
+    })
+  };
+
+  switch (userType) {
+    case 'system':
+      if (Object.keys(updates).some(key => ['role_id', 'name', 'email', 'is_active'].includes(key))) {
+        await supabaseAdmin
+          .from('admin_users')
+          .update({
+            ...commonUpdates,
+            ...(updates.role_id && { role_id: updates.role_id })
+          })
+          .eq('id', userId);
+      }
+      break;
+
+    case 'student':
+      const studentUpdates = {
+        ...(updates.grade_level && { grade_level: updates.grade_level }),
+        ...(updates.section && { section: updates.section }),
+        ...(updates.parent_name && { parent_name: updates.parent_name }),
+        ...(updates.parent_contact && { parent_contact: updates.parent_contact }),
+        ...(updates.parent_email && { parent_email: updates.parent_email }),
+        ...(updates.school_id && { school_id: updates.school_id }),
+        ...(updates.branch_id && { branch_id: updates.branch_id }),
+        ...(updates.class_id && { class_id: updates.class_id })
+      };
+      
+      if (Object.keys(studentUpdates).length > 0) {
+        await supabaseAdmin
+          .from('students')
+          .update(studentUpdates)
+          .eq('user_id', userId);
+      }
+      break;
+
+    case 'teacher':
+      const teacherUpdates = {
+        ...(updates.department_id && { department_id: updates.department_id }),
+        ...(updates.school_id && { school_id: updates.school_id }),
+        ...(updates.branch_id && { branch_id: updates.branch_id })
+      };
+      
+      if (Object.keys(teacherUpdates).length > 0) {
+        await supabaseAdmin
+          .from('teachers')
+          .update(teacherUpdates)
+          .eq('user_id', userId);
+      }
+      break;
+
+    case 'entity':
+      const entityUpdates = {
+        ...(updates.position && { position: updates.position }),
+        ...(updates.department && { department: updates.department }),
+        ...(updates.employee_id && { employee_id: updates.employee_id }),
+        ...(updates.company_id && { company_id: updates.company_id })
+      };
+      
+      if (Object.keys(entityUpdates).length > 0) {
+        await supabaseAdmin
+          .from('entity_users')
+          .update(entityUpdates)
+          .eq('user_id', userId);
+      }
+      break;
+
+    case 'parent':
+      if (updates.phone || updates.name || updates.email || typeof updates.is_active !== 'undefined') {
+        await supabaseAdmin
+          .from('parents')
+          .update({
+            ...commonUpdates,
+            ...(updates.phone && { phone: updates.phone }),
+            ...(updates.address && { address: updates.address })
+          })
+          .eq('user_id', userId);
+      }
+      
+      // Update student relationships if provided
+      if (updates.student_ids) {
+        // Remove old relationships
+        await supabaseAdmin
+          .from('parent_students')
+          .delete()
+          .eq('parent_id', userId);
+        
+        // Add new relationships
+        if (updates.student_ids.length > 0) {
+          await supabaseAdmin
+            .from('parent_students')
+            .insert(
+              updates.student_ids.map((studentId: string) => ({
+                parent_id: userId,
+                student_id: studentId,
+                relationship_type: 'parent',
+                is_primary: true
+              }))
+            );
+        }
+      }
+      break;
   }
-  
-  throw new Error(`Failed to generate unique ${prefix} code after ${maxRetries} attempts`);
 }
 
-async function generateEnrollmentNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const randomNum = Math.floor(10000 + Math.random() * 90000);
-  return `ENR${year}${randomNum}`;
-}
-
-// Enhanced email verification with template support
-async function sendVerificationEmail(
-  email: string, 
-  name: string, 
-  userType: UserType,
-  password?: string,
-  metadata?: Record<string, any>
-): Promise<void> {
-  const redirectUrl = metadata?.redirectUrl || `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`;
-  
-  try {
-    if (password) {
-      // For password users, send verification link
-      const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: redirectUrl,
-        data: {
-          name,
-          user_type: userType,
-          ...metadata
-        }
-      });
-      
-      if (error) throw error;
-    } else {
-      // For OAuth users, send magic link
-      const { error } = await supabaseAdmin.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/google-signup`,
-          data: {
-            name,
-            user_type: userType,
-            invite_type: 'google_signup',
-            ...metadata
-          }
-        }
-      });
-      
-      if (error) throw error;
-    }
-  } catch (error) {
-    console.error('Error sending verification email:', error);
-    throw new Error('Failed to send verification email');
+// Delete from type-specific table
+async function deleteFromTypeSpecificTable(userType: string, userId: string): Promise<void> {
+  switch (userType) {
+    case 'system':
+      await supabaseAdmin.from('admin_users').delete().eq('id', userId);
+      break;
+    case 'student':
+      await supabaseAdmin.from('students').delete().eq('user_id', userId);
+      break;
+    case 'teacher':
+      await supabaseAdmin.from('teachers').delete().eq('user_id', userId);
+      break;
+    case 'entity':
+      await supabaseAdmin.from('entity_users').delete().eq('user_id', userId);
+      break;
+    case 'parent':
+      await supabaseAdmin.from('parent_students').delete().eq('parent_id', userId);
+      await supabaseAdmin.from('parents').delete().eq('user_id', userId);
+      break;
   }
 }
 
 // ===== API ENDPOINTS =====
 
-// CREATE USER (Universal)
+// CREATE USER
 export async function POST(request: NextRequest) {
   try {
     // Verify permission
     const currentUser = await verifyPermission(request);
     if (!currentUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Unauthorized - You must be a system admin to create users' 
+      }, { status: 401 });
     }
 
     const body: CreateUserRequest = await request.json();
@@ -386,12 +602,15 @@ export async function POST(request: NextRequest) {
       email, 
       name, 
       user_type, 
-      password, 
       is_active = true,
       send_verification = true,
       metadata = {},
-      ...typeSpecificData 
+      ...typeSpecificData
     } = validatedData;
+
+    // Generate password if not provided
+    const password = validatedData.password || generateRandomPassword();
+    const isGeneratedPassword = !validatedData.password;
 
     // Check if email already exists
     const { data: existingUser } = await supabaseAdmin
@@ -414,35 +633,30 @@ export async function POST(request: NextRequest) {
       typeSpecificData.company_id = currentUser.company_id;
     }
 
-    // Start transaction-like operation
     let authUserId: string;
     let authCreated = false;
     
     try {
-      // 1. Create auth user if password provided
-      if (password) {
-        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: !send_verification, // Auto-confirm if not sending verification
-          user_metadata: {
-            name,
-            full_name: name,
-            user_type,
-            ...metadata
-          }
-        });
-
-        if (authError) {
-          throw new Error(authError.message);
+      // 1. Create Supabase Auth user
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: false, // Let them verify via email
+        user_metadata: {
+          name,
+          full_name: name,
+          user_type,
+          ...metadata
         }
+      });
 
-        authUserId = authUser.user.id;
-        authCreated = true;
-      } else {
-        // Generate ID for OAuth/passwordless user
-        authUserId = crypto.randomUUID();
+      if (authError) {
+        console.error('Auth creation error:', authError);
+        throw new Error(authError.message);
       }
+
+      authUserId = authUser.user.id;
+      authCreated = true;
 
       // 2. Insert into centralized users table
       const { error: usersError } = await supabaseAdmin
@@ -464,25 +678,43 @@ export async function POST(request: NextRequest) {
             ...typeSpecificData
           },
           raw_app_meta_data: {
-            provider: password ? 'email' : 'pending',
+            provider: 'email',
             ...typeSpecificData
           }
         });
 
       if (usersError) throw usersError;
 
-      // 3. Create type-specific table entry
+      // 3. Hash password for local storage
+      let hashedPassword: string | undefined;
+      if (password) {
+        const salt = await bcrypt.genSalt(10);
+        hashedPassword = await bcrypt.hash(password, salt);
+      }
+
+      // 4. Create type-specific table entry
       await createTypeSpecificEntry(authUserId, user_type, { 
         ...validatedData, 
         ...typeSpecificData 
-      });
+      }, hashedPassword);
 
-      // 4. Send verification email if active and requested
+      // 5. Send verification/invite email if active
       if (is_active && send_verification) {
-        await sendVerificationEmail(email, name, user_type, password, metadata);
+        const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+          redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/setting-password`,
+          data: {
+            name,
+            user_type,
+            message: 'Please verify your email and set your password'
+          }
+        });
+
+        if (inviteError) {
+          console.error('Invite email error:', inviteError);
+        }
       }
 
-      // 5. Log the creation
+      // 6. Log the creation
       await supabaseAdmin
         .from('audit_logs')
         .insert({
@@ -493,7 +725,8 @@ export async function POST(request: NextRequest) {
           details: {
             user_type,
             email,
-            created_by: currentUser.email
+            created_by: currentUser.email,
+            password_generated: isGeneratedPassword
           },
           ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
           user_agent: request.headers.get('user-agent')
@@ -506,19 +739,21 @@ export async function POST(request: NextRequest) {
           email,
           name,
           user_type,
-          is_active
+          is_active,
+          temporary_password: isGeneratedPassword ? password : undefined
         },
         message: is_active && send_verification
-          ? `${user_type} user created and verification email sent` 
-          : `${user_type} user created successfully`
+          ? `User created successfully. Verification email sent to ${email}` 
+          : `User created successfully`,
+        password_info: isGeneratedPassword 
+          ? 'A temporary password has been generated. Share it with the user securely.'
+          : 'User will set their password via the verification email'
       });
 
     } catch (error) {
       // Rollback on error
-      if (authCreated) {
-        await supabaseAdmin.auth.admin.deleteUser(authUserId!);
-      }
-      if (authUserId!) {
+      if (authCreated && authUserId) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
         await supabaseAdmin.from('users').delete().eq('id', authUserId);
       }
       throw error;
@@ -527,12 +762,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Internal server error' 
+      error: error instanceof Error ? error.message : 'Internal server error',
+      details: error
     }, { status: 500 });
   }
 }
 
-// UPDATE USER (Universal)
+// UPDATE USER
 export async function PUT(request: NextRequest) {
   try {
     const currentUser = await verifyPermission(request);
@@ -645,16 +881,13 @@ export async function PUT(request: NextRequest) {
 
         // Send verification email if email changed
         if (emailChanged && updates.is_active !== false && updates.send_verification !== false) {
-          await sendVerificationEmail(
-            updates.email!, 
-            updates.name || existingUser.raw_user_meta_data?.name, 
-            existingUser.user_type
-          );
+          await supabaseAdmin.auth.admin.inviteUserByEmail(updates.email!, {
+            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify`
+          });
         }
       }
     } catch (authError) {
       console.error('Auth update error (non-critical):', authError);
-      // Don't fail the whole operation if auth update fails
     }
 
     // Log the update
@@ -688,7 +921,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE USER (Universal)
+// DELETE USER
 export async function DELETE(request: NextRequest) {
   try {
     const currentUser = await verifyPermission(request);
@@ -854,7 +1087,7 @@ export async function PATCH(request: NextRequest) {
 
     // Resend verification email
     await supabaseAdmin.auth.admin.inviteUserByEmail(user.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/setting-password`,
       data: {
         name: user.raw_user_meta_data?.name,
         user_type: user.user_type
@@ -874,8 +1107,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// ===== HELPER FUNCTIONS =====
-
+// Helper function to get user type table
 function getUserTypeTable(userType: string): string {
   const tableMap: Record<string, string> = {
     'system': 'admin_users',
@@ -885,250 +1117,4 @@ function getUserTypeTable(userType: string): string {
     'parent': 'parents'
   };
   return tableMap[userType] || 'users';
-}
-
-async function getCompanyUserIds(companyId: string): Promise<string[]> {
-  const userIds: string[] = [];
-  
-  // Get entity users
-  const { data: entityUsers } = await supabaseAdmin
-    .from('entity_users')
-    .select('user_id')
-    .eq('company_id', companyId);
-  
-  userIds.push(...(entityUsers?.map(u => u.user_id) || []));
-  
-  // Get teachers
-  const { data: teachers } = await supabaseAdmin
-    .from('teachers')
-    .select('user_id')
-    .eq('company_id', companyId);
-  
-  userIds.push(...(teachers?.map(t => t.user_id) || []));
-  
-  // Get students
-  const { data: students } = await supabaseAdmin
-    .from('students')
-    .select('user_id')
-    .eq('company_id', companyId);
-  
-  userIds.push(...(students?.map(s => s.user_id) || []));
-  
-  return userIds;
-}
-
-async function enhanceUserData(users: any[]): Promise<any[]> {
-  return Promise.all(
-    users.map(async (user) => {
-      let additionalInfo = {};
-      
-      // Get type-specific data
-      switch (user.user_type) {
-        case 'system':
-          const { data: adminData } = await supabaseAdmin
-            .from('admin_users')
-            .select('roles(name)')
-            .eq('id', user.id)
-            .single();
-          additionalInfo = { role: adminData?.roles?.name };
-          break;
-          
-        case 'entity':
-          const { data: entityData } = await supabaseAdmin
-            .from('entity_users')
-            .select('position, department, companies(name)')
-            .eq('user_id', user.id)
-            .single();
-          additionalInfo = { 
-            position: entityData?.position,
-            department: entityData?.department,
-            company: entityData?.companies?.name
-          };
-          break;
-          
-        case 'teacher':
-          const { data: teacherData } = await supabaseAdmin
-            .from('teachers')
-            .select('teacher_code, companies(name), schools(name)')
-            .eq('user_id', user.id)
-            .single();
-          additionalInfo = { 
-            code: teacherData?.teacher_code,
-            company: teacherData?.companies?.name,
-            school: teacherData?.schools?.name
-          };
-          break;
-          
-        case 'student':
-          const { data: studentData } = await supabaseAdmin
-            .from('students')
-            .select('student_code, grade_level, schools(name)')
-            .eq('user_id', user.id)
-            .single();
-          additionalInfo = { 
-            code: studentData?.student_code,
-            grade: studentData?.grade_level,
-            school: studentData?.schools?.name
-          };
-          break;
-          
-        case 'parent':
-          const { data: parentData } = await supabaseAdmin
-            .from('parent_students')
-            .select('student_id')
-            .eq('parent_id', user.id);
-          additionalInfo = { 
-            children_count: parentData?.length || 0
-          };
-          break;
-      }
-
-      // Check email verification status from auth
-      let authVerified = false;
-      try {
-        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
-        authVerified = authUser?.user?.email_confirmed_at !== null;
-      } catch (error) {
-        // User might not exist in auth
-      }
-
-      return {
-        ...user,
-        name: user.raw_user_meta_data?.name || user.raw_user_meta_data?.full_name || 'Unknown',
-        email_verified: user.email_verified || authVerified,
-        ...additionalInfo
-      };
-    })
-  );
-}
-
-async function updateTypeSpecificTable(userType: string, userId: string, updates: any): Promise<void> {
-  const commonUpdates = {
-    ...(updates.name && { name: updates.name }),
-    ...(updates.email && { email: updates.email }),
-    ...(typeof updates.is_active !== 'undefined' && { 
-      is_active: updates.is_active,
-      status: updates.is_active ? 'active' : 'inactive' 
-    })
-  };
-
-  switch (userType) {
-    case 'system':
-      if (Object.keys(updates).some(key => ['role_id', 'name', 'email', 'is_active'].includes(key))) {
-        await supabaseAdmin
-          .from('admin_users')
-          .update({
-            ...commonUpdates,
-            ...(updates.role_id && { role_id: updates.role_id })
-          })
-          .eq('id', userId);
-      }
-      break;
-
-    case 'student':
-      const studentUpdates = {
-        ...(updates.grade_level && { grade_level: updates.grade_level }),
-        ...(updates.section && { section: updates.section }),
-        ...(updates.parent_name && { parent_name: updates.parent_name }),
-        ...(updates.parent_contact && { parent_contact: updates.parent_contact }),
-        ...(updates.parent_email && { parent_email: updates.parent_email }),
-        ...(updates.school_id && { school_id: updates.school_id }),
-        ...(updates.branch_id && { branch_id: updates.branch_id })
-      };
-      
-      if (Object.keys(studentUpdates).length > 0) {
-        await supabaseAdmin
-          .from('students')
-          .update(studentUpdates)
-          .eq('user_id', userId);
-      }
-      break;
-
-    case 'teacher':
-      const teacherUpdates = {
-        ...(updates.department_id && { department_id: updates.department_id }),
-        ...(updates.school_id && { school_id: updates.school_id }),
-        ...(updates.branch_id && { branch_id: updates.branch_id })
-      };
-      
-      if (Object.keys(teacherUpdates).length > 0) {
-        await supabaseAdmin
-          .from('teachers')
-          .update(teacherUpdates)
-          .eq('user_id', userId);
-      }
-      break;
-
-    case 'entity':
-      const entityUpdates = {
-        ...(updates.position && { position: updates.position }),
-        ...(updates.department && { department: updates.department }),
-        ...(updates.employee_id && { employee_id: updates.employee_id }),
-        ...(updates.company_id && { company_id: updates.company_id })
-      };
-      
-      if (Object.keys(entityUpdates).length > 0) {
-        await supabaseAdmin
-          .from('entity_users')
-          .update(entityUpdates)
-          .eq('user_id', userId);
-      }
-      break;
-
-    case 'parent':
-      if (updates.phone || updates.name || updates.email || typeof updates.is_active !== 'undefined') {
-        await supabaseAdmin
-          .from('parents')
-          .update({
-            ...commonUpdates,
-            ...(updates.phone && { phone: updates.phone })
-          })
-          .eq('user_id', userId);
-      }
-      
-      // Update student relationships if provided
-      if (updates.student_ids) {
-        // Remove old relationships
-        await supabaseAdmin
-          .from('parent_students')
-          .delete()
-          .eq('parent_id', userId);
-        
-        // Add new relationships
-        if (updates.student_ids.length > 0) {
-          await supabaseAdmin
-            .from('parent_students')
-            .insert(
-              updates.student_ids.map((studentId: string) => ({
-                parent_id: userId,
-                student_id: studentId,
-                relationship_type: 'parent',
-                is_primary: true
-              }))
-            );
-        }
-      }
-      break;
-  }
-}
-
-async function deleteFromTypeSpecificTable(userType: string, userId: string): Promise<void> {
-  switch (userType) {
-    case 'system':
-      await supabaseAdmin.from('admin_users').delete().eq('id', userId);
-      break;
-    case 'student':
-      await supabaseAdmin.from('students').delete().eq('user_id', userId);
-      break;
-    case 'teacher':
-      await supabaseAdmin.from('teachers').delete().eq('user_id', userId);
-      break;
-    case 'entity':
-      await supabaseAdmin.from('entity_users').delete().eq('user_id', userId);
-      break;
-    case 'parent':
-      await supabaseAdmin.from('parent_students').delete().eq('parent_id', userId);
-      await supabaseAdmin.from('parents').delete().eq('user_id', userId);
-      break;
-  }
 }
