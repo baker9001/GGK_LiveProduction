@@ -1,10 +1,10 @@
 // /src/app/system-admin/admin-users/tabs/UsersTab.tsx
-// Complete standardized System Admin user management with ALL features preserved
+// Complete System Admin user management with ALL features
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Loader2, FlaskConical, Mail } from 'lucide-react';
+import { Plus, Key, Eye, EyeOff, Edit2, Trash2, Mail, Copy, Check, FlaskConical, Loader2 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -16,7 +16,6 @@ import { SearchableMultiSelect } from '../../../../components/shared/SearchableM
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 import { startTestMode, isInTestMode, getRealAdminUser, mapUserTypeToRole } from '../../../../lib/auth';
-import { userService, systemUserSchema, UserServiceError } from '../../../../services/userService';
 import bcrypt from 'bcryptjs';
 
 // ===== VALIDATION SCHEMAS =====
@@ -60,11 +59,32 @@ interface FilterState {
   status: string[];
 }
 
-interface FormState {
-  name: string;
-  email: string;
-  role_id: string;
-  status: 'active' | 'inactive';
+type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER';
+
+// ===== API HELPER FUNCTIONS =====
+async function makeAPICall(method: string, endpoint: string = '', body?: any) {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`/api/users${endpoint}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Request failed');
+  }
+
+  return data;
 }
 
 // ===== MAIN COMPONENT =====
@@ -76,6 +96,9 @@ export default function UsersTab() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [generatePassword, setGeneratePassword] = useState(true);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     name: '',
     email: '',
@@ -93,11 +116,12 @@ export default function UsersTab() {
   const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
 
   // Form state
-  const [formState, setFormState] = useState<FormState>({
+  const [formState, setFormState] = useState({
     name: '',
     email: '',
+    password: '',
     role_id: '',
-    status: 'active'
+    status: 'active' as 'active' | 'inactive'
   });
 
   // ===== QUERIES =====
@@ -114,9 +138,7 @@ export default function UsersTab() {
       if (error) throw error;
       return data || [];
     },
-    {
-      staleTime: 10 * 60 * 1000,
-    }
+    { staleTime: 10 * 60 * 1000 }
   );
 
   // Fetch users with filters
@@ -173,48 +195,42 @@ export default function UsersTab() {
 
       return enhancedData;
     },
-    {
-      keepPreviousData: true,
-      staleTime: 5 * 60 * 1000,
-    }
+    { keepPreviousData: true, staleTime: 5 * 60 * 1000 }
   );
 
   // ===== MUTATIONS =====
   
-  // Create/update user mutation using standardized service
+  // Create/update user mutation
   const userMutation = useMutation(
     async (formData: FormData) => {
-      const passwordValue = formData.get('password') as string | null;
-      
-      const data = {
-        name: formData.get('name') as string,
-        email: formData.get('email') as string,
-        ...(passwordValue !== null && { password: passwordValue }),
-        role_id: formData.get('role_id') as string,
-        status: formData.get('status') as 'active' | 'inactive'
+      const name = formData.get('name') as string;
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string | null;
+      const role_id = formData.get('role_id') as string;
+      const status = formData.get('status') as 'active' | 'inactive';
+
+      // Validate
+      const validationData = {
+        name,
+        email,
+        role_id,
+        status,
+        ...(password && !editingUser ? { password } : {})
       };
 
-      const validatedData = adminUserSchema.parse(data);
-      
-      if (editingUser) {
-        // UPDATE EXISTING USER
-        const emailChanged = editingUser.email !== validatedData.email;
-        
-        if (emailChanged) {
-          const emailAvailable = await userService.isEmailAvailable(validatedData.email, editingUser.id);
-          if (!emailAvailable) {
-            throw new UserServiceError('This email is already in use');
-          }
-        }
+      const validatedData = adminUserSchema.parse(validationData);
 
-        // Update via standardized service
-        await userService.updateUser(editingUser.id, {
+      if (editingUser) {
+        // UPDATE USER
+        const response = await makeAPICall('PUT', '', {
+          userId: editingUser.id,
           name: validatedData.name,
           email: validatedData.email,
+          role_id: validatedData.role_id,
           is_active: validatedData.status === 'active'
         });
 
-        // Update admin_users table for backward compatibility
+        // Also update admin_users table directly for backward compatibility
         const { error: adminError } = await supabase
           .from('admin_users')
           .update({
@@ -225,80 +241,51 @@ export default function UsersTab() {
           })
           .eq('id', editingUser.id);
 
-        if (adminError) throw adminError;
-
-        // If email changed and user is active, they need to re-verify
-        if (emailChanged && validatedData.status === 'active') {
-          toast.info('User will need to verify their new email address');
+        if (adminError && !adminError.message?.includes('duplicate')) {
+          console.error('Error updating admin_users:', adminError);
         }
 
-        return { ...editingUser, ...validatedData };
-        
+        return response;
       } else {
-        // CREATE NEW USER via standardized service
-        
-        // Check email availability
-        const emailAvailable = await userService.isEmailAvailable(validatedData.email);
-        if (!emailAvailable) {
-          throw new UserServiceError('This email is already in use');
-        }
-
-        // Create user via standardized service
-        const newUser = await userService.createSystemAdmin({
-          email: validatedData.email,
+        // CREATE NEW USER
+        const response = await makeAPICall('POST', '', {
           name: validatedData.name,
-          password: validatedData.password!,
+          email: validatedData.email,
+          password: !generatePassword ? validatedData.password : undefined,
+          user_type: 'system',
           role_id: validatedData.role_id,
-          is_active: validatedData.status === 'active'
+          is_active: validatedData.status === 'active',
+          send_verification: true
         });
 
-        // Also maintain admin_users table for backward compatibility
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(validatedData.password!, salt);
-
-        const { error: adminError } = await supabase
-          .from('admin_users')
-          .upsert({
-            id: newUser.id,
-            name: validatedData.name,
-            email: validatedData.email,
-            role_id: validatedData.role_id,
-            status: validatedData.status,
-            password_hash: hashedPassword
-          });
-
-        if (adminError && !adminError.message?.includes('duplicate')) {
-          console.error('Error maintaining admin_users table:', adminError);
+        // Store generated password if returned
+        if (response.user?.temporary_password) {
+          setGeneratedPassword(response.user.temporary_password);
         }
 
-        // Send verification email if active
-        if (validatedData.status === 'active') {
-          try {
-            await userService.sendVerificationEmail(newUser.id);
-            toast.success('User created and verification email sent');
-          } catch (error) {
-            toast.warning('User created but verification email may not have been sent');
-          }
-        } else {
-          toast.success('User created as inactive (no verification email sent)');
-        }
-
-        return newUser;
+        return response;
       }
     },
     {
-      onSuccess: () => {
+      onSuccess: (data) => {
         queryClient.invalidateQueries(['admin-users']);
-        setIsFormOpen(false);
-        setEditingUser(null);
-        setFormState({
-          name: '',
-          email: '',
-          role_id: '',
-          status: 'active'
-        });
+        
+        if (!editingUser && data.user?.temporary_password) {
+          // Show password modal for new users with generated password
+          toast.success('User created successfully. Copy the temporary password!');
+        } else {
+          setIsFormOpen(false);
+          setEditingUser(null);
+          setFormState({
+            name: '',
+            email: '',
+            password: '',
+            role_id: '',
+            status: 'active'
+          });
+          toast.success(data.message || `User ${editingUser ? 'updated' : 'created'} successfully`);
+        }
         setFormErrors({});
-        toast.success(`User ${editingUser ? 'updated' : 'created'} successfully`);
       },
       onError: (error: any) => {
         if (error instanceof z.ZodError) {
@@ -309,15 +296,10 @@ export default function UsersTab() {
             }
           });
           setFormErrors(errors);
-        } else if (error instanceof UserServiceError) {
-          setFormErrors({ form: error.message });
-          toast.error(error.message);
         } else {
-          console.error('Error saving user:', error);
-          setFormErrors({ 
-            form: error.message || 'Failed to save user. Please try again.' 
-          });
-          toast.error('Failed to save user');
+          console.error('Error:', error);
+          setFormErrors({ form: error.message || 'Operation failed' });
+          toast.error(error.message || 'Operation failed');
         }
       }
     }
@@ -347,16 +329,15 @@ export default function UsersTab() {
 
       if (error) throw error;
 
-      // Also update via service if needed for auth consistency
+      // Also update via API for Supabase Auth sync
       try {
-        await userService.updateUser(editingUser.id, {
+        await makeAPICall('PUT', '', {
+          userId: editingUser.id,
           password: validatedData.password
         });
       } catch (error) {
         console.log('Auth password update not needed or failed:', error);
       }
-      
-      toast.info('Password updated. User can also reset password via email if needed.');
       
       return editingUser;
     },
@@ -385,11 +366,12 @@ export default function UsersTab() {
     }
   );
 
-  // Delete users mutation using standardized service
+  // Delete users mutation
   const deleteMutation = useMutation(
     async (users: AdminUser[]) => {
-      // Use standardized service for deletion
-      await userService.deleteUsers(users.map(u => u.id));
+      for (const user of users) {
+        await makeAPICall('DELETE', `?userId=${user.id}`);
+      }
       return users;
     },
     {
@@ -404,6 +386,22 @@ export default function UsersTab() {
         toast.error('Failed to delete user(s)');
         setIsConfirmDialogOpen(false);
         setUsersToDelete([]);
+      }
+    }
+  );
+
+  // Resend verification mutation
+  const resendVerificationMutation = useMutation(
+    async (userId: string) => {
+      return await makeAPICall('PATCH', '', { userId });
+    },
+    {
+      onSuccess: () => {
+        toast.success('Verification email sent successfully');
+      },
+      onError: (error) => {
+        console.error('Error:', error);
+        toast.error('Failed to send verification email');
       }
     }
   );
@@ -452,7 +450,7 @@ export default function UsersTab() {
         };
       } else {
         // Admin user only - map admin role
-        const roleMapping: Record<string, any> = {
+        const roleMapping: Record<string, UserRole> = {
           'Super Admin': 'SSA',
           'Support Admin': 'SUPPORT',
           'Viewer': 'VIEWER'
@@ -477,38 +475,6 @@ export default function UsersTab() {
     }
   };
 
-  // Resend verification email
-  const resendVerificationEmail = async (user: AdminUser) => {
-    try {
-      await userService.sendVerificationEmail(user.id);
-      toast.success('Verification email sent successfully');
-    } catch (error) {
-      console.error('Error resending verification:', error);
-      toast.error('Failed to send verification email');
-    }
-  };
-
-  // ===== EFFECTS =====
-  
-  // Update form state when editing user changes
-  useEffect(() => {
-    if (editingUser) {
-      setFormState({
-        name: editingUser.name,
-        email: editingUser.email,
-        role_id: editingUser.role_id,
-        status: editingUser.status
-      });
-    } else {
-      setFormState({
-        name: '',
-        email: '',
-        role_id: '',
-        status: 'active'
-      });
-    }
-  }, [editingUser]);
-
   // ===== HANDLERS =====
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -532,10 +498,51 @@ export default function UsersTab() {
     deleteMutation.mutate(usersToDelete);
   };
 
-  const cancelDelete = () => {
-    setIsConfirmDialogOpen(false);
-    setUsersToDelete([]);
+  const copyPassword = () => {
+    if (generatedPassword) {
+      navigator.clipboard.writeText(generatedPassword);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+      toast.success('Password copied to clipboard');
+    }
   };
+
+  const closePasswordModal = () => {
+    setGeneratedPassword(null);
+    setIsFormOpen(false);
+    setEditingUser(null);
+    setFormState({
+      name: '',
+      email: '',
+      password: '',
+      role_id: '',
+      status: 'active'
+    });
+  };
+
+  // ===== EFFECTS =====
+  
+  useEffect(() => {
+    if (editingUser) {
+      setFormState({
+        name: editingUser.name,
+        email: editingUser.email,
+        password: '',
+        role_id: editingUser.role_id,
+        status: editingUser.status
+      });
+      setGeneratePassword(false);
+    } else {
+      setFormState({
+        name: '',
+        email: '',
+        password: '',
+        role_id: '',
+        status: 'active'
+      });
+      setGeneratePassword(true);
+    }
+  }, [editingUser]);
 
   // ===== TABLE CONFIGURATION =====
   
@@ -593,10 +600,10 @@ export default function UsersTab() {
 
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
-      {/* Resend Verification Button */}
+      {/* Resend Verification */}
       {row.status === 'active' && !row.email_verified && (
         <button
-          onClick={() => resendVerificationEmail(row)}
+          onClick={() => resendVerificationMutation.mutate(row.id)}
           className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
           title="Resend verification email"
         >
@@ -615,7 +622,7 @@ export default function UsersTab() {
         </button>
       )}
       
-      {/* Edit Button */}
+      {/* Edit */}
       <button
         onClick={() => {
           setEditingUser(row);
@@ -627,7 +634,7 @@ export default function UsersTab() {
         <Edit2 className="h-4 w-4" />
       </button>
       
-      {/* Change Password Button */}
+      {/* Change Password */}
       <button
         onClick={() => {
           setEditingUser(row);
@@ -639,7 +646,7 @@ export default function UsersTab() {
         <Key className="h-4 w-4" />
       </button>
       
-      {/* Delete Button */}
+      {/* Delete */}
       <button
         onClick={() => handleDelete([row])}
         className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
@@ -659,6 +666,7 @@ export default function UsersTab() {
           onClick={() => {
             setEditingUser(null);
             setFormErrors({});
+            setGeneratePassword(true);
             setIsFormOpen(true);
           }}
           leftIcon={<Plus className="h-4 w-4" />}
@@ -681,18 +689,18 @@ export default function UsersTab() {
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField id="name" label="Name">
+          <FormField id="filter-name" label="Name">
             <Input
-              id="name"
+              id="filter-name"
               placeholder="Search by name..."
               value={filters.name}
               onChange={(e) => setFilters({ ...filters, name: e.target.value })}
             />
           </FormField>
 
-          <FormField id="email" label="Email">
+          <FormField id="filter-email" label="Email">
             <Input
-              id="email"
+              id="filter-email"
               placeholder="Search by email..."
               value={filters.email}
               onChange={(e) => setFilters({ ...filters, email: e.target.value })}
@@ -742,7 +750,7 @@ export default function UsersTab() {
       <SlideInForm
         key={editingUser?.id || 'new'}
         title={editingUser ? 'Edit System User' : 'Create System User'}
-        isOpen={isFormOpen}
+        isOpen={isFormOpen && !generatedPassword}
         onClose={() => {
           setIsFormOpen(false);
           setEditingUser(null);
@@ -783,30 +791,49 @@ export default function UsersTab() {
           </FormField>
 
           {!editingUser && (
-            <FormField
-              id="password"
-              label="Password"
-              required
-              error={formErrors.password}
-              helpText="User will receive a verification email and can change this password"
-            >
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  id="password"
-                  name="password"
-                  placeholder="Enter password"
-                  autoComplete="new-password"
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  id="generatePassword"
+                  checked={generatePassword}
+                  onChange={(e) => setGeneratePassword(e.target.checked)}
+                  className="rounded border-gray-300"
                 />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <label htmlFor="generatePassword" className="text-sm text-gray-700 dark:text-gray-300">
+                  Auto-generate secure password
+                </label>
               </div>
-            </FormField>
+
+              {!generatePassword && (
+                <FormField 
+                  id="password" 
+                  label="Password" 
+                  required 
+                  error={formErrors.password}
+                  helpText="User will receive a verification email and can change this password"
+                >
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      placeholder="Enter password (min 8 characters)"
+                      value={formState.password}
+                      onChange={(e) => setFormState({ ...formState, password: e.target.value })}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </FormField>
+              )}
+            </>
           )}
 
           <FormField id="role_id" label="Role" required error={formErrors.role_id}>
@@ -822,10 +849,10 @@ export default function UsersTab() {
             />
           </FormField>
 
-          <FormField
-            id="status"
-            label="Status"
-            required
+          <FormField 
+            id="status" 
+            label="Status" 
+            required 
             error={formErrors.status}
             helpText="Active users will receive a verification email"
           >
@@ -906,6 +933,47 @@ export default function UsersTab() {
         </form>
       </SlideInForm>
 
+      {/* Generated Password Modal */}
+      {generatedPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">User Created Successfully</h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                A temporary password has been generated. Please copy and share it securely with the user.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                The user will receive an email to verify their account and can reset this password.
+              </p>
+            </div>
+
+            <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md mb-4">
+              <div className="flex items-center justify-between">
+                <code className="text-sm font-mono">{generatedPassword}</code>
+                <button
+                  onClick={copyPassword}
+                  className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  title="Copy password"
+                >
+                  {copiedPassword ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button onClick={closePasswordModal}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
@@ -914,7 +982,10 @@ export default function UsersTab() {
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
-        onCancel={cancelDelete}
+        onCancel={() => {
+          setIsConfirmDialogOpen(false);
+          setUsersToDelete([]);
+        }}
       />
     </div>
   );
