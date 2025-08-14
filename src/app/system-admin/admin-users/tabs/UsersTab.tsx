@@ -117,39 +117,92 @@ type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER';
 async function makeAPICall(method: string, endpoint: string = '', body?: any) {
   try {
     // Get current session
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
     
-    if (!session?.access_token) {
+    let token = session?.access_token;
+    
+    if (!token) {
       // Try to refresh session
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
       
-      if (refreshError || !refreshData.session) {
+      if (refreshError || !refreshData.session?.access_token) {
         toast.error('Session expired. Please log in again.');
         window.location.href = '/signin';
         throw new Error('Not authenticated');
       }
+      
+      token = refreshData.session.access_token;
+      session = refreshData.session;
     }
 
     const response = await fetch(`/api/users${endpoint}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token || ''}`
+        'Authorization': `Bearer ${token}`
       },
       body: body ? JSON.stringify(body) : undefined
     });
 
-    const data = await response.json();
-
+    // Check if response is ok before trying to parse
     if (!response.ok) {
+      // Try to parse error message
+      let errorMessage = 'Request failed';
+      const contentType = response.headers.get('content-type');
+      
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+      } else {
+        // Try to get text response
+        try {
+          const textError = await response.text();
+          if (textError) {
+            errorMessage = textError;
+          }
+        } catch (textError) {
+          console.error('Error reading error response:', textError);
+        }
+      }
+      
       if (response.status === 401) {
         toast.error('Session expired. Please log in again.');
         window.location.href = '/signin';
       }
-      throw new Error(data.error || 'Request failed');
+      
+      throw new Error(errorMessage);
     }
 
-    return data;
+    // Handle empty responses (204 No Content, etc.)
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return { success: true };
+    }
+
+    // Check content type
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        return await response.json();
+      } catch (parseError) {
+        console.error('Error parsing JSON response:', parseError);
+        // Return a default success response if parsing fails
+        return { success: true };
+      }
+    }
+
+    // If not JSON, try to return text
+    try {
+      const text = await response.text();
+      return { success: true, data: text };
+    } catch (e) {
+      // If even text parsing fails, return basic success
+      return { success: true };
+    }
+    
   } catch (error) {
     console.error('API call failed:', error);
     throw error;
@@ -314,7 +367,7 @@ export default function UsersTab() {
           is_active: validatedData.status === 'active'
         });
 
-        return response;
+        return response || { success: true };
       } else {
         // CREATE NEW USER with centralized auth
         const response = await makeAPICall('POST', '', {
@@ -328,18 +381,18 @@ export default function UsersTab() {
         });
 
         // Store generated password if returned
-        if (response.user?.temporary_password) {
+        if (response?.user?.temporary_password) {
           setGeneratedPassword(response.user.temporary_password);
         }
 
-        return response;
+        return response || { success: true };
       }
     },
     {
       onSuccess: (data) => {
         queryClient.invalidateQueries(['admin-users']);
         
-        if (!editingUser && data.user?.temporary_password) {
+        if (!editingUser && data?.user?.temporary_password) {
           // Show password modal for new users with generated password
           toast.success('User created successfully. Copy the temporary password!');
         } else {
@@ -353,11 +406,11 @@ export default function UsersTab() {
             status: 'active'
           });
           
-          const message = data.message || `User ${editingUser ? 'updated' : 'created'} successfully`;
+          const message = data?.message || `User ${editingUser ? 'updated' : 'created'} successfully`;
           toast.success(message);
           
           // Show additional info about verification
-          if (!editingUser && data.user) {
+          if (!editingUser && data?.user) {
             toast.info('Verification email has been sent to the user', {
               duration: 5000
             });
@@ -395,17 +448,32 @@ export default function UsersTab() {
     async (users: AdminUser[]) => {
       const results = [];
       for (const user of users) {
-        const result = await makeAPICall('DELETE', `?userId=${user.id}&hard=false`);
-        results.push(result);
+        try {
+          const result = await makeAPICall('DELETE', `?userId=${user.id}&hard=false`);
+          results.push(result || { success: true });
+        } catch (error) {
+          console.error(`Error deleting user ${user.id}:`, error);
+          results.push({ success: false, error });
+        }
       }
       return results;
     },
     {
-      onSuccess: () => {
+      onSuccess: (results) => {
         queryClient.invalidateQueries(['admin-users']);
         setIsConfirmDialogOpen(false);
         setUsersToDelete([]);
-        toast.success('User(s) deactivated successfully');
+        
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+        
+        if (failCount === 0) {
+          toast.success(`${successCount} user(s) deactivated successfully`);
+        } else if (successCount > 0) {
+          toast.warning(`${successCount} user(s) deactivated, ${failCount} failed`);
+        } else {
+          toast.error('Failed to deactivate user(s)');
+        }
       },
       onError: (error) => {
         console.error('Error deleting users:', error);
@@ -428,11 +496,26 @@ export default function UsersTab() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send verification email');
+        let errorMessage = 'Failed to send verification email';
+        try {
+          const data = await response.json();
+          errorMessage = data.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, use default error message
+        }
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      // Handle potential empty response
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return { success: true };
+      }
+
+      try {
+        return await response.json();
+      } catch (e) {
+        return { success: true };
+      }
     },
     {
       onSuccess: () => {
@@ -458,11 +541,26 @@ export default function UsersTab() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send reset email');
+        let errorMessage = 'Failed to send reset email';
+        try {
+          const data = await response.json();
+          errorMessage = data.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, use default error message
+        }
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      // Handle potential empty response
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return { success: true };
+      }
+
+      try {
+        return await response.json();
+      } catch (e) {
+        return { success: true };
+      }
     },
     {
       onSuccess: (data, email) => {
