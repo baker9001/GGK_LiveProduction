@@ -1,20 +1,17 @@
 /**
- * File: /src/app/api/auth/route.ts
+ * File: /src/app/api/users/route.ts
  * Dependencies: 
  *   - @supabase/supabase-js
  *   - bcryptjs
  *   - zod
- *   - crypto
  * 
- * Description: Centralized authentication API endpoints
+ * Description: User management API with centralized authentication
  * 
- * Endpoints:
- *   - POST /api/auth/login - User login
- *   - POST /api/auth/verify-email - Email verification
- *   - POST /api/auth/resend-verification - Resend verification email
- *   - POST /api/auth/forgot-password - Password reset request
- *   - POST /api/auth/reset-password - Reset password with token
- *   - POST /api/auth/change-password - Change password (authenticated)
+ * Key Changes:
+ *   - Password stored only in users table
+ *   - Email verification required for all users
+ *   - Unified user creation flow
+ *   - Type-specific profiles created after main user
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,7 +20,6 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import crypto from 'crypto';
 
-// Initialize Supabase admin client
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -36,318 +32,355 @@ const supabaseAdmin = createClient(
 );
 
 // ===== VALIDATION SCHEMAS =====
-const loginSchema = z.object({
-  email: z.string().email('Invalid email').transform(e => e.toLowerCase()),
-  password: z.string().min(1, 'Password required')
-});
-
-const verifyEmailSchema = z.object({
-  token: z.string().min(1, 'Token required')
-});
-
-const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email').transform(e => e.toLowerCase())
-});
-
-const resetPasswordSchema = z.object({
-  token: z.string().min(1, 'Token required'),
-  password: z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain uppercase letter')
-    .regex(/[a-z]/, 'Password must contain lowercase letter')
-    .regex(/[0-9]/, 'Password must contain number')
-});
-
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password required'),
-  newPassword: z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain uppercase letter')
-    .regex(/[a-z]/, 'Password must contain lowercase letter')
-    .regex(/[0-9]/, 'Password must contain number')
+const createUserSchema = z.object({
+  email: z.string().email().transform(e => e.toLowerCase()),
+  name: z.string().min(2).max(100),
+  user_type: z.enum(['system', 'entity', 'teacher', 'student', 'parent']),
+  password: z.string().min(8).optional(),
+  phone: z.string().optional(),
+  is_active: z.boolean().default(true),
+  send_verification: z.boolean().default(true),
+  
+  // Type-specific fields
+  role_id: z.string().uuid().optional(), // For system users
+  company_id: z.string().uuid().optional(), // For entity/teacher/student
+  position: z.string().optional(), // Entity users
+  department: z.string().optional(), // Entity users
+  teacher_code: z.string().optional(), // Teachers
+  student_code: z.string().optional(), // Students
+  grade_level: z.string().optional(), // Students
+  parent_name: z.string().optional(), // Students
+  student_ids: z.array(z.string().uuid()).optional() // Parents
 });
 
 // ===== HELPER FUNCTIONS =====
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+  let password = 'Temp';
+  for (let i = 0; i < 8; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password + '2024!';
+}
+
 function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-async function logLoginAttempt(
-  email: string,
-  success: boolean,
-  ip?: string,
-  userAgent?: string,
-  failureReason?: string
-) {
-  await supabaseAdmin.from('login_attempts').insert({
-    email,
-    success,
-    ip_address: ip,
-    user_agent: userAgent,
-    failure_reason: failureReason
-  });
+async function generateUniqueCode(prefix: string): Promise<string> {
+  const maxRetries = 10;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const code = `${prefix}-${randomNum}`;
+    
+    // Check uniqueness based on prefix
+    const table = prefix === 'STU' ? 'students' : 'teachers';
+    const column = prefix === 'STU' ? 'student_code' : 'teacher_code';
+    
+    const { data } = await supabaseAdmin
+      .from(table)
+      .select('id')
+      .eq(column, code)
+      .maybeSingle();
+    
+    if (!data) return code;
+  }
+  
+  throw new Error(`Failed to generate unique ${prefix} code`);
 }
 
 async function sendVerificationEmail(
   email: string,
+  name: string,
   token: string,
-  type: 'signup' | 'email_change' = 'signup'
+  temporaryPassword?: string
 ) {
-  // In production, integrate with email service (SendGrid, AWS SES, etc.)
   const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${token}`;
   
-  console.log(`[EMAIL] Verification link for ${email}: ${verificationUrl}`);
+  console.log(`
+    ====================================
+    VERIFICATION EMAIL
+    ====================================
+    To: ${email}
+    Name: ${name}
+    Verification URL: ${verificationUrl}
+    ${temporaryPassword ? `Temporary Password: ${temporaryPassword}` : ''}
+    ====================================
+  `);
   
   // TODO: Implement actual email sending
-  // await emailService.send({
-  //   to: email,
-  //   subject: type === 'signup' ? 'Verify your email' : 'Confirm email change',
-  //   template: 'email-verification',
-  //   data: { verificationUrl, type }
-  // });
-  
   return true;
 }
 
-// ===== API ENDPOINTS =====
-
+// ===== CREATE USER ENDPOINT =====
 export async function POST(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+  const transaction: any[] = [];
   
-  // Route to appropriate handler
-  if (pathname.endsWith('/login')) {
-    return handleLogin(request);
-  } else if (pathname.endsWith('/verify-email')) {
-    return handleVerifyEmail(request);
-  } else if (pathname.endsWith('/resend-verification')) {
-    return handleResendVerification(request);
-  } else if (pathname.endsWith('/forgot-password')) {
-    return handleForgotPassword(request);
-  } else if (pathname.endsWith('/reset-password')) {
-    return handleResetPassword(request);
-  } else if (pathname.endsWith('/change-password')) {
-    return handleChangePassword(request);
-  }
-  
-  return NextResponse.json({ error: 'Not found' }, { status: 404 });
-}
-
-// ===== LOGIN HANDLER =====
-async function handleLogin(request: NextRequest) {
   try {
     const body = await request.json();
-    const validationResult = loginSchema.safeParse(body);
+    const validationResult = createUserSchema.safeParse(body);
     
     if (!validationResult.success) {
       return NextResponse.json({
-        error: 'Invalid input',
+        error: 'Validation failed',
         details: validationResult.error.errors
       }, { status: 400 });
     }
     
-    const { email, password } = validationResult.data;
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
-    const userAgent = request.headers.get('user-agent');
+    const data = validationResult.data;
     
-    // Get user from database
-    const { data: user } = await supabaseAdmin
+    // Check if email already exists
+    const { data: existingUser } = await supabaseAdmin
       .from('users')
-      .select(`
-        id,
-        email,
-        password_hash,
-        user_type,
-        is_active,
-        email_verified,
-        locked_until,
-        failed_login_attempts,
-        requires_password_change,
-        raw_user_meta_data
-      `)
-      .eq('email', email)
+      .select('id')
+      .eq('email', data.email)
       .single();
     
-    // Check if user exists
-    if (!user) {
-      await logLoginAttempt(email, false, ip || undefined, userAgent || undefined, 'User not found');
+    if (existingUser) {
       return NextResponse.json({
-        error: 'Invalid credentials'
-      }, { status: 401 });
+        error: 'Email already exists'
+      }, { status: 400 });
     }
     
-    // Check if account is locked
-    if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      await logLoginAttempt(email, false, ip || undefined, userAgent || undefined, 'Account locked');
-      const minutesLeft = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 60000);
-      return NextResponse.json({
-        error: `Account locked. Try again in ${minutesLeft} minutes.`
-      }, { status: 403 });
-    }
+    // Generate password if not provided
+    const password = data.password || generatePassword();
+    const isGeneratedPassword = !data.password;
     
-    // Check if account is active
-    if (!user.is_active) {
-      await logLoginAttempt(email, false, ip || undefined, userAgent || undefined, 'Account inactive');
-      return NextResponse.json({
-        error: 'Account is inactive. Please contact support.'
-      }, { status: 403 });
-    }
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
     
-    // Check if email is verified
-    if (!user.email_verified) {
-      await logLoginAttempt(email, false, ip || undefined, userAgent || undefined, 'Email not verified');
-      return NextResponse.json({
-        error: 'Email not verified',
-        code: 'EMAIL_NOT_VERIFIED',
-        userId: user.id
-      }, { status: 403 });
-    }
+    // Generate verification token
+    const verificationToken = generateVerificationToken();
+    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash || '');
-    
-    if (!isValidPassword) {
-      // Increment failed attempts
-      await supabaseAdmin.rpc('handle_failed_login', { p_user_id: user.id });
-      await logLoginAttempt(email, false, ip || undefined, userAgent || undefined, 'Invalid password');
-      
-      // Check if account should be locked
-      const attempts = user.failed_login_attempts + 1;
-      if (attempts >= 5) {
-        return NextResponse.json({
-          error: 'Too many failed attempts. Account locked for 30 minutes.'
-        }, { status: 403 });
-      }
-      
-      return NextResponse.json({
-        error: 'Invalid credentials',
-        attemptsLeft: 5 - attempts
-      }, { status: 401 });
-    }
-    
-    // Success - reset failed attempts and update last login
-    await supabaseAdmin.rpc('handle_successful_login', { p_user_id: user.id });
-    await logLoginAttempt(email, true, ip || undefined, userAgent || undefined);
-    
-    // Create session with Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: user.email,
-      email_confirm: true,
-      user_metadata: {
-        ...user.raw_user_meta_data,
-        user_type: user.user_type,
-        requires_password_change: user.requires_password_change
-      }
-    });
-    
-    // Get user profile with role information
-    const { data: profile } = await supabaseAdmin
-      .from('user_profiles')
-      .select('*')
-      .eq('id', user.id)
+    // Step 1: Create main user record
+    const { data: newUser, error: userError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        email: data.email,
+        phone: data.phone,
+        user_type: data.user_type,
+        is_active: data.is_active,
+        email_verified: false,
+        password_hash: passwordHash,
+        verification_token: verificationToken,
+        verification_sent_at: new Date().toISOString(),
+        raw_user_meta_data: {
+          name: data.name,
+          created_by: 'admin' // TODO: Get from auth context
+        }
+      })
+      .select()
       .single();
+    
+    if (userError) throw userError;
+    transaction.push({ table: 'users', id: newUser.id });
+    
+    // Step 2: Create type-specific profile
+    try {
+      switch (data.user_type) {
+        case 'system':
+          if (!data.role_id) {
+            throw new Error('Role ID required for system users');
+          }
+          
+          const { error: adminError } = await supabaseAdmin
+            .from('admin_users')
+            .insert({
+              id: newUser.id,
+              name: data.name,
+              email: data.email,
+              role_id: data.role_id,
+              status: data.is_active ? 'active' : 'inactive'
+            });
+          
+          if (adminError) throw adminError;
+          transaction.push({ table: 'admin_users', id: newUser.id });
+          break;
+          
+        case 'entity':
+          if (!data.company_id) {
+            throw new Error('Company ID required for entity users');
+          }
+          
+          const { error: entityError } = await supabaseAdmin
+            .from('entity_users')
+            .insert({
+              user_id: newUser.id,
+              company_id: data.company_id,
+              position: data.position || 'Staff',
+              department: data.department || 'General',
+              is_company_admin: false
+            });
+          
+          if (entityError) throw entityError;
+          transaction.push({ table: 'entity_users', user_id: newUser.id });
+          break;
+          
+        case 'teacher':
+          if (!data.company_id) {
+            throw new Error('Company ID required for teachers');
+          }
+          
+          const teacherCode = data.teacher_code || await generateUniqueCode('TCH');
+          
+          const { error: teacherError } = await supabaseAdmin
+            .from('teachers')
+            .insert({
+              user_id: newUser.id,
+              teacher_code: teacherCode,
+              company_id: data.company_id,
+              status: data.is_active ? 'active' : 'inactive'
+            });
+          
+          if (teacherError) throw teacherError;
+          transaction.push({ table: 'teachers', user_id: newUser.id });
+          break;
+          
+        case 'student':
+          if (!data.company_id) {
+            throw new Error('Company ID required for students');
+          }
+          
+          const studentCode = data.student_code || await generateUniqueCode('STU');
+          const enrollmentNumber = `ENR${new Date().getFullYear()}${Math.floor(10000 + Math.random() * 90000)}`;
+          
+          const { error: studentError } = await supabaseAdmin
+            .from('students')
+            .insert({
+              user_id: newUser.id,
+              student_code: studentCode,
+              enrollment_number: enrollmentNumber,
+              grade_level: data.grade_level,
+              parent_name: data.parent_name,
+              company_id: data.company_id,
+              status: data.is_active ? 'active' : 'inactive'
+            });
+          
+          if (studentError) throw studentError;
+          transaction.push({ table: 'students', user_id: newUser.id });
+          break;
+          
+        case 'parent':
+          const { error: parentError } = await supabaseAdmin
+            .from('parents')
+            .insert({
+              user_id: newUser.id,
+              name: data.name,
+              email: data.email,
+              phone: data.phone,
+              is_active: data.is_active
+            });
+          
+          if (parentError) throw parentError;
+          transaction.push({ table: 'parents', user_id: newUser.id });
+          
+          // Link to students if provided
+          if (data.student_ids && data.student_ids.length > 0) {
+            const { error: linkError } = await supabaseAdmin
+              .from('parent_students')
+              .insert(
+                data.student_ids.map(studentId => ({
+                  parent_id: newUser.id,
+                  student_id: studentId,
+                  relationship_type: 'parent',
+                  is_primary: true
+                }))
+              );
+            
+            if (linkError) throw linkError;
+          }
+          break;
+      }
+    } catch (profileError) {
+      // Rollback user creation on profile error
+      await rollbackTransaction(transaction);
+      throw profileError;
+    }
+    
+    // Step 3: Create verification record
+    const { error: verificationError } = await supabaseAdmin
+      .from('email_verifications')
+      .insert({
+        user_id: newUser.id,
+        email: data.email,
+        token: verificationToken,
+        expires_at: verificationExpiresAt.toISOString(),
+        verification_type: 'signup'
+      });
+    
+    if (verificationError) {
+      await rollbackTransaction(transaction);
+      throw verificationError;
+    }
+    
+    // Step 4: Send verification email
+    if (data.send_verification && data.is_active) {
+      await sendVerificationEmail(
+        data.email,
+        data.name,
+        verificationToken,
+        isGeneratedPassword ? password : undefined
+      );
+    }
+    
+    // Step 5: Log creation
+    await supabaseAdmin
+      .from('audit_logs')
+      .insert({
+        user_id: newUser.id,
+        action: 'create_user',
+        entity_type: 'user',
+        entity_id: newUser.id,
+        details: {
+          user_type: data.user_type,
+          created_by: 'admin', // TODO: Get from auth
+          password_generated: isGeneratedPassword
+        }
+      });
     
     return NextResponse.json({
       success: true,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.raw_user_meta_data?.name,
-        user_type: user.user_type,
-        requires_password_change: user.requires_password_change,
-        profile: profile?.profile_details
+        id: newUser.id,
+        email: data.email,
+        name: data.name,
+        user_type: data.user_type,
+        temporary_password: isGeneratedPassword ? password : undefined
       },
-      message: 'Login successful'
+      message: data.send_verification 
+        ? `User created. Verification email sent to ${data.email}`
+        : 'User created successfully'
     });
     
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('User creation error:', error);
     return NextResponse.json({
-      error: 'Login failed'
+      error: error instanceof Error ? error.message : 'Failed to create user'
     }, { status: 500 });
   }
 }
 
-// ===== EMAIL VERIFICATION HANDLER =====
-async function handleVerifyEmail(request: NextRequest) {
+// ===== UPDATE USER ENDPOINT =====
+export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const validationResult = verifyEmailSchema.safeParse(body);
+    const { userId, ...updates } = body;
     
-    if (!validationResult.success) {
+    if (!userId) {
       return NextResponse.json({
-        error: 'Invalid token'
+        error: 'User ID required'
       }, { status: 400 });
     }
     
-    const { token } = validationResult.data;
-    
-    // Find verification record
-    const { data: verification } = await supabaseAdmin
-      .from('email_verifications')
-      .select('*')
-      .eq('token', token)
-      .gt('expires_at', new Date().toISOString())
-      .is('verified_at', null)
-      .single();
-    
-    if (!verification) {
-      return NextResponse.json({
-        error: 'Invalid or expired token'
-      }, { status: 400 });
-    }
-    
-    // Update user as verified
-    const { error: updateError } = await supabaseAdmin
+    // Get existing user
+    const { data: user } = await supabaseAdmin
       .from('users')
-      .update({
-        email_verified: true,
-        verified_at: new Date().toISOString(),
-        verification_token: null
-      })
-      .eq('id', verification.user_id);
-    
-    if (updateError) throw updateError;
-    
-    // Mark verification as used
-    await supabaseAdmin
-      .from('email_verifications')
-      .update({ verified_at: new Date().toISOString() })
-      .eq('id', verification.id);
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Email verified successfully'
-    });
-    
-  } catch (error) {
-    console.error('Verification error:', error);
-    return NextResponse.json({
-      error: 'Verification failed'
-    }, { status: 500 });
-  }
-}
-
-// ===== RESEND VERIFICATION HANDLER =====
-async function handleResendVerification(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { userId, email } = body;
-    
-    if (!userId && !email) {
-      return NextResponse.json({
-        error: 'User ID or email required'
-      }, { status: 400 });
-    }
-    
-    // Get user
-    const query = supabaseAdmin.from('users').select('*');
-    if (userId) {
-      query.eq('id', userId);
-    } else {
-      query.eq('email', email.toLowerCase());
-    }
-    
-    const { data: user } = await query.single();
+      .select('*')
+      .eq('id', userId)
+      .single();
     
     if (!user) {
       return NextResponse.json({
@@ -355,269 +388,207 @@ async function handleResendVerification(request: NextRequest) {
       }, { status: 404 });
     }
     
-    if (user.email_verified) {
-      return NextResponse.json({
-        error: 'Email already verified'
-      }, { status: 400 });
-    }
+    // Prepare updates for users table
+    const userUpdates: any = {
+      updated_at: new Date().toISOString()
+    };
     
-    // Check for recent verification emails (rate limiting)
-    const { data: recentVerifications } = await supabaseAdmin
-      .from('email_verifications')
-      .select('created_at')
-      .eq('user_id', user.id)
-      .eq('verification_type', 'signup')
-      .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Last 5 minutes
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
-    if (recentVerifications && recentVerifications.length > 0) {
-      return NextResponse.json({
-        error: 'Please wait 5 minutes before requesting another verification email'
-      }, { status: 429 });
-    }
-    
-    // Generate new verification token
-    const token = generateVerificationToken();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    // Store verification record
-    await supabaseAdmin.from('email_verifications').insert({
-      user_id: user.id,
-      email: user.email,
-      token,
-      expires_at: expiresAt.toISOString(),
-      verification_type: 'signup'
-    });
-    
-    // Update user record
-    await supabaseAdmin
-      .from('users')
-      .update({
-        verification_token: token,
-        verification_sent_at: new Date().toISOString()
-      })
-      .eq('id', user.id);
-    
-    // Send email
-    await sendVerificationEmail(user.email, token);
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Verification email sent'
-    });
-    
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    return NextResponse.json({
-      error: 'Failed to send verification email'
-    }, { status: 500 });
-  }
-}
-
-// ===== FORGOT PASSWORD HANDLER =====
-async function handleForgotPassword(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const validationResult = forgotPasswordSchema.safeParse(body);
-    
-    if (!validationResult.success) {
-      return NextResponse.json({
-        error: 'Invalid email'
-      }, { status: 400 });
-    }
-    
-    const { email } = validationResult.data;
-    
-    // Get user (don't reveal if user exists)
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('id, email, is_active')
-      .eq('email', email)
-      .single();
-    
-    // Always return success to prevent email enumeration
-    if (!user || !user.is_active) {
-      return NextResponse.json({
-        success: true,
-        message: 'If an account exists, a password reset email will be sent'
+    if (updates.email && updates.email !== user.email) {
+      // Check if new email exists
+      const { data: emailExists } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', updates.email.toLowerCase())
+        .neq('id', userId)
+        .single();
+      
+      if (emailExists) {
+        return NextResponse.json({
+          error: 'Email already exists'
+        }, { status: 400 });
+      }
+      
+      userUpdates.email = updates.email.toLowerCase();
+      userUpdates.email_verified = false;
+      
+      // Generate new verification token
+      const token = generateVerificationToken();
+      userUpdates.verification_token = token;
+      userUpdates.verification_sent_at = new Date().toISOString();
+      
+      // Create verification record
+      await supabaseAdmin.from('email_verifications').insert({
+        user_id: userId,
+        email: updates.email.toLowerCase(),
+        token,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        verification_type: 'email_change'
       });
+      
+      // Send verification email
+      await sendVerificationEmail(updates.email, updates.name || user.raw_user_meta_data?.name, token);
     }
     
-    // Generate reset token
-    const token = generateVerificationToken();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    
-    // Store in email_verifications table
-    await supabaseAdmin.from('email_verifications').insert({
-      user_id: user.id,
-      email: user.email,
-      token,
-      expires_at: expiresAt.toISOString(),
-      verification_type: 'password_reset'
-    });
-    
-    // Send reset email
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}`;
-    console.log(`[EMAIL] Password reset link for ${email}: ${resetUrl}`);
-    
-    // TODO: Send actual email
-    
-    return NextResponse.json({
-      success: true,
-      message: 'If an account exists, a password reset email will be sent'
-    });
-    
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    return NextResponse.json({
-      error: 'Failed to process request'
-    }, { status: 500 });
-  }
-}
-
-// ===== RESET PASSWORD HANDLER =====
-async function handleResetPassword(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const validationResult = resetPasswordSchema.safeParse(body);
-    
-    if (!validationResult.success) {
-      return NextResponse.json({
-        error: 'Invalid input',
-        details: validationResult.error.errors
-      }, { status: 400 });
+    if (updates.name) {
+      userUpdates.raw_user_meta_data = {
+        ...user.raw_user_meta_data,
+        name: updates.name
+      };
     }
     
-    const { token, password } = validationResult.data;
-    
-    // Find valid reset token
-    const { data: verification } = await supabaseAdmin
-      .from('email_verifications')
-      .select('*')
-      .eq('token', token)
-      .eq('verification_type', 'password_reset')
-      .gt('expires_at', new Date().toISOString())
-      .is('verified_at', null)
-      .single();
-    
-    if (!verification) {
-      return NextResponse.json({
-        error: 'Invalid or expired token'
-      }, { status: 400 });
+    if (updates.phone !== undefined) {
+      userUpdates.phone = updates.phone;
     }
     
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    if (typeof updates.is_active !== 'undefined') {
+      userUpdates.is_active = updates.is_active;
+    }
     
-    // Update user password
+    // Update users table
     const { error: updateError } = await supabaseAdmin
       .from('users')
-      .update({
-        password_hash: passwordHash,
-        password_updated_at: new Date().toISOString(),
-        requires_password_change: false,
-        failed_login_attempts: 0,
-        locked_until: null
-      })
-      .eq('id', verification.user_id);
+      .update(userUpdates)
+      .eq('id', userId);
     
     if (updateError) throw updateError;
     
-    // Mark token as used
+    // Update type-specific table
+    switch (user.user_type) {
+      case 'system':
+        if (updates.name || updates.email || updates.role_id) {
+          await supabaseAdmin
+            .from('admin_users')
+            .update({
+              ...(updates.name && { name: updates.name }),
+              ...(updates.email && { email: updates.email }),
+              ...(updates.role_id && { role_id: updates.role_id }),
+              ...(typeof updates.is_active !== 'undefined' && {
+                status: updates.is_active ? 'active' : 'inactive'
+              })
+            })
+            .eq('id', userId);
+        }
+        break;
+        
+      case 'entity':
+        if (updates.position || updates.department) {
+          await supabaseAdmin
+            .from('entity_users')
+            .update({
+              ...(updates.position && { position: updates.position }),
+              ...(updates.department && { department: updates.department })
+            })
+            .eq('user_id', userId);
+        }
+        break;
+        
+      // Add other type-specific updates as needed
+    }
+    
+    // Log update
     await supabaseAdmin
-      .from('email_verifications')
-      .update({ verified_at: new Date().toISOString() })
-      .eq('id', verification.id);
+      .from('audit_logs')
+      .insert({
+        user_id: userId,
+        action: 'update_user',
+        entity_type: 'user',
+        entity_id: userId,
+        details: {
+          updates,
+          updated_by: 'admin' // TODO: Get from auth
+        }
+      });
     
     return NextResponse.json({
       success: true,
-      message: 'Password reset successfully'
+      message: updates.email && updates.email !== user.email
+        ? 'User updated. Verification email sent to new address.'
+        : 'User updated successfully'
     });
     
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('User update error:', error);
     return NextResponse.json({
-      error: 'Failed to reset password'
+      error: error instanceof Error ? error.message : 'Failed to update user'
     }, { status: 500 });
   }
 }
 
-// ===== CHANGE PASSWORD HANDLER (Authenticated) =====
-async function handleChangePassword(request: NextRequest) {
+// ===== DELETE USER ENDPOINT =====
+export async function DELETE(request: NextRequest) {
   try {
-    // Get user from session/token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     
-    const token = authHeader.substring(7);
-    const { data: { user: authUser } } = await supabaseAdmin.auth.getUser(token);
-    
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    const body = await request.json();
-    const validationResult = changePasswordSchema.safeParse(body);
-    
-    if (!validationResult.success) {
+    if (!userId) {
       return NextResponse.json({
-        error: 'Invalid input',
-        details: validationResult.error.errors
+        error: 'User ID required'
       }, { status: 400 });
     }
     
-    const { currentPassword, newPassword } = validationResult.data;
+    // Soft delete by default
+    const hardDelete = searchParams.get('hard') === 'true';
     
-    // Get user from database
-    const { data: user } = await supabaseAdmin
-      .from('users')
-      .select('id, password_hash')
-      .eq('id', authUser.id)
-      .single();
-    
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (hardDelete) {
+      // Hard delete - cascades to profile tables
+      const { error } = await supabaseAdmin
+        .from('users')
+        .delete()
+        .eq('id', userId);
+      
+      if (error) throw error;
+    } else {
+      // Soft delete
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      if (error) throw error;
     }
     
-    // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, user.password_hash || '');
-    if (!isValid) {
-      return NextResponse.json({
-        error: 'Current password is incorrect'
-      }, { status: 400 });
-    }
-    
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(newPassword, salt);
-    
-    // Update password
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({
-        password_hash: passwordHash,
-        password_updated_at: new Date().toISOString(),
-        requires_password_change: false
-      })
-      .eq('id', user.id);
-    
-    if (updateError) throw updateError;
+    // Log deletion
+    await supabaseAdmin
+      .from('audit_logs')
+      .insert({
+        user_id: userId,
+        action: hardDelete ? 'hard_delete_user' : 'soft_delete_user',
+        entity_type: 'user',
+        entity_id: userId,
+        details: {
+          deleted_by: 'admin' // TODO: Get from auth
+        }
+      });
     
     return NextResponse.json({
       success: true,
-      message: 'Password changed successfully'
+      message: hardDelete ? 'User permanently deleted' : 'User deactivated'
     });
     
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error('User deletion error:', error);
     return NextResponse.json({
-      error: 'Failed to change password'
+      error: error instanceof Error ? error.message : 'Failed to delete user'
     }, { status: 500 });
   }
 }
 
-export { handleLogin as login };
+// ===== HELPER: Rollback Transaction =====
+async function rollbackTransaction(transaction: any[]) {
+  for (const item of transaction.reverse()) {
+    try {
+      if (item.table === 'users') {
+        await supabaseAdmin.from('users').delete().eq('id', item.id);
+      } else if (item.user_id) {
+        await supabaseAdmin.from(item.table).delete().eq('user_id', item.user_id);
+      } else if (item.id) {
+        await supabaseAdmin.from(item.table).delete().eq('id', item.id);
+      }
+    } catch (error) {
+      console.error(`Rollback error for ${item.table}:`, error);
+    }
+  }
+}
