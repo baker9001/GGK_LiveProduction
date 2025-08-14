@@ -114,9 +114,13 @@ export default function SignInPage() {
           raw_user_meta_data
         `)
         .eq('email', normalizedEmail)
-        .single();
+        .maybeSingle();
       
-      if (userError || !user) {
+      if (userError) {
+        throw new Error('Database query failed');
+      }
+      
+      if (!user) {
         setError('Invalid email or password');
         setLoading(false);
         return;
