@@ -10,6 +10,7 @@ import { TestModeBar } from './components/admin/TestModeBar';
 import { isInTestMode, getCurrentUser } from './lib/auth';
 import SystemAdminPage from './app/system-admin/page';
 import SignInPage from './app/signin/page';
+import ForgotPasswordPage from './app/forgot-password/page';
 import ResetPasswordPage from './app/reset-password/page';
 import LandingPage from './app/landing/page';
 import EntityModulePage from './app/entity-module/page';
@@ -71,6 +72,7 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/signin" element={<SignInPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/form-validation" element={<FormValidationPage />} />
             

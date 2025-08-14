@@ -188,6 +188,13 @@ export default function ResetPasswordPage() {
               
               <div className="mt-6 space-y-3">
                 <Button
+                  onClick={() => navigate('/forgot-password')}
+                  className="w-full justify-center"
+                >
+                  Request New Link
+                </Button>
+                
+                <Button
                   onClick={() => navigate('/signin')}
                   variant="outline"
                   className="w-full justify-center"

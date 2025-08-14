@@ -476,9 +476,12 @@ export default function SignInPage() {
               </div>
               
               <div className="text-sm">
-                <span className="font-medium text-gray-500">
-                  Forgot password? Contact support
-                </span>
+                <Link
+                  to="/forgot-password"
+                  className="font-medium text-[#8CC63F] hover:text-[#7AB635]"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </div>
             
