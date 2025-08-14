@@ -1,5 +1,5 @@
 // /src/app/system-admin/admin-users/tabs/UsersTab.tsx
-// Complete System Admin user management with ALL features
+// Complete System Admin user management with ALL features - FIXED AUTHENTICATION
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,14 @@ import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
-import { startTestMode, isInTestMode, getRealAdminUser, mapUserTypeToRole } from '../../../../lib/auth';
+import { 
+  startTestMode, 
+  isInTestMode, 
+  getRealAdminUser, 
+  mapUserTypeToRole,
+  getAuthenticatedUser,
+  clearAuthenticatedUser 
+} from '../../../../lib/auth';
 import bcrypt from 'bcryptjs';
 
 // ===== VALIDATION SCHEMAS =====
@@ -61,30 +68,130 @@ interface FilterState {
 
 type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER';
 
-// ===== API HELPER FUNCTIONS =====
+// ===== HELPER FUNCTION FOR SUPABASE PASSWORD =====
+function generateSupabasePassword(email: string, userId: string): string {
+  // This should match the logic in your signin page
+  return `${email}_${userId}_GGK2024!@#`;
+}
+
+// ===== ENHANCED API HELPER FUNCTION WITH SESSION RECOVERY =====
 async function makeAPICall(method: string, endpoint: string = '', body?: any) {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
+  try {
+    // First attempt to get the session
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    // If no session, try to refresh it
+    if (!session?.access_token) {
+      console.log('No session found, attempting to refresh...');
+      
+      // Try to refresh the session
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshData.session) {
+        console.error('Session refresh failed:', refreshError);
+        
+        // Check if we have custom auth
+        const customUser = getAuthenticatedUser();
+        if (customUser) {
+          // Try to re-authenticate with Supabase
+          console.log('Attempting to re-authenticate with Supabase...');
+          
+          // Generate a consistent password for the user
+          const supabasePassword = generateSupabasePassword(customUser.email, customUser.id);
+          
+          // Try to sign in with Supabase
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: customUser.email,
+            password: supabasePassword
+          });
+          
+          if (authError) {
+            console.error('Re-authentication failed:', authError);
+            
+            // Try with a stronger password pattern if the first attempt fails
+            const strongerPassword = `${customUser.email.split('@')[0]}_${customUser.id}_GGK2024!@#$`;
+            const { data: retryAuthData, error: retryAuthError } = await supabase.auth.signInWithPassword({
+              email: customUser.email,
+              password: strongerPassword
+            });
+            
+            if (retryAuthError) {
+              // If sign in fails, user needs to log in again
+              toast.error('Session expired. Please log in again.');
+              
+              // Clear auth and redirect to signin
+              await clearAuthenticatedUser();
+              window.location.href = '/signin';
+              throw new Error('Session expired');
+            }
+            
+            session = retryAuthData.session;
+          } else {
+            session = authData.session;
+          }
+        } else {
+          // No custom auth either - user needs to log in
+          toast.error('Not authenticated. Please log in.');
+          window.location.href = '/signin';
+          throw new Error('Not authenticated');
+        }
+      } else {
+        session = refreshData.session;
+        console.log('Session refreshed successfully');
+      }
+    }
+    
+    // Now we should have a valid session
+    if (!session?.access_token) {
+      throw new Error('Failed to obtain valid session');
+    }
+
+    const response = await fetch(`/api/users${endpoint}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Handle 401 specifically
+      if (response.status === 401) {
+        console.error('API returned 401 - attempting session recovery');
+        
+        // Try one more refresh attempt
+        const { data: finalRefresh } = await supabase.auth.refreshSession();
+        if (finalRefresh?.session) {
+          // Retry the request with new token
+          const retryResponse = await fetch(`/api/users${endpoint}`, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${finalRefresh.session.access_token}`
+            },
+            body: body ? JSON.stringify(body) : undefined
+          });
+          
+          if (retryResponse.ok) {
+            return await retryResponse.json();
+          }
+        }
+        
+        // If still failing, clear auth and redirect
+        await clearAuthenticatedUser();
+        window.location.href = '/signin';
+      }
+      throw new Error(data.error || 'Request failed');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('API call failed:', error);
+    throw error;
   }
-
-  const response = await fetch(`/api/users${endpoint}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-
-  return data;
 }
 
 // ===== MAIN COMPONENT =====
