@@ -252,6 +252,5 @@ function ForgotPasswordPage() {
   );
 }
 
-export { ForgotPasswordPage as default };
-
-export default ForgotPasswordPage
+// Single default export - matching project pattern
+export default ForgotPasswordPage;
