@@ -22,7 +22,6 @@ import {
   EyeOff,
   ShieldAlert,
   MailWarning,
-  ChevronLeft,
   Home
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
@@ -70,11 +69,18 @@ export default function SignInPage() {
   // Redirect path
   const from = location.state?.from?.pathname || '/app/dashboard';
   
-  // Clear any existing sessions on mount
+  // Load remembered email on mount
   useEffect(() => {
     // Clear any test mode or existing sessions
     localStorage.removeItem('test_user');
     sessionStorage.clear();
+    
+    // Load remembered email if exists
+    const savedEmail = localStorage.getItem('ggk_remembered_email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
   }, []);
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,9 +99,6 @@ export default function SignInPage() {
     setLoading(true);
     
     try {
-      // Direct database authentication since we're not using separate auth endpoints yet
-      // This is a temporary solution until the API routes are properly set up
-      
       const normalizedEmail = email.trim().toLowerCase();
       
       // Get user from database
@@ -142,8 +145,8 @@ export default function SignInPage() {
         return;
       }
       
-      // Check if email is verified
-      if (!user.email_verified) {
+      // Check if email is verified (skip in development)
+      if (!user.email_verified && process.env.NODE_ENV === 'production') {
         setVerificationNeeded(true);
         setUnverifiedUserId(user.id);
         setError('Please verify your email before signing in');
@@ -227,19 +230,20 @@ export default function SignInPage() {
         role: userRole
       };
       
-      // Set authenticated user
-      setAuthenticatedUser(authenticatedUser);
-      
-      // Create Supabase session for API calls
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: password
-      });
-      
-      // If Supabase auth fails, create a minimal session
-      if (signInError) {
-        console.warn('Supabase Auth not configured, using custom auth only');
+      // Handle Remember Me functionality
+      if (rememberMe) {
+        // Save email for next time
+        localStorage.setItem('ggk_remembered_email', normalizedEmail);
+        // Set a flag for extended session (30 days instead of default 24 hours)
+        localStorage.setItem('ggk_remember_session', 'true');
+      } else {
+        // Clear remembered email if not checked
+        localStorage.removeItem('ggk_remembered_email');
+        localStorage.removeItem('ggk_remember_session');
       }
+      
+      // Set authenticated user (uses remember me setting internally)
+      setAuthenticatedUser(authenticatedUser);
       
       // Check if password change required
       if (user.requires_password_change) {
@@ -340,15 +344,6 @@ export default function SignInPage() {
         
         {/* Sign-in Form */}
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
-          {/* Back to Home - Inside card for consistency */}
-          <Link
-            to="/"
-            className="inline-flex items-center text-sm text-gray-400 hover:text-[#8CC63F] transition-colors mb-6 group"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1 transition-transform group-hover:-translate-x-1" />
-            Back to home
-          </Link>
-
           {/* Error Messages */}
           {error && (
             <div className="mb-4">
@@ -465,7 +460,14 @@ export default function SignInPage() {
                   name="remember-me"
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                  onChange={(e) => {
+                    setRememberMe(e.target.checked);
+                    // Clear saved email if unchecked
+                    if (!e.target.checked) {
+                      localStorage.removeItem('ggk_remembered_email');
+                      localStorage.removeItem('ggk_remember_session');
+                    }
+                  }}
                   className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
@@ -527,6 +529,17 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
+          </div>
+          
+          {/* Back to Home Button - Bottom Style like Forgot Password */}
+          <div className="mt-6">
+            <Button
+              onClick={() => navigate('/')}
+              variant="outline"
+              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            >
+              Back to Home
+            </Button>
           </div>
         </div>
         
