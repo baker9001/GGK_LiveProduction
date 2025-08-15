@@ -16,8 +16,7 @@ import {
   GraduationCap, 
   AlertCircle, 
   CheckCircle as CircleCheck, 
-  Loader2, 
-  ChevronLeft,
+  Loader2,
   Eye,
   EyeOff,
   MailWarning
@@ -431,14 +430,6 @@ export default function SignInPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-md dark:shadow-gray-900/20 sm:rounded-lg sm:px-10 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-          {/* Back to Home Link */}
-          <Link
-            to="/"
-            className="inline-flex items-center text-sm text-gray-400 hover:text-[#8CC63F] transition-colors mb-6 group"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1 transition-transform group-hover:-translate-x-1" />
-            Back to home
-          </Link>
 
           {/* Error Alert */}
           {error && (
@@ -624,6 +615,17 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
+          </div>
+
+          {/* Back to Home Button */}
+          <div className="mt-6">
+            <Button
+              onClick={() => navigate('/')}
+              variant="outline"
+              className="w-full justify-center bg-transparent dark:bg-gray-700/30 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            >
+              Back to Home
+            </Button>
           </div>
         </div>
       </div>
