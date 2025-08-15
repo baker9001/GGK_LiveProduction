@@ -7,7 +7,7 @@
  *   - bcryptjs
  *   - Custom components (NO SUPABASE AUTH)
  * 
- * Description: Sign-in page without Supabase authentication
+ * Description: Sign-in page with original design restored and improved authentication logic
  */
 
 import React, { useState, useEffect } from 'react';
@@ -15,21 +15,18 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   GraduationCap, 
   AlertCircle, 
-  CheckCircle, 
+  CheckCircle as CircleCheck, 
   Loader2, 
-  Mail,
-  Lock,
+  ArrowLeft,
   Eye,
   EyeOff,
   ShieldAlert,
-  MailWarning,
-  ChevronLeft,
-  Home
+  MailWarning
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { toast } from '../../components/shared/Toast';
-import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
+import { setAuthenticatedUser, type User, type UserRole, isInTestMode, exitTestMode } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import bcrypt from 'bcryptjs';
 
@@ -60,10 +57,31 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
   const [verificationUserId, setVerificationUserId] = useState<string | null>(null);
+  
+  // CRITICAL: Clear test mode when signin page loads
+  useEffect(() => {
+    if (isInTestMode()) {
+      console.warn('Test mode was active on signin page - clearing for security');
+      exitTestMode();
+      
+      // Show a brief notification
+      setError('Test mode has been terminated for security. Please sign in again.');
+      setTimeout(() => setError(null), 5000);
+    }
+    
+    // Also clear any stale authentication
+    const authUser = localStorage.getItem('ggk_authenticated_user');
+    if (!authUser) {
+      // No authenticated user, clear everything
+      localStorage.removeItem('test_mode_user');
+      sessionStorage.clear();
+    }
+  }, []);
   
   // Helper function to get system user role
   function getUserSystemRole(roleName: string): UserRole {
@@ -251,11 +269,16 @@ export default function SignInPage() {
       }
       
       // Success message
+      setSuccess(true);
       toast.success(`Welcome back, ${authenticatedUser.name}!`);
       
       // Redirect based on user type
       const redirectPath = getRedirectPath(user.user_type, userRole);
-      navigate(redirectPath, { replace: true });
+      
+      // Redirect after a brief delay to show success state
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 500);
       
     } catch (err) {
       console.error('Login error:', err);
@@ -278,101 +301,233 @@ export default function SignInPage() {
       setResendingVerification(false);
     }
   };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    setError(null);
+
+    // Clear any existing test mode before dev login
+    if (isInTestMode()) {
+      exitTestMode();
+    }
+
+    try {
+      // CRITICAL: Normalize email
+      const devEmail = 'bakir.alramadi@gmail.com'.trim().toLowerCase();
+      
+      // Check if dev user exists
+      const { data: user, error: queryError } = await supabase
+        .from('admin_users')
+        .select(`
+          id,
+          name,
+          email,
+          password_hash,
+          status,
+          roles (name)
+        `)
+        .eq('email', devEmail)
+        .maybeSingle();
+
+      if (queryError) {
+        throw new Error('Failed to check dev user');
+      }
+
+      const devPassword = 'dev_password'; // Password for admin_users table
+      
+      if (!user) {
+        // Create dev admin user if it doesn't exist
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(devPassword, salt);
+
+        // Get SSA role ID
+        const { data: ssaRole } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', 'Super Admin')
+          .single();
+
+        if (!ssaRole) {
+          throw new Error('SSA role not found');
+        }
+
+        const { data: newUser, error: insertError } = await supabase
+          .from('admin_users')
+          .insert([{
+            name: 'Baker R.',
+            email: devEmail,
+            password_hash: hashedPassword,
+            role_id: ssaRole.id,
+            status: 'active'
+          }])
+          .select(`
+            id,
+            name,
+            email,
+            roles (name)
+          `)
+          .single();
+
+        if (insertError) throw insertError;
+
+        // Create user object for new user
+        const authenticatedUser: User = {
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          role: 'SSA'
+        };
+
+        setAuthenticatedUser(authenticatedUser);
+      } else {
+        // Map role name to UserRole type
+        const roleMapping: Record<string, UserRole> = {
+          'Super Admin': 'SSA',
+          'Support Admin': 'SUPPORT',
+          'Viewer': 'VIEWER'
+        };
+
+        const userRole = roleMapping[user.roles?.name] || 'SSA';
+
+        // Create user object for existing user
+        const authenticatedUser: User = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: userRole
+        };
+
+        setAuthenticatedUser(authenticatedUser);
+      }
+
+      setSuccess(true);
+
+      setTimeout(() => {
+        navigate(from, { replace: true });
+      }, 500);
+    } catch (err) {
+      setError('Failed to create dev account');
+      console.error('Dev login error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur rounded-full mb-4">
-            <GraduationCap className="w-10 h-10 text-white" />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 transition-colors duration-200">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          <div className="flex items-center">
+            <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
+            <span className="ml-2 text-3xl font-bold text-gray-900 dark:text-white">GGK</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-purple-200">Sign in to your account</p>
         </div>
-        
-        {/* Login Form */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-2xl p-8 border border-white/20">
-          <form onSubmit={handleLogin} className="space-y-6">
-            {/* Error Alert */}
-            {error && (
-              <div className="bg-red-500/10 backdrop-blur border border-red-500/20 text-red-100 p-3 rounded-lg flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm">{error}</p>
-                  {attemptsLeft && attemptsLeft < 3 && (
-                    <p className="text-xs mt-1 text-red-200">
-                      Warning: {attemptsLeft} attempts remaining before account lock
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Email Not Verified Alert */}
-            {emailNotVerified && (
-              <div className="bg-yellow-500/10 backdrop-blur border border-yellow-500/20 text-yellow-100 p-3 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <MailWarning className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Email Verification Required</p>
-                    <p className="text-xs mt-1">
-                      Please check your email and click the verification link before logging in.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleResendVerification}
-                      disabled={resendingVerification}
-                      className="text-xs mt-2 text-yellow-200 hover:text-yellow-100 underline disabled:opacity-50"
-                    >
-                      {resendingVerification ? 'Sending...' : 'Resend verification email'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-purple-100 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-300" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
-                  placeholder="Enter your email"
-                  required
-                  disabled={loading}
-                />
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+          System Administration
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+          Access the GGK admin dashboard
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-md dark:shadow-gray-900/20 sm:rounded-lg sm:px-10 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
+          {/* Back to Home Link */}
+          <Link
+            to="/"
+            className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] transition-colors mb-6"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to home
+          </Link>
+
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded-md flex items-center border border-red-200 dark:border-red-800">
+              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm">{error}</p>
+                {attemptsLeft && attemptsLeft < 3 && (
+                  <p className="text-xs mt-1 text-red-500 dark:text-red-300">
+                    Warning: {attemptsLeft} attempts remaining before account lock
+                  </p>
+                )}
               </div>
             </div>
-            
+          )}
+
+          {/* Success Alert */}
+          {success && (
+            <div className="mb-4 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 p-4 rounded-md flex items-center border border-green-200 dark:border-green-800">
+              <CircleCheck className="h-5 w-5 mr-2" />
+              Login successful! Redirecting...
+            </div>
+          )}
+          
+          {/* Email Not Verified Alert */}
+          {emailNotVerified && (
+            <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 p-4 rounded-md border border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-start">
+                <MailWarning className="h-5 w-5 mt-0.5 mr-2 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Email Verification Required</p>
+                  <p className="text-xs mt-1">
+                    Please check your email and click the verification link before logging in.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendingVerification}
+                    className="text-xs mt-2 text-yellow-600 dark:text-yellow-300 hover:text-yellow-700 dark:hover:text-yellow-200 underline disabled:opacity-50"
+                  >
+                    {resendingVerification ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <form className="space-y-6" onSubmit={handleLogin}>
+            {/* Email Field */}
+            <FormField
+              id="email"
+              label="Email"
+              required
+            >
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading || success}
+              />
+            </FormField>
+
             {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-purple-100 mb-2">
-                Password
-              </label>
+            <FormField
+              id="password"
+              label="Password"
+              required
+            >
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-300" />
-                <input
+                <Input
                   id="password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-white/10 backdrop-blur border border-white/20 rounded-lg text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
-                  placeholder="Enter your password"
-                  required
-                  disabled={loading}
+                  disabled={loading || success}
+                  className="pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300 hover:text-purple-100 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -382,73 +537,107 @@ export default function SignInPage() {
                   )}
                 </button>
               </div>
-            </div>
-            
+            </FormField>
+
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
-                  id="remember"
+                  id="remember-me"
+                  name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 bg-white/10 border-white/20 rounded text-purple-600 focus:ring-purple-400 focus:ring-offset-0"
+                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded"
                 />
-                <label htmlFor="remember" className="ml-2 text-sm text-purple-200">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                   Remember me
                 </label>
               </div>
-              <Link
-                to="/forgot-password"
-                className="text-sm text-purple-200 hover:text-white transition-colors"
-              >
-                Forgot password?
-              </Link>
+
+              <div className="text-sm">
+                <Link to="/forgot-password" className="font-medium text-[#8CC63F] hover:text-[#5da82f]">
+                  Forgot your password?
+                </Link>
+              </div>
             </div>
-            
+
             {/* Submit Button */}
             <Button
               type="submit"
-              variant="primary"
-              className="w-full bg-white/20 backdrop-blur hover:bg-white/30 text-white font-medium py-2.5 transition-all"
-              loading={loading}
-              disabled={loading}
+              className="w-full justify-center"
+              disabled={loading || success}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
-            
-            {/* Security Notice */}
-            <div className="flex items-start gap-2 p-3 bg-purple-500/10 backdrop-blur rounded-lg border border-purple-500/20">
-              <ShieldAlert className="h-4 w-4 text-purple-300 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-purple-200">
+          </form>
+
+          {/* Security Notice */}
+          <div className="mt-6 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-start">
+              <ShieldAlert className="h-4 w-4 text-gray-400 mt-0.5 mr-2 flex-shrink-0" />
+              <div className="text-xs text-gray-600 dark:text-gray-400">
                 <p>This is a secure system. Unauthorized access is prohibited.</p>
                 <p className="mt-1">Your IP address and login attempts are being logged.</p>
               </div>
             </div>
-          </form>
-          
+          </div>
+
+          {/* Development Access Section */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                  Development access
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <Button
+                onClick={handleDevLogin}
+                variant="outline"
+                className="w-full justify-center"
+                disabled={loading || success}
+              >
+                🔧 Dev Login (Baker R.)
+              </Button>
+            </div>
+            
+            <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">
+              This is a temporary login for development purposes.
+              <br />
+              Production authentication will be implemented later.
+            </p>
+          </div>
+
           {/* Footer Links */}
-          <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
             <div className="flex items-center justify-center gap-4 text-sm">
               <Link
                 to="/contact-support"
-                className="text-purple-200 hover:text-white transition-colors"
+                className="text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] transition-colors"
               >
                 Contact Support
               </Link>
-              <span className="text-purple-400">•</span>
+              <span className="text-gray-400 dark:text-gray-500">•</span>
               <Link
                 to="/request-access"
-                className="text-purple-200 hover:text-white transition-colors"
+                className="text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] transition-colors"
               >
                 Request Access
               </Link>
             </div>
           </div>
         </div>
-        
-        {/* Bottom Text */}
-        <p className="mt-8 text-center text-sm text-purple-300">
-          Protected by industry-standard encryption
-        </p>
       </div>
     </div>
   );
