@@ -17,10 +17,9 @@ import {
   AlertCircle, 
   CheckCircle as CircleCheck, 
   Loader2, 
-  ArrowLeft,
+  ChevronLeft,
   Eye,
   EyeOff,
-  ShieldAlert,
   MailWarning
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
@@ -435,9 +434,9 @@ export default function SignInPage() {
           {/* Back to Home Link */}
           <Link
             to="/"
-            className="inline-flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] transition-colors mb-6"
+            className="inline-flex items-center text-sm text-gray-400 hover:text-[#8CC63F] transition-colors mb-6 group"
           >
-            <ArrowLeft className="h-4 w-4 mr-1" />
+            <ChevronLeft className="h-4 w-4 mr-1 transition-transform group-hover:-translate-x-1" />
             Back to home
           </Link>
 
@@ -576,17 +575,6 @@ export default function SignInPage() {
               )}
             </Button>
           </form>
-
-          {/* Security Notice */}
-          <div className="mt-6 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start">
-              <ShieldAlert className="h-4 w-4 text-gray-400 mt-0.5 mr-2 flex-shrink-0" />
-              <div className="text-xs text-gray-600 dark:text-gray-400">
-                <p>This is a secure system. Unauthorized access is prohibited.</p>
-                <p className="mt-1">Your IP address and login attempts are being logged.</p>
-              </div>
-            </div>
-          </div>
 
           {/* Development Access Section */}
           <div className="mt-6">
