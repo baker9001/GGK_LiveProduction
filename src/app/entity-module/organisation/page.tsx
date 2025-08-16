@@ -12,22 +12,6 @@
  *   - @/components/shared/StatusBadge
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * Preserved Features:
- *   - All original functionality from page.tsx
- *   - All CRUD operations (schools, branches, departments)
- *   - Organization chart with expand/collapse
- *   - Details panel with tabs
- *   - Department and Academic Year management
- *   - All original queries and mutations
- * 
- * Added/Modified:
- *   - SlideInForm for create/edit modals (system standard)
- *   - FormField, Input, Select components (system standard)
- *   - Button component for consistent styling
- *   - StatusBadge for status display
- *   - Enhanced card backgrounds for visibility
- *   - Consistent dark mode support
- * 
  * Database Tables:
  *   - companies (always exists for user)
  *   - companies_additional (optional)
@@ -35,13 +19,9 @@
  *   - schools_additional (optional)
  *   - branches (linked to schools)
  *   - branches_additional (optional)
- *   - entity_departments
+ *   - entity_departments (no description field)
  *   - academic_years
  *   - entity_users
- * 
- * Query Methods:
- *   - .single() for required data (company, entity_user)
- *   - .maybeSingle() for optional data (additional tables)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -186,8 +166,9 @@ interface AcademicYear {
 export default function OrganisationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const authenticatedUser = getAuthenticatedUser();
   
-  // State management - All nodes expanded by default
+  // State management
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
@@ -206,24 +187,20 @@ export default function OrganisationManagement() {
   // Form states
   const [formData, setFormData] = useState<any>({});
 
-  // ===== FETCH USER'S COMPANY (WITH PROPER AUTH) =====
+  // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
-        const authenticatedUser = getAuthenticatedUser();
-        
         if (!authenticatedUser) {
           console.error('No authenticated user found');
-          toast.error('Please login to access this page');
           return;
         }
 
-        // Fetch entity_user record - this SHOULD exist
         const { data: entityUser, error: entityError } = await supabase
           .from('entity_users')
           .select('company_id, is_company_admin')
           .eq('user_id', authenticatedUser.id)
-          .single(); // Use .single() here because user MUST have an entity_user record
+          .single();
         
         if (entityError) {
           console.error('Error fetching entity user:', entityError);
@@ -244,24 +221,57 @@ export default function OrganisationManagement() {
       }
     };
     
-    fetchUserCompany();
-  }, [user]);
+    if (authenticatedUser) {
+      fetchUserCompany();
+    }
+  }, [authenticatedUser]);
 
   // Initialize all nodes as expanded when company data is loaded
   useEffect(() => {
     if (companyData) {
       const allNodes = new Set<string>(['company']);
-      
-      // Add all school IDs
       companyData.schools?.forEach(school => {
         allNodes.add(school.id);
       });
-      
       setExpandedNodes(allNodes);
     }
   }, [companyData]);
 
-  // ===== FETCH ORGANIZATION DATA (WITH CORRECT QUERY METHODS) =====
+  // Handle keyboard shortcuts and click outside for details panel
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const panel = document.getElementById('details-panel');
+      if (panel && !panel.contains(event.target as Node)) {
+        setShowDetailsPanel(false);
+      }
+    };
+
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (editMode) {
+          setEditMode(false);
+          setFormData(selectedItem?.additional || {});
+        } else if (showDetailsPanel) {
+          setShowDetailsPanel(false);
+        }
+      }
+      if (event.key === 'Enter' && editMode && event.ctrlKey) {
+        handleSaveDetails();
+      }
+    };
+
+    if (showDetailsPanel) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetailsPanel, editMode, selectedItem]);
+
+  // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
     async () => {
@@ -271,26 +281,23 @@ export default function OrganisationManagement() {
 
       console.log('Fetching organization data for company:', userCompanyId);
 
-      // Fetch company data - MUST exist
       const { data: company, error: companyError } = await supabase
         .from('companies')
         .select('*')
         .eq('id', userCompanyId)
-        .single(); // Use .single() - company MUST exist
+        .single();
 
       if (companyError) {
         console.error('Company fetch error:', companyError);
         throw companyError;
       }
 
-      // Fetch company additional data - OPTIONAL
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
-        .maybeSingle(); // Use .maybeSingle() - additional data is optional
+        .maybeSingle();
 
-      // Fetch schools
       const { data: schools, error: schoolsError } = await supabase
         .from('schools')
         .select('*')
@@ -299,14 +306,12 @@ export default function OrganisationManagement() {
 
       if (schoolsError) throw schoolsError;
 
-      // Fetch details for each school
       const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
-        // School additional data - OPTIONAL
         const { data: schoolAdditional } = await supabase
           .from('schools_additional')
           .select('*')
           .eq('school_id', school.id)
-          .maybeSingle(); // Use .maybeSingle() - additional data is optional
+          .maybeSingle();
 
         const { data: branches } = await supabase
           .from('branches')
@@ -315,12 +320,11 @@ export default function OrganisationManagement() {
           .order('name');
 
         const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
-          // Branch additional data - OPTIONAL
           const { data: branchAdditional } = await supabase
             .from('branches_additional')
             .select('*')
             .eq('branch_id', branch.id)
-            .maybeSingle(); // Use .maybeSingle() - additional data is optional
+            .maybeSingle();
 
           return { ...branch, additional: branchAdditional };
         }));
@@ -393,15 +397,13 @@ export default function OrganisationManagement() {
   );
 
   // ===== MUTATIONS =====
-  
-  // Update Company Additional Info
   const updateCompanyMutation = useMutation(
     async (data: CompanyAdditional) => {
       const { data: existing } = await supabase
         .from('companies_additional')
         .select('id')
         .eq('company_id', data.company_id)
-        .maybeSingle(); // Use .maybeSingle() - might not exist yet
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
@@ -428,7 +430,6 @@ export default function OrganisationManagement() {
     }
   );
 
-  // Create School
   const createSchoolMutation = useMutation(
     async (data: Partial<SchoolData>) => {
       const { data: school, error } = await supabase
@@ -441,7 +442,7 @@ export default function OrganisationManagement() {
           status: 'active'
         }])
         .select()
-        .single(); // Use .single() - we're inserting one record
+        .single();
 
       if (error) throw error;
       return school;
@@ -460,7 +461,6 @@ export default function OrganisationManagement() {
     }
   );
 
-  // Create Branch
   const createBranchMutation = useMutation(
     async (data: Partial<BranchData>) => {
       const { data: branch, error } = await supabase
@@ -473,7 +473,7 @@ export default function OrganisationManagement() {
           status: 'active'
         }])
         .select()
-        .single(); // Use .single() - we're inserting one record
+        .single();
 
       if (error) throw error;
       return branch;
@@ -492,7 +492,6 @@ export default function OrganisationManagement() {
     }
   );
 
-  // Create Department
   const createDepartmentMutation = useMutation(
     async (data: Partial<Department>) => {
       const { error } = await supabase
@@ -542,45 +541,8 @@ export default function OrganisationManagement() {
         company_id: selectedItem.id
       });
     }
-    // Add similar handlers for school and branch updates
   };
 
-  // Handle keyboard shortcuts and click outside for details panel
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const panel = document.getElementById('details-panel');
-      if (panel && !panel.contains(event.target as Node)) {
-        setShowDetailsPanel(false);
-      }
-    };
-
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (editMode) {
-          setEditMode(false);
-          setFormData(selectedItem?.additional || {});
-        } else if (showDetailsPanel) {
-          setShowDetailsPanel(false);
-        }
-      }
-      // Handle Enter key to save when in edit mode
-      if (event.key === 'Enter' && editMode && event.ctrlKey) {
-        handleSaveDetails();
-      }
-    };
-
-    if (showDetailsPanel) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscKey);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscKey);
-    };
-  }, [showDetailsPanel, editMode, selectedItem]);
-
-  // Handle form submission for create modal
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
@@ -591,12 +553,10 @@ export default function OrganisationManagement() {
       code: formData.get('code') as string,
     };
 
-    // Add description only for school and branch
     if (modalType !== 'department') {
       data.description = formData.get('description') as string;
     }
 
-    // Validation
     const errors: Record<string, string> = {};
     if (!data.name) errors.name = 'Name is required';
     if (!data.code) errors.code = 'Code is required';
@@ -632,15 +592,7 @@ export default function OrganisationManagement() {
   };
 
   // ===== ORG CHART NODE COMPONENT =====
-  const OrgChartNode = ({ 
-    item, 
-    type,
-    isRoot = false
-  }: { 
-    item: any; 
-    type: 'company' | 'school' | 'branch';
-    isRoot?: boolean;
-  }) => {
+  const OrgChartNode = ({ item, type, isRoot = false }: { item: any; type: 'company' | 'school' | 'branch'; isRoot?: boolean; }) => {
     const employeeCount = type === 'company' ? 
       item.schools?.reduce((acc: number, school: SchoolData) => 
         acc + (school.additional?.teachers_count || 0), 0) || 0 :
@@ -658,14 +610,12 @@ export default function OrganisationManagement() {
       managerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 
       'NA';
 
-    // Get avatar color based on type
     const getAvatarColor = () => {
       if (type === 'company') return 'bg-blue-500';
       if (type === 'school') return 'bg-green-500';
       return 'bg-purple-500';
     };
 
-    // Enhanced card background based on type and theme
     const getCardBackground = () => {
       if (type === 'company') {
         return 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700';
@@ -678,15 +628,11 @@ export default function OrganisationManagement() {
 
     return (
       <div className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-4 w-[320px] h-full ${getCardBackground()}`}>
-        {/* Header with Actions */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
-            {/* Avatar */}
             <div className={`w-12 h-12 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
               {managerInitials}
             </div>
-            
-            {/* Title and Role */}
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900 dark:text-white text-base line-clamp-1">
                 {item.name}
@@ -696,8 +642,6 @@ export default function OrganisationManagement() {
               </p>
             </div>
           </div>
-
-          {/* Action Icons */}
           <div className="flex items-center space-x-1">
             <button
               onClick={(e) => {
@@ -710,7 +654,6 @@ export default function OrganisationManagement() {
             >
               <Edit2 className="h-4 w-4 text-gray-600 dark:text-gray-400" />
             </button>
-            
             {(type === 'company' || type === 'school') && (
               <button
                 onClick={(e) => {
@@ -725,7 +668,6 @@ export default function OrganisationManagement() {
                 <PlusCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               </button>
             )}
-            
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -738,16 +680,12 @@ export default function OrganisationManagement() {
             </button>
           </div>
         </div>
-
-        {/* Manager Info */}
         <div className="mb-3 min-h-[40px]">
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 line-clamp-1">
             {managerName || 'Not Assigned'}
           </p>
           <p className="text-xs text-gray-600 dark:text-gray-400">{managerTitle}</p>
         </div>
-
-        {/* Employee Count */}
         <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
           <span className="text-lg font-semibold">{employeeCount}</span> Employees
         </div>
@@ -763,11 +701,8 @@ export default function OrganisationManagement() {
 
     return (
       <div className="flex flex-col items-center py-8">
-        {/* Company Node */}
         <div className="relative">
           <OrgChartNode item={companyData} type="company" isRoot={true} />
-          
-          {/* Expand/Collapse Button */}
           {companyData.schools && companyData.schools.length > 0 && (
             <button
               onClick={() => toggleNode('company')}
@@ -783,12 +718,9 @@ export default function OrganisationManagement() {
           )}
         </div>
 
-        {/* Vertical Connection Line */}
         {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
           <>
             <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
-            
-            {/* Horizontal Line for Multiple Schools */}
             {companyData.schools.length > 1 && (
               <div className="relative h-0.5">
                 <div 
@@ -801,24 +733,16 @@ export default function OrganisationManagement() {
                 ></div>
               </div>
             )}
-            
-            {/* Schools Container - All same height */}
             <div className="flex items-stretch space-x-4 mt-8">
-              {companyData.schools.map((school, schoolIndex) => {
+              {companyData.schools.map((school) => {
                 const isSchoolExpanded = expandedNodes.has(school.id);
-                
                 return (
                   <div key={school.id} className="flex flex-col items-center">
-                    {/* Connection line from horizontal to school */}
                     {companyData.schools!.length > 1 && (
                       <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                     )}
-                    
-                    {/* School Node */}
                     <div className="relative h-full">
                       <OrgChartNode item={school} type="school" />
-                      
-                      {/* Expand/Collapse Button for School */}
                       {school.branches && school.branches.length > 0 && (
                         <button
                           onClick={() => toggleNode(school.id)}
@@ -833,13 +757,9 @@ export default function OrganisationManagement() {
                         </button>
                       )}
                     </div>
-                    
-                    {/* Branches under School */}
                     {isSchoolExpanded && school.branches && school.branches.length > 0 && (
                       <>
                         <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
-                        
-                        {/* Horizontal Line for Multiple Branches */}
                         {school.branches.length > 1 && (
                           <div className="relative h-0.5">
                             <div 
@@ -852,17 +772,12 @@ export default function OrganisationManagement() {
                             ></div>
                           </div>
                         )}
-                        
-                        {/* Branches Container - All same height */}
                         <div className="flex items-stretch space-x-4 mt-8">
                           {school.branches.map((branch) => (
                             <div key={branch.id} className="flex flex-col items-center">
-                              {/* Connection line from horizontal to branch */}
                               {school.branches!.length > 1 && (
                                 <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                               )}
-                              
-                              {/* Branch Node */}
                               <div className="h-full">
                                 <OrgChartNode item={branch} type="branch" />
                               </div>
@@ -881,51 +796,13 @@ export default function OrganisationManagement() {
     );
   };
 
-  // Handle keyboard shortcuts and click outside for details panel
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const panel = document.getElementById('details-panel');
-      if (panel && !panel.contains(event.target as Node)) {
-        setShowDetailsPanel(false);
-      }
-    };
-
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (editMode) {
-          setEditMode(false);
-          setFormData(selectedItem?.additional || {});
-        } else if (showDetailsPanel) {
-          setShowDetailsPanel(false);
-        }
-      }
-      // Handle Enter key to save when in edit mode
-      if (event.key === 'Enter' && editMode && event.ctrlKey) {
-        handleSaveDetails();
-      }
-    };
-
-    if (showDetailsPanel) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscKey);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscKey);
-    };
-  }, [showDetailsPanel, editMode, selectedItem]);
-
   // ===== RENDER DETAILS PANEL =====
   const renderDetailsPanel = () => {
     if (!selectedItem || !showDetailsPanel) return null;
 
     return (
       <div className="fixed inset-0 z-50">
-        {/* Backdrop */}
         <div className="absolute inset-0 bg-black/20" onClick={() => setShowDetailsPanel(false)} />
-        
-        {/* Panel */}
         <div id="details-panel" className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl overflow-y-auto">
           <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
             <div className="flex items-center justify-between">
@@ -940,236 +817,222 @@ export default function OrganisationManagement() {
                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
-          
-          {/* Tabs */}
-          <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('details')}
-              className={`pb-2 px-1 ${activeTab === 'details' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Details
-            </button>
-            <button
-              onClick={() => setActiveTab('departments')}
-              className={`pb-2 px-1 ${activeTab === 'departments' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Departments
-            </button>
-            {selectedType === 'school' && (
+            <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
               <button
-                onClick={() => setActiveTab('academic')}
-                className={`pb-2 px-1 ${activeTab === 'academic' 
+                onClick={() => setActiveTab('details')}
+                className={`pb-2 px-1 ${activeTab === 'details' 
                   ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
                   : 'text-gray-600 dark:text-gray-400'}`}
               >
-                Academic Years
+                Details
               </button>
-            )}
+              <button
+                onClick={() => setActiveTab('departments')}
+                className={`pb-2 px-1 ${activeTab === 'departments' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                  : 'text-gray-600 dark:text-gray-400'}`}
+              >
+                Departments
+              </button>
+              {selectedType === 'school' && (
+                <button
+                  onClick={() => setActiveTab('academic')}
+                  className={`pb-2 px-1 ${activeTab === 'academic' 
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-600 dark:text-gray-400'}`}
+                >
+                  Academic Years
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-        
-        <div className="p-6">
-          {/* Details Tab */}
-          {activeTab === 'details' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Name
-                </label>
-                <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Code
-                </label>
-                <p className="text-gray-900 dark:text-white">{selectedItem.code}</p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Status
-                </label>
-                <StatusBadge status={selectedItem.status} />
-              </div>
-              
-              {selectedItem.description && (
+          
+          <div className="p-6">
+            {activeTab === 'details' && (
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description
+                    Name
                   </label>
-                  <p className="text-gray-700 dark:text-gray-300">{selectedItem.description}</p>
+                  <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
                 </div>
-              )}
-              
-              {/* Additional fields based on type */}
-              {selectedType === 'company' && editMode && (
-                <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Code
+                  </label>
+                  <p className="text-gray-900 dark:text-white">{selectedItem.code}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Status
+                  </label>
+                  <StatusBadge status={selectedItem.status} />
+                </div>
+                {selectedItem.description && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Main Phone
+                      Description
                     </label>
-                    <input
-                      type="text"
-                      value={formData.main_phone || ''}
-                      onChange={(e) => setFormData({...formData, main_phone: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
+                    <p className="text-gray-700 dark:text-gray-300">{selectedItem.description}</p>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Main Email
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.main_email || ''}
-                      onChange={(e) => setFormData({...formData, main_email: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Website
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.website || ''}
-                      onChange={(e) => setFormData({...formData, website: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                </>
-              )}
-              
-              {/* Action buttons */}
-              <div className="flex space-x-3 pt-4">
-                {editMode ? (
+                )}
+                {selectedType === 'company' && editMode && (
                   <>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setEditMode(false);
-                        setFormData(selectedItem.additional || {});
-                      }}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleSaveDetails}
-                      disabled={updateCompanyMutation.isLoading}
-                      className="flex-1"
-                    >
-                      <Save className="w-4 h-4 inline mr-2" />
-                      {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
-                    </Button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Main Phone
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.main_phone || ''}
+                        onChange={(e) => setFormData({...formData, main_phone: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Main Email
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.main_email || ''}
+                        onChange={(e) => setFormData({...formData, main_email: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Website
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.website || ''}
+                        onChange={(e) => setFormData({...formData, website: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
                   </>
-                ) : (
-                  <Button
-                    onClick={() => setEditMode(true)}
-                    className="w-full"
+                )}
+                <div className="flex space-x-3 pt-4">
+                  {editMode ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEditMode(false);
+                          setFormData(selectedItem.additional || {});
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSaveDetails}
+                        disabled={updateCompanyMutation.isLoading}
+                        className="flex-1"
+                      >
+                        <Save className="w-4 h-4 inline mr-2" />
+                        {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => setEditMode(true)}
+                      className="w-full"
+                    >
+                      <Edit className="w-4 h-4 inline mr-2" />
+                      Edit Details
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'departments' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
+                  <button
+                    onClick={() => {
+                      setModalType('department');
+                      setFormData({
+                        company_id: userCompanyId!,
+                        school_id: selectedType === 'school' ? selectedItem?.id : undefined,
+                        branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
+                      });
+                      setShowModal(true);
+                    }}
+                    className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
-                    <Edit className="w-4 h-4 inline mr-2" />
-                    Edit Details
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Departments Tab */}
-          {activeTab === 'departments' && (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
-                <button
-                  onClick={() => {
-                    setModalType('department');
-                    setFormData({
-                      company_id: userCompanyId!,
-                      school_id: selectedType === 'school' ? selectedItem?.id : undefined,
-                      branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
-                    });
-                    setShowModal(true);
-                  }}
-                  className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-2">
-                {departments && departments.length > 0 ? (
-                  departments.map((dept) => (
-                    <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {dept.code} • {dept.employee_count || 0} employees
-                          </p>
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {departments && departments.length > 0 ? (
+                    departments.map((dept) => (
+                      <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {dept.code} • {dept.employee_count || 0} employees
+                            </p>
+                          </div>
+                          <StatusBadge status={dept.status} />
                         </div>
-                        <StatusBadge status={dept.status} />
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                    No departments found
-                  </p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                      No departments found
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Academic Years Tab */}
-          {activeTab === 'academic' && selectedType === 'school' && (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
-                <button className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-2">
-                {academicYears && academicYears.length > 0 ? (
-                  academicYears.map((year) => (
-                    <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
-                          </p>
+            {activeTab === 'academic' && selectedType === 'school' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
+                  <button className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {academicYears && academicYears.length > 0 ? (
+                    academicYears.map((year) => (
+                      <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          {year.is_current && (
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">
+                              Current
+                            </span>
+                          )}
                         </div>
-                        {year.is_current && (
-                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">
-                            Current
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                    No academic years found
-                  </p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+                      No academic years found
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
   };
 
-  // ===== CHECK AUTHENTICATION =====
-  const authenticatedUser = getAuthenticatedUser();
+  // ===== CHECK AUTHENTICATION (MOVED TO AFTER ALL HOOKS) =====
   if (!authenticatedUser) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1186,7 +1049,6 @@ export default function OrganisationManagement() {
     );
   }
 
-  // ===== LOADING STATE =====
   if (!userCompanyId || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1200,7 +1062,6 @@ export default function OrganisationManagement() {
     );
   }
 
-  // ===== ERROR STATE =====
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1223,7 +1084,6 @@ export default function OrganisationManagement() {
   // ===== MAIN RENDER =====
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
@@ -1257,9 +1117,7 @@ export default function OrganisationManagement() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="p-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -1319,24 +1177,20 @@ export default function OrganisationManagement() {
           </div>
         </div>
 
-        {/* Organization Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-x-auto">
           <div className="p-4 border-b dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Organization Structure
             </h2>
           </div>
-          
           <div className="p-6 min-w-max">
             {renderOrganizationChart()}
           </div>
         </div>
       </div>
 
-      {/* Details Panel */}
       {renderDetailsPanel()}
       
-      {/* Create Modal using SlideInForm */}
       <SlideInForm
         title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
         isOpen={showModal}
