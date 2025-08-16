@@ -603,15 +603,15 @@ export default function OrganisationManagement() {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
-    const formData = new FormData(form);
+    const formDataFromForm = new FormData(form);
     
     const data: any = {
-      name: formData.get('name') as string,
-      code: formData.get('code') as string,
+      name: formDataFromForm.get('name') as string,
+      code: formDataFromForm.get('code') as string,
     };
 
     if (modalType !== 'department') {
-      data.description = formData.get('description') as string;
+      data.description = formDataFromForm.get('description') as string;
     }
 
     const errors: Record<string, string> = {};
@@ -619,8 +619,9 @@ export default function OrganisationManagement() {
     if (!data.code) errors.code = 'Code is required';
     
     if (modalType === 'branch') {
-      data.school_id = formData.get('school_id') as string;
-      if (!data.school_id) errors.school_id = 'Please select a school';
+      // Use the school_id from state (set when clicking the add button)
+      data.school_id = formData.school_id;
+      if (!data.school_id) errors.school_id = 'School is required';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -640,7 +641,7 @@ export default function OrganisationManagement() {
         company_id: userCompanyId!,
         school_id: selectedType === 'school' ? selectedItem?.id : undefined,
         branch_id: selectedType === 'branch' ? selectedItem?.id : undefined,
-        department_type: formData.get('department_type') as any,
+        department_type: formDataFromForm.get('department_type') as any,
         employee_count: 0,
         status: 'active'
       };
@@ -662,6 +663,14 @@ export default function OrganisationManagement() {
   const handleCollapseAll = () => {
     setExpandedNodes(new Set());
     setExpandAll(false);
+  };
+
+  // Function to scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   // ===== ENHANCED ORG CHART NODE COMPONENT WITH ALL DATA =====
@@ -766,10 +775,19 @@ export default function OrganisationManagement() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  // IMPORTANT: Clear all form data
+                  // Clear form data and set the parent relationship
                   setFormData({});
                   setFormErrors({});
-                  setModalType(type === 'company' ? 'school' : 'branch');
+                  
+                  if (type === 'company') {
+                    setModalType('school');
+                    // School form doesn't need school_id
+                  } else if (type === 'school') {
+                    setModalType('branch');
+                    // Pre-fill the school_id for the branch
+                    setFormData({ school_id: item.id });
+                  }
+                  
                   setShowModal(true);
                 }}
                 className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
@@ -1350,23 +1368,131 @@ export default function OrganisationManagement() {
                 </button>
               </div>
 
-              {/* Expand/Collapse Controls */}
+              {/* Level Navigation Controls */}
               {viewMode === 'expand' && (
                 <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
+                  
+                  {/* Entity Tab */}
                   <button
-                    onClick={handleExpandAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set(expandedNodes);
+                      if (newExpanded.has('company')) {
+                        // If company is expanded, collapse it
+                        newExpanded.delete('company');
+                        // Also remove all school expansions
+                        companyData.schools?.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
+                      } else {
+                        // If company is collapsed, expand it
+                        newExpanded.add('company');
+                      }
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company')
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
                   >
-                    <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                    Expand All
+                    Entity
                   </button>
+                  
+                  {/* Schools Tab */}
                   <button
-                    onClick={handleCollapseAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => {
+                      if (!companyData || !companyData.schools?.length) return;
+                      
+                      // First ensure company is expanded to show schools
+                      const newExpanded = new Set(expandedNodes);
+                      newExpanded.add('company');
+                      
+                      // Check if any school is currently expanded
+                      const anySchoolExpanded = companyData.schools.some(school => 
+                        expandedNodes.has(school.id)
+                      );
+                      
+                      if (anySchoolExpanded) {
+                        // If any school is expanded, collapse all schools (hide branches)
+                        companyData.schools.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
+                      } else {
+                        // If no schools are expanded, expand all schools (show branches)
+                        companyData.schools.forEach(school => {
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
+                        });
+                      }
+                      
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(s => expandedNodes.has(s.id))
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
                   >
-                    <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                    Collapse All
+                    Schools
                   </button>
+                  
+                  {/* Branches Tab */}
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      
+                      // This button controls branch visibility
+                      const newExpanded = new Set<string>(['company']);
+                      
+                      // Check if any branches are currently visible
+                      const anyBranchesVisible = companyData.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      );
+                      
+                      if (anyBranchesVisible) {
+                        // If branches are visible, hide them (but keep schools visible)
+                        // Just keep company expanded
+                      } else {
+                        // If branches are not visible, show them
+                        companyData.schools?.forEach(school => {
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
+                        });
+                      }
+                      
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      )
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    Branches
+                  </button>
+                  
+                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                    <button
+                      onClick={handleExpandAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                      Expand All
+                    </button>
+                    <button
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1528,25 +1654,12 @@ export default function OrganisationManagement() {
             </FormField>
           )}
 
-          {modalType === 'branch' && companyData?.schools && (
-            <FormField
-              id="school_id"
-              label="School"
-              required
-              error={formErrors.school_id}
-            >
-              <Select
-                id="school_id"
-                name="school_id"
-                options={[
-                  { value: '', label: 'Select a school' },
-                  ...companyData.schools.map(school => ({
-                    value: school.id,
-                    label: school.name
-                  }))
-                ]}
-              />
-            </FormField>
+          {modalType === 'branch' && formData.school_id && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
+              </p>
+            </div>
           )}
 
           {modalType === 'department' && (
