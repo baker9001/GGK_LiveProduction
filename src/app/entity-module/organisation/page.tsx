@@ -1,6 +1,6 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * Complete Organization Management Page with System Standard Components
+ * Complete Organization Management Page with Enhanced Card Display
  * 
  * Dependencies: 
  *   - @/lib/supabase
@@ -13,10 +13,11 @@
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * Features:
+ *   - Enhanced card display with more visible data
+ *   - Square logo placeholders with initials
+ *   - Optimized card sizing
+ *   - Fixed form clearing on add operations
  *   - Navigation tabs (Expand/Colleagues view toggle)
- *   - Quick navigation to Entity/Schools/Branches
- *   - Expand/Collapse all controls
- *   - Organization chart with proper hierarchy
  *   - Complete CRUD operations
  *   - Department and Academic Year management
  *   - Dark mode support throughout
@@ -196,6 +197,16 @@ export default function OrganisationManagement() {
   
   // Form states
   const [formData, setFormData] = useState<any>({});
+
+  // Helper function to get initials from name
+  const getInitials = (name: string): string => {
+    if (!name) return 'NA';
+    const words = name.trim().split(' ');
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
   // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
@@ -591,15 +602,7 @@ export default function OrganisationManagement() {
     setExpandAll(false);
   };
 
-  // Function to scroll to section
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  // ===== ORG CHART NODE COMPONENT =====
+  // ===== ENHANCED ORG CHART NODE COMPONENT =====
   const OrgChartNode = ({ item, type, isRoot = false }: { item: any; type: 'company' | 'school' | 'branch'; isRoot?: boolean; }) => {
     const employeeCount = type === 'company' ? 
       item.schools?.reduce((acc: number, school: SchoolData) => 
@@ -607,22 +610,24 @@ export default function OrganisationManagement() {
       type === 'school' ? item.additional?.teachers_count || 0 :
       item.additional?.teachers_count || 0;
 
-    const managerName = type === 'company' ? 'CEO' :
-                       type === 'school' ? item.additional?.principal_name :
-                       item.additional?.branch_head_name;
+    const managerName = type === 'company' ? item.additional?.ceo_name || null :
+                       type === 'school' ? item.additional?.principal_name || null :
+                       item.additional?.branch_head_name || null;
 
-    const managerTitle = type === 'school' ? 'Principal' : 
-                        type === 'branch' ? 'Branch Head' : 'CEO';
+    const managerTitle = type === 'company' ? 'CEO' :
+                        type === 'school' ? 'Principal' : 
+                        'Branch Head';
 
-    const managerInitials = managerName ? 
-      managerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 
-      'NA';
+    const managerEmail = type === 'company' ? item.additional?.main_email :
+                        type === 'school' ? item.additional?.principal_email :
+                        item.additional?.branch_head_email;
 
-    const getAvatarColor = () => {
-      if (type === 'company') return 'bg-blue-500';
-      if (type === 'school') return 'bg-green-500';
-      return 'bg-purple-500';
-    };
+    const managerPhone = type === 'company' ? item.additional?.main_phone :
+                        type === 'school' ? item.additional?.principal_phone :
+                        item.additional?.branch_head_phone;
+
+    const logoUrl = item.additional?.logo_url;
+    const initials = getInitials(item.name);
 
     const getCardBackground = () => {
       if (type === 'company') {
@@ -634,49 +639,64 @@ export default function OrganisationManagement() {
       return 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700';
     };
 
+    const getAvatarColor = () => {
+      if (type === 'company') return 'bg-blue-500';
+      if (type === 'school') return 'bg-green-500';
+      return 'bg-purple-500';
+    };
+
     return (
       <div 
-        className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-4 w-[320px] cursor-pointer ${getCardBackground()}`}
+        className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 w-[280px] cursor-pointer ${getCardBackground()}`}
         onClick={() => handleItemClick(item, type)}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center space-x-3">
-            <div className={`w-12 h-12 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
-              {managerInitials}
+        {/* Header with Logo and Actions */}
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center space-x-2">
+            {/* Square Logo/Initials */}
+            <div className={`w-10 h-10 rounded-md ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md overflow-hidden`}>
+              {logoUrl ? (
+                <img src={logoUrl} alt={item.name} className="w-full h-full object-cover" />
+              ) : (
+                <span>{initials}</span>
+              )}
             </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 dark:text-white text-base line-clamp-1">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">
                 {item.name}
               </h3>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                {item.code || type.charAt(0).toUpperCase() + type.slice(1)}
+                {item.code}
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-1">
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-0.5">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleItemClick(item, type);
                 setEditMode(true);
               }}
-              className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+              className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
               title="Edit"
             >
-              <Edit2 className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <Edit2 className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
             </button>
             {(type === 'company' || type === 'school') && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Clear form data before opening modal
+                  setFormData({});
+                  setFormErrors({});
                   setModalType(type === 'company' ? 'school' : 'branch');
-                  setFormData(type === 'school' ? { school_id: item.id } : {});
                   setShowModal(true);
                 }}
-                className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+                className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
                 title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
               >
-                <PlusCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <PlusCircle className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
               </button>
             )}
             <button
@@ -684,22 +704,70 @@ export default function OrganisationManagement() {
                 e.stopPropagation();
                 handleItemClick(item, type);
               }}
-              className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
+              className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
               title="More Actions"
             >
-              <MoreVertical className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <MoreVertical className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
-        <div className="mb-3 min-h-[40px]">
-          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 line-clamp-1">
+
+        {/* Status Badge */}
+        <div className="mb-2">
+          <StatusBadge status={item.status} />
+        </div>
+
+        {/* Manager Info */}
+        <div className="mb-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{managerTitle}</div>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
             {managerName || 'Not Assigned'}
           </p>
-          <p className="text-xs text-gray-600 dark:text-gray-400">{managerTitle}</p>
         </div>
-        <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-          <span className="text-lg font-semibold">{employeeCount}</span> Users
+
+        {/* Contact Info - Now Visible */}
+        {(managerEmail || managerPhone) && (
+          <div className="space-y-1 mb-2">
+            {managerEmail && (
+              <div className="flex items-center space-x-1">
+                <Mail className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                  {managerEmail}
+                </p>
+              </div>
+            )}
+            {managerPhone && (
+              <div className="flex items-center space-x-1">
+                <Phone className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {managerPhone}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Additional Info */}
+        <div className="flex items-center justify-between text-xs">
+          <div className="text-gray-700 dark:text-gray-300">
+            <span className="font-semibold text-sm">{employeeCount}</span> Users
+          </div>
+          {type === 'school' && item.branches && (
+            <div className="text-gray-600 dark:text-gray-400">
+              {item.branches.length} Branches
+            </div>
+          )}
         </div>
+
+        {/* Location for School/Branch */}
+        {type !== 'company' && (item.additional?.campus_city || item.additional?.building_name) && (
+          <div className="mt-1 flex items-center space-x-1">
+            <MapPin className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              {type === 'school' ? item.additional?.campus_city : item.additional?.building_name}
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -740,7 +808,7 @@ export default function OrganisationManagement() {
                   <div 
                     className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                     style={{
-                      width: `${(companyData.schools.length - 1) * 336 + 100}px`,
+                      width: `${(companyData.schools.length - 1) * 296 + 100}px`,
                       left: '50%',
                       transform: 'translateX(-50%)'
                     }}
@@ -782,7 +850,7 @@ export default function OrganisationManagement() {
                                 <div 
                                   className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                                   style={{
-                                    width: `${(school.branches.length - 1) * 336 + 100}px`,
+                                    width: `${(school.branches.length - 1) * 296 + 100}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)'
                                   }}
@@ -1049,7 +1117,9 @@ export default function OrganisationManagement() {
     );
   };
 
-  // ===== CHECK AUTHENTICATION =====
+  // Rest of the component remains the same...
+  // (Authentication checks, loading states, main render, etc.)
+
   if (!authenticatedUser) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1118,7 +1188,8 @@ export default function OrganisationManagement() {
                 variant="outline"
                 onClick={() => {
                   setModalType('school');
-                  setFormData({ company_id: userCompanyId });
+                  setFormData({});
+                  setFormErrors({});
                   setShowModal(true);
                 }}
               >
@@ -1156,6 +1227,26 @@ export default function OrganisationManagement() {
                   Colleagues
                 </button>
               </div>
+
+              {/* Expand/Collapse Controls */}
+              {viewMode === 'expand' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExpandAll}
+                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                    Expand All
+                  </button>
+                  <button
+                    onClick={handleCollapseAll}
+                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                    Collapse All
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1209,134 +1300,9 @@ export default function OrganisationManagement() {
         {/* Organization Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
-              </h2>
-              
-              {/* Level Navigation Controls */}
-              {viewMode === 'expand' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      // Toggle entity level (show/hide schools)
-                      const newExpanded = new Set(expandedNodes);
-                      if (newExpanded.has('company')) {
-                        // If company is expanded, collapse it
-                        newExpanded.delete('company');
-                        // Also remove all school expansions
-                        companyData.schools?.forEach(school => {
-                          newExpanded.delete(school.id);
-                        });
-                      } else {
-                        // If company is collapsed, expand it
-                        newExpanded.add('company');
-                      }
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company')
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                    }`}
-                  >
-                    Entity
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!companyData || !companyData.schools?.length) return;
-                      
-                      // First ensure company is expanded to show schools
-                      const newExpanded = new Set(expandedNodes);
-                      newExpanded.add('company');
-                      
-                      // Check if any school is currently expanded
-                      const anySchoolExpanded = companyData.schools.some(school => 
-                        expandedNodes.has(school.id)
-                      );
-                      
-                      if (anySchoolExpanded) {
-                        // If any school is expanded, collapse all schools (hide branches)
-                        companyData.schools.forEach(school => {
-                          newExpanded.delete(school.id);
-                        });
-                      } else {
-                        // If no schools are expanded, expand all schools (show branches)
-                        companyData.schools.forEach(school => {
-                          if (school.branches && school.branches.length > 0) {
-                            newExpanded.add(school.id);
-                          }
-                        });
-                      }
-                      
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(s => expandedNodes.has(s.id))
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                  >
-                    Schools
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      
-                      // This button controls branch visibility
-                      const newExpanded = new Set<string>(['company']);
-                      
-                      // Check if any branches are currently visible
-                      const anyBranchesVisible = companyData.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      );
-                      
-                      if (anyBranchesVisible) {
-                        // If branches are visible, hide them (but keep schools visible)
-                        // Just keep company expanded
-                      } else {
-                        // If branches are not visible, show them
-                        companyData.schools?.forEach(school => {
-                          if (school.branches && school.branches.length > 0) {
-                            newExpanded.add(school.id);
-                          }
-                        });
-                      }
-                      
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      )
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                    }`}
-                  >
-                    Branches
-                  </button>
-                  
-                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
-                    <button
-                      onClick={handleExpandAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                      Expand All
-                    </button>
-                    <button
-                      onClick={handleCollapseAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                      Collapse All
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
+            </h2>
           </div>
           
           <div className="p-6 min-w-max">
