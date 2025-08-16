@@ -545,6 +545,41 @@ export default function OrganisationManagement() {
     // Add similar handlers for school and branch updates
   };
 
+  // Handle keyboard shortcuts and click outside for details panel
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const panel = document.getElementById('details-panel');
+      if (panel && !panel.contains(event.target as Node)) {
+        setShowDetailsPanel(false);
+      }
+    };
+
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (editMode) {
+          setEditMode(false);
+          setFormData(selectedItem?.additional || {});
+        } else if (showDetailsPanel) {
+          setShowDetailsPanel(false);
+        }
+      }
+      // Handle Enter key to save when in edit mode
+      if (event.key === 'Enter' && editMode && event.ctrlKey) {
+        handleSaveDetails();
+      }
+    };
+
+    if (showDetailsPanel) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showDetailsPanel, editMode, selectedItem]);
+
   // Handle form submission for create modal
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
