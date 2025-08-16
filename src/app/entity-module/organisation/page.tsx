@@ -1,12 +1,32 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * Complete Organization Management Page
+ * Complete Organization Management Page with System Standard Components
  * 
  * Dependencies: 
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
+ *   - @/components/shared/SlideInForm
+ *   - @/components/shared/FormField
+ *   - @/components/shared/Button
+ *   - @/components/shared/StatusBadge
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Preserved Features:
+ *   - All original functionality from page.tsx
+ *   - All CRUD operations (schools, branches, departments)
+ *   - Organization chart with expand/collapse
+ *   - Details panel with tabs
+ *   - Department and Academic Year management
+ *   - All original queries and mutations
+ * 
+ * Added/Modified:
+ *   - SlideInForm for create/edit modals (system standard)
+ *   - FormField, Input, Select components (system standard)
+ *   - Button component for consistent styling
+ *   - StatusBadge for status display
+ *   - Enhanced card backgrounds for visibility
+ *   - Consistent dark mode support
  * 
  * Database Tables:
  *   - companies (always exists for user)
@@ -38,6 +58,10 @@ import { supabase } from '../../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '../../../lib/auth';
 import { useUser } from '../../../contexts/UserContext';
+import { SlideInForm } from '../../../components/shared/SlideInForm';
+import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
+import { Button } from '../../../components/shared/Button';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
 
 // ===== TYPE DEFINITIONS =====
 interface Company {
@@ -174,6 +198,7 @@ export default function OrganisationManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   
   // Tab states for detail panel
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
@@ -414,6 +439,7 @@ export default function OrganisationManagement() {
         toast.success('School created successfully');
         setShowModal(false);
         setFormData({});
+        setFormErrors({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create school');
@@ -445,6 +471,7 @@ export default function OrganisationManagement() {
         toast.success('Branch created successfully');
         setShowModal(false);
         setFormData({});
+        setFormErrors({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create branch');
@@ -467,6 +494,7 @@ export default function OrganisationManagement() {
         toast.success('Department created successfully');
         setShowModal(false);
         setFormData({});
+        setFormErrors({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create department');
@@ -502,6 +530,53 @@ export default function OrganisationManagement() {
       });
     }
     // Add similar handlers for school and branch updates
+  };
+
+  // Handle form submission for create modal
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    
+    const data: any = {
+      name: formData.get('name') as string,
+      code: formData.get('code') as string,
+      description: formData.get('description') as string,
+    };
+
+    // Validation
+    const errors: Record<string, string> = {};
+    if (!data.name) errors.name = 'Name is required';
+    if (!data.code) errors.code = 'Code is required';
+    
+    if (modalType === 'branch') {
+      data.school_id = formData.get('school_id') as string;
+      if (!data.school_id) errors.school_id = 'Please select a school';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setFormErrors({});
+
+    if (modalType === 'school') {
+      createSchoolMutation.mutate(data);
+    } else if (modalType === 'branch') {
+      createBranchMutation.mutate(data);
+    } else if (modalType === 'department') {
+      const deptData: Partial<Department> = {
+        ...data,
+        company_id: userCompanyId!,
+        school_id: selectedType === 'school' ? selectedItem?.id : undefined,
+        branch_id: selectedType === 'branch' ? selectedItem?.id : undefined,
+        department_type: formData.get('department_type') as any,
+        employee_count: 0,
+        status: 'active'
+      };
+      createDepartmentMutation.mutate(deptData);
+    }
   };
 
   // ===== ORG CHART NODE COMPONENT =====
@@ -815,13 +890,7 @@ export default function OrganisationManagement() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Status
                 </label>
-                <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
-                  selectedItem.status === 'active' 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                }`}>
-                  {selectedItem.status}
-                </span>
+                <StatusBadge status={selectedItem.status} />
               </div>
               
               {selectedItem.description && (
@@ -878,32 +947,33 @@ export default function OrganisationManagement() {
               <div className="flex space-x-3 pt-4">
                 {editMode ? (
                   <>
-                    <button
+                    <Button
                       onClick={handleSaveDetails}
                       disabled={updateCompanyMutation.isLoading}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      className="flex-1"
                     >
                       <Save className="w-4 h-4 inline mr-2" />
                       {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => {
                         setEditMode(false);
                         setFormData(selectedItem.additional || {});
                       }}
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-white"
+                      className="flex-1"
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </>
                 ) : (
-                  <button
+                  <Button
                     onClick={() => setEditMode(true)}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="flex-1"
                   >
                     <Edit className="w-4 h-4 inline mr-2" />
                     Edit Details
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -932,7 +1002,7 @@ export default function OrganisationManagement() {
               <div className="space-y-2">
                 {departments && departments.length > 0 ? (
                   departments.map((dept) => (
-                    <div key={dept.id} className="p-3 border rounded dark:border-gray-700">
+                    <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
@@ -940,13 +1010,7 @@ export default function OrganisationManagement() {
                             {dept.code} • {dept.employee_count || 0} employees
                           </p>
                         </div>
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          dept.status === 'active' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {dept.status}
-                        </span>
+                        <StatusBadge status={dept.status} />
                       </div>
                     </div>
                   ))
@@ -971,7 +1035,7 @@ export default function OrganisationManagement() {
               <div className="space-y-2">
                 {academicYears && academicYears.length > 0 ? (
                   academicYears.map((year) => (
-                    <div key={year.id} className="p-3 border rounded dark:border-gray-700">
+                    <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
@@ -995,118 +1059,6 @@ export default function OrganisationManagement() {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== RENDER CREATE MODAL =====
-  const renderCreateModal = () => {
-    if (!showModal) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Create New {modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}
-          </h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Name *
-              </label>
-              <input
-                type="text"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="Enter name"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Code *
-              </label>
-              <input
-                type="text"
-                value={formData.code || ''}
-                onChange={(e) => setFormData({...formData, code: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                placeholder="Enter code"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description || ''}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                rows={3}
-                placeholder="Enter description"
-              />
-            </div>
-
-            {modalType === 'department' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Department Type
-                </label>
-                <select
-                  value={formData.department_type || 'administrative'}
-                  onChange={(e) => setFormData({...formData, department_type: e.target.value})}
-                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="academic">Academic</option>
-                  <option value="administrative">Administrative</option>
-                  <option value="support">Support</option>
-                  <option value="operations">Operations</option>
-                </select>
-              </div>
-            )}
-            
-            <div className="flex space-x-3 pt-4">
-              <button
-                onClick={() => {
-                  if (!formData.name || !formData.code) {
-                    toast.error('Please fill in required fields');
-                    return;
-                  }
-
-                  if (modalType === 'school') {
-                    createSchoolMutation.mutate(formData);
-                  } else if (modalType === 'branch') {
-                    createBranchMutation.mutate(formData);
-                  } else if (modalType === 'department') {
-                    createDepartmentMutation.mutate({
-                      ...formData,
-                      employee_count: 0,
-                      status: 'active'
-                    });
-                  }
-                }}
-                disabled={createSchoolMutation.isLoading || createBranchMutation.isLoading || createDepartmentMutation.isLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {(createSchoolMutation.isLoading || createBranchMutation.isLoading || createDepartmentMutation.isLoading) 
-                  ? 'Creating...' 
-                  : 'Create'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setFormData({});
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-white"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -1156,12 +1108,9 @@ export default function OrganisationManagement() {
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {(error as Error).message || 'An error occurred while loading your organization structure.'}
           </p>
-          <button
-            onClick={() => refetch()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
+          <Button onClick={() => refetch()}>
             Try Again
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -1283,8 +1232,107 @@ export default function OrganisationManagement() {
       {/* Details Panel */}
       {renderDetailsPanel()}
       
-      {/* Create Modal */}
-      {renderCreateModal()}
+      {/* Create Modal using SlideInForm */}
+      <SlideInForm
+        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('form');
+          if (form) form.requestSubmit();
+        }}
+      >
+        <form onSubmit={handleCreateSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <FormField
+            id="name"
+            label="Name"
+            required
+            error={formErrors.name}
+          >
+            <Input
+              id="name"
+              name="name"
+              placeholder={`Enter ${modalType} name`}
+            />
+          </FormField>
+
+          <FormField
+            id="code"
+            label="Code"
+            required
+            error={formErrors.code}
+          >
+            <Input
+              id="code"
+              name="code"
+              placeholder={`Enter ${modalType} code`}
+            />
+          </FormField>
+
+          <FormField
+            id="description"
+            label="Description"
+            error={formErrors.description}
+          >
+            <Textarea
+              id="description"
+              name="description"
+              placeholder={`Enter ${modalType} description`}
+              rows={3}
+            />
+          </FormField>
+
+          {modalType === 'branch' && companyData?.schools && (
+            <FormField
+              id="school_id"
+              label="School"
+              required
+              error={formErrors.school_id}
+            >
+              <Select
+                id="school_id"
+                name="school_id"
+                options={[
+                  { value: '', label: 'Select a school' },
+                  ...companyData.schools.map(school => ({
+                    value: school.id,
+                    label: school.name
+                  }))
+                ]}
+              />
+            </FormField>
+          )}
+
+          {modalType === 'department' && (
+            <FormField
+              id="department_type"
+              label="Department Type"
+              error={formErrors.department_type}
+            >
+              <Select
+                id="department_type"
+                name="department_type"
+                options={[
+                  { value: 'academic', label: 'Academic' },
+                  { value: 'administrative', label: 'Administrative' },
+                  { value: 'support', label: 'Support' },
+                  { value: 'operations', label: 'Operations' }
+                ]}
+              />
+            </FormField>
+          )}
+        </form>
+      </SlideInForm>
     </div>
   );
 }
