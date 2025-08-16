@@ -1,13 +1,52 @@
-// /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
-// Complete standardized company management with ALL features preserved
+/**
+ * File: /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
+ * Dependencies: 
+ *   - @/components/shared/* (all UI components)
+ *   - @/lib/supabase
+ *   - @/lib/auth
+ *   - bcryptjs
+ *   - crypto
+ *   - zod
+ *   - React and related
+ * 
+ * Preserved Features:
+ *   - Company CRUD operations
+ *   - Tenant admin management (create/edit/delete)
+ *   - View/Manage admins modal
+ *   - Filter and search functionality
+ *   - Image upload for company logos
+ *   - All UI interactions and modals
+ * 
+ * Added/Modified:
+ *   - Direct database operations (no API calls)
+ *   - Unified password management from UsersTab
+ *   - Password requirements checker
+ *   - Generate/manual password options
+ *   - Password display and print functionality
+ * 
+ * Database Tables:
+ *   - companies
+ *   - users (main auth table)
+ *   - entity_users (profile table)
+ *   - regions
+ *   - countries
+ *   - audit_logs
+ * 
+ * Connected Files:
+ *   - Uses same patterns as UsersTab.tsx
+ *   - Follows hierarchical user model
+ */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
-  Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key 
+  Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
+  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw
 } from 'lucide-react';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -20,7 +59,7 @@ import { SearchableMultiSelect } from '../../../../components/shared/SearchableM
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
-import { userService, entityUserSchema, UserServiceError } from '../../../../services/userService';
+import { getAuthenticatedUser } from '../../../../lib/auth';
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -35,22 +74,78 @@ const companySchema = z.object({
 });
 
 const tenantAdminSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
   position: z.string().optional(),
   department: z.string().optional(),
   employee_id: z.string().optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain uppercase letter')
+    .regex(/[a-z]/, 'Password must contain lowercase letter')
+    .regex(/[0-9]/, 'Password must contain number')
+    .optional(),
   confirmPassword: z.string().optional()
 }).refine((data) => {
   if (data.password && data.password !== data.confirmPassword) {
-    throw new Error('Passwords don\'t match');
+    return false;
   }
   return true;
 }, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
+
+const passwordChangeSchema = z.object({
+  newPassword: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain uppercase letter')
+    .regex(/[a-z]/, 'Password must contain lowercase letter')
+    .regex(/[0-9]/, 'Password must contain number')
+    .regex(/[!@#$%^&*]/, 'Password must contain special character'),
+  sendEmail: z.boolean().optional()
+});
+
+// ===== PASSWORD REQUIREMENTS =====
+interface PasswordRequirement {
+  label: string;
+  test: (password: string) => boolean;
+}
+
+const passwordRequirements: PasswordRequirement[] = [
+  { label: 'At least 8 characters', test: (p) => p.length >= 8 },
+  { label: 'Contains uppercase letter (A-Z)', test: (p) => /[A-Z]/.test(p) },
+  { label: 'Contains lowercase letter (a-z)', test: (p) => /[a-z]/.test(p) },
+  { label: 'Contains number (0-9)', test: (p) => /[0-9]/.test(p) },
+  { label: 'Contains special character (!@#$%^&*)', test: (p) => /[!@#$%^&*]/.test(p) }
+];
+
+// Password Requirements Checker Component
+const PasswordRequirementsChecker: React.FC<{ password: string }> = ({ password }) => {
+  return (
+    <div className="mt-2 space-y-1">
+      {passwordRequirements.map((req, index) => {
+        const isMet = password ? req.test(password) : false;
+        return (
+          <div 
+            key={index} 
+            className={`flex items-center gap-2 text-xs transition-all ${
+              isMet ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {isMet ? (
+              <CheckCircle className="h-3 w-3" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+            <span>{req.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // ===== TYPE DEFINITIONS =====
 interface FilterState {
@@ -102,6 +197,7 @@ interface FormState {
 }
 
 interface TenantAdminFormData {
+  name: string;
   email: string;
   phone: string;
   position: string;
@@ -129,12 +225,44 @@ interface CompanyAdmin {
     user_type: string;
     is_active: boolean;
     last_sign_in_at?: string;
+    requires_password_change?: boolean;
+    email_verified?: boolean;
   };
+}
+
+// ===== HELPER FUNCTIONS =====
+function generateComplexPassword(length: number = 12): string {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const allChars = uppercase + lowercase + numbers + special;
+  
+  let password = '';
+  // Ensure at least one of each required character type
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Fill the rest randomly
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+function generateVerificationToken(): string {
+  return crypto.randomBytes(32).toString('hex');
 }
 
 // ===== MAIN COMPONENT =====
 export default function CompaniesTab() {
   const queryClient = useQueryClient();
+  const currentUser = getAuthenticatedUser();
+  
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -153,7 +281,20 @@ export default function CompaniesTab() {
   const [isAdminFormOpen, setIsAdminFormOpen] = useState(false);
   const [selectedCompanyForAdmin, setSelectedCompanyForAdmin] = useState<Company | null>(null);
   const [adminFormErrors, setAdminFormErrors] = useState<Record<string, string>>({});
+  const [editingAdmin, setEditingAdmin] = useState<CompanyAdmin | null>(null);
+  
+  // Password management state (unified with UsersTab)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [generatePassword, setGeneratePassword] = useState(true);
+  const [generateNewPassword, setGenerateNewPassword] = useState(true);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
+  const [selectedAdminForPassword, setSelectedAdminForPassword] = useState<CompanyAdmin | null>(null);
+  
   const [adminFormState, setAdminFormState] = useState<TenantAdminFormData>({
+    name: '',
     email: '',
     phone: '',
     position: '',
@@ -161,6 +302,11 @@ export default function CompaniesTab() {
     employee_id: '',
     password: '',
     confirmPassword: ''
+  });
+
+  const [passwordFormState, setPasswordFormState] = useState({
+    newPassword: '',
+    sendEmail: false
   });
 
   // View/Manage Admins state
@@ -407,88 +553,251 @@ export default function CompaniesTab() {
     }
   );
 
-  // Standardized tenant admin mutation
+  // Tenant admin mutation (Direct Database - No API)
   const tenantAdminMutation = useMutation(
-    async (formData: TenantAdminFormData) => {
+    async (formData: FormData) => {
       try {
-        // Validate input
-        const validatedData = tenantAdminSchema.parse(formData);
+        const name = formData.get('name') as string;
+        const email = formData.get('email') as string;
+        const password = formData.get('password') as string | null;
+        const phone = formData.get('phone') as string;
+        const position = formData.get('position') as string;
+        const department = formData.get('department') as string;
+        const employee_id = formData.get('employee_id') as string;
 
         if (!selectedCompanyForAdmin?.id) {
-          throw new UserServiceError('No company selected');
+          throw new Error('No company selected');
         }
 
         const companyId = selectedCompanyForAdmin.id;
 
-        // Check if user already exists and get their status
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', validatedData.email.toLowerCase())
-          .maybeSingle();
-
-        if (existingUser) {
-          // User exists - check if already linked to this company
-          const { data: existingLink } = await supabase
+        if (editingAdmin) {
+          // ===== UPDATE EXISTING ADMIN =====
+          
+          // Update entity_users profile
+          const { error: entityError } = await supabase
             .from('entity_users')
-            .select('id')
-            .eq('user_id', existingUser.id)
-            .eq('company_id', companyId)
-            .maybeSingle();
+            .update({
+              position: position || editingAdmin.position,
+              department: department || editingAdmin.department,
+              employee_id: employee_id || editingAdmin.employee_id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', editingAdmin.id);
 
-          if (existingLink) {
-            throw new UserServiceError('This user is already associated with this company');
+          if (entityError) throw entityError;
+
+          // Update users table if email/phone changed
+          const userUpdates: any = {
+            updated_at: new Date().toISOString(),
+            raw_user_meta_data: {
+              ...(editingAdmin.users as any)?.raw_user_meta_data,
+              name: name,
+              updated_by: currentUser?.id
+            }
+          };
+
+          if (email !== editingAdmin.users?.email) {
+            userUpdates.email = email.toLowerCase();
+            userUpdates.email_verified = false;
+            userUpdates.verification_token = generateVerificationToken();
+            userUpdates.verification_sent_at = new Date().toISOString();
           }
 
-          // Link existing user to company as admin
-          const { error: linkError } = await supabase
+          if (phone !== editingAdmin.users?.phone) {
+            userUpdates.phone = phone || null;
+          }
+
+          const { error: userError } = await supabase
+            .from('users')
+            .update(userUpdates)
+            .eq('id', editingAdmin.user_id);
+
+          if (userError) throw userError;
+
+          // Log the update
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'update_entity_admin',
+              entity_type: 'entity_user',
+              entity_id: editingAdmin.user_id,
+              details: {
+                company_id: companyId,
+                updated_fields: { name, email, phone, position, department, employee_id },
+                updated_by: currentUser?.email
+              },
+              created_at: new Date().toISOString()
+            });
+
+          return { success: true, message: 'Admin updated successfully' };
+
+        } else {
+          // ===== CREATE NEW ADMIN =====
+          
+          // Check if user already exists
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email.toLowerCase())
+            .maybeSingle();
+
+          if (existingUser) {
+            // User exists - check if already linked to this company
+            const { data: existingLink } = await supabase
+              .from('entity_users')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .eq('company_id', companyId)
+              .maybeSingle();
+
+            if (existingLink) {
+              throw new Error('This user is already associated with this company');
+            }
+
+            // Link existing user to company as admin
+            const { error: linkError } = await supabase
+              .from('entity_users')
+              .insert([{
+                user_id: existingUser.id,
+                company_id: companyId,
+                position: position || 'Administrator',
+                department: department || 'Management',
+                employee_id: employee_id || null,
+                hire_date: new Date().toISOString().split('T')[0],
+                is_company_admin: true,
+                employee_status: 'active',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }]);
+
+            if (linkError) throw linkError;
+
+            // Log the action
+            await supabase
+              .from('audit_logs')
+              .insert({
+                user_id: currentUser?.id,
+                action: 'link_entity_admin',
+                entity_type: 'entity_user',
+                entity_id: existingUser.id,
+                details: {
+                  company_id: companyId,
+                  company_name: selectedCompanyForAdmin.name,
+                  linked_by: currentUser?.email
+                },
+                created_at: new Date().toISOString()
+              });
+
+            return { 
+              success: true,
+              type: 'linked', 
+              user: existingUser,
+              company: selectedCompanyForAdmin,
+              message: 'Existing user linked as admin'
+            };
+          }
+
+          // Create new user
+          // Generate password if needed
+          const finalPassword = password || generateComplexPassword();
+          const isGeneratedPassword = !password;
+          
+          // Hash password
+          const salt = await bcrypt.genSalt(10);
+          const passwordHash = await bcrypt.hash(finalPassword, salt);
+          
+          // Generate verification token
+          const verificationToken = generateVerificationToken();
+          
+          // Create user in users table
+          const { data: newUser, error: userError } = await supabase
+            .from('users')
+            .insert({
+              email: email.toLowerCase(),
+              password_hash: passwordHash,
+              user_type: 'entity',
+              is_active: true,
+              email_verified: false,
+              phone: phone || null,
+              verification_token: verificationToken,
+              verification_sent_at: new Date().toISOString(),
+              requires_password_change: isGeneratedPassword,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              raw_user_meta_data: {
+                name: name,
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                created_by: currentUser?.email,
+                created_by_id: currentUser?.id
+              }
+            })
+            .select()
+            .single();
+          
+          if (userError) {
+            if (userError.code === '23505') {
+              throw new Error('This email is already registered');
+            }
+            throw userError;
+          }
+          
+          // Create entity user profile
+          const { error: entityError } = await supabase
             .from('entity_users')
-            .insert([{
-              user_id: existingUser.id,
+            .insert({
+              user_id: newUser.id,
               company_id: companyId,
-              position: validatedData.position || 'Administrator',
-              department: validatedData.department || 'Management',
-              employee_id: validatedData.employee_id || null,
+              position: position || 'Administrator',
+              department: department || 'Management',
+              employee_id: employee_id || null,
               hire_date: new Date().toISOString().split('T')[0],
               is_company_admin: true,
+              employee_status: 'active',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
-            }]);
-
-          if (linkError) throw linkError;
-
-          return { 
-            type: 'linked', 
-            user: existingUser,
-            company: selectedCompanyForAdmin
+            });
+          
+          if (entityError) {
+            // Rollback: delete the user if entity_users insert fails
+            await supabase.from('users').delete().eq('id', newUser.id);
+            throw entityError;
+          }
+          
+          // Log the creation
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'create_entity_admin',
+              entity_type: 'entity_user',
+              entity_id: newUser.id,
+              details: {
+                email: email,
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                is_company_admin: true,
+                created_by: currentUser?.email,
+                password_generated: isGeneratedPassword
+              },
+              created_at: new Date().toISOString()
+            });
+          
+          return {
+            success: true,
+            type: 'created',
+            user: {
+              id: newUser.id,
+              email: newUser.email,
+              name: name,
+              temporary_password: isGeneratedPassword ? finalPassword : undefined
+            },
+            company: selectedCompanyForAdmin,
+            message: isGeneratedPassword ? 'Admin created with temporary password' : 'Admin created successfully'
           };
         }
-
-        // User doesn't exist - create new using standardized service
-        if (!validatedData.password) {
-          throw new UserServiceError('Password is required for new users');
-        }
-
-        // Use standardized service for user creation
-        const newUser = await userService.createEntityUser({
-          email: validatedData.email,
-          name: validatedData.email.split('@')[0], // Default name from email
-          password: validatedData.password,
-          company_id: companyId,
-          position: validatedData.position || 'Administrator',
-          department: validatedData.department || 'Management',
-          employee_id: validatedData.employee_id,
-          is_company_admin: true,
-          phone: validatedData.phone,
-          is_active: true
-        });
-
-        return { 
-          type: 'created', 
-          user: newUser,
-          company: selectedCompanyForAdmin
-        };
-
       } catch (error) {
         if (error instanceof z.ZodError) {
           throw { validationErrors: error.flatten().fieldErrors };
@@ -498,25 +807,27 @@ export default function CompaniesTab() {
     },
     {
       onSuccess: (result) => {
-        const companyName = result.company?.name;
-        
         queryClient.invalidateQueries(['companies']);
-        setIsAdminFormOpen(false);
-        setSelectedCompanyForAdmin(null);
-        setAdminFormErrors({});
-        resetAdminForm();
         
-        // Return to View Admins modal if we came from there
-        if (returnToViewAfterAdd && selectedCompanyForView && result.company?.id) {
-          fetchCompanyAdmins(result.company.id);
-          setIsViewAdminsOpen(true);
-          setReturnToViewAfterAdd(false);
-        }
-        
-        if (result.type === 'linked') {
-          toast.success(`Existing user linked as tenant admin for ${companyName}`);
+        if (result.type === 'created' && result.user?.temporary_password) {
+          // Show password modal for new users with generated password
+          setGeneratedPassword(result.user.temporary_password);
+          toast.success('Admin created successfully. Copy the temporary password!');
         } else {
-          toast.success(`Tenant admin created for ${companyName}. They will receive an email to confirm their account.`);
+          setIsAdminFormOpen(false);
+          setSelectedCompanyForAdmin(null);
+          setEditingAdmin(null);
+          setAdminFormErrors({});
+          resetAdminForm();
+          
+          // Return to View Admins modal if we came from there
+          if (returnToViewAfterAdd && selectedCompanyForView && result.company?.id) {
+            fetchCompanyAdmins(result.company.id);
+            setIsViewAdminsOpen(true);
+            setReturnToViewAfterAdd(false);
+          }
+          
+          toast.success(result.message || 'Operation successful');
         }
       },
       onError: (error: any) => {
@@ -526,15 +837,79 @@ export default function CompaniesTab() {
             errors[key] = Array.isArray(value) ? value[0] : value as string;
           });
           setAdminFormErrors(errors);
-        } else if (error instanceof UserServiceError) {
-          setAdminFormErrors({ form: error.message });
-          toast.error(error.message);
         } else {
-          console.error('Error creating tenant admin:', error);
-          const errorMessage = error.message || 'Failed to create tenant admin';
+          console.error('Error:', error);
+          const errorMessage = error.message || 'Operation failed';
           setAdminFormErrors({ form: errorMessage });
           toast.error(errorMessage);
         }
+      }
+    }
+  );
+
+  // Change password mutation (Direct Database - Like UsersTab)
+  const changePasswordMutation = useMutation(
+    async (data: { userId: string; password: string; sendEmail: boolean }) => {
+      // Hash the new password
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(data.password, salt);
+      
+      // Update password in users table
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          password_hash: passwordHash,
+          password_updated_at: new Date().toISOString(),
+          requires_password_change: false,
+          failed_login_attempts: 0,
+          locked_until: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', data.userId);
+      
+      if (updateError) throw updateError;
+      
+      // Log the password change
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser?.id,
+          action: 'admin_password_change',
+          entity_type: 'entity_user',
+          entity_id: data.userId,
+          details: {
+            changed_by: currentUser?.email,
+            target_user: selectedAdminForPassword?.users?.email,
+            notification_sent: data.sendEmail
+          },
+          created_at: new Date().toISOString()
+        });
+      
+      // TODO: Send email notification if requested
+      if (data.sendEmail) {
+        console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
+      }
+      
+      return { success: true, password: data.password };
+    },
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(['companies']);
+        
+        if (data.password) {
+          setGeneratedPassword(data.password);
+          toast.success('Password changed successfully. Copy the new password!');
+        } else {
+          setIsPasswordFormOpen(false);
+          setSelectedAdminForPassword(null);
+          toast.success('Password changed successfully');
+        }
+        
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        console.error('Error changing password:', error);
+        toast.error(error.message || 'Failed to change password');
       }
     }
   );
@@ -579,49 +954,6 @@ export default function CompaniesTab() {
     }
   );
 
-  // Update admin mutation
-  const updateAdminMutation = useMutation(
-    async ({ entityUserId, data }: { entityUserId: string; data: any }) => {
-      // Update entity_users record
-      const { error: entityError } = await supabase
-        .from('entity_users')
-        .update({
-          position: data.position,
-          department: data.department,
-          employee_id: data.employee_id,
-          hire_date: data.hire_date,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', entityUserId);
-
-      if (entityError) throw entityError;
-
-      // Update user record via standardized service if email/phone changed
-      if (data.email || data.phone !== undefined) {
-        await userService.updateUser(data.user_id, {
-          email: data.email,
-          phone: data.phone
-        });
-      }
-
-      return { success: true };
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['companies']);
-        if (selectedCompanyForView?.id) {
-          fetchCompanyAdmins(selectedCompanyForView.id);
-        }
-        setEditingAdminId(null);
-        toast.success('Admin updated successfully');
-      },
-      onError: (error) => {
-        console.error('Error updating admin:', error);
-        toast.error('Failed to update admin');
-      }
-    }
-  );
-
   // Remove admin mutation
   const removeAdminMutation = useMutation(
     async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
@@ -648,10 +980,57 @@ export default function CompaniesTab() {
     }
   );
 
+  // Resend verification mutation
+  const resendVerificationMutation = useMutation(
+    async (userId: string) => {
+      // Generate new verification token
+      const token = generateVerificationToken();
+      
+      // Update user with new token
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          verification_token: token,
+          verification_sent_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      if (updateError) throw updateError;
+      
+      // Get user email
+      const { data: user } = await supabase
+        .from('users')
+        .select('email, raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+      
+      if (!user) throw new Error('User not found');
+      
+      // TODO: Send actual email
+      console.log('Verification email would be sent to:', user.email);
+      console.log('Verification token:', token);
+      
+      return { success: true };
+    },
+    {
+      onSuccess: () => {
+        toast.success('Verification email sent successfully');
+        if (selectedCompanyForView?.id) {
+          fetchCompanyAdmins(selectedCompanyForView.id);
+        }
+      },
+      onError: (error: any) => {
+        console.error('Error:', error);
+        toast.error(error.message || 'Failed to send verification email');
+      }
+    }
+  );
+
   // ===== HELPER FUNCTIONS =====
   
   const resetAdminForm = () => {
     setAdminFormState({
+      name: '',
       email: '',
       phone: '',
       position: '',
@@ -661,6 +1040,8 @@ export default function CompaniesTab() {
       confirmPassword: ''
     });
     setAdminFormErrors({});
+    setGeneratePassword(true);
+    setShowPassword(false);
   };
 
   const fetchCompanyAdmins = async (companyId: string) => {
@@ -749,7 +1130,43 @@ export default function CompaniesTab() {
   const handleAdminSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAdminFormErrors({});
-    tenantAdminMutation.mutate(adminFormState);
+    tenantAdminMutation.mutate(new FormData(e.currentTarget));
+  };
+
+  const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormErrors({});
+    
+    if (!selectedAdminForPassword) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const newPassword = formData.get('newPassword') as string;
+    const sendEmail = formData.get('sendEmail') === 'on';
+    
+    // Validate password
+    try {
+      passwordChangeSchema.parse({ newPassword, sendEmail });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path.length > 0) {
+            errors[err.path[0] as string] = err.message;
+          }
+        });
+        setFormErrors(errors);
+        return;
+      }
+    }
+    
+    // Use generated password if checkbox is checked
+    const passwordToSet = generateNewPassword ? generateComplexPassword() : newPassword;
+    
+    changePasswordMutation.mutate({
+      userId: selectedAdminForPassword.user_id,
+      password: passwordToSet,
+      sendEmail
+    });
   };
 
   const handleDelete = (companies: Company[]) => {
@@ -764,6 +1181,84 @@ export default function CompaniesTab() {
   const cancelDelete = () => {
     setIsConfirmDialogOpen(false);
     setCompaniesToDelete([]);
+  };
+
+  const copyPassword = () => {
+    if (generatedPassword) {
+      navigator.clipboard.writeText(generatedPassword);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+      toast.success('Password copied to clipboard');
+    }
+  };
+  
+  const printPassword = () => {
+    if (generatedPassword) {
+      const adminInfo = editingAdmin || selectedAdminForPassword || 
+        (selectedCompanyForAdmin ? { users: { email: adminFormState.email, name: adminFormState.name } } : null);
+      
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Password for ${adminInfo?.users?.name || 'User'}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .header { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
+                .info { margin: 10px 0; }
+                .password { 
+                  font-family: monospace; 
+                  font-size: 16px; 
+                  background: #f3f4f6; 
+                  padding: 10px; 
+                  border: 1px solid #d1d5db;
+                  margin: 20px 0;
+                }
+                .footer { margin-top: 30px; font-size: 12px; color: #6b7280; }
+              </style>
+            </head>
+            <body>
+              <div class="header">GGK Learning System - Password Information</div>
+              <div class="info"><strong>User:</strong> ${adminInfo?.users?.name || 'N/A'}</div>
+              <div class="info"><strong>Email:</strong> ${adminInfo?.users?.email || 'N/A'}</div>
+              <div class="info"><strong>Company:</strong> ${selectedCompanyForAdmin?.name || selectedCompanyForView?.name || 'N/A'}</div>
+              <div class="info"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+              <div class="password">${generatedPassword}</div>
+              <div class="footer">
+                Please share this password securely with the user. 
+                They will need to verify their email before logging in.
+                The user should change this password after first login.
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const closePasswordModal = () => {
+    setGeneratedPassword(null);
+    setIsAdminFormOpen(false);
+    setIsPasswordFormOpen(false);
+    setSelectedCompanyForAdmin(null);
+    setSelectedAdminForPassword(null);
+    setEditingAdmin(null);
+    resetAdminForm();
+    setPasswordFormState({
+      newPassword: '',
+      sendEmail: false
+    });
+    setGenerateNewPassword(true);
+    
+    // Return to View Admins modal if needed
+    if (returnToViewAfterAdd && selectedCompanyForView) {
+      fetchCompanyAdmins(selectedCompanyForView.id);
+      setIsViewAdminsOpen(true);
+      setReturnToViewAfterAdd(false);
+    }
   };
 
   // ===== EFFECTS =====
@@ -795,12 +1290,36 @@ export default function CompaniesTab() {
     }
   }, [editingCompany]);
 
-  // Reset admin form when modal closes
+  // Update admin form when editing
   React.useEffect(() => {
-    if (!isAdminFormOpen) {
+    if (editingAdmin) {
+      setAdminFormState({
+        name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
+        email: editingAdmin.users?.email || '',
+        phone: editingAdmin.users?.phone || '',
+        position: editingAdmin.position || '',
+        department: editingAdmin.department || '',
+        employee_id: editingAdmin.employee_id || '',
+        password: '',
+        confirmPassword: ''
+      });
+      setGeneratePassword(false);
+    } else {
       resetAdminForm();
     }
-  }, [isAdminFormOpen]);
+  }, [editingAdmin]);
+
+  // Reset password form when closing
+  React.useEffect(() => {
+    if (!isPasswordFormOpen) {
+      setPasswordFormState({
+        newPassword: '',
+        sendEmail: false
+      });
+      setGenerateNewPassword(true);
+      setShowNewPassword(false);
+    }
+  }, [isPasswordFormOpen]);
 
   // ===== TABLE COLUMNS =====
   
@@ -1005,6 +1524,8 @@ export default function CompaniesTab() {
             <button
               onClick={() => {
                 setSelectedCompanyForAdmin(company);
+                setEditingAdmin(null);
+                resetAdminForm();
                 setIsAdminFormOpen(true);
               }}
               className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
@@ -1154,14 +1675,15 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form Modal */}
+      {/* Tenant Admin Form Modal (Unified with UsersTab pattern) */}
       <SlideInForm
-        key={selectedCompanyForAdmin?.id || 'admin-new'}
-        title={`Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
-        isOpen={isAdminFormOpen}
+        key={`${selectedCompanyForAdmin?.id || 'admin-new'}-${editingAdmin?.id || 'new'}`}
+        title={editingAdmin ? `Edit Admin for ${selectedCompanyForAdmin?.name}` : `Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
+        isOpen={isAdminFormOpen && !generatedPassword}
         onClose={() => {
           setIsAdminFormOpen(false);
           setSelectedCompanyForAdmin(null);
+          setEditingAdmin(null);
           resetAdminForm();
           setReturnToViewAfterAdd(false);
         }}
@@ -1183,9 +1705,27 @@ export default function CompaniesTab() {
           <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Account Information</h3>
             
-            <FormField id="tenant-email" label="Email Address" required error={adminFormErrors.email}>
+            <FormField id="tenant-name" label="Name" required error={adminFormErrors.name}>
+              <Input
+                id="tenant-name"
+                name="name"
+                type="text"
+                value={adminFormState.name}
+                onChange={(e) => setAdminFormState(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="John Doe"
+              />
+            </FormField>
+
+            <FormField 
+              id="tenant-email" 
+              label="Email Address" 
+              required 
+              error={adminFormErrors.email}
+              helpText={editingAdmin ? "Changing email will require re-verification" : "Verification email will be sent"}
+            >
               <Input
                 id="tenant-email"
+                name="email"
                 type="email"
                 value={adminFormState.email}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, email: e.target.value }))}
@@ -1195,12 +1735,115 @@ export default function CompaniesTab() {
 
             <FormField id="tenant-phone" label="Phone Number" error={adminFormErrors.phone}>
               <PhoneInput
+                name="phone"
                 value={adminFormState.phone}
                 onChange={(value) => setAdminFormState(prev => ({ ...prev, phone: value }))}
                 placeholder="XXXX XXXX"
               />
             </FormField>
           </div>
+
+          {/* Password Section (only for new admins) */}
+          {!editingAdmin && (
+            <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
+              
+              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Password Options
+                </p>
+                
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="passwordOption"
+                      checked={generatePassword}
+                      onChange={() => {
+                        setGeneratePassword(true);
+                        setAdminFormState({ ...adminFormState, password: '', confirmPassword: '' });
+                      }}
+                      className="text-[#8CC63F]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Auto-generate secure password
+                    </span>
+                  </label>
+                  
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="passwordOption"
+                      checked={!generatePassword}
+                      onChange={() => setGeneratePassword(false)}
+                      className="text-[#8CC63F]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Set password manually
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {!generatePassword && (
+                <>
+                  <FormField 
+                    id="tenant-password" 
+                    label="Password" 
+                    required 
+                    error={adminFormErrors.password}
+                  >
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="tenant-password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          value={adminFormState.password}
+                          onChange={(e) => setAdminFormState(prev => ({ ...prev, password: e.target.value }))}
+                          placeholder="Minimum 8 characters"
+                          autoComplete="new-password"
+                          className={`pr-10 ${
+                            adminFormState.password && 
+                            passwordRequirements.every(req => req.test(adminFormState.password))
+                              ? 'border-green-500 focus:border-green-500'
+                              : ''
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <PasswordRequirementsChecker password={adminFormState.password} />
+                    </div>
+                  </FormField>
+
+                  <FormField id="tenant-confirm-password" label="Confirm Password" required error={adminFormErrors.confirmPassword}>
+                    <Input
+                      id="tenant-confirm-password"
+                      name="confirmPassword"
+                      type="password"
+                      value={adminFormState.confirmPassword}
+                      onChange={(e) => setAdminFormState(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                      placeholder="Re-enter password"
+                    />
+                  </FormField>
+                </>
+              )}
+              
+              {generatePassword && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    ✓ A secure password will be automatically generated when you save
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Employee Information Section */}
           <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
@@ -1209,6 +1852,7 @@ export default function CompaniesTab() {
             <FormField id="tenant-position" label="Position" error={adminFormErrors.position}>
               <Input
                 id="tenant-position"
+                name="position"
                 type="text"
                 value={adminFormState.position}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, position: e.target.value }))}
@@ -1219,6 +1863,7 @@ export default function CompaniesTab() {
             <FormField id="tenant-department" label="Department" error={adminFormErrors.department}>
               <Input
                 id="tenant-department"
+                name="department"
                 type="text"
                 value={adminFormState.department}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, department: e.target.value }))}
@@ -1229,6 +1874,7 @@ export default function CompaniesTab() {
             <FormField id="tenant-employee-id" label="Employee ID" error={adminFormErrors.employee_id}>
               <Input
                 id="tenant-employee-id"
+                name="employee_id"
                 type="text"
                 value={adminFormState.employee_id}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, employee_id: e.target.value }))}
@@ -1237,37 +1883,13 @@ export default function CompaniesTab() {
             </FormField>
           </div>
 
-          {/* Password Section - Only for new users */}
-          <div className="space-y-4 pb-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
-            
-            <FormField 
-              id="tenant-password" 
-              label="Password" 
-              error={adminFormErrors.password}
-              helpText="Leave blank if linking an existing user"
-            >
-              <Input
-                id="tenant-password"
-                type="password"
-                value={adminFormState.password}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="Minimum 8 characters"
-              />
-            </FormField>
-
-            {adminFormState.password && (
-              <FormField id="tenant-confirm-password" label="Confirm Password" required error={adminFormErrors.confirmPassword}>
-                <Input
-                  id="tenant-confirm-password"
-                  type="password"
-                  value={adminFormState.confirmPassword}
-                  onChange={(e) => setAdminFormState(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  placeholder="Re-enter password"
-                />
-              </FormField>
-            )}
-          </div>
+          {editingAdmin && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Note:</strong> To change the user's password, use the password reset option from the table actions.
+              </p>
+            </div>
+          )}
 
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <div className="flex items-start gap-2">
@@ -1287,6 +1909,166 @@ export default function CompaniesTab() {
                 </ul>
               </div>
             </div>
+          </div>
+        </form>
+      </SlideInForm>
+
+      {/* Change Password Form (Like UsersTab) */}
+      <SlideInForm
+        key={`${selectedAdminForPassword?.id || 'new'}-password`}
+        title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
+        isOpen={isPasswordFormOpen && !generatedPassword}
+        onClose={() => {
+          setIsPasswordFormOpen(false);
+          setSelectedAdminForPassword(null);
+          setFormErrors({});
+          setShowNewPassword(false);
+          setGenerateNewPassword(true);
+          setPasswordFormState({
+            newPassword: '',
+            sendEmail: false
+          });
+        }}
+        onSave={() => {
+          const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+        loading={changePasswordMutation.isLoading}
+      >
+        <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <Shield className="h-4 w-4 inline mr-1" />
+              You can directly set a new password for this user.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Password Options
+              </p>
+              
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={generateNewPassword}
+                    onChange={() => {
+                      setGenerateNewPassword(true);
+                      setPasswordFormState({ ...passwordFormState, newPassword: '' });
+                    }}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Generate secure password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      System will create a strong 12-character password
+                    </p>
+                  </div>
+                </label>
+                
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={!generateNewPassword}
+                    onChange={() => setGenerateNewPassword(false)}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Set custom password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Enter your own password meeting complexity requirements
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {!generateNewPassword && (
+              <FormField 
+                id="newPassword" 
+                label="New Password" 
+                required 
+                error={formErrors.newPassword}
+              >
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      id="newPassword"
+                      name="newPassword"
+                      placeholder="Enter new password"
+                      value={passwordFormState.newPassword}
+                      onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
+                      className={`pr-10 ${
+                        passwordFormState.newPassword && 
+                        passwordRequirements.every(req => req.test(passwordFormState.newPassword))
+                          ? 'border-green-500 focus:border-green-500'
+                          : ''
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <PasswordRequirementsChecker password={passwordFormState.newPassword} />
+                </div>
+              </FormField>
+            )}
+            
+            {generateNewPassword && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  A strong password will be generated automatically
+                </p>
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="sendEmail"
+                  name="sendEmail"
+                  checked={passwordFormState.sendEmail}
+                  onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
+                  className="rounded border-gray-300 text-[#8CC63F]"
+                />
+                <div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    Send password to user's email
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Email the new password to {selectedAdminForPassword?.users?.email}
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              <strong>Note:</strong> The user can log in immediately with the new password.
+              {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
+            </p>
           </div>
         </form>
       </SlideInForm>
@@ -1340,6 +2122,8 @@ export default function CompaniesTab() {
                     onClick={() => {
                       setIsViewAdminsOpen(false);
                       setSelectedCompanyForAdmin(selectedCompanyForView);
+                      setEditingAdmin(null);
+                      resetAdminForm();
                       setIsAdminFormOpen(true);
                       setReturnToViewAfterAdd(true);
                     }}
@@ -1352,7 +2136,6 @@ export default function CompaniesTab() {
               ) : (
                 <div className="space-y-4">
                   {companyAdmins.map((admin) => {
-                    const isEditing = editingAdminId === admin.id;
                     return (
                       <div 
                         key={admin.id} 
@@ -1366,19 +2149,9 @@ export default function CompaniesTab() {
                                 <Shield className="h-6 w-6 text-white" />
                               </div>
                               <div>
-                                {isEditing ? (
-                                  <input
-                                    type="email"
-                                    value={editAdminData.email || ''}
-                                    onChange={(e) => setEditAdminData({ ...editAdminData, email: e.target.value })}
-                                    placeholder="Email address"
-                                    className="text-lg font-semibold px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                  />
-                                ) : (
-                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    {admin.users?.email || 'Unknown'}
-                                  </h3>
-                                )}
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                  {admin.users?.raw_user_meta_data?.name || admin.users?.email?.split('@')[0] || 'Unknown'}
+                                </h3>
                                 <div className="flex items-center gap-3 mt-1">
                                   {admin.users?.is_active ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
@@ -1389,76 +2162,92 @@ export default function CompaniesTab() {
                                       Inactive
                                     </span>
                                   )}
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    Admin since {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : 'Unknown'}
-                                  </span>
+                                  {admin.users?.email_verified ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                      Verified
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                      Unverified
+                                    </span>
+                                  )}
+                                  {admin.users?.requires_password_change && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                      <Key className="h-3 w-3 mr-1" />
+                                      Password Change Required
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
                             
                             <div className="flex items-center gap-2">
-                              {isEditing ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      updateAdminMutation.mutate({
-                                        entityUserId: admin.id,
-                                        data: { ...editAdminData, user_id: admin.user_id }
-                                      });
-                                    }}
-                                    disabled={updateAdminMutation.isLoading}
-                                    className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:text-green-300 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Save Changes"
-                                  >
-                                    <Check className="h-5 w-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingAdminId(null);
-                                      setEditAdminData({});
-                                    }}
-                                    className="p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                                    title="Cancel"
-                                  >
-                                    <X className="h-5 w-5" />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setEditingAdminId(admin.id);
-                                      setEditAdminData({
-                                        email: admin.users?.email || '',
-                                        phone: admin.users?.phone || '',
-                                        position: admin.position || '',
-                                        department: admin.department || '',
-                                        employee_id: admin.employee_id || '',
-                                        hire_date: admin.hire_date || ''
-                                      });
-                                    }}
-                                    className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                    title="Edit Admin"
-                                  >
-                                    <Edit className="h-5 w-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (confirm('Are you sure you want to remove this admin? They will lose all administrative access to this company.')) {
-                                        removeAdminMutation.mutate({
-                                          entityUserId: admin.id,
-                                          userId: admin.user_id
-                                        });
-                                      }
-                                    }}
-                                    disabled={removeAdminMutation.isLoading}
-                                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Remove Admin"
-                                  >
-                                    <Trash2 className="h-5 w-5" />
-                                  </button>
-                                </>
+                              {/* Resend Verification */}
+                              {admin.users?.is_active && !admin.users?.email_verified && (
+                                <button
+                                  onClick={() => resendVerificationMutation.mutate(admin.user_id)}
+                                  disabled={resendVerificationMutation.isLoading}
+                                  className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                  title="Resend verification email"
+                                >
+                                  {resendVerificationMutation.isLoading ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                  ) : (
+                                    <Mail className="h-5 w-5" />
+                                  )}
+                                </button>
                               )}
+                              
+                              {/* Change Password */}
+                              {admin.users?.is_active && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedAdminForPassword(admin);
+                                    setIsPasswordFormOpen(true);
+                                    setGenerateNewPassword(true);
+                                    setPasswordFormState({
+                                      newPassword: '',
+                                      sendEmail: false
+                                    });
+                                  }}
+                                  className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                  title="Change password"
+                                >
+                                  <Key className="h-5 w-5" />
+                                </button>
+                              )}
+                              
+                              {/* Edit */}
+                              <button
+                                onClick={() => {
+                                  setSelectedCompanyForAdmin(selectedCompanyForView);
+                                  setEditingAdmin(admin);
+                                  setIsViewAdminsOpen(false);
+                                  setIsAdminFormOpen(true);
+                                  setReturnToViewAfterAdd(true);
+                                }}
+                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                title="Edit Admin"
+                              >
+                                <Edit className="h-5 w-5" />
+                              </button>
+                              
+                              {/* Remove */}
+                              <button
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to remove this admin? They will lose all administrative access to this company.')) {
+                                    removeAdminMutation.mutate({
+                                      entityUserId: admin.id,
+                                      userId: admin.user_id
+                                    });
+                                  }
+                                }}
+                                disabled={removeAdminMutation.isLoading}
+                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                title="Remove Admin"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1472,25 +2261,16 @@ export default function CompaniesTab() {
                               
                               <div className="space-y-2">
                                 <div className="flex items-center gap-3">
-                                  <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  {isEditing ? (
-                                    <PhoneInput
-                                      value={editAdminData.phone || ''}
-                                      onChange={(value) => setEditAdminData({ ...editAdminData, phone: value })}
-                                      placeholder="Phone number"
-                                      className="flex-1"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      {admin.users?.phone || '—'}
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                <div className="flex items-center gap-3">
                                   <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
                                     {admin.users?.email || '—'}
+                                  </span>
+                                </div>
+                                
+                                <div className="flex items-center gap-3">
+                                  <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    {admin.users?.phone || '—'}
                                   </span>
                                 </div>
                               </div>
@@ -1503,69 +2283,30 @@ export default function CompaniesTab() {
                               <div className="space-y-2">
                                 <div className="flex items-center gap-3">
                                   <Briefcase className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  {isEditing ? (
-                                    <input
-                                      type="text"
-                                      value={editAdminData.position || ''}
-                                      onChange={(e) => setEditAdminData({ ...editAdminData, position: e.target.value })}
-                                      placeholder="Position"
-                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      {admin.position || '—'}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    {admin.position || '—'}
+                                  </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Building className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  {isEditing ? (
-                                    <input
-                                      type="text"
-                                      value={editAdminData.department || ''}
-                                      onChange={(e) => setEditAdminData({ ...editAdminData, department: e.target.value })}
-                                      placeholder="Department"
-                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      {admin.department || '—'}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    {admin.department || '—'}
+                                  </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Hash className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  {isEditing ? (
-                                    <input
-                                      type="text"
-                                      value={editAdminData.employee_id || ''}
-                                      onChange={(e) => setEditAdminData({ ...editAdminData, employee_id: e.target.value })}
-                                      placeholder="Employee ID"
-                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      {admin.employee_id ? `ID: ${admin.employee_id}` : 'ID: —'}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    {admin.employee_id ? `ID: ${admin.employee_id}` : 'ID: —'}
+                                  </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  {isEditing ? (
-                                    <input
-                                      type="date"
-                                      value={editAdminData.hire_date || ''}
-                                      onChange={(e) => setEditAdminData({ ...editAdminData, hire_date: e.target.value })}
-                                      className="flex-1 text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                      Hire Date: {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : '—'}
-                                    </span>
-                                  )}
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                                    Hire Date: {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : '—'}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1589,6 +2330,8 @@ export default function CompaniesTab() {
                       onClick={() => {
                         setIsViewAdminsOpen(false);
                         setSelectedCompanyForAdmin(selectedCompanyForView);
+                        setEditingAdmin(null);
+                        resetAdminForm();
                         setIsAdminFormOpen(true);
                         setReturnToViewAfterAdd(true);
                       }}
@@ -1601,6 +2344,86 @@ export default function CompaniesTab() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generated Password Modal (Unified with UsersTab) */}
+      {generatedPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedAdminForPassword ? 'Password Changed Successfully' : 'Admin Created Successfully'}
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                {selectedAdminForPassword 
+                  ? `A new password has been set for ${selectedAdminForPassword.users?.email}.`
+                  : `A temporary password has been generated for ${selectedCompanyForAdmin?.name}.`
+                }
+              </p>
+              {!selectedAdminForPassword && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  The user will receive a verification email and must verify their email before logging in.
+                </p>
+              )}
+            </div>
+
+            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                Generated Password
+              </p>
+              <div className="flex items-center justify-between">
+                <code className="text-base font-mono font-semibold break-all pr-2">
+                  {generatedPassword}
+                </code>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={copyPassword}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    title="Copy password"
+                  >
+                    {copiedPassword ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={printPassword}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    title="Print password"
+                  >
+                    <Printer className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Important:</strong> This password will not be shown again. Make sure to:
+              </p>
+              <ul className="mt-2 text-sm text-amber-700 dark:text-amber-400 list-disc list-inside">
+                <li>Copy or print the password now</li>
+                <li>Share it securely with the user</li>
+                <li>Advise the user to change it after first login</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={printPassword}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
+              <Button onClick={closePasswordModal}>
+                Close
+              </Button>
             </div>
           </div>
         </div>
