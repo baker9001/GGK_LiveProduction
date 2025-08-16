@@ -202,6 +202,7 @@ interface TenantAdminFormData {
   position: string;
   department: string;
   employee_id: string;
+  hire_date: string;
   password: string;
   confirmPassword: string;
 }
@@ -214,6 +215,8 @@ interface CompanyAdmin {
   department?: string;
   employee_id?: string;
   hire_date?: string;
+  employee_status?: string;
+  department_id?: string | null;
   is_company_admin: boolean;
   created_at: string;
   updated_at: string;
@@ -224,8 +227,10 @@ interface CompanyAdmin {
     user_type: string;
     is_active: boolean;
     last_sign_in_at?: string;
+    last_login_at?: string;
     requires_password_change?: boolean;
     email_verified?: boolean;
+    raw_user_meta_data?: any;
   };
 }
 
@@ -260,13 +265,26 @@ function generateVerificationToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Alternative: Generate UUID v4 for tokens
+// Alternative: Generate UUID v4 for tokens and IDs
 function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  // Proper UUID v4 generation for database IDs
+  const array = new Uint8Array(16);
+  window.crypto.getRandomValues(array);
+  
+  // Set version (4) and variant bits
+  array[6] = (array[6] & 0x0f) | 0x40; // Version 4
+  array[8] = (array[8] & 0x3f) | 0x80; // Variant 10
+  
+  const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  
+  // Format as UUID
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32)
+  ].join('-');
 }
 
 // ===== MAIN COMPONENT =====
@@ -311,6 +329,7 @@ export default function CompaniesTab() {
     position: '',
     department: '',
     employee_id: '',
+    hire_date: new Date().toISOString().split('T')[0], // Default to today
     password: '',
     confirmPassword: ''
   });
@@ -575,6 +594,7 @@ export default function CompaniesTab() {
         const position = formData.get('position') as string;
         const department = formData.get('department') as string;
         const employee_id = formData.get('employee_id') as string;
+        const hire_date = formData.get('hire_date') as string;
 
         if (!selectedCompanyForAdmin?.id) {
           throw new Error('No company selected');
@@ -585,36 +605,45 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update entity_users profile
+          // Update entity_users profile with all relevant fields
+          const entityUpdates: any = {
+            position: position || editingAdmin.position,
+            department: department || editingAdmin.department,
+            employee_id: employee_id || editingAdmin.employee_id,
+            hire_date: hire_date || editingAdmin.hire_date,
+            employee_status: 'active', // Maintain active status
+            updated_at: new Date().toISOString()
+          };
+
           const { error: entityError } = await supabase
             .from('entity_users')
-            .update({
-              position: position || editingAdmin.position,
-              department: department || editingAdmin.department,
-              employee_id: employee_id || editingAdmin.employee_id,
-              updated_at: new Date().toISOString()
-            })
+            .update(entityUpdates)
             .eq('id', editingAdmin.id);
 
           if (entityError) throw entityError;
 
-          // Update users table if email/phone changed
+          // Update users table if email/phone/name changed
           const userUpdates: any = {
             updated_at: new Date().toISOString(),
             raw_user_meta_data: {
               ...(editingAdmin.users as any)?.raw_user_meta_data,
               name: name,
-              updated_by: currentUser?.id
+              updated_by: currentUser?.email,
+              updated_by_id: currentUser?.id,
+              last_updated: new Date().toISOString()
             }
           };
 
+          // Check if email is changing
           if (email !== editingAdmin.users?.email) {
             userUpdates.email = email.toLowerCase();
             userUpdates.email_verified = false;
             userUpdates.verification_token = generateVerificationToken();
             userUpdates.verification_sent_at = new Date().toISOString();
+            userUpdates.verified_at = null;
           }
 
+          // Update phone if changed
           if (phone !== editingAdmin.users?.phone) {
             userUpdates.phone = phone || null;
           }
@@ -667,18 +696,20 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin
+            // Link existing user to company as admin with all fields
             const { error: linkError } = await supabase
               .from('entity_users')
               .insert([{
+                // id will be auto-generated by database (uuid_generate_v4())
                 user_id: existingUser.id,
                 company_id: companyId,
                 position: position || 'Administrator',
                 department: department || 'Management',
                 employee_id: employee_id || null,
-                hire_date: new Date().toISOString().split('T')[0],
+                hire_date: hire_date || new Date().toISOString().split('T')[0],
                 is_company_admin: true,
                 employee_status: 'active',
+                department_id: null, // Can be updated later if departments are implemented
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               }]);
@@ -722,7 +753,7 @@ export default function CompaniesTab() {
           // Generate verification token
           const verificationToken = generateVerificationToken();
           
-          // Create user in users table
+          // Create user in users table with all required fields
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
@@ -734,7 +765,13 @@ export default function CompaniesTab() {
               phone: phone || null,
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
+              verified_at: null,
               requires_password_change: isGeneratedPassword,
+              failed_login_attempts: 0,
+              locked_until: null,
+              last_sign_in_at: null,
+              last_login_at: null,
+              password_updated_at: new Date().toISOString(),
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               raw_user_meta_data: {
@@ -743,7 +780,10 @@ export default function CompaniesTab() {
                 company_name: selectedCompanyForAdmin.name,
                 created_by: currentUser?.email,
                 created_by_id: currentUser?.id
-              }
+              },
+              raw_app_meta_data: {},
+              user_types: ['entity'],
+              primary_type: 'entity'
             })
             .select()
             .single();
@@ -1047,6 +1087,7 @@ export default function CompaniesTab() {
       position: '',
       department: '',
       employee_id: '',
+      hire_date: new Date().toISOString().split('T')[0], // Default to today
       password: '',
       confirmPassword: ''
     });
@@ -1311,6 +1352,7 @@ export default function CompaniesTab() {
         position: editingAdmin.position || '',
         department: editingAdmin.department || '',
         employee_id: editingAdmin.employee_id || '',
+        hire_date: editingAdmin.hire_date || new Date().toISOString().split('T')[0],
         password: '',
         confirmPassword: ''
       });
@@ -1890,6 +1932,16 @@ export default function CompaniesTab() {
                 value={adminFormState.employee_id}
                 onChange={(e) => setAdminFormState(prev => ({ ...prev, employee_id: e.target.value }))}
                 placeholder="e.g., EMP001"
+              />
+            </FormField>
+
+            <FormField id="tenant-hire-date" label="Hire Date" error={adminFormErrors.hire_date}>
+              <Input
+                id="tenant-hire-date"
+                name="hire_date"
+                type="date"
+                value={adminFormState.hire_date}
+                onChange={(e) => setAdminFormState(prev => ({ ...prev, hire_date: e.target.value }))}
               />
             </FormField>
           </div>
