@@ -147,7 +147,6 @@ interface BranchData {
   name: string;
   code: string;
   school_id: string;
-  description: string;
   status: 'active' | 'inactive';
   created_at: string;
   additional?: BranchAdditional;
@@ -519,7 +518,6 @@ export default function OrganisationManagement() {
           name: data.name,
           code: data.code,
           school_id: data.school_id,
-          description: data.description || '',
           status: 'active'
         }])
         .select()
@@ -605,7 +603,8 @@ export default function OrganisationManagement() {
       code: formDataFromForm.get('code') as string,
     };
 
-    if (modalType !== 'department') {
+    // Only add description for schools and departments (not branches)
+    if (modalType === 'school') {
       data.description = formDataFromForm.get('description') as string;
     }
 
@@ -1053,7 +1052,7 @@ export default function OrganisationManagement() {
                   </label>
                   <StatusBadge status={selectedItem.status} />
                 </div>
-                {selectedItem.description && (
+                {(selectedItem.description || (selectedType === 'school' && selectedItem.description)) && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Description
@@ -1647,7 +1646,7 @@ export default function OrganisationManagement() {
             />
           </FormField>
 
-          {modalType !== 'department' && (
+          {modalType === 'school' && (
             <FormField
               id="description"
               label="Description"
