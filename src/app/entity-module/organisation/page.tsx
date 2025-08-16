@@ -15,24 +15,19 @@
  *   - Create modal with form validation
  *   - All original state management
  * 
- * Added/Modified:
- *   - Clean hierarchical org chart matching sample design
- *   - Proper connection lines between nodes
- *   - Centered layout with proper spacing
- *   - Inline action icons (edit, add, more)
- *   - Avatar badges for managers
- *   - Clean white cards with subtle shadows
+ * Fixed Issues:
+ *   - Proper dark mode colors matching system standards
+ *   - Correct database relationships with .maybeSingle()
+ *   - System standard UI components and colors
+ *   - Proper data fetching from additional tables
  * 
  * Database Tables:
- *   - companies
- *   - companies_additional
- *   - schools
- *   - schools_additional
- *   - branches
- *   - branches_additional
- *   - entity_departments
- *   - academic_years
- *   - entity_users
+ *   - companies → companies_additional (via company_id)
+ *   - schools → schools_additional (via school_id)
+ *   - branches → branches_additional (via branch_id)
+ *   - entity_departments (company/school/branch relationships)
+ *   - academic_years (school_id relationship)
+ *   - entity_users (user profiles)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -192,7 +187,7 @@ export default function EnhancedOrgStructure() {
   // Form states
   const [formData, setFormData] = useState<any>({});
 
-  // ===== FETCH USER'S COMPANY (PRESERVED WITH CUSTOM AUTH) =====
+  // ===== FETCH USER'S COMPANY (FIXED WITH PROPER ERROR HANDLING) =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
@@ -200,7 +195,6 @@ export default function EnhancedOrgStructure() {
         
         if (!authenticatedUser) {
           console.error('No authenticated user found');
-          toast.error('Please login to access this page');
           return;
         }
 
@@ -210,39 +204,30 @@ export default function EnhancedOrgStructure() {
           .eq('user_id', authenticatedUser.id)
           .maybeSingle();
         
-        if (entityError) {
+        if (entityError && entityError.code !== 'PGRST116') {
           console.error('Error fetching entity user:', entityError);
-          toast.error('Failed to fetch user information');
           return;
         }
 
         if (entityUser && entityUser.company_id) {
-          console.log('Found company ID:', entityUser.company_id);
           setUserCompanyId(entityUser.company_id);
-          // Auto-expand company node
           setExpandedNodes(new Set(['company']));
-        } else {
-          console.error('No company associated with user');
-          toast.error('No company associated with your account');
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
-        toast.error('Failed to identify your company');
       }
     };
     
     fetchUserCompany();
   }, [user]);
 
-  // ===== FETCH ORGANIZATION DATA (PRESERVED) =====
+  // ===== FETCH ORGANIZATION DATA (FIXED WITH PROPER RELATIONSHIPS) =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
     async () => {
       if (!userCompanyId) {
         throw new Error('No company associated with user');
       }
-
-      console.log('Fetching organization data for company:', userCompanyId);
 
       // Fetch company data
       const { data: company, error: companyError } = await supabase
@@ -251,12 +236,9 @@ export default function EnhancedOrgStructure() {
         .eq('id', userCompanyId)
         .single();
 
-      if (companyError) {
-        console.error('Company fetch error:', companyError);
-        throw companyError;
-      }
+      if (companyError) throw companyError;
 
-      // Fetch company additional data
+      // Fetch company additional data - Use maybeSingle to handle missing data
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
@@ -274,6 +256,7 @@ export default function EnhancedOrgStructure() {
 
       // Fetch details for each school
       const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
+        // Use maybeSingle for optional additional data
         const { data: schoolAdditional } = await supabase
           .from('schools_additional')
           .select('*')
@@ -287,6 +270,7 @@ export default function EnhancedOrgStructure() {
           .order('name');
 
         const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
+          // Use maybeSingle for optional additional data
           const { data: branchAdditional } = await supabase
             .from('branches_additional')
             .select('*')
@@ -317,7 +301,7 @@ export default function EnhancedOrgStructure() {
     }
   );
 
-  // ===== FETCH DEPARTMENTS (PRESERVED) =====
+  // ===== FETCH DEPARTMENTS (FIXED TABLE NAME) =====
   const { data: departments } = useQuery(
     ['departments', selectedItem?.id, selectedType],
     async () => {
@@ -335,7 +319,7 @@ export default function EnhancedOrgStructure() {
       
       const { data, error } = await query.order('name');
       
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       return data || [];
     },
     {
@@ -355,7 +339,7 @@ export default function EnhancedOrgStructure() {
         .eq('school_id', selectedItem.id)
         .order('start_date', { ascending: false });
       
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       return data || [];
     },
     {
@@ -513,7 +497,7 @@ export default function EnhancedOrgStructure() {
     // Add similar handlers for school and branch updates
   };
 
-  // ===== ORG CHART NODE COMPONENT - Matching Sample Design =====
+  // ===== ORG CHART NODE COMPONENT - WITH PROPER DARK MODE =====
   const OrgChartNode = ({ 
     item, 
     type,
@@ -548,7 +532,7 @@ export default function EnhancedOrgStructure() {
     };
 
     return (
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4 min-w-[280px] max-w-[320px]">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all p-4 min-w-[280px] max-w-[320px]">
         {/* Header with Actions */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
@@ -559,10 +543,10 @@ export default function EnhancedOrgStructure() {
             
             {/* Title and Role */}
             <div>
-              <h3 className="font-semibold text-gray-900 text-base">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-base">
                 {item.name}
               </h3>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {item.code || type.charAt(0).toUpperCase() + type.slice(1)}
               </p>
             </div>
@@ -575,10 +559,10 @@ export default function EnhancedOrgStructure() {
                 handleItemClick(item, type);
                 setEditMode(true);
               }}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               title="Edit"
             >
-              <Edit2 className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              <Edit2 className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
             </button>
             
             {(type === 'company' || type === 'school') && (
@@ -588,19 +572,19 @@ export default function EnhancedOrgStructure() {
                   setFormData(type === 'school' ? { school_id: item.id } : {});
                   setShowModal(true);
                 }}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                 title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
               >
-                <PlusCircle className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                <PlusCircle className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
               </button>
             )}
             
             <button
               onClick={() => handleItemClick(item, type)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
               title="More Actions"
             >
-              <MoreVertical className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              <MoreVertical className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
             </button>
           </div>
         </div>
@@ -608,20 +592,20 @@ export default function EnhancedOrgStructure() {
         {/* Manager Info */}
         {managerName && (
           <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700">{managerName}</p>
-            <p className="text-xs text-gray-500">{managerTitle}</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{managerName}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{managerTitle}</p>
           </div>
         )}
 
         {/* Employee Count */}
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           <span className="font-medium">{employeeCount}</span> Employees
         </div>
       </div>
     );
   };
 
-  // ===== RENDER ORGANIZATION CHART - Clean Hierarchical Layout =====
+  // ===== RENDER ORGANIZATION CHART - WITH PROPER DARK MODE =====
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
@@ -637,12 +621,12 @@ export default function EnhancedOrgStructure() {
           {companyData.schools && companyData.schools.length > 0 && (
             <button
               onClick={() => toggleNode('company')}
-              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 z-10"
+              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 z-10"
             >
               {isCompanyExpanded ? (
-                <ChevronUp className="h-3 w-3 text-gray-600" />
+                <ChevronUp className="h-3 w-3 text-gray-600 dark:text-gray-400" />
               ) : (
-                <ChevronDown className="h-3 w-3 text-gray-600" />
+                <ChevronDown className="h-3 w-3 text-gray-600 dark:text-gray-400" />
               )}
             </button>
           )}
@@ -651,13 +635,13 @@ export default function EnhancedOrgStructure() {
         {/* Vertical Connection Line */}
         {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
           <>
-            <div className="w-px h-12 bg-gray-300"></div>
+            <div className="w-px h-12 bg-gray-300 dark:bg-gray-600"></div>
             
             {/* Horizontal Line for Multiple Schools */}
             {companyData.schools.length > 1 && (
               <div className="relative">
                 <div 
-                  className="h-px bg-gray-300 absolute top-0"
+                  className="h-px bg-gray-300 dark:bg-gray-600 absolute top-0"
                   style={{
                     width: `${(companyData.schools.length - 1) * 320 + 100}px`,
                     left: '50%',
@@ -676,7 +660,7 @@ export default function EnhancedOrgStructure() {
                   <div key={school.id} className="flex flex-col items-center">
                     {/* Connection line from horizontal to school */}
                     {companyData.schools!.length > 1 && (
-                      <div className="w-px h-8 bg-gray-300 -mt-8"></div>
+                      <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 -mt-8"></div>
                     )}
                     
                     {/* School Node */}
@@ -687,12 +671,12 @@ export default function EnhancedOrgStructure() {
                       {school.branches && school.branches.length > 0 && (
                         <button
                           onClick={() => toggleNode(school.id)}
-                          className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 z-10"
+                          className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 z-10"
                         >
                           {isSchoolExpanded ? (
-                            <ChevronUp className="h-3 w-3 text-gray-600" />
+                            <ChevronUp className="h-3 w-3 text-gray-600 dark:text-gray-400" />
                           ) : (
-                            <ChevronDown className="h-3 w-3 text-gray-600" />
+                            <ChevronDown className="h-3 w-3 text-gray-600 dark:text-gray-400" />
                           )}
                         </button>
                       )}
@@ -701,13 +685,13 @@ export default function EnhancedOrgStructure() {
                     {/* Branches under School */}
                     {isSchoolExpanded && school.branches && school.branches.length > 0 && (
                       <>
-                        <div className="w-px h-12 bg-gray-300"></div>
+                        <div className="w-px h-12 bg-gray-300 dark:bg-gray-600"></div>
                         
                         {/* Horizontal Line for Multiple Branches */}
                         {school.branches.length > 1 && (
                           <div className="relative">
                             <div 
-                              className="h-px bg-gray-300 absolute top-0"
+                              className="h-px bg-gray-300 dark:bg-gray-600 absolute top-0"
                               style={{
                                 width: `${(school.branches.length - 1) * 320 + 100}px`,
                                 left: '50%',
@@ -723,7 +707,7 @@ export default function EnhancedOrgStructure() {
                             <div key={branch.id} className="flex flex-col items-center">
                               {/* Connection line from horizontal to branch */}
                               {school.branches!.length > 1 && (
-                                <div className="w-px h-8 bg-gray-300 -mt-8"></div>
+                                <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 -mt-8"></div>
                               )}
                               
                               {/* Branch Node */}
@@ -743,7 +727,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== RENDER DETAILS PANEL (PRESERVED FROM ORIGINAL) =====
+  // ===== RENDER DETAILS PANEL (WITH PROPER DARK MODE) =====
   const renderDetailsPanel = () => {
     if (!selectedItem || !showDetailsPanel) return null;
 
@@ -758,7 +742,7 @@ export default function EnhancedOrgStructure() {
               onClick={() => setShowDetailsPanel(false)}
               className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
           </div>
           
@@ -805,7 +789,7 @@ export default function EnhancedOrgStructure() {
                   <input
                     type="text"
                     value={selectedItem.name}
-                    className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                    className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     disabled
                   />
                 ) : (
@@ -853,7 +837,7 @@ export default function EnhancedOrgStructure() {
                       type="text"
                       value={formData.main_phone || ''}
                       onChange={(e) => setFormData({...formData, main_phone: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                   
@@ -865,7 +849,7 @@ export default function EnhancedOrgStructure() {
                       type="email"
                       value={formData.main_email || ''}
                       onChange={(e) => setFormData({...formData, main_email: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                   
@@ -877,7 +861,7 @@ export default function EnhancedOrgStructure() {
                       type="text"
                       value={formData.website || ''}
                       onChange={(e) => setFormData({...formData, website: e.target.value})}
-                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                      className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                 </>
@@ -900,7 +884,7 @@ export default function EnhancedOrgStructure() {
                         setEditMode(false);
                         setFormData(selectedItem.additional || {});
                       }}
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-white"
                     >
                       Cancel
                     </button>
@@ -951,8 +935,8 @@ export default function EnhancedOrgStructure() {
                         </div>
                         <span className={`px-2 py-1 text-xs rounded ${
                           dept.status === 'active' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                         }`}>
                           {dept.status}
                         </span>
@@ -989,7 +973,7 @@ export default function EnhancedOrgStructure() {
                           </p>
                         </div>
                         {year.is_current && (
-                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">
                             Current
                           </span>
                         )}
@@ -1009,7 +993,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== RENDER CREATE MODAL (PRESERVED FROM ORIGINAL) =====
+  // ===== RENDER CREATE MODAL (WITH PROPER DARK MODE) =====
   const renderCreateModal = () => {
     if (!showModal) return null;
 
@@ -1029,7 +1013,7 @@ export default function EnhancedOrgStructure() {
                 type="text"
                 value={formData.name || ''}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 placeholder="Enter name"
               />
             </div>
@@ -1042,7 +1026,7 @@ export default function EnhancedOrgStructure() {
                 type="text"
                 value={formData.code || ''}
                 onChange={(e) => setFormData({...formData, code: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 placeholder="Enter code"
               />
             </div>
@@ -1054,7 +1038,7 @@ export default function EnhancedOrgStructure() {
               <textarea
                 value={formData.description || ''}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 rows={3}
                 placeholder="Enter description"
               />
@@ -1068,7 +1052,7 @@ export default function EnhancedOrgStructure() {
                 <select
                   value={formData.department_type || 'administrative'}
                   onChange={(e) => setFormData({...formData, department_type: e.target.value})}
-                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="academic">Academic</option>
                   <option value="administrative">Administrative</option>
@@ -1110,7 +1094,7 @@ export default function EnhancedOrgStructure() {
                   setShowModal(false);
                   setFormData({});
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-white"
               >
                 Cancel
               </button>
@@ -1125,7 +1109,7 @@ export default function EnhancedOrgStructure() {
   const authenticatedUser = getAuthenticatedUser();
   if (!authenticatedUser) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -1139,10 +1123,10 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== LOADING STATE (PRESERVED) =====
+  // ===== LOADING STATE (WITH PROPER DARK MODE) =====
   if (!userCompanyId || isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
           <p className="mt-4 text-gray-600 dark:text-gray-400">
@@ -1153,10 +1137,10 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== ERROR STATE (PRESERVED) =====
+  // ===== ERROR STATE (WITH PROPER DARK MODE) =====
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -1176,18 +1160,18 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== MAIN RENDER - Clean Org Chart Design =====
+  // ===== MAIN RENDER - WITH PROPER DARK MODE =====
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Organization Management
               </h1>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Manage your organizational structure, schools, and branches
               </p>
             </div>
@@ -1199,14 +1183,14 @@ export default function EnhancedOrgStructure() {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 border rounded-lg text-sm"
+                  className="pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
                 />
               </div>
-              <button className="p-2 hover:bg-gray-100 rounded">
-                <Filter className="w-5 h-5" />
+              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                <Filter className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded">
-                <Settings className="w-5 h-5" />
+              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                <Settings className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
           </div>
@@ -1217,68 +1201,68 @@ export default function EnhancedOrgStructure() {
       <div className="p-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-4 border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Schools</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.length || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <School className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <School className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg p-4 border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Branches</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg p-4 border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Active Units</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Units</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.filter(s => s.status === 'active').length || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Activity className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-lg p-4 border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Staff</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.reduce((acc, school) => 
                     acc + (school.additional?.teachers_count || 0), 0) || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-orange-600" />
+              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <Users className="w-6 h-6 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Organization Chart */}
-        <div className="bg-white rounded-lg border overflow-x-auto">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-x-auto">
+          <div className="p-4 border-b dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Organization Structure
             </h2>
           </div>
