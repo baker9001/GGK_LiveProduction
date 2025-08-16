@@ -12,17 +12,25 @@
  *   - @/components/shared/StatusBadge
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
+ * Features:
+ *   - Navigation tabs (Expand/Colleagues view toggle)
+ *   - Quick navigation to Entity/Schools/Branches
+ *   - Expand/Collapse all controls
+ *   - Organization chart with proper hierarchy
+ *   - Complete CRUD operations
+ *   - Department and Academic Year management
+ *   - Dark mode support throughout
+ * 
  * Database Tables:
- *   - companies (always exists for user)
- *   - companies_additional (optional)
- *   - schools (linked to company)
- *   - schools_additional (optional)
- *   - branches (linked to schools)
- *   - branches_additional (optional)
- *   - entity_departments (no description field)
+ *   - companies → companies_additional
+ *   - schools → schools_additional
+ *   - branches → branches_additional
+ *   - entity_departments
  *   - academic_years
  *   - entity_users
  */
+
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -180,6 +188,8 @@ export default function OrganisationManagement() {
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [viewMode, setViewMode] = useState<'expand' | 'colleagues'>('expand');
+  const [expandAll, setExpandAll] = useState(true);
   
   // Tab states for detail panel
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
@@ -228,48 +238,14 @@ export default function OrganisationManagement() {
 
   // Initialize all nodes as expanded when company data is loaded
   useEffect(() => {
-    if (companyData) {
+    if (companyData && expandAll) {
       const allNodes = new Set<string>(['company']);
       companyData.schools?.forEach(school => {
         allNodes.add(school.id);
       });
       setExpandedNodes(allNodes);
     }
-  }, [companyData]);
-
-  // Handle keyboard shortcuts and click outside for details panel
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const panel = document.getElementById('details-panel');
-      if (panel && !panel.contains(event.target as Node)) {
-        setShowDetailsPanel(false);
-      }
-    };
-
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (editMode) {
-          setEditMode(false);
-          setFormData(selectedItem?.additional || {});
-        } else if (showDetailsPanel) {
-          setShowDetailsPanel(false);
-        }
-      }
-      if (event.key === 'Enter' && editMode && event.ctrlKey) {
-        handleSaveDetails();
-      }
-    };
-
-    if (showDetailsPanel) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscKey);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscKey);
-    };
-  }, [showDetailsPanel, editMode, selectedItem]);
+  }, [companyData, expandAll]);
 
   // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
@@ -591,6 +567,30 @@ export default function OrganisationManagement() {
     }
   };
 
+  // Function to handle expand/collapse all
+  const handleExpandAll = () => {
+    if (!companyData) return;
+    const allNodes = new Set<string>(['company']);
+    companyData.schools?.forEach(school => {
+      allNodes.add(school.id);
+    });
+    setExpandedNodes(allNodes);
+    setExpandAll(true);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedNodes(new Set());
+    setExpandAll(false);
+  };
+
+  // Function to scroll to section
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // ===== ORG CHART NODE COMPONENT =====
   const OrgChartNode = ({ item, type, isRoot = false }: { item: any; type: 'company' | 'school' | 'branch'; isRoot?: boolean; }) => {
     const employeeCount = type === 'company' ? 
@@ -627,7 +627,10 @@ export default function OrganisationManagement() {
     };
 
     return (
-      <div className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-4 w-[320px] h-full ${getCardBackground()}`}>
+      <div 
+        className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-4 w-[320px] cursor-pointer ${getCardBackground()}`}
+        onClick={() => handleItemClick(item, type)}
+      >
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className={`w-12 h-12 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
@@ -687,13 +690,13 @@ export default function OrganisationManagement() {
           <p className="text-xs text-gray-600 dark:text-gray-400">{managerTitle}</p>
         </div>
         <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-          <span className="text-lg font-semibold">{employeeCount}</span> Employees
+          <span className="text-lg font-semibold">{employeeCount}</span> Users
         </div>
       </div>
     );
   };
 
-  // ===== RENDER ORGANIZATION CHART =====
+  // ===== RENDER ORGANIZATION CHART WITH SECTION IDS =====
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
@@ -701,7 +704,8 @@ export default function OrganisationManagement() {
 
     return (
       <div className="flex flex-col items-center py-8">
-        <div className="relative">
+        {/* Company Node */}
+        <div id="org-company" className="relative">
           <OrgChartNode item={companyData} type="company" isRoot={true} />
           {companyData.schools && companyData.schools.length > 0 && (
             <button
@@ -718,80 +722,85 @@ export default function OrganisationManagement() {
           )}
         </div>
 
-        {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
-          <>
-            <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
-            {companyData.schools.length > 1 && (
-              <div className="relative h-0.5">
-                <div 
-                  className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
-                  style={{
-                    width: `${(companyData.schools.length - 1) * 336 + 100}px`,
-                    left: '50%',
-                    transform: 'translateX(-50%)'
-                  }}
-                ></div>
-              </div>
-            )}
-            <div className="flex items-stretch space-x-4 mt-8">
-              {companyData.schools.map((school) => {
-                const isSchoolExpanded = expandedNodes.has(school.id);
-                return (
-                  <div key={school.id} className="flex flex-col items-center">
-                    {companyData.schools!.length > 1 && (
-                      <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
-                    )}
-                    <div className="relative h-full">
-                      <OrgChartNode item={school} type="school" />
-                      {school.branches && school.branches.length > 0 && (
-                        <button
-                          onClick={() => toggleNode(school.id)}
-                          className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
-                          title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
-                        >
-                          {isSchoolExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                          )}
-                        </button>
+        {/* Schools Section */}
+        <div id="org-schools">
+          {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
+            <>
+              <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
+              {companyData.schools.length > 1 && (
+                <div className="relative h-0.5">
+                  <div 
+                    className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
+                    style={{
+                      width: `${(companyData.schools.length - 1) * 336 + 100}px`,
+                      left: '50%',
+                      transform: 'translateX(-50%)'
+                    }}
+                  ></div>
+                </div>
+              )}
+              <div className="flex items-stretch space-x-4 mt-8">
+                {companyData.schools.map((school) => {
+                  const isSchoolExpanded = expandedNodes.has(school.id);
+                  return (
+                    <div key={school.id} className="flex flex-col items-center">
+                      {companyData.schools!.length > 1 && (
+                        <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                       )}
-                    </div>
-                    {isSchoolExpanded && school.branches && school.branches.length > 0 && (
-                      <>
-                        <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
-                        {school.branches.length > 1 && (
-                          <div className="relative h-0.5">
-                            <div 
-                              className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
-                              style={{
-                                width: `${(school.branches.length - 1) * 336 + 100}px`,
-                                left: '50%',
-                                transform: 'translateX(-50%)'
-                              }}
-                            ></div>
-                          </div>
+                      <div className="relative">
+                        <OrgChartNode item={school} type="school" />
+                        {school.branches && school.branches.length > 0 && (
+                          <button
+                            onClick={() => toggleNode(school.id)}
+                            className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
+                            title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
+                          >
+                            {isSchoolExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                            )}
+                          </button>
                         )}
-                        <div className="flex items-stretch space-x-4 mt-8">
-                          {school.branches.map((branch) => (
-                            <div key={branch.id} className="flex flex-col items-center">
-                              {school.branches!.length > 1 && (
-                                <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
-                              )}
-                              <div className="h-full">
-                                <OrgChartNode item={branch} type="branch" />
+                      </div>
+                      
+                      {/* Branches Section */}
+                      <div id={school.id === companyData.schools![0].id ? 'org-branches' : undefined}>
+                        {isSchoolExpanded && school.branches && school.branches.length > 0 && (
+                          <>
+                            <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
+                            {school.branches.length > 1 && (
+                              <div className="relative h-0.5">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
+                                  style={{
+                                    width: `${(school.branches.length - 1) * 336 + 100}px`,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)'
+                                  }}
+                                ></div>
                               </div>
+                            )}
+                            <div className="flex items-stretch space-x-4 mt-8">
+                              {school.branches.map((branch) => (
+                                <div key={branch.id} className="flex flex-col items-center">
+                                  {school.branches!.length > 1 && (
+                                    <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
+                                  )}
+                                  <OrgChartNode item={branch} type="branch" />
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
   };
@@ -975,7 +984,7 @@ export default function OrganisationManagement() {
                           <div>
                             <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {dept.code} • {dept.employee_count || 0} employees
+                              {dept.code} • {dept.employee_count || 0} users
                             </p>
                           </div>
                           <StatusBadge status={dept.status} />
@@ -1032,7 +1041,7 @@ export default function OrganisationManagement() {
     );
   };
 
-  // ===== CHECK AUTHENTICATION (MOVED TO AFTER ALL HOOKS) =====
+  // ===== CHECK AUTHENTICATION =====
   if (!authenticatedUser) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1083,114 +1092,188 @@ export default function OrganisationManagement() {
 
   // ===== MAIN RENDER =====
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Organization Management
+                Organization Structure
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Manage your organizational structure, schools, and branches
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Manage your organization hierarchy and structure
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
-                />
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setModalType('school');
+                  setFormData({ company_id: userCompanyId });
+                  setShowModal(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add School
+              </Button>
+            </div>
+          </div>
+
+          {/* Navigation Bar */}
+          <div className="border-t dark:border-gray-700 pt-4 mt-4">
+            <div className="flex items-center justify-between">
+              {/* View Mode Toggle */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('expand')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'expand'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <ChevronRight className="w-4 h-4 inline-block mr-2" />
+                  Expand View
+                </button>
+                <button
+                  onClick={() => setViewMode('colleagues')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'colleagues'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Users className="w-4 h-4 inline-block mr-2" />
+                  Colleagues
+                </button>
               </div>
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                <Filter className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                <Settings className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              </button>
+
+              {/* Quick Navigation and Controls */}
+              <div className="flex items-center gap-4">
+                {/* Navigation Tabs */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Jump to:</span>
+                  <button
+                    onClick={() => scrollToSection('org-company')}
+                    className="px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                  >
+                    Entity
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('org-schools')}
+                    className="px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
+                  >
+                    Schools
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('org-branches')}
+                    className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors"
+                  >
+                    Branches
+                  </button>
+                </div>
+
+                {/* Expand/Collapse Controls */}
+                <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4">
+                  <button
+                    onClick={handleExpandAll}
+                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                    Expand All
+                  </button>
+                  <button
+                    onClick={handleCollapseAll}
+                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  >
+                    <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                    Collapse All
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                    {companyData?.schools?.length || 0}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                  <School className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                    {companyData?.schools?.filter(s => s.status === 'active').length || 0}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                  <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                    {companyData?.schools?.reduce((acc, school) => 
+                      acc + (school.additional?.teachers_count || 0), 0) || 0}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                  <Users className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.length || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <School className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Active Units</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => 
-                    acc + (school.additional?.teachers_count || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                <Users className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-x-auto">
-          <div className="p-4 border-b dark:border-gray-700">
+        {/* Organization Chart */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Organization Structure
+              {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
             </h2>
           </div>
+          
           <div className="p-6 min-w-max">
-            {renderOrganizationChart()}
+            {viewMode === 'expand' ? (
+              <div id="org-chart">
+                {renderOrganizationChart()}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">
+                  Colleagues view will display all users in card format
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  This feature is coming soon
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
+      {/* Details Panel */}
       {renderDetailsPanel()}
       
+      {/* Create Modal using SlideInForm */}
       <SlideInForm
         title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
         isOpen={showModal}
