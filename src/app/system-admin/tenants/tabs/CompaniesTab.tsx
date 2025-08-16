@@ -17,6 +17,7 @@
  *   - All UI interactions and modals
  * 
  * Added/Modified:
+ *   - FIXED: Phone field now properly saved to entity_users table
  *   - Direct database operations (no API calls)
  *   - Unified password management from UsersTab
  *   - Password requirements checker
@@ -29,7 +30,7 @@
  * Fields managed in this stage:
  *   - name (required)
  *   - email (required)
- *   - phone (optional)
+ *   - phone (optional) - NOW PROPERLY SAVED TO entity_users
  *   - position (optional, defaults to 'Administrator')
  *   - password (required for new, optional for edit)
  * 
@@ -41,7 +42,7 @@
  * Database Tables:
  *   - companies
  *   - users (main auth table)
- *   - entity_users (profile table)
+ *   - entity_users (profile table - includes phone)
  *   - regions
  *   - countries
  *   - audit_logs
@@ -227,6 +228,7 @@ interface CompanyAdmin {
   employee_status?: string;
   department_id?: string | null;
   is_company_admin: boolean;
+  phone?: string; // Added phone field to interface
   created_at: string;
   updated_at: string;
   users?: {
@@ -589,7 +591,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation (Direct Database - No API)
+  // Tenant admin mutation (Direct Database - No API) - FIXED PHONE FIELD
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -616,9 +618,10 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update entity_users profile with managed fields only
+          // Update entity_users profile with managed fields including PHONE
           const entityUpdates: any = {
             position: position || editingAdmin.position || 'Administrator',
+            phone: phone || null, // FIXED: Added phone field to entity_users update
             updated_at: new Date().toISOString()
           };
 
@@ -650,7 +653,7 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Update phone if changed
+          // Update phone in users table if changed
           if (phone !== editingAdmin.users?.phone) {
             userUpdates.phone = phone || null;
           }
@@ -703,7 +706,7 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin with minimal fields
+            // Link existing user to company as admin with phone field
             const { error: linkError } = await supabase
               .from('entity_users')
               .insert([{
@@ -711,6 +714,7 @@ export default function CompaniesTab() {
                 user_id: existingUser.id,
                 company_id: companyId,
                 position: position || 'Administrator',
+                phone: phone || null, // FIXED: Added phone field to entity_users insert
                 department: null, // Will be set later in entity management
                 employee_id: null, // Will be set later in entity management
                 hire_date: new Date().toISOString().split('T')[0], // Default to today
@@ -802,7 +806,7 @@ export default function CompaniesTab() {
             throw userError;
           }
           
-          // Create entity user profile with minimal fields
+          // Create entity user profile with phone field
           const { error: entityError } = await supabase
             .from('entity_users')
             .insert({
@@ -810,6 +814,7 @@ export default function CompaniesTab() {
               user_id: newUser.id, // Link to the user we just created
               company_id: companyId,
               position: position || 'Administrator',
+              phone: phone || null, // FIXED: Added phone field to entity_users insert
               department: null, // Will be set later in entity management
               employee_id: null, // Will be set later in entity management
               hire_date: new Date().toISOString().split('T')[0], // Default to today
@@ -1105,7 +1110,7 @@ export default function CompaniesTab() {
   const fetchCompanyAdmins = async (companyId: string) => {
     setLoadingAdmins(true);
     try {
-      // Fetch entity_users with user details
+      // Fetch entity_users with user details - Now includes phone from entity_users
       const { data: entityUsers, error: entityError } = await supabase
         .from('entity_users')
         .select('*')
@@ -1132,7 +1137,7 @@ export default function CompaniesTab() {
       // Create user map
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
-      // Combine data
+      // Combine data - entity_users now includes phone field
       const adminsWithUsers = entityUsers.map(entityUser => ({
         ...entityUser,
         users: userMap.get(entityUser.user_id) || null
@@ -1285,7 +1290,7 @@ export default function CompaniesTab() {
               <div class="password">${generatedPassword}</div>
               <div class="footer">
                 Please share this password securely with the user. 
-                They will need to verify their email before logging in.
+                They will receive a verification email and must verify their email before logging in.
                 The user should change this password after first login.
               </div>
             </body>
@@ -1348,13 +1353,13 @@ export default function CompaniesTab() {
     }
   }, [editingCompany]);
 
-  // Update admin form when editing
+  // Update admin form when editing - FIXED to include phone from entity_users
   React.useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: editingAdmin.users?.phone || '',
+        phone: editingAdmin.phone || editingAdmin.users?.phone || '', // Prefer entity_users.phone
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -2117,7 +2122,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* View/Manage Admins Modal */}
+      {/* View/Manage Admins Modal - FIXED to display phone from entity_users */}
       {isViewAdminsOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -2314,7 +2319,7 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.users?.phone || '—'}
+                                    {admin.phone || admin.users?.phone || '—'}
                                   </span>
                                 </div>
                               </div>
