@@ -16,12 +16,12 @@
  *   - All original state management
  * 
  * Added/Modified:
- *   - Modern hierarchical chart view with card-based nodes
- *   - Direct action icons for each node
- *   - Employee count and manager information display
- *   - View mode toggle (chart/tree)
- *   - Enhanced visual hierarchy with gradients
- *   - Quick action buttons with tooltips
+ *   - Clean hierarchical org chart matching sample design
+ *   - Proper connection lines between nodes
+ *   - Centered layout with proper spacing
+ *   - Inline action icons (edit, add, more)
+ *   - Avatar badges for managers
+ *   - Clean white cards with subtle shadows
  * 
  * Database Tables:
  *   - companies
@@ -33,9 +33,6 @@
  *   - entity_departments
  *   - academic_years
  *   - entity_users
- * 
- * Connected Files:
- *   - Imported by: /src/app/entity-module/organisation/page.tsx
  */
 
 import React, { useState, useEffect } from 'react';
@@ -44,7 +41,8 @@ import {
   Plus, X, Save, Trash2, Users, Search, Filter, Settings,
   Activity, AlertCircle, Loader2, Phone, Mail, Eye,
   Globe, User, MoreVertical, UserPlus, ChevronUp,
-  FolderOpen, FileText, Calendar, Shield, Hash, Briefcase
+  FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
+  Edit2, PlusCircle
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -177,7 +175,7 @@ export default function EnhancedOrgStructure() {
   const { user } = useUser();
   
   // PRESERVED: All original state management
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
@@ -193,10 +191,6 @@ export default function EnhancedOrgStructure() {
   
   // Form states
   const [formData, setFormData] = useState<any>({});
-  
-  // ADDED: New states for enhanced features
-  const [viewMode, setViewMode] = useState<'chart' | 'tree'>('chart');
-  const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
 
   // ===== FETCH USER'S COMPANY (PRESERVED WITH CUSTOM AUTH) =====
   useEffect(() => {
@@ -225,6 +219,8 @@ export default function EnhancedOrgStructure() {
         if (entityUser && entityUser.company_id) {
           console.log('Found company ID:', entityUser.company_id);
           setUserCompanyId(entityUser.company_id);
+          // Auto-expand company node
+          setExpandedNodes(new Set(['company']));
         } else {
           console.error('No company associated with user');
           toast.error('No company associated with your account');
@@ -517,34 +513,16 @@ export default function EnhancedOrgStructure() {
     // Add similar handlers for school and branch updates
   };
 
-  // ===== ENHANCED ORGANIZATION NODE COMPONENT =====
-  const OrganizationNode = ({ 
+  // ===== ORG CHART NODE COMPONENT - Matching Sample Design =====
+  const OrgChartNode = ({ 
     item, 
-    type, 
-    level = 0,
-    isLast = false,
-    parentExpanded = true
+    type,
+    isRoot = false
   }: { 
     item: any; 
     type: 'company' | 'school' | 'branch';
-    level?: number;
-    isLast?: boolean;
-    parentExpanded?: boolean;
+    isRoot?: boolean;
   }) => {
-    const isExpanded = expandedNodes.has(item.id);
-    const hasChildren = type === 'company' ? item.schools?.length > 0 : 
-                       type === 'school' ? item.branches?.length > 0 : false;
-    
-    const getIcon = () => {
-      switch(type) {
-        case 'company': return Building2;
-        case 'school': return School;
-        case 'branch': return MapPin;
-        default: return Building2;
-      }
-    };
-    
-    const Icon = getIcon();
     const employeeCount = type === 'company' ? 
       item.schools?.reduce((acc: number, school: SchoolData) => 
         acc + (school.additional?.teachers_count || 0), 0) || 0 :
@@ -556,259 +534,210 @@ export default function EnhancedOrgStructure() {
                        item.additional?.branch_head_name;
 
     const managerTitle = type === 'school' ? 'Principal' : 
-                        type === 'branch' ? 'Branch Head' : 'Manager';
+                        type === 'branch' ? 'Branch Head' : 'CEO';
+
+    const managerInitials = managerName ? 
+      managerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 
+      'NA';
+
+    // Get avatar color based on type
+    const getAvatarColor = () => {
+      if (type === 'company') return 'bg-blue-500';
+      if (type === 'school') return 'bg-green-500';
+      return 'bg-purple-500';
+    };
 
     return (
-      <div className={`${viewMode === 'chart' ? 'flex flex-col items-center' : ''}`}>
-        {/* Connection Lines for Chart View */}
-        {viewMode === 'chart' && level > 0 && (
-          <div className="w-px h-8 bg-gray-300 dark:bg-gray-600"></div>
-        )}
-        
-        {/* Node Card */}
-        <div className={`
-          relative group
-          ${viewMode === 'chart' ? 'min-w-[280px]' : 'w-full'}
-        `}>
-          <div className={`
-            bg-white dark:bg-gray-800 
-            border-2 
-            ${item.status === 'active' 
-              ? 'border-gray-200 dark:border-gray-700' 
-              : 'border-gray-300 dark:border-gray-600'
-            }
-            rounded-xl shadow-sm hover:shadow-lg
-            transition-all duration-200
-            ${selectedItem?.id === item.id ? 'ring-2 ring-blue-500 border-blue-500' : ''}
-            hover:border-blue-400 dark:hover:border-blue-500
-          `}>
-            {/* Header with Icon and Status */}
-            <div className={`
-              px-4 py-3 
-              ${type === 'company' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20' :
-                type === 'school' ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20' :
-                'bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20'}
-              rounded-t-lg border-b border-gray-200 dark:border-gray-700
-            `}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`
-                    p-2 rounded-lg
-                    ${type === 'company' ? 'bg-blue-100 dark:bg-blue-900/50' :
-                      type === 'school' ? 'bg-green-100 dark:bg-green-900/50' :
-                      'bg-purple-100 dark:bg-purple-900/50'}
-                  `}>
-                    <Icon className={`
-                      h-5 w-5
-                      ${type === 'company' ? 'text-blue-600 dark:text-blue-400' :
-                        type === 'school' ? 'text-green-600 dark:text-green-400' :
-                        'text-purple-600 dark:text-purple-400'}
-                    `} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {item.name}
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {item.code}
-                    </p>
-                  </div>
-                </div>
-                <span className={`
-                  px-2 py-1 text-xs font-medium rounded-full
-                  ${item.status === 'active' 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400'
-                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}
-                `}>
-                  {item.status}
-                </span>
-              </div>
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-4 min-w-[280px] max-w-[320px]">
+        {/* Header with Actions */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center space-x-3">
+            {/* Avatar */}
+            <div className={`w-10 h-10 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-medium text-sm`}>
+              {managerInitials}
             </div>
-
-            {/* Content */}
-            <div className="p-4">
-              {/* Manager Info */}
-              {managerName && (
-                <div className="flex items-center space-x-2 mb-3">
-                  <User className="h-4 w-4 text-gray-400" />
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-700 dark:text-gray-300">
-                      {managerName}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {managerTitle}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Stats */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-1">
-                    <Users className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {employeeCount} Employees
-                    </span>
-                  </div>
-                  {type === 'company' && item.schools && (
-                    <div className="flex items-center space-x-1">
-                      <School className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {item.schools.length} Units
-                      </span>
-                    </div>
-                  )}
-                  {type === 'school' && item.branches && (
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {item.branches.length} Branches
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between">
-                {hasChildren && (
-                  <button
-                    onClick={() => toggleNode(item.id)}
-                    className="flex items-center space-x-1 text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                  >
-                    {isExpanded ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        <span>Collapse</span>
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        <span>Expand</span>
-                      </>
-                    )}
-                  </button>
-                )}
-                
-                <div className="flex items-center space-x-1">
-                  {/* Quick Actions */}
-                  <button
-                    onClick={() => handleItemClick(item, type)}
-                    className="p-1.5 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
-                    title="View Details"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      handleItemClick(item, type);
-                      setEditMode(true);
-                    }}
-                    className="p-1.5 text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-all"
-                    title="Edit"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  
-                  {(type === 'company' || type === 'school') && (
-                    <button
-                      onClick={() => {
-                        setModalType(type === 'company' ? 'school' : 'branch');
-                        setFormData(type === 'school' ? { school_id: item.id } : {});
-                        setShowModal(true);
-                      }}
-                      className="p-1.5 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-all"
-                      title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
-                  
-                  {/* More Actions */}
-                  <button
-                    onClick={() => setShowActionMenu(showActionMenu === item.id ? null : item.id)}
-                    className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all"
-                    title="More Actions"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-
-                  {/* Action Menu Dropdown */}
-                  {showActionMenu === item.id && (
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                      <div className="py-1">
-                        <button 
-                          onClick={() => {
-                            setModalType('department');
-                            setFormData({
-                              company_id: userCompanyId!,
-                              school_id: type === 'school' ? item.id : undefined,
-                              branch_id: type === 'branch' ? item.id : undefined
-                            });
-                            setShowModal(true);
-                            setShowActionMenu(null);
-                          }}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                        >
-                          <Briefcase className="h-4 w-4" />
-                          <span>Add Department</span>
-                        </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2">
-                          <UserPlus className="h-4 w-4" />
-                          <span>Add Employee</span>
-                        </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2">
-                          <FileText className="h-4 w-4" />
-                          <span>View Reports</span>
-                        </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2">
-                          <Calendar className="h-4 w-4" />
-                          <span>Schedule Meeting</span>
-                        </button>
-                        <hr className="my-1 border-gray-200 dark:border-gray-700" />
-                        <button className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2">
-                          <Trash2 className="h-4 w-4" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+            
+            {/* Title and Role */}
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base">
+                {item.name}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {item.code || type.charAt(0).toUpperCase() + type.slice(1)}
+              </p>
             </div>
+          </div>
+
+          {/* Action Icons */}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => {
+                handleItemClick(item, type);
+                setEditMode(true);
+              }}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              title="Edit"
+            >
+              <Edit2 className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+            </button>
+            
+            {(type === 'company' || type === 'school') && (
+              <button
+                onClick={() => {
+                  setModalType(type === 'company' ? 'school' : 'branch');
+                  setFormData(type === 'school' ? { school_id: item.id } : {});
+                  setShowModal(true);
+                }}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
+              >
+                <PlusCircle className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              </button>
+            )}
+            
+            <button
+              onClick={() => handleItemClick(item, type)}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
+              title="More Actions"
+            >
+              <MoreVertical className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+            </button>
           </div>
         </div>
 
-        {/* Children Nodes */}
-        {isExpanded && hasChildren && (
-          <div className={`
-            ${viewMode === 'chart' 
-              ? 'flex flex-row items-start justify-center space-x-4 mt-8' 
-              : 'ml-6 mt-3 space-y-3 border-l-2 border-gray-200 dark:border-gray-700 pl-4'}
-          `}>
-            {type === 'company' && item.schools?.map((school: SchoolData, index: number) => (
-              <OrganizationNode 
-                key={school.id} 
-                item={school} 
-                type="school" 
-                level={level + 1}
-                isLast={index === item.schools.length - 1}
-                parentExpanded={isExpanded}
-              />
-            ))}
-            {type === 'school' && item.branches?.map((branch: BranchData, index: number) => (
-              <OrganizationNode 
-                key={branch.id} 
-                item={branch} 
-                type="branch" 
-                level={level + 1}
-                isLast={index === item.branches.length - 1}
-                parentExpanded={isExpanded}
-              />
-            ))}
+        {/* Manager Info */}
+        {managerName && (
+          <div className="mb-3">
+            <p className="text-sm font-medium text-gray-700">{managerName}</p>
+            <p className="text-xs text-gray-500">{managerTitle}</p>
           </div>
+        )}
+
+        {/* Employee Count */}
+        <div className="text-sm text-gray-600">
+          <span className="font-medium">{employeeCount}</span> Employees
+        </div>
+      </div>
+    );
+  };
+
+  // ===== RENDER ORGANIZATION CHART - Clean Hierarchical Layout =====
+  const renderOrganizationChart = () => {
+    if (!companyData) return null;
+
+    const isCompanyExpanded = expandedNodes.has('company');
+
+    return (
+      <div className="flex flex-col items-center py-8">
+        {/* Company Node */}
+        <div className="relative">
+          <OrgChartNode item={companyData} type="company" isRoot={true} />
+          
+          {/* Expand/Collapse Button */}
+          {companyData.schools && companyData.schools.length > 0 && (
+            <button
+              onClick={() => toggleNode('company')}
+              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 z-10"
+            >
+              {isCompanyExpanded ? (
+                <ChevronUp className="h-3 w-3 text-gray-600" />
+              ) : (
+                <ChevronDown className="h-3 w-3 text-gray-600" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Vertical Connection Line */}
+        {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
+          <>
+            <div className="w-px h-12 bg-gray-300"></div>
+            
+            {/* Horizontal Line for Multiple Schools */}
+            {companyData.schools.length > 1 && (
+              <div className="relative">
+                <div 
+                  className="h-px bg-gray-300 absolute top-0"
+                  style={{
+                    width: `${(companyData.schools.length - 1) * 320 + 100}px`,
+                    left: '50%',
+                    transform: 'translateX(-50%)'
+                  }}
+                ></div>
+              </div>
+            )}
+            
+            {/* Schools Container */}
+            <div className="flex items-start space-x-8 mt-8">
+              {companyData.schools.map((school, schoolIndex) => {
+                const isSchoolExpanded = expandedNodes.has(school.id);
+                
+                return (
+                  <div key={school.id} className="flex flex-col items-center">
+                    {/* Connection line from horizontal to school */}
+                    {companyData.schools!.length > 1 && (
+                      <div className="w-px h-8 bg-gray-300 -mt-8"></div>
+                    )}
+                    
+                    {/* School Node */}
+                    <div className="relative">
+                      <OrgChartNode item={school} type="school" />
+                      
+                      {/* Expand/Collapse Button for School */}
+                      {school.branches && school.branches.length > 0 && (
+                        <button
+                          onClick={() => toggleNode(school.id)}
+                          className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 z-10"
+                        >
+                          {isSchoolExpanded ? (
+                            <ChevronUp className="h-3 w-3 text-gray-600" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3 text-gray-600" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Branches under School */}
+                    {isSchoolExpanded && school.branches && school.branches.length > 0 && (
+                      <>
+                        <div className="w-px h-12 bg-gray-300"></div>
+                        
+                        {/* Horizontal Line for Multiple Branches */}
+                        {school.branches.length > 1 && (
+                          <div className="relative">
+                            <div 
+                              className="h-px bg-gray-300 absolute top-0"
+                              style={{
+                                width: `${(school.branches.length - 1) * 320 + 100}px`,
+                                left: '50%',
+                                transform: 'translateX(-50%)'
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                        
+                        {/* Branches Container */}
+                        <div className="flex items-start space-x-8 mt-8">
+                          {school.branches.map((branch) => (
+                            <div key={branch.id} className="flex flex-col items-center">
+                              {/* Connection line from horizontal to branch */}
+                              {school.branches!.length > 1 && (
+                                <div className="w-px h-8 bg-gray-300 -mt-8"></div>
+                              )}
+                              
+                              {/* Branch Node */}
+                              <OrgChartNode item={branch} type="branch" />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     );
@@ -1247,23 +1176,22 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== MAIN RENDER (ENHANCED) =====
+  // ===== MAIN RENDER - Clean Org Chart Design =====
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
+      <div className="bg-white shadow-sm border-b">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Organization Structure
+              <h1 className="text-2xl font-bold text-gray-900">
+                Organization Management
               </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Manage your organizational hierarchy and structure
+              <p className="text-sm text-gray-600 mt-1">
+                Manage your organizational structure, schools, and branches
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* Search Bar */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
@@ -1271,38 +1199,13 @@ export default function EnhancedOrgStructure() {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 text-sm"
+                  className="pl-10 pr-4 py-2 border rounded-lg text-sm"
                 />
               </div>
-              
-              {/* View Mode Toggle */}
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('chart')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    viewMode === 'chart' 
-                      ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  Chart View
-                </button>
-                <button
-                  onClick={() => setViewMode('tree')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    viewMode === 'tree' 
-                      ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm' 
-                      : 'text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  Tree View
-                </button>
-              </div>
-              
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+              <button className="p-2 hover:bg-gray-100 rounded">
                 <Filter className="w-5 h-5" />
               </button>
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+              <button className="p-2 hover:bg-gray-100 rounded">
                 <Settings className="w-5 h-5" />
               </button>
             </div>
@@ -1312,76 +1215,77 @@ export default function EnhancedOrgStructure() {
 
       {/* Main Content */}
       <div className="p-6">
-        {/* Stats Cards (PRESERVED) */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+          <div className="bg-white rounded-lg p-4 border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm text-gray-500">Total Schools</p>
+                <p className="text-2xl font-semibold text-gray-900">
                   {companyData?.schools?.length || 0}
                 </p>
               </div>
-              <School className="w-8 h-8 text-green-500" />
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <School className="w-6 h-6 text-green-600" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+          <div className="bg-white rounded-lg p-4 border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm text-gray-500">Total Branches</p>
+                <p className="text-2xl font-semibold text-gray-900">
                   {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
                 </p>
               </div>
-              <MapPin className="w-8 h-8 text-purple-500" />
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-purple-600" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+          <div className="bg-white rounded-lg p-4 border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Active Units</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm text-gray-500">Active Units</p>
+                <p className="text-2xl font-semibold text-gray-900">
                   {companyData?.schools?.filter(s => s.status === 'active').length || 0}
                 </p>
               </div>
-              <Activity className="w-8 h-8 text-blue-500" />
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Activity className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
+          <div className="bg-white rounded-lg p-4 border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm text-gray-500">Total Staff</p>
+                <p className="text-2xl font-semibold text-gray-900">
                   {companyData?.schools?.reduce((acc, school) => 
                     acc + (school.additional?.teachers_count || 0), 0) || 0}
                 </p>
               </div>
-              <Users className="w-8 h-8 text-orange-500" />
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Users className="w-6 h-6 text-orange-600" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Organization Structure */}
-        <div className={`
-          ${viewMode === 'chart' ? 'overflow-x-auto' : ''}
-          bg-white dark:bg-gray-800 rounded-lg p-6 border dark:border-gray-700
-        `}>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-            Organization Hierarchy
-          </h2>
+        {/* Organization Chart */}
+        <div className="bg-white rounded-lg border overflow-x-auto">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Organization Structure
+            </h2>
+          </div>
           
-          {companyData && (
-            <div className={viewMode === 'chart' ? 'inline-block min-w-full' : ''}>
-              <OrganizationNode 
-                item={companyData} 
-                type="company" 
-                level={0}
-              />
-            </div>
-          )}
+          <div className="p-6 min-w-max">
+            {renderOrganizationChart()}
+          </div>
         </div>
       </div>
 
