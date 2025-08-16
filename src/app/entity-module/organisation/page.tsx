@@ -314,7 +314,6 @@ export default function OrganisationManagement() {
         schools: schoolsWithDetails 
       };
 
-      setCompanyData(fullData);
       return fullData;
     },
     {
@@ -322,9 +321,18 @@ export default function OrganisationManagement() {
       staleTime: 5 * 60 * 1000,
       cacheTime: 10 * 60 * 1000,
       retry: 2,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
+      keepPreviousData: true
     }
   );
+
+  // Update companyData whenever organizationData changes
+  useEffect(() => {
+    if (organizationData) {
+      setCompanyData(organizationData);
+    }
+  }, [organizationData]);
 
   // ===== FETCH DEPARTMENTS =====
   const { data: departments } = useQuery(
@@ -1148,50 +1156,6 @@ export default function OrganisationManagement() {
                   Colleagues
                 </button>
               </div>
-
-              {/* Quick Navigation and Controls */}
-              <div className="flex items-center gap-4">
-                {/* Navigation Tabs */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Jump to:</span>
-                  <button
-                    onClick={() => scrollToSection('org-company')}
-                    className="px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                  >
-                    Entity
-                  </button>
-                  <button
-                    onClick={() => scrollToSection('org-schools')}
-                    className="px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
-                  >
-                    Schools
-                  </button>
-                  <button
-                    onClick={() => scrollToSection('org-branches')}
-                    className="px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors"
-                  >
-                    Branches
-                  </button>
-                </div>
-
-                {/* Expand/Collapse Controls */}
-                <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4">
-                  <button
-                    onClick={handleExpandAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  >
-                    <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                    Expand All
-                  </button>
-                  <button
-                    onClick={handleCollapseAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  >
-                    <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                    Collapse All
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1245,9 +1209,110 @@ export default function OrganisationManagement() {
         {/* Organization Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
+              </h2>
+              
+              {/* Level Navigation Controls */}
+              {viewMode === 'expand' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      // Toggle company expansion
+                      const newExpanded = new Set(expandedNodes);
+                      if (newExpanded.has('company')) {
+                        // Collapse all
+                        setExpandedNodes(new Set());
+                      } else {
+                        // Show only company
+                        setExpandedNodes(new Set(['company']));
+                      }
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company')
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                  >
+                    Entity
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set<string>(['company']);
+                      // Toggle schools expansion
+                      const hasAnySchool = companyData.schools?.some(s => expandedNodes.has(s.id));
+                      if (!hasAnySchool) {
+                        // Expand to show schools but not branches
+                        setExpandedNodes(newExpanded);
+                      } else {
+                        // Collapse schools (and branches)
+                        companyData.schools?.forEach(school => {
+                          newExpanded.add(school.id);
+                        });
+                        setExpandedNodes(newExpanded);
+                      }
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(s => expandedNodes.has(s.id))
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                  >
+                    Schools
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      const allNodes = new Set<string>(['company']);
+                      const hasAnyBranch = companyData.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      );
+                      
+                      if (hasAnyBranch) {
+                        // Collapse branches (show only company and schools)
+                        setExpandedNodes(new Set(['company']));
+                      } else {
+                        // Expand all to show branches
+                        companyData.schools?.forEach(school => {
+                          allNodes.add(school.id);
+                        });
+                        setExpandedNodes(allNodes);
+                      }
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      )
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    Branches
+                  </button>
+                  
+                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                    <button
+                      onClick={handleExpandAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                      Expand All
+                    </button>
+                    <button
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="p-6 min-w-max">
