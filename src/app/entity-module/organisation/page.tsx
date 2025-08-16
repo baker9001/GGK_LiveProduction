@@ -1,33 +1,27 @@
 /**
- * File: /src/app/entity-module/organisation/EnhancedOrgStructure.tsx
+ * File: /src/app/entity-module/organisation/page.tsx
+ * Complete Organization Management Page
+ * 
  * Dependencies: 
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * Preserved Features:
- *   - All CRUD mutations (createSchool, createBranch, createDepartment, updateCompany)
- *   - Department management with queries and tab
- *   - Academic years management with queries and tab
- *   - Complete details panel with tabs
- *   - Edit mode functionality
- *   - Create modal with form validation
- *   - All original state management
- * 
- * Fixed Issues:
- *   - Proper dark mode colors matching system standards
- *   - Correct database relationships with .maybeSingle()
- *   - System standard UI components and colors
- *   - Proper data fetching from additional tables
- * 
  * Database Tables:
- *   - companies → companies_additional (via company_id)
- *   - schools → schools_additional (via school_id)
- *   - branches → branches_additional (via branch_id)
- *   - entity_departments (company/school/branch relationships)
- *   - academic_years (school_id relationship)
- *   - entity_users (user profiles)
+ *   - companies (always exists for user)
+ *   - companies_additional (optional)
+ *   - schools (linked to company)
+ *   - schools_additional (optional)
+ *   - branches (linked to schools)
+ *   - branches_additional (optional)
+ *   - entity_departments
+ *   - academic_years
+ *   - entity_users
+ * 
+ * Query Methods:
+ *   - .single() for required data (company, entity_user)
+ *   - .maybeSingle() for optional data (additional tables)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -45,7 +39,7 @@ import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '../../../lib/auth';
 import { useUser } from '../../../contexts/UserContext';
 
-// ===== TYPE DEFINITIONS (PRESERVED FROM ORIGINAL) =====
+// ===== TYPE DEFINITIONS =====
 interface Company {
   id: string;
   name: string;
@@ -165,11 +159,11 @@ interface AcademicYear {
 }
 
 // ===== MAIN COMPONENT =====
-export default function EnhancedOrgStructure() {
+export default function OrganisationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   
-  // PRESERVED: All original state management
+  // State management
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
@@ -187,7 +181,7 @@ export default function EnhancedOrgStructure() {
   // Form states
   const [formData, setFormData] = useState<any>({});
 
-  // ===== FETCH USER'S COMPANY (FIXED WITH PROPER ERROR HANDLING) =====
+  // ===== FETCH USER'S COMPANY (WITH PROPER AUTH) =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
@@ -195,33 +189,41 @@ export default function EnhancedOrgStructure() {
         
         if (!authenticatedUser) {
           console.error('No authenticated user found');
+          toast.error('Please login to access this page');
           return;
         }
 
+        // Fetch entity_user record - this SHOULD exist
         const { data: entityUser, error: entityError } = await supabase
           .from('entity_users')
           .select('company_id, is_company_admin')
           .eq('user_id', authenticatedUser.id)
-          .maybeSingle();
+          .single(); // Use .single() here because user MUST have an entity_user record
         
-        if (entityError && entityError.code !== 'PGRST116') {
+        if (entityError) {
           console.error('Error fetching entity user:', entityError);
+          toast.error('Failed to fetch user information');
           return;
         }
 
         if (entityUser && entityUser.company_id) {
+          console.log('Found company ID:', entityUser.company_id);
           setUserCompanyId(entityUser.company_id);
           setExpandedNodes(new Set(['company']));
+        } else {
+          console.error('No company associated with user');
+          toast.error('No company associated with your account');
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
+        toast.error('Failed to identify your company');
       }
     };
     
     fetchUserCompany();
   }, [user]);
 
-  // ===== FETCH ORGANIZATION DATA (FIXED WITH PROPER RELATIONSHIPS) =====
+  // ===== FETCH ORGANIZATION DATA (WITH CORRECT QUERY METHODS) =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
     async () => {
@@ -229,21 +231,26 @@ export default function EnhancedOrgStructure() {
         throw new Error('No company associated with user');
       }
 
-      // Fetch company data
+      console.log('Fetching organization data for company:', userCompanyId);
+
+      // Fetch company data - MUST exist
       const { data: company, error: companyError } = await supabase
         .from('companies')
         .select('*')
         .eq('id', userCompanyId)
-        .single();
+        .single(); // Use .single() - company MUST exist
 
-      if (companyError) throw companyError;
+      if (companyError) {
+        console.error('Company fetch error:', companyError);
+        throw companyError;
+      }
 
-      // Fetch company additional data - Use maybeSingle to handle missing data
+      // Fetch company additional data - OPTIONAL
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
-        .maybeSingle();
+        .maybeSingle(); // Use .maybeSingle() - additional data is optional
 
       // Fetch schools
       const { data: schools, error: schoolsError } = await supabase
@@ -256,12 +263,12 @@ export default function EnhancedOrgStructure() {
 
       // Fetch details for each school
       const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
-        // Use maybeSingle for optional additional data
+        // School additional data - OPTIONAL
         const { data: schoolAdditional } = await supabase
           .from('schools_additional')
           .select('*')
           .eq('school_id', school.id)
-          .maybeSingle();
+          .maybeSingle(); // Use .maybeSingle() - additional data is optional
 
         const { data: branches } = await supabase
           .from('branches')
@@ -270,12 +277,12 @@ export default function EnhancedOrgStructure() {
           .order('name');
 
         const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
-          // Use maybeSingle for optional additional data
+          // Branch additional data - OPTIONAL
           const { data: branchAdditional } = await supabase
             .from('branches_additional')
             .select('*')
             .eq('branch_id', branch.id)
-            .maybeSingle();
+            .maybeSingle(); // Use .maybeSingle() - additional data is optional
 
           return { ...branch, additional: branchAdditional };
         }));
@@ -301,7 +308,7 @@ export default function EnhancedOrgStructure() {
     }
   );
 
-  // ===== FETCH DEPARTMENTS (FIXED TABLE NAME) =====
+  // ===== FETCH DEPARTMENTS =====
   const { data: departments } = useQuery(
     ['departments', selectedItem?.id, selectedType],
     async () => {
@@ -319,7 +326,7 @@ export default function EnhancedOrgStructure() {
       
       const { data, error } = await query.order('name');
       
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       return data || [];
     },
     {
@@ -327,7 +334,7 @@ export default function EnhancedOrgStructure() {
     }
   );
 
-  // ===== FETCH ACADEMIC YEARS (PRESERVED) =====
+  // ===== FETCH ACADEMIC YEARS =====
   const { data: academicYears } = useQuery(
     ['academicYears', selectedItem?.id],
     async () => {
@@ -339,7 +346,7 @@ export default function EnhancedOrgStructure() {
         .eq('school_id', selectedItem.id)
         .order('start_date', { ascending: false });
       
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       return data || [];
     },
     {
@@ -347,7 +354,7 @@ export default function EnhancedOrgStructure() {
     }
   );
 
-  // ===== MUTATIONS (ALL PRESERVED FROM ORIGINAL) =====
+  // ===== MUTATIONS =====
   
   // Update Company Additional Info
   const updateCompanyMutation = useMutation(
@@ -356,7 +363,7 @@ export default function EnhancedOrgStructure() {
         .from('companies_additional')
         .select('id')
         .eq('company_id', data.company_id)
-        .maybeSingle();
+        .maybeSingle(); // Use .maybeSingle() - might not exist yet
 
       if (existing) {
         const { error } = await supabase
@@ -396,7 +403,7 @@ export default function EnhancedOrgStructure() {
           status: 'active'
         }])
         .select()
-        .single();
+        .single(); // Use .single() - we're inserting one record
 
       if (error) throw error;
       return school;
@@ -427,7 +434,7 @@ export default function EnhancedOrgStructure() {
           status: 'active'
         }])
         .select()
-        .single();
+        .single(); // Use .single() - we're inserting one record
 
       if (error) throw error;
       return branch;
@@ -467,7 +474,7 @@ export default function EnhancedOrgStructure() {
     }
   );
 
-  // ===== UI HELPER FUNCTIONS (PRESERVED) =====
+  // ===== UI HELPER FUNCTIONS =====
   const toggleNode = (id: string) => {
     const newExpanded = new Set(expandedNodes);
     if (newExpanded.has(id)) {
@@ -497,7 +504,7 @@ export default function EnhancedOrgStructure() {
     // Add similar handlers for school and branch updates
   };
 
-  // ===== ORG CHART NODE COMPONENT - WITH PROPER DARK MODE =====
+  // ===== ORG CHART NODE COMPONENT =====
   const OrgChartNode = ({ 
     item, 
     type,
@@ -605,7 +612,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== RENDER ORGANIZATION CHART - WITH PROPER DARK MODE =====
+  // ===== RENDER ORGANIZATION CHART =====
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
@@ -727,7 +734,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== RENDER DETAILS PANEL (WITH PROPER DARK MODE) =====
+  // ===== RENDER DETAILS PANEL =====
   const renderDetailsPanel = () => {
     if (!selectedItem || !showDetailsPanel) return null;
 
@@ -993,7 +1000,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== RENDER CREATE MODAL (WITH PROPER DARK MODE) =====
+  // ===== RENDER CREATE MODAL =====
   const renderCreateModal = () => {
     if (!showModal) return null;
 
@@ -1105,7 +1112,7 @@ export default function EnhancedOrgStructure() {
     );
   };
 
-  // ===== CHECK AUTHENTICATION (PRESERVED) =====
+  // ===== CHECK AUTHENTICATION =====
   const authenticatedUser = getAuthenticatedUser();
   if (!authenticatedUser) {
     return (
@@ -1123,7 +1130,7 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== LOADING STATE (WITH PROPER DARK MODE) =====
+  // ===== LOADING STATE =====
   if (!userCompanyId || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1137,7 +1144,7 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== ERROR STATE (WITH PROPER DARK MODE) =====
+  // ===== ERROR STATE =====
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1160,7 +1167,7 @@ export default function EnhancedOrgStructure() {
     );
   }
 
-  // ===== MAIN RENDER - WITH PROPER DARK MODE =====
+  // ===== MAIN RENDER =====
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
