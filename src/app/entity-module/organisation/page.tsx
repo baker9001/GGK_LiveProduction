@@ -1221,15 +1221,20 @@ export default function OrganisationManagement() {
                   <button
                     onClick={() => {
                       if (!companyData) return;
-                      // Toggle company expansion
+                      // Toggle entity level (show/hide schools)
                       const newExpanded = new Set(expandedNodes);
                       if (newExpanded.has('company')) {
-                        // Collapse all
-                        setExpandedNodes(new Set());
+                        // If company is expanded, collapse it
+                        newExpanded.delete('company');
+                        // Also remove all school expansions
+                        companyData.schools?.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
                       } else {
-                        // Show only company
-                        setExpandedNodes(new Set(['company']));
+                        // If company is collapsed, expand it
+                        newExpanded.add('company');
                       }
+                      setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                       expandedNodes.has('company')
@@ -1241,20 +1246,32 @@ export default function OrganisationManagement() {
                   </button>
                   <button
                     onClick={() => {
-                      if (!companyData) return;
-                      const newExpanded = new Set<string>(['company']);
-                      // Toggle schools expansion
-                      const hasAnySchool = companyData.schools?.some(s => expandedNodes.has(s.id));
-                      if (!hasAnySchool) {
-                        // Expand to show schools but not branches
-                        setExpandedNodes(newExpanded);
-                      } else {
-                        // Collapse schools (and branches)
-                        companyData.schools?.forEach(school => {
-                          newExpanded.add(school.id);
+                      if (!companyData || !companyData.schools?.length) return;
+                      
+                      // First ensure company is expanded to show schools
+                      const newExpanded = new Set(expandedNodes);
+                      newExpanded.add('company');
+                      
+                      // Check if any school is currently expanded
+                      const anySchoolExpanded = companyData.schools.some(school => 
+                        expandedNodes.has(school.id)
+                      );
+                      
+                      if (anySchoolExpanded) {
+                        // If any school is expanded, collapse all schools (hide branches)
+                        companyData.schools.forEach(school => {
+                          newExpanded.delete(school.id);
                         });
-                        setExpandedNodes(newExpanded);
+                      } else {
+                        // If no schools are expanded, expand all schools (show branches)
+                        companyData.schools.forEach(school => {
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
+                        });
                       }
+                      
+                      setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                       companyData?.schools?.some(s => expandedNodes.has(s.id))
@@ -1267,21 +1284,28 @@ export default function OrganisationManagement() {
                   <button
                     onClick={() => {
                       if (!companyData) return;
-                      const allNodes = new Set<string>(['company']);
-                      const hasAnyBranch = companyData.schools?.some(school => 
+                      
+                      // This button controls branch visibility
+                      const newExpanded = new Set<string>(['company']);
+                      
+                      // Check if any branches are currently visible
+                      const anyBranchesVisible = companyData.schools?.some(school => 
                         school.branches?.length && expandedNodes.has(school.id)
                       );
                       
-                      if (hasAnyBranch) {
-                        // Collapse branches (show only company and schools)
-                        setExpandedNodes(new Set(['company']));
+                      if (anyBranchesVisible) {
+                        // If branches are visible, hide them (but keep schools visible)
+                        // Just keep company expanded
                       } else {
-                        // Expand all to show branches
+                        // If branches are not visible, show them
                         companyData.schools?.forEach(school => {
-                          allNodes.add(school.id);
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
                         });
-                        setExpandedNodes(allNodes);
                       }
+                      
+                      setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                       companyData?.schools?.some(school => 
