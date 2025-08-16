@@ -187,7 +187,7 @@ export default function OrganisationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   
-  // State management - Initialize with all nodes expanded
+  // State management - All nodes expanded by default
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
@@ -202,17 +202,6 @@ export default function OrganisationManagement() {
   
   // Tab states for detail panel
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
-  
-  // Initialize expanded nodes when company data is loaded
-  useEffect(() => {
-    if (companyData) {
-      const allNodes = new Set<string>(['company']);
-      companyData.schools?.forEach(school => {
-        allNodes.add(school.id);
-      });
-      setExpandedNodes(allNodes);
-    }
-  }, [companyData]);
   
   // Form states
   const [formData, setFormData] = useState<any>({});
@@ -245,7 +234,6 @@ export default function OrganisationManagement() {
         if (entityUser && entityUser.company_id) {
           console.log('Found company ID:', entityUser.company_id);
           setUserCompanyId(entityUser.company_id);
-          setExpandedNodes(new Set(['company']));
         } else {
           console.error('No company associated with user');
           toast.error('No company associated with your account');
@@ -258,6 +246,20 @@ export default function OrganisationManagement() {
     
     fetchUserCompany();
   }, [user]);
+
+  // Initialize all nodes as expanded when company data is loaded
+  useEffect(() => {
+    if (companyData) {
+      const allNodes = new Set<string>(['company']);
+      
+      // Add all school IDs
+      companyData.schools?.forEach(school => {
+        allNodes.add(school.id);
+      });
+      
+      setExpandedNodes(allNodes);
+    }
+  }, [companyData]);
 
   // ===== FETCH ORGANIZATION DATA (WITH CORRECT QUERY METHODS) =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
@@ -624,28 +626,33 @@ export default function OrganisationManagement() {
       return 'bg-purple-500';
     };
 
+    // Enhanced card background based on type and theme
+    const getCardBackground = () => {
+      if (type === 'company') {
+        return 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700';
+      }
+      if (type === 'school') {
+        return 'bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700';
+      }
+      return 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700';
+    };
+
     return (
-      <div className={`${
-        type === 'company' 
-          ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
-          : type === 'school'
-          ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-700'
-          : 'bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200 dark:border-purple-700'
-      } rounded-lg border shadow-sm hover:shadow-md transition-all p-4 min-w-[280px] max-w-[320px]`}>
+      <div className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-4 w-[320px] h-full ${getCardBackground()}`}>
         {/* Header with Actions */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             {/* Avatar */}
-            <div className={`w-10 h-10 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-medium text-sm`}>
+            <div className={`w-12 h-12 rounded-full ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
               {managerInitials}
             </div>
             
             {/* Title and Role */}
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white text-base">
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-base line-clamp-1">
                 {item.name}
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-600 dark:text-gray-400">
                 {item.code || type.charAt(0).toUpperCase() + type.slice(1)}
               </p>
             </div>
@@ -654,51 +661,56 @@ export default function OrganisationManagement() {
           {/* Action Icons */}
           <div className="flex items-center space-x-1">
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 handleItemClick(item, type);
                 setEditMode(true);
               }}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
               title="Edit"
             >
-              <Edit2 className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
+              <Edit2 className="h-4 w-4 text-gray-600 dark:text-gray-400" />
             </button>
             
             {(type === 'company' || type === 'school') && (
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setModalType(type === 'company' ? 'school' : 'branch');
                   setFormData(type === 'school' ? { school_id: item.id } : {});
                   setShowModal(true);
                 }}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                 title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
               >
-                <PlusCircle className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
+                <PlusCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               </button>
             )}
             
             <button
-              onClick={() => handleItemClick(item, type)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleItemClick(item, type);
+              }}
+              className="p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
               title="More Actions"
             >
-              <MoreVertical className="h-4 w-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300" />
+              <MoreVertical className="h-4 w-4 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
 
         {/* Manager Info */}
-        {managerName && (
-          <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{managerName}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{managerTitle}</p>
-          </div>
-        )}
+        <div className="mb-3 min-h-[40px]">
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 line-clamp-1">
+            {managerName || 'Not Assigned'}
+          </p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">{managerTitle}</p>
+        </div>
 
         {/* Employee Count */}
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          <span className="font-medium">{employeeCount}</span> Employees
+        <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+          <span className="text-lg font-semibold">{employeeCount}</span> Employees
         </div>
       </div>
     );
@@ -713,19 +725,20 @@ export default function OrganisationManagement() {
     return (
       <div className="flex flex-col items-center py-8">
         {/* Company Node */}
-        <div id="org-company" className="relative">
+        <div className="relative">
           <OrgChartNode item={companyData} type="company" isRoot={true} />
           
           {/* Expand/Collapse Button */}
           {companyData.schools && companyData.schools.length > 0 && (
             <button
               onClick={() => toggleNode('company')}
-              className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 z-10"
+              className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
+              title={isCompanyExpanded ? 'Collapse Schools' : 'Expand Schools'}
             >
               {isCompanyExpanded ? (
-                <ChevronUp className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               ) : (
-                <ChevronDown className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               )}
             </button>
           )}
@@ -734,15 +747,15 @@ export default function OrganisationManagement() {
         {/* Vertical Connection Line */}
         {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
           <>
-            <div className="w-px h-12 bg-gray-300 dark:bg-gray-600"></div>
+            <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
             
             {/* Horizontal Line for Multiple Schools */}
             {companyData.schools.length > 1 && (
-              <div className="relative">
+              <div className="relative h-0.5">
                 <div 
-                  className="h-px bg-gray-300 dark:bg-gray-600 absolute top-0"
+                  className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                   style={{
-                    width: `${(companyData.schools.length - 1) * 320 + 100}px`,
+                    width: `${(companyData.schools.length - 1) * 336 + 100}px`,
                     left: '50%',
                     transform: 'translateX(-50%)'
                   }}
@@ -750,8 +763,8 @@ export default function OrganisationManagement() {
               </div>
             )}
             
-            {/* Schools Container */}
-            <div id="org-schools" className="flex items-start space-x-8 mt-8">
+            {/* Schools Container - All same height */}
+            <div className="flex items-stretch space-x-4 mt-8">
               {companyData.schools.map((school, schoolIndex) => {
                 const isSchoolExpanded = expandedNodes.has(school.id);
                 
@@ -759,23 +772,24 @@ export default function OrganisationManagement() {
                   <div key={school.id} className="flex flex-col items-center">
                     {/* Connection line from horizontal to school */}
                     {companyData.schools!.length > 1 && (
-                      <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 -mt-8"></div>
+                      <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                     )}
                     
                     {/* School Node */}
-                    <div className="relative">
+                    <div className="relative h-full">
                       <OrgChartNode item={school} type="school" />
                       
                       {/* Expand/Collapse Button for School */}
                       {school.branches && school.branches.length > 0 && (
                         <button
                           onClick={() => toggleNode(school.id)}
-                          className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-full flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 z-10"
+                          className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
+                          title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
                         >
                           {isSchoolExpanded ? (
-                            <ChevronUp className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                            <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                           ) : (
-                            <ChevronDown className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                            <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                           )}
                         </button>
                       )}
@@ -784,15 +798,15 @@ export default function OrganisationManagement() {
                     {/* Branches under School */}
                     {isSchoolExpanded && school.branches && school.branches.length > 0 && (
                       <>
-                        <div className="w-px h-12 bg-gray-300 dark:bg-gray-600"></div>
+                        <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
                         
                         {/* Horizontal Line for Multiple Branches */}
                         {school.branches.length > 1 && (
-                          <div className="relative">
+                          <div className="relative h-0.5">
                             <div 
-                              className="h-px bg-gray-300 dark:bg-gray-600 absolute top-0"
+                              className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                               style={{
-                                width: `${(school.branches.length - 1) * 320 + 100}px`,
+                                width: `${(school.branches.length - 1) * 336 + 100}px`,
                                 left: '50%',
                                 transform: 'translateX(-50%)'
                               }}
@@ -800,17 +814,19 @@ export default function OrganisationManagement() {
                           </div>
                         )}
                         
-                        {/* Branches Container */}
-                        <div id={schoolIndex === 0 ? "org-branches" : undefined} className="flex items-start space-x-8 mt-8">
+                        {/* Branches Container - All same height */}
+                        <div className="flex items-stretch space-x-4 mt-8">
                           {school.branches.map((branch) => (
                             <div key={branch.id} className="flex flex-col items-center">
                               {/* Connection line from horizontal to branch */}
                               {school.branches!.length > 1 && (
-                                <div className="w-px h-8 bg-gray-300 dark:bg-gray-600 -mt-8"></div>
+                                <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                               )}
                               
                               {/* Branch Node */}
-                              <OrgChartNode item={branch} type="branch" />
+                              <div className="h-full">
+                                <OrgChartNode item={branch} type="branch" />
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1235,67 +1251,9 @@ export default function OrganisationManagement() {
         {/* Organization Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-x-auto">
           <div className="p-4 border-b dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Organization Structure
-              </h2>
-              
-              {/* Quick Navigation Tabs */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Jump to:</span>
-                <button
-                  onClick={() => {
-                    const element = document.getElementById('org-company');
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }}
-                  className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                >
-                  Company
-                </button>
-                <button
-                  onClick={() => {
-                    const element = document.getElementById('org-schools');
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }}
-                  className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-                >
-                  Schools
-                </button>
-                <button
-                  onClick={() => {
-                    const element = document.getElementById('org-branches');
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }}
-                  className="px-3 py-1 text-sm bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                >
-                  Branches
-                </button>
-                <button
-                  onClick={() => {
-                    // Collapse all nodes
-                    setExpandedNodes(new Set());
-                  }}
-                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ml-2"
-                >
-                  Collapse All
-                </button>
-                <button
-                  onClick={() => {
-                    // Expand all nodes
-                    if (companyData) {
-                      const allNodes = new Set<string>(['company']);
-                      companyData.schools?.forEach(school => {
-                        allNodes.add(school.id);
-                      });
-                      setExpandedNodes(allNodes);
-                    }
-                  }}
-                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Expand All
-                </button>
-              </div>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Organization Structure
+            </h2>
           </div>
           
           <div className="p-6 min-w-max">
