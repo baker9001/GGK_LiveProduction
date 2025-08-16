@@ -191,8 +191,8 @@ interface AcademicYear {
 // ===== OPTIMIZED FETCH FUNCTION =====
 const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   try {
-    // Fetch all core data in parallel
-    const [companyRes, companyAddRes, schoolsRes, branchesRes] = await Promise.all([
+    // First, fetch company and schools data
+    const [companyRes, companyAddRes, schoolsRes] = await Promise.all([
       // Company basic data
       supabase
         .from('companies')
@@ -207,7 +207,7 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
         .eq('company_id', companyId)
         .maybeSingle(),
       
-      // All schools for the company
+      // All schools for the company with their additional data
       supabase
         .from('schools')
         .select(`
@@ -215,22 +215,6 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
           schools_additional (*)
         `)
         .eq('company_id', companyId)
-        .order('name'),
-      
-      // All branches with their schools
-      supabase
-        .from('branches')
-        .select(`
-          *,
-          branches_additional (*),
-          school_id
-        `)
-        .in('school_id', 
-          supabase
-            .from('schools')
-            .select('id')
-            .eq('company_id', companyId)
-        )
         .order('name')
     ]);
 
@@ -238,7 +222,24 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
     
     const company = companyRes.data;
     const schools = schoolsRes.data || [];
-    const branches = branchesRes.data || [];
+    
+    // Extract school IDs for fetching branches
+    const schoolIds = schools.map(s => s.id);
+    
+    // If we have schools, fetch branches and their additional data
+    let branches: any[] = [];
+    if (schoolIds.length > 0) {
+      const branchesRes = await supabase
+        .from('branches')
+        .select(`
+          *,
+          branches_additional (*)
+        `)
+        .in('school_id', schoolIds)
+        .order('name');
+      
+      branches = branchesRes.data || [];
+    }
 
     // Group branches by school
     const branchesBySchool = branches.reduce((acc, branch) => {
@@ -247,7 +248,8 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
       }
       acc[branch.school_id].push({
         ...branch,
-        additional: branch.branches_additional?.[0] || null
+        additional: branch.branches_additional?.[0] || null,
+        student_count: 0 // Load on demand
       });
       return acc;
     }, {} as Record<string, BranchData[]>);
