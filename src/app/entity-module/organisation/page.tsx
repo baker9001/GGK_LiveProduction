@@ -554,8 +554,12 @@ export default function OrganisationManagement() {
     const data: any = {
       name: formData.get('name') as string,
       code: formData.get('code') as string,
-      description: formData.get('description') as string,
     };
+
+    // Add description only for school and branch
+    if (modalType !== 'department') {
+      data.description = formData.get('description') as string;
+    }
 
     // Validation
     const errors: Record<string, string> = {};
@@ -846,20 +850,62 @@ export default function OrganisationManagement() {
   const renderDetailsPanel = () => {
     if (!selectedItem || !showDetailsPanel) return null;
 
+    // Handle click outside to close
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        const panel = document.getElementById('details-panel');
+        if (panel && !panel.contains(event.target as Node)) {
+          setShowDetailsPanel(false);
+        }
+      };
+
+      // Handle ESC key to close
+      const handleEscKey = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          if (editMode) {
+            setEditMode(false);
+            setFormData(selectedItem.additional || {});
+          } else {
+            setShowDetailsPanel(false);
+          }
+        }
+        // Handle Enter key to save when in edit mode
+        if (event.key === 'Enter' && editMode && event.ctrlKey) {
+          handleSaveDetails();
+        }
+      };
+
+      if (showDetailsPanel) {
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscKey);
+      }
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscKey);
+      };
+    }, [showDetailsPanel, editMode, selectedItem]);
+
     return (
-      <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl z-50 overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
-            </h2>
-            <button
-              onClick={() => setShowDetailsPanel(false)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-            </button>
-          </div>
+      <div className="fixed inset-0 z-50">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/20" onClick={() => setShowDetailsPanel(false)} />
+        
+        {/* Panel */}
+        <div id="details-panel" className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl overflow-y-auto">
+          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
+              </h2>
+              <button
+                onClick={() => setShowDetailsPanel(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                title="Close (ESC)"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
           
           {/* Tabs */}
           <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
@@ -900,16 +946,7 @@ export default function OrganisationManagement() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Name
                 </label>
-                {editMode ? (
-                  <input
-                    type="text"
-                    value={selectedItem.name}
-                    className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    disabled
-                  />
-                ) : (
-                  <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
-                )}
+                <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
               </div>
               
               <div>
@@ -981,14 +1018,6 @@ export default function OrganisationManagement() {
                 {editMode ? (
                   <>
                     <Button
-                      onClick={handleSaveDetails}
-                      disabled={updateCompanyMutation.isLoading}
-                      className="flex-1"
-                    >
-                      <Save className="w-4 h-4 inline mr-2" />
-                      {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
-                    </Button>
-                    <Button
                       variant="outline"
                       onClick={() => {
                         setEditMode(false);
@@ -998,11 +1027,19 @@ export default function OrganisationManagement() {
                     >
                       Cancel
                     </Button>
+                    <Button
+                      onClick={handleSaveDetails}
+                      disabled={updateCompanyMutation.isLoading}
+                      className="flex-1"
+                    >
+                      <Save className="w-4 h-4 inline mr-2" />
+                      {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
+                    </Button>
                   </>
                 ) : (
                   <Button
                     onClick={() => setEditMode(true)}
-                    className="flex-1"
+                    className="w-full"
                   >
                     <Edit className="w-4 h-4 inline mr-2" />
                     Edit Details
@@ -1275,11 +1312,11 @@ export default function OrganisationManagement() {
           setFormErrors({});
         }}
         onSave={() => {
-          const form = document.querySelector('form');
+          const form = document.querySelector('#create-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
       >
-        <form onSubmit={handleCreateSubmit} className="space-y-4">
+        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
@@ -1296,6 +1333,7 @@ export default function OrganisationManagement() {
               id="name"
               name="name"
               placeholder={`Enter ${modalType} name`}
+              autoFocus
             />
           </FormField>
 
@@ -1312,18 +1350,20 @@ export default function OrganisationManagement() {
             />
           </FormField>
 
-          <FormField
-            id="description"
-            label="Description"
-            error={formErrors.description}
-          >
-            <Textarea
+          {modalType !== 'department' && (
+            <FormField
               id="description"
-              name="description"
-              placeholder={`Enter ${modalType} description`}
-              rows={3}
-            />
-          </FormField>
+              label="Description"
+              error={formErrors.description}
+            >
+              <Textarea
+                id="description"
+                name="description"
+                placeholder={`Enter ${modalType} description`}
+                rows={3}
+              />
+            </FormField>
+          )}
 
           {modalType === 'branch' && companyData?.schools && (
             <FormField
