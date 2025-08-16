@@ -16,10 +16,10 @@
  *   - Image upload for company logos
  *   - All UI interactions and modals
  * 
- * Added/Modified:
- *   - FIXED: Phone field now properly saved to entity_users table
- *   - Direct database operations (no API calls)
- *   - Unified password management from UsersTab
+ * Fixed Issues:
+ *   - UUID validation for audit logs (handles non-UUID user IDs like "dev-001")
+ *   - Phone field properly saved to entity_users table
+ *   - Update flow correctly refreshes admin list
  *   - Password requirements checker
  *   - Generate/manual password options
  *   - Password display and print functionality
@@ -30,7 +30,7 @@
  * Fields managed in this stage:
  *   - name (required)
  *   - email (required)
- *   - phone (optional) - NOW PROPERLY SAVED TO entity_users
+ *   - phone (optional) - PROPERLY SAVED TO entity_users
  *   - position (optional, defaults to 'Administrator')
  *   - password (required for new, optional for edit)
  * 
@@ -45,7 +45,7 @@
  *   - entity_users (profile table - includes phone)
  *   - regions
  *   - countries
- *   - audit_logs
+ *   - audit_logs (with UUID validation)
  * 
  * Connected Files:
  *   - Uses same patterns as UsersTab.tsx
@@ -246,6 +246,52 @@ interface CompanyAdmin {
 }
 
 // ===== HELPER FUNCTIONS =====
+
+// UUID validation helper
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+// Safe audit log insertion
+async function createAuditLog(
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: any
+) {
+  try {
+    const currentUser = getAuthenticatedUser();
+    
+    // Only insert if we have a valid UUID user ID
+    // If user ID is not a UUID (like "dev-001"), skip audit logging
+    if (currentUser?.id && isValidUUID(currentUser.id)) {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser.id,
+          action: action,
+          entity_type: entityType,
+          entity_id: entityId,
+          details: details,
+          created_at: new Date().toISOString()
+        });
+    } else {
+      // Log to console for dev/test environments
+      console.log('Audit Log (dev mode):', {
+        user: currentUser?.email || 'unknown',
+        action,
+        entityType,
+        entityId,
+        details
+      });
+    }
+  } catch (error) {
+    // Don't throw error for audit logging failures
+    console.error('Failed to create audit log:', error);
+  }
+}
+
 function generateComplexPassword(length: number = 12): string {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -591,7 +637,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation (Direct Database - No API) - FIXED PHONE FIELD
+  // Tenant admin mutation (Direct Database - No API) - FIXED PHONE FIELD AND AUDIT LOGS
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -665,21 +711,17 @@ export default function CompaniesTab() {
 
           if (userError) throw userError;
 
-          // Log the update
-          await supabase
-            .from('audit_logs')
-            .insert({
-              user_id: currentUser?.id,
-              action: 'update_entity_admin',
-              entity_type: 'entity_user',
-              entity_id: editingAdmin.user_id,
-              details: {
-                company_id: companyId,
-                updated_fields: { name, email, phone, position },
-                updated_by: currentUser?.email
-              },
-              created_at: new Date().toISOString()
-            });
+          // Log the update (with UUID validation)
+          await createAuditLog(
+            'update_entity_admin',
+            'entity_user',
+            editingAdmin.user_id,
+            {
+              company_id: companyId,
+              updated_fields: { name, email, phone, position },
+              updated_by: currentUser?.email
+            }
+          );
 
           return { 
             success: true, 
@@ -732,21 +774,17 @@ export default function CompaniesTab() {
 
             if (linkError) throw linkError;
 
-            // Log the action
-            await supabase
-              .from('audit_logs')
-              .insert({
-                user_id: currentUser?.id,
-                action: 'link_entity_admin',
-                entity_type: 'entity_user',
-                entity_id: existingUser.id,
-                details: {
-                  company_id: companyId,
-                  company_name: selectedCompanyForAdmin.name,
-                  linked_by: currentUser?.email
-                },
-                created_at: new Date().toISOString()
-              });
+            // Log the action (with UUID validation)
+            await createAuditLog(
+              'link_entity_admin',
+              'entity_user',
+              existingUser.id,
+              {
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                linked_by: currentUser?.email
+              }
+            );
 
             return { 
               success: true,
@@ -836,24 +874,20 @@ export default function CompaniesTab() {
             throw entityError;
           }
           
-          // Log the creation
-          await supabase
-            .from('audit_logs')
-            .insert({
-              user_id: currentUser?.id,
-              action: 'create_entity_admin',
-              entity_type: 'entity_user',
-              entity_id: newUser.id,
-              details: {
-                email: email,
-                company_id: companyId,
-                company_name: selectedCompanyForAdmin.name,
-                is_company_admin: true,
-                created_by: currentUser?.email,
-                password_generated: isGeneratedPassword
-              },
-              created_at: new Date().toISOString()
-            });
+          // Log the creation (with UUID validation)
+          await createAuditLog(
+            'create_entity_admin',
+            'entity_user',
+            newUser.id,
+            {
+              email: email,
+              company_id: companyId,
+              company_name: selectedCompanyForAdmin.name,
+              is_company_admin: true,
+              created_by: currentUser?.email,
+              password_generated: isGeneratedPassword
+            }
+          );
           
           return {
             success: true,
@@ -942,21 +976,17 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Log the password change
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: currentUser?.id,
-          action: 'admin_password_change',
-          entity_type: 'entity_user',
-          entity_id: data.userId,
-          details: {
-            changed_by: currentUser?.email,
-            target_user: selectedAdminForPassword?.users?.email,
-            notification_sent: data.sendEmail
-          },
-          created_at: new Date().toISOString()
-        });
+      // Log the password change (with UUID validation)
+      await createAuditLog(
+        'admin_password_change',
+        'entity_user',
+        data.userId,
+        {
+          changed_by: currentUser?.email,
+          target_user: selectedAdminForPassword?.users?.email,
+          notification_sent: data.sendEmail
+        }
+      );
       
       // TODO: Send email notification if requested
       if (data.sendEmail) {
