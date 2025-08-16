@@ -11,6 +11,9 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 import { toast } from 'react-hot-toast';
+// Import custom auth functions
+import { getAuthenticatedUser } from '../../../lib/auth';
+import { useUser } from '../../../contexts/UserContext';
 
 // ===== TYPE DEFINITIONS =====
 interface Company {
@@ -135,6 +138,7 @@ interface AcademicYear {
 // ===== MAIN COMPONENT =====
 export default function OrganisationManagement() {
   const queryClient = useQueryClient();
+  const { user } = useUser(); // Use UserContext for authentication
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
@@ -152,21 +156,38 @@ export default function OrganisationManagement() {
   // Form states
   const [formData, setFormData] = useState<any>({});
 
-  // ===== FETCH USER'S COMPANY =====
+  // ===== FETCH USER'S COMPANY - FIXED FOR CUSTOM AUTH =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: entityUser } = await supabase
-            .from('entity_users')
-            .select('company_id, is_company_admin')
-            .eq('user_id', user.id)
-            .single();
-          
-          if (entityUser && entityUser.company_id) {
-            setUserCompanyId(entityUser.company_id);
-          }
+        // First check if we have a user from custom auth
+        const authenticatedUser = getAuthenticatedUser();
+        
+        if (!authenticatedUser) {
+          console.error('No authenticated user found');
+          toast.error('Please login to access this page');
+          return;
+        }
+
+        // Now fetch the entity_user record using the authenticated user's ID
+        const { data: entityUser, error: entityError } = await supabase
+          .from('entity_users')
+          .select('company_id, is_company_admin')
+          .eq('user_id', authenticatedUser.id)
+          .maybeSingle();
+        
+        if (entityError) {
+          console.error('Error fetching entity user:', entityError);
+          toast.error('Failed to fetch user information');
+          return;
+        }
+
+        if (entityUser && entityUser.company_id) {
+          console.log('Found company ID:', entityUser.company_id);
+          setUserCompanyId(entityUser.company_id);
+        } else {
+          console.error('No company associated with user');
+          toast.error('No company associated with your account');
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
@@ -175,7 +196,7 @@ export default function OrganisationManagement() {
     };
     
     fetchUserCompany();
-  }, []);
+  }, [user]); // Re-run when user changes
 
   // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
@@ -185,6 +206,8 @@ export default function OrganisationManagement() {
         throw new Error('No company associated with user');
       }
 
+      console.log('Fetching organization data for company:', userCompanyId);
+
       // Fetch company data
       const { data: company, error: companyError } = await supabase
         .from('companies')
@@ -192,14 +215,17 @@ export default function OrganisationManagement() {
         .eq('id', userCompanyId)
         .single();
 
-      if (companyError) throw companyError;
+      if (companyError) {
+        console.error('Company fetch error:', companyError);
+        throw companyError;
+      }
 
       // Fetch company additional data
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
-        .single();
+        .maybeSingle();
 
       // Fetch schools
       const { data: schools, error: schoolsError } = await supabase
@@ -208,7 +234,10 @@ export default function OrganisationManagement() {
         .eq('company_id', userCompanyId)
         .order('name');
 
-      if (schoolsError) throw schoolsError;
+      if (schoolsError) {
+        console.error('Schools fetch error:', schoolsError);
+        throw schoolsError;
+      }
 
       // Fetch schools additional data and branches for each school
       const schoolsWithDetails = await Promise.all(
@@ -217,7 +246,7 @@ export default function OrganisationManagement() {
             .from('schools_additional')
             .select('*')
             .eq('school_id', school.id)
-            .single();
+            .maybeSingle();
 
           const { data: branches } = await supabase
             .from('branches')
@@ -232,7 +261,7 @@ export default function OrganisationManagement() {
                 .from('branches_additional')
                 .select('*')
                 .eq('branch_id', branch.id)
-                .single();
+                .maybeSingle();
 
               return {
                 ...branch,
@@ -324,7 +353,7 @@ export default function OrganisationManagement() {
         .from('companies_additional')
         .select('id')
         .eq('company_id', data.company_id)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
@@ -385,6 +414,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success('School created successfully');
         setShowModal(false);
+        setFormData({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create school');
@@ -426,6 +456,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success('Branch created successfully');
         setShowModal(false);
+        setFormData({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create branch');
@@ -447,6 +478,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['departments']);
         toast.success('Department created successfully');
         setShowModal(false);
+        setFormData({});
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create department');
@@ -600,6 +632,22 @@ export default function OrganisationManagement() {
                           </div>
                         </div>
                       ))}
+                      
+                      {/* Add Branch Button - Only when school is selected */}
+                      {selectedType === 'school' && selectedItem?.id === school.id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModalType('branch');
+                            setFormData({ school_id: school.id });
+                            setShowModal(true);
+                          }}
+                          className="w-full p-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-purple-500 hover:text-purple-500 transition flex items-center justify-center text-sm"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Add Branch
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -609,6 +657,7 @@ export default function OrganisationManagement() {
               <button
                 onClick={() => {
                   setModalType('school');
+                  setFormData({});
                   setShowModal(true);
                 }}
                 className="w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-green-500 hover:text-green-500 transition flex items-center justify-center"
@@ -692,6 +741,12 @@ export default function OrganisationManagement() {
                     <label className="text-sm text-gray-500 dark:text-gray-400">Status</label>
                     <p className="text-gray-900 dark:text-white capitalize">{selectedItem.status}</p>
                   </div>
+                  {selectedItem.description && (
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Description</label>
+                      <p className="text-gray-900 dark:text-white">{selectedItem.description}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -755,10 +810,11 @@ export default function OrganisationManagement() {
                   <>
                     <button
                       onClick={handleSaveDetails}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      disabled={updateCompanyMutation.isLoading}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                     >
                       <Save className="w-4 h-4 inline mr-2" />
-                      Save
+                      {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       onClick={() => {
@@ -790,6 +846,11 @@ export default function OrganisationManagement() {
                 <button
                   onClick={() => {
                     setModalType('department');
+                    setFormData({
+                      company_id: userCompanyId!,
+                      school_id: selectedType === 'school' ? selectedItem?.id : undefined,
+                      branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
+                    });
                     setShowModal(true);
                   }}
                   className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -805,7 +866,7 @@ export default function OrganisationManagement() {
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {dept.code} • {dept.employee_count} employees
+                            {dept.code} • {dept.employee_count || 0} employees
                           </p>
                         </div>
                         <span className={`px-2 py-1 text-xs rounded ${
@@ -917,29 +978,51 @@ export default function OrganisationManagement() {
                 placeholder="Enter description"
               />
             </div>
+
+            {modalType === 'department' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Department Type
+                </label>
+                <select
+                  value={formData.department_type || 'administrative'}
+                  onChange={(e) => setFormData({...formData, department_type: e.target.value})}
+                  className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                >
+                  <option value="academic">Academic</option>
+                  <option value="administrative">Administrative</option>
+                  <option value="support">Support</option>
+                  <option value="operations">Operations</option>
+                </select>
+              </div>
+            )}
             
             <div className="flex space-x-3 pt-4">
               <button
                 onClick={() => {
+                  if (!formData.name || !formData.code) {
+                    toast.error('Please fill in required fields');
+                    return;
+                  }
+
                   if (modalType === 'school') {
                     createSchoolMutation.mutate(formData);
                   } else if (modalType === 'branch') {
-                    createBranchMutation.mutate({
-                      ...formData,
-                      school_id: selectedItem?.id
-                    });
+                    createBranchMutation.mutate(formData);
                   } else if (modalType === 'department') {
                     createDepartmentMutation.mutate({
                       ...formData,
-                      company_id: userCompanyId!,
-                      school_id: selectedType === 'school' ? selectedItem?.id : undefined,
-                      branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
+                      employee_count: 0,
+                      status: 'active'
                     });
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                disabled={createSchoolMutation.isLoading || createBranchMutation.isLoading || createDepartmentMutation.isLoading}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
-                Create
+                {(createSchoolMutation.isLoading || createBranchMutation.isLoading || createDepartmentMutation.isLoading) 
+                  ? 'Creating...' 
+                  : 'Create'}
               </button>
               <button
                 onClick={() => {
@@ -956,6 +1039,24 @@ export default function OrganisationManagement() {
       </div>
     );
   };
+
+  // ===== CHECK AUTHENTICATION =====
+  const authenticatedUser = getAuthenticatedUser();
+  if (!authenticatedUser) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please login to access this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ===== LOADING STATE =====
   if (!userCompanyId || isLoading) {
