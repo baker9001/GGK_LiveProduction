@@ -1304,7 +1304,7 @@ export default function OrganisationManagement() {
   // ===== MAIN RENDER =====
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -1436,9 +1436,9 @@ export default function OrganisationManagement() {
         </div>
 
         {/* Organization Chart with Navigation Controls */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
           {/* Chart Header with Navigation Controls */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
@@ -1575,9 +1575,9 @@ export default function OrganisationManagement() {
           </div>
           
           {/* Chart Content */}
-          <div className="p-6 min-w-max overflow-x-auto">
+          <div className="p-6 overflow-x-auto overflow-y-hidden">
             {viewMode === 'expand' ? (
-              <div id="org-chart">
+              <div id="org-chart" className="inline-block min-w-full">
                 {renderOrganizationChart()}
               </div>
             ) : (
