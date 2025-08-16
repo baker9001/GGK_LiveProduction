@@ -681,7 +681,12 @@ export default function CompaniesTab() {
               created_at: new Date().toISOString()
             });
 
-          return { success: true, message: 'Admin updated successfully' };
+          return { 
+            success: true, 
+            message: 'Admin updated successfully',
+            company: selectedCompanyForAdmin,
+            type: 'updated'
+          };
 
         } else {
           // ===== CREATE NEW ADMIN =====
@@ -886,8 +891,11 @@ export default function CompaniesTab() {
           resetAdminForm();
           
           // Return to View Admins modal if we came from there
-          if (returnToViewAfterAdd && selectedCompanyForView && result.company?.id) {
-            fetchCompanyAdmins(result.company.id);
+          // For both create and update operations
+          if (returnToViewAfterAdd && selectedCompanyForView) {
+            // Use the company from either the result or the selectedCompanyForView
+            const companyId = result.company?.id || selectedCompanyForView.id;
+            fetchCompanyAdmins(companyId);
             setIsViewAdminsOpen(true);
             setReturnToViewAfterAdd(false);
           }
@@ -1110,6 +1118,9 @@ export default function CompaniesTab() {
   const fetchCompanyAdmins = async (companyId: string) => {
     setLoadingAdmins(true);
     try {
+      // Small delay to ensure database has updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Fetch entity_users with user details - Now includes phone from entity_users
       const { data: entityUsers, error: entityError } = await supabase
         .from('entity_users')
