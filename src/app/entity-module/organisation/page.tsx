@@ -187,8 +187,8 @@ export default function OrganisationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   
-  // State management
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
+  // State management - Initialize with all nodes expanded
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
@@ -202,6 +202,17 @@ export default function OrganisationManagement() {
   
   // Tab states for detail panel
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
+  
+  // Initialize expanded nodes when company data is loaded
+  useEffect(() => {
+    if (companyData) {
+      const allNodes = new Set<string>(['company']);
+      companyData.schools?.forEach(school => {
+        allNodes.add(school.id);
+      });
+      setExpandedNodes(allNodes);
+    }
+  }, [companyData]);
   
   // Form states
   const [formData, setFormData] = useState<any>({});
@@ -614,7 +625,13 @@ export default function OrganisationManagement() {
     };
 
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all p-4 min-w-[280px] max-w-[320px]">
+      <div className={`${
+        type === 'company' 
+          ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
+          : type === 'school'
+          ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-700'
+          : 'bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200 dark:border-purple-700'
+      } rounded-lg border shadow-sm hover:shadow-md transition-all p-4 min-w-[280px] max-w-[320px]`}>
         {/* Header with Actions */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
@@ -696,7 +713,7 @@ export default function OrganisationManagement() {
     return (
       <div className="flex flex-col items-center py-8">
         {/* Company Node */}
-        <div className="relative">
+        <div id="org-company" className="relative">
           <OrgChartNode item={companyData} type="company" isRoot={true} />
           
           {/* Expand/Collapse Button */}
@@ -734,7 +751,7 @@ export default function OrganisationManagement() {
             )}
             
             {/* Schools Container */}
-            <div className="flex items-start space-x-8 mt-8">
+            <div id="org-schools" className="flex items-start space-x-8 mt-8">
               {companyData.schools.map((school, schoolIndex) => {
                 const isSchoolExpanded = expandedNodes.has(school.id);
                 
@@ -784,7 +801,7 @@ export default function OrganisationManagement() {
                         )}
                         
                         {/* Branches Container */}
-                        <div className="flex items-start space-x-8 mt-8">
+                        <div id={schoolIndex === 0 ? "org-branches" : undefined} className="flex items-start space-x-8 mt-8">
                           {school.branches.map((branch) => (
                             <div key={branch.id} className="flex flex-col items-center">
                               {/* Connection line from horizontal to branch */}
@@ -1218,9 +1235,67 @@ export default function OrganisationManagement() {
         {/* Organization Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-x-auto">
           <div className="p-4 border-b dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Organization Structure
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Organization Structure
+              </h2>
+              
+              {/* Quick Navigation Tabs */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Jump to:</span>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('org-company');
+                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                  className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  Company
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('org-schools');
+                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                  className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                >
+                  Schools
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('org-branches');
+                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                  className="px-3 py-1 text-sm bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  Branches
+                </button>
+                <button
+                  onClick={() => {
+                    // Collapse all nodes
+                    setExpandedNodes(new Set());
+                  }}
+                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ml-2"
+                >
+                  Collapse All
+                </button>
+                <button
+                  onClick={() => {
+                    // Expand all nodes
+                    if (companyData) {
+                      const allNodes = new Set<string>(['company']);
+                      companyData.schools?.forEach(school => {
+                        allNodes.add(school.id);
+                      });
+                      setExpandedNodes(allNodes);
+                    }
+                  }}
+                  className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Expand All
+                </button>
+              </div>
+            </div>
           </div>
           
           <div className="p-6 min-w-max">
