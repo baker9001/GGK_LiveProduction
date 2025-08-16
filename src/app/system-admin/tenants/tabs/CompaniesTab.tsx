@@ -1,4 +1,19 @@
-/**
+// Validate input (simplified)
+        const validationData = {
+          name,
+          email,
+          phone: phone || undefined,
+          position: position || undefined,
+          ...(password && !editingAdmin ? { password } : {})
+        };
+
+        // Basic validation
+        if (!name || name.length < 2) {
+          throw new Error('Name must be at least 2 characters');
+        }
+        if (!email || !email.includes('@')) {
+          throw new Error('Please enter a valid email address');
+        }/**
  * File: /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
  * Dependencies: 
  *   - @/components/shared/* (all UI components)
@@ -23,6 +38,20 @@
  *   - Generate/manual password options
  *   - Password display and print functionality
  *   - Browser-compatible token generation (no Node.js crypto)
+ *   - Simplified admin form (only name, email, phone, position, password)
+ *   - Fixed z-index for password modals
+ * 
+ * Fields managed in this stage:
+ *   - name (required)
+ *   - email (required)
+ *   - phone (optional)
+ *   - position (optional, defaults to 'Administrator')
+ *   - password (required for new, optional for edit)
+ * 
+ * Fields to be managed later in entity management:
+ *   - department
+ *   - employee_id
+ *   - hire_date (auto-set to today for now)
  * 
  * Database Tables:
  *   - companies
@@ -77,8 +106,6 @@ const tenantAdminSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().optional(),
   position: z.string().optional(),
-  department: z.string().optional(),
-  employee_id: z.string().optional(),
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain uppercase letter')
@@ -200,9 +227,6 @@ interface TenantAdminFormData {
   email: string;
   phone: string;
   position: string;
-  department: string;
-  employee_id: string;
-  hire_date: string;
   password: string;
   confirmPassword: string;
 }
@@ -327,9 +351,6 @@ export default function CompaniesTab() {
     email: '',
     phone: '',
     position: '',
-    department: '',
-    employee_id: '',
-    hire_date: new Date().toISOString().split('T')[0], // Default to today
     password: '',
     confirmPassword: ''
   });
@@ -592,9 +613,14 @@ export default function CompaniesTab() {
         const password = formData.get('password') as string | null;
         const phone = formData.get('phone') as string;
         const position = formData.get('position') as string;
-        const department = formData.get('department') as string;
-        const employee_id = formData.get('employee_id') as string;
-        const hire_date = formData.get('hire_date') as string;
+
+        // Basic validation
+        if (!name || name.length < 2) {
+          throw new Error('Name must be at least 2 characters');
+        }
+        if (!email || !email.includes('@')) {
+          throw new Error('Please enter a valid email address');
+        }
 
         if (!selectedCompanyForAdmin?.id) {
           throw new Error('No company selected');
@@ -605,13 +631,9 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update entity_users profile with all relevant fields
+          // Update entity_users profile with managed fields only
           const entityUpdates: any = {
-            position: position || editingAdmin.position,
-            department: department || editingAdmin.department,
-            employee_id: employee_id || editingAdmin.employee_id,
-            hire_date: hire_date || editingAdmin.hire_date,
-            employee_status: 'active', // Maintain active status
+            position: position || editingAdmin.position || 'Administrator',
             updated_at: new Date().toISOString()
           };
 
@@ -665,7 +687,7 @@ export default function CompaniesTab() {
               entity_id: editingAdmin.user_id,
               details: {
                 company_id: companyId,
-                updated_fields: { name, email, phone, position, department, employee_id },
+                updated_fields: { name, email, phone, position },
                 updated_by: currentUser?.email
               },
               created_at: new Date().toISOString()
@@ -696,7 +718,7 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin with all fields
+            // Link existing user to company as admin with minimal fields
             const { error: linkError } = await supabase
               .from('entity_users')
               .insert([{
@@ -704,12 +726,12 @@ export default function CompaniesTab() {
                 user_id: existingUser.id,
                 company_id: companyId,
                 position: position || 'Administrator',
-                department: department || 'Management',
-                employee_id: employee_id || null,
-                hire_date: hire_date || new Date().toISOString().split('T')[0],
+                department: null, // Will be set later in entity management
+                employee_id: null, // Will be set later in entity management
+                hire_date: new Date().toISOString().split('T')[0], // Default to today
                 is_company_admin: true,
                 employee_status: 'active',
-                department_id: null, // Can be updated later if departments are implemented
+                department_id: null,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               }]);
@@ -1085,9 +1107,6 @@ export default function CompaniesTab() {
       email: '',
       phone: '',
       position: '',
-      department: '',
-      employee_id: '',
-      hire_date: new Date().toISOString().split('T')[0], // Default to today
       password: '',
       confirmPassword: ''
     });
@@ -1350,9 +1369,6 @@ export default function CompaniesTab() {
         email: editingAdmin.users?.email || '',
         phone: editingAdmin.users?.phone || '',
         position: editingAdmin.position || '',
-        department: editingAdmin.department || '',
-        employee_id: editingAdmin.employee_id || '',
-        hire_date: editingAdmin.hire_date || new Date().toISOString().split('T')[0],
         password: '',
         confirmPassword: ''
       });
@@ -1754,10 +1770,8 @@ export default function CompaniesTab() {
             </div>
           )}
 
-          {/* Account Information Section */}
-          <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Account Information</h3>
-            
+          {/* Basic Information Section */}
+          <div className="space-y-4">
             <FormField id="tenant-name" label="Name" required error={adminFormErrors.name}>
               <Input
                 id="tenant-name"
@@ -1794,11 +1808,22 @@ export default function CompaniesTab() {
                 placeholder="XXXX XXXX"
               />
             </FormField>
+
+            <FormField id="tenant-position" label="Position" error={adminFormErrors.position}>
+              <Input
+                id="tenant-position"
+                name="position"
+                type="text"
+                value={adminFormState.position}
+                onChange={(e) => setAdminFormState(prev => ({ ...prev, position: e.target.value }))}
+                placeholder="e.g., IT Administrator"
+              />
+            </FormField>
           </div>
 
           {/* Password Section (only for new admins) */}
           {!editingAdmin && (
-            <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
               
               <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -1898,58 +1923,10 @@ export default function CompaniesTab() {
             </div>
           )}
 
-          {/* Employee Information Section */}
-          <div className="space-y-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Employee Information</h3>
-            
-            <FormField id="tenant-position" label="Position" error={adminFormErrors.position}>
-              <Input
-                id="tenant-position"
-                name="position"
-                type="text"
-                value={adminFormState.position}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, position: e.target.value }))}
-                placeholder="e.g., IT Administrator"
-              />
-            </FormField>
-
-            <FormField id="tenant-department" label="Department" error={adminFormErrors.department}>
-              <Input
-                id="tenant-department"
-                name="department"
-                type="text"
-                value={adminFormState.department}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, department: e.target.value }))}
-                placeholder="e.g., Information Technology"
-              />
-            </FormField>
-
-            <FormField id="tenant-employee-id" label="Employee ID" error={adminFormErrors.employee_id}>
-              <Input
-                id="tenant-employee-id"
-                name="employee_id"
-                type="text"
-                value={adminFormState.employee_id}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, employee_id: e.target.value }))}
-                placeholder="e.g., EMP001"
-              />
-            </FormField>
-
-            <FormField id="tenant-hire-date" label="Hire Date" error={adminFormErrors.hire_date}>
-              <Input
-                id="tenant-hire-date"
-                name="hire_date"
-                type="date"
-                value={adminFormState.hire_date}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, hire_date: e.target.value }))}
-              />
-            </FormField>
-          </div>
-
           {editingAdmin && (
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> To change the user's password, use the password reset option from the table actions.
+                <strong>Note:</strong> To change the user's password, use the password reset option from the admins list.
               </p>
             </div>
           )}
@@ -1976,28 +1953,30 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Change Password Form (Like UsersTab) */}
-      <SlideInForm
-        key={`${selectedAdminForPassword?.id || 'new'}-password`}
-        title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
-        isOpen={isPasswordFormOpen && !generatedPassword}
-        onClose={() => {
-          setIsPasswordFormOpen(false);
-          setSelectedAdminForPassword(null);
-          setFormErrors({});
-          setShowNewPassword(false);
-          setGenerateNewPassword(true);
-          setPasswordFormState({
-            newPassword: '',
-            sendEmail: false
-          });
-        }}
-        onSave={() => {
-          const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }}
-        loading={changePasswordMutation.isLoading}
-      >
+      {/* Change Password Form (Like UsersTab) - Higher z-index for proper display */}
+      {isPasswordFormOpen && !generatedPassword && (
+        <div className="relative z-[60]">
+          <SlideInForm
+            key={`${selectedAdminForPassword?.id || 'new'}-password`}
+            title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
+            isOpen={true}
+            onClose={() => {
+              setIsPasswordFormOpen(false);
+              setSelectedAdminForPassword(null);
+              setFormErrors({});
+              setShowNewPassword(false);
+              setGenerateNewPassword(true);
+              setPasswordFormState({
+                newPassword: '',
+                sendEmail: false
+              });
+            }}
+            onSave={() => {
+              const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
+              if (form) form.requestSubmit();
+            }}
+            loading={changePasswordMutation.isLoading}
+          >
         <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
@@ -2131,10 +2110,11 @@ export default function CompaniesTab() {
             <p className="text-sm text-amber-700 dark:text-amber-400">
               <strong>Note:</strong> The user can log in immediately with the new password.
               {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
-            </p>
-          </div>
-        </form>
-      </SlideInForm>
+            </div>
+          </form>
+        </SlideInForm>
+        </div>
+      )}
 
       {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
@@ -2148,7 +2128,7 @@ export default function CompaniesTab() {
               setEditingAdminId(null);
               setEditAdminData({});
             }}></div>
-            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto z-[51]">
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -2347,21 +2327,21 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Briefcase className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.position || '—'}
+                                    {admin.position || 'Administrator'}
                                   </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Building className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.department || '—'}
+                                    {admin.department || 'Not set'}
                                   </span>
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
                                   <Hash className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.employee_id ? `ID: ${admin.employee_id}` : 'ID: —'}
+                                    {admin.employee_id ? `ID: ${admin.employee_id}` : 'ID: Not set'}
                                   </span>
                                 </div>
                                 
@@ -2412,10 +2392,10 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal (Unified with UsersTab) */}
+      {/* Generated Password Modal (Unified with UsersTab) - Highest z-index */}
       {generatedPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[71]">
             <h3 className="text-lg font-semibold mb-4">
               {selectedAdminForPassword ? 'Password Changed Successfully' : 'Admin Created Successfully'}
             </h3>
