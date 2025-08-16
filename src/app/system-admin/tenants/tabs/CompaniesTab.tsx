@@ -39,7 +39,7 @@
  *   - Password display and print functionality
  *   - Browser-compatible token generation (no Node.js crypto)
  *   - Simplified admin form (only name, email, phone, position, password)
- *   - Fixed z-index for password modals
+ *   - Fixed z-index layering for modals (view admins: z-50, password form: z-70, generated password: z-80)
  * 
  * Fields managed in this stage:
  *   - name (required)
@@ -1953,30 +1953,42 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Change Password Form (Like UsersTab) - Higher z-index for proper display */}
+      {/* Change Password Form - Highest z-index to appear above all modals */}
       {isPasswordFormOpen && !generatedPassword && (
-        <div className="relative z-[60]">
-          <SlideInForm
-            key={`${selectedAdminForPassword?.id || 'new'}-password`}
-            title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
-            isOpen={true}
-            onClose={() => {
-              setIsPasswordFormOpen(false);
-              setSelectedAdminForPassword(null);
-              setFormErrors({});
-              setShowNewPassword(false);
-              setGenerateNewPassword(true);
-              setPasswordFormState({
-                newPassword: '',
-                sendEmail: false
-              });
-            }}
-            onSave={() => {
-              const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
-              if (form) form.requestSubmit();
-            }}
-            loading={changePasswordMutation.isLoading}
-          >
+        <div className="fixed inset-0 z-[70]">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => {
+            setIsPasswordFormOpen(false);
+            setSelectedAdminForPassword(null);
+            setFormErrors({});
+            setShowNewPassword(false);
+            setGenerateNewPassword(true);
+            setPasswordFormState({
+              newPassword: '',
+              sendEmail: false
+            });
+          }}></div>
+          <div className="relative z-[71]">
+            <SlideInForm
+              key={`${selectedAdminForPassword?.id || 'new'}-password`}
+              title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
+              isOpen={true}
+              onClose={() => {
+                setIsPasswordFormOpen(false);
+                setSelectedAdminForPassword(null);
+                setFormErrors({});
+                setShowNewPassword(false);
+                setGenerateNewPassword(true);
+                setPasswordFormState({
+                  newPassword: '',
+                  sendEmail: false
+                });
+              }}
+              onSave={() => {
+                const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
+                if (form) form.requestSubmit();
+              }}
+              loading={changePasswordMutation.isLoading}
+            >
         <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
@@ -2128,7 +2140,7 @@ export default function CompaniesTab() {
               setEditingAdminId(null);
               setEditAdminData({});
             }}></div>
-            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto z-[51]">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -2392,10 +2404,10 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal (Unified with UsersTab) - Highest z-index */}
+      {/* Generated Password Modal - Highest z-index */}
       {generatedPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[71]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
             <h3 className="text-lg font-semibold mb-4">
               {selectedAdminForPassword ? 'Password Changed Successfully' : 'Admin Created Successfully'}
             </h3>
