@@ -5,7 +5,6 @@
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - bcryptjs
- *   - crypto
  *   - zod
  *   - React and related
  * 
@@ -23,6 +22,7 @@
  *   - Password requirements checker
  *   - Generate/manual password options
  *   - Password display and print functionality
+ *   - Browser-compatible token generation (no Node.js crypto)
  * 
  * Database Tables:
  *   - companies
@@ -46,7 +46,6 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -255,7 +254,19 @@ function generateComplexPassword(length: number = 12): string {
 }
 
 function generateVerificationToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  // Browser-compatible random token generation
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// Alternative: Generate UUID v4 for tokens
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 // ===== MAIN COMPONENT =====
