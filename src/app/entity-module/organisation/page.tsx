@@ -193,60 +193,254 @@ interface AcademicYear {
 
 // ===== OPTIMIZED DATA FETCHING FUNCTION =====
 const fetchOrganizationDataOptimized = async (companyId: string): Promise<Company> => {
-  // Fetch all data in parallel using Promise.allSettled for better error handling
-  const [
-    companyResult,
-    companyAdditionalResult,
-    schoolsResult,
-    schoolsAdditionalResult,
-    branchesResult,
-    branchesAdditionalResult,
-    studentCountsResult
-  ] = await Promise.allSettled([
-    // 1. Company basic data
+  // First, fetch company and schools data
+  const [companyResult, schoolsResult] = await Promise.allSettled([
     supabase
       .from('companies')
       .select('*')
       .eq('id', companyId)
       .single(),
     
-    // 2. Company additional data
+    supabase
+      .from('schools')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('name')
+};
+
+  // Handle company data
+  if (companyResult.status === 'rejected') {
+    throw new Error('Failed to fetch company data');
+  }
+  const company = companyResult.value.data;
+
+  // Handle additional data with null safety
+  const companyAdditional = companyAdditionalResult.status === 'fulfilled' 
+    ? companyAdditionalResult.value.data 
+    : null;
+
+  const schools = schoolsResult.status === 'fulfilled' 
+    ? schoolsResult.value.data || [] 
+    : [];
+
+  const schoolsAdditionalMap = new Map();
+  if (schoolsAdditionalResult.status === 'fulfilled' && schoolsAdditionalResult.value.data) {
+    schoolsAdditionalResult.value.data.forEach((sa: SchoolAdditional) => {
+      schoolsAdditionalMap.set(sa.school_id, sa);
+    });
+  }
+
+  const branches = branchesResult.status === 'fulfilled' 
+    ? branchesResult.value.data || [] 
+    : [];
+
+  const branchesAdditionalMap = new Map();
+  if (branchesAdditionalResult.status === 'fulfilled' && branchesAdditionalResult.value.data) {
+    branchesAdditionalResult.value.data.forEach((ba: BranchAdditional) => {
+      branchesAdditionalMap.set(ba.branch_id, ba);
+    });
+  }
+
+  // Create a map of student counts
+  const studentCountsMap = new Map();
+  if (studentCountsResult.status === 'fulfilled' && studentCountsResult.value.data) {
+    studentCountsResult.value.data.forEach((sc: any) => {
+      if (sc.school_id) {
+        studentCountsMap.set(`school_${sc.school_id}`, sc.count);
+      }
+      if (sc.branch_id) {
+        studentCountsMap.set(`branch_${sc.branch_id}`, sc.count);
+      }
+    });
+  }
+
+  // Group branches by school
+  const branchesBySchool = new Map<string, BranchData[]>();
+  branches.forEach((branch: BranchData) => {
+    if (!branchesBySchool.has(branch.school_id)) {
+      branchesBySchool.set(branch.school_id, []);
+    }
+    branchesBySchool.get(branch.school_id)!.push({
+      ...branch,
+      additional: branchesAdditionalMap.get(branch.id),
+      student_count: studentCountsMap.get(`branch_${branch.id}`) || 0
+    });
+  });
+
+  // Assemble schools with their branches
+  const schoolsWithDetails = schools.map((school: SchoolData) => ({
+    ...school,
+    additional: schoolsAdditionalMap.get(school.id),
+    branches: branchesBySchool.get(school.id) || [],
+    student_count: studentCountsMap.get(`school_${school.id}`) || 0
+  }));
+
+  return {
+    ...company,
+    additional: companyAdditional,
+    schools: schoolsWithDetails
+  };
+
+  // Handle company data
+  if (companyResult.status === 'rejected') {
+    throw new Error('Failed to fetch company data');
+  }
+  const company = companyResult.value.data;
+
+  // Handle schools data
+  const schools = schoolsResult.status === 'fulfilled' 
+    ? schoolsResult.value.data || [] 
+    : [];
+
+  // Extract school IDs for parallel fetching
+  const schoolIds = schools.map((s: any) => s.id);
+
+  // Now fetch all related data in parallel using the school IDs
+  const [
+    companyAdditionalResult,
+    schoolsAdditionalResult,
+    branchesResult,
+    studentCountsResult
+  ] = await Promise.allSettled([
+    // Company additional data
     supabase
       .from('companies_additional')
       .select('*')
       .eq('company_id', companyId)
       .maybeSingle(),
     
-    // 3. All schools for company
-    supabase
-      .from('schools')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('name'),
+    // School additional data - batch fetch
+    schoolIds.length > 0 
+      ? supabase
+          .from('schools_additional')
+          .select('*')
+          .in('school_id', schoolIds)
+      : Promise.resolve({ data: [] }),
     
-    // 4. All school additional data at once
-    supabase
-      .from('schools_additional')
-      .select('*')
-      .eq('school_id', supabase.raw(`(SELECT id FROM schools WHERE company_id = '${companyId}')`)),
+    // All branches - batch fetch
+    schoolIds.length > 0
+      ? supabase
+          .from('branches')
+          .select('*')
+          .in('school_id', schoolIds)
+          .order('name')
+      : Promise.resolve({ data: [] }),
     
-    // 5. All branches for all schools at once
-    supabase
-      .from('branches')
-      .select('*')
-      .eq('school_id', supabase.raw(`(SELECT id FROM schools WHERE company_id = '${companyId}')`))
-      .order('name'),
-    
-    // 6. All branch additional data at once
-    supabase
-      .from('branches_additional')
-      .select('*')
-      .eq('branch_id', supabase.raw(`(SELECT id FROM branches WHERE school_id IN (SELECT id FROM schools WHERE company_id = '${companyId}'))`)),
-    
-    // 7. Aggregated student counts - single query
+    // Student counts - using RPC if available, fallback to manual count
     supabase
       .rpc('get_student_counts_by_org', { p_company_id: companyId })
+      .then(result => result)
+      .catch(() => {
+        // Fallback: fetch student counts manually if RPC doesn't exist
+        return schoolIds.length > 0
+          ? supabase
+              .from('students')
+              .select('school_id, branch_id')
+              .in('school_id', schoolIds)
+          : Promise.resolve({ data: [] });
+      })
   ]);
+
+  // Process schools additional data
+  const schoolsAdditionalMap = new Map();
+  if (schoolsAdditionalResult.status === 'fulfilled' && schoolsAdditionalResult.value.data) {
+    schoolsAdditionalResult.value.data.forEach((sa: SchoolAdditional) => {
+      schoolsAdditionalMap.set(sa.school_id, sa);
+    });
+  }
+
+  // Process branches
+  const branches = branchesResult.status === 'fulfilled' 
+    ? branchesResult.value.data || [] 
+    : [];
+
+  // Extract branch IDs for additional data fetch
+  const branchIds = branches.map((b: any) => b.id);
+
+  // Fetch branch additional data if we have branches
+  const branchesAdditionalResult = branchIds.length > 0
+    ? await supabase
+        .from('branches_additional')
+        .select('*')
+        .in('branch_id', branchIds)
+    : { data: [] };
+
+  // Process branch additional data
+  const branchesAdditionalMap = new Map();
+  if (branchesAdditionalResult.data) {
+    branchesAdditionalResult.data.forEach((ba: BranchAdditional) => {
+      branchesAdditionalMap.set(ba.branch_id, ba);
+    });
+  }
+
+  // Process student counts
+  const studentCountsMap = new Map();
+  if (studentCountsResult.status === 'fulfilled' && studentCountsResult.value.data) {
+    // If RPC worked, use the aggregated counts
+    if (studentCountsResult.value.data[0]?.count !== undefined) {
+      studentCountsResult.value.data.forEach((sc: any) => {
+        if (sc.school_id && !sc.branch_id) {
+          studentCountsMap.set(`school_${sc.school_id}`, sc.count);
+        }
+        if (sc.branch_id) {
+          studentCountsMap.set(`branch_${sc.branch_id}`, sc.count);
+        }
+      });
+    } else {
+      // Fallback: manually count from student records
+      const students = studentCountsResult.value.data;
+      const schoolCounts = new Map();
+      const branchCounts = new Map();
+      
+      students.forEach((student: any) => {
+        if (student.school_id) {
+          schoolCounts.set(student.school_id, (schoolCounts.get(student.school_id) || 0) + 1);
+        }
+        if (student.branch_id) {
+          branchCounts.set(student.branch_id, (branchCounts.get(student.branch_id) || 0) + 1);
+        }
+      });
+      
+      schoolCounts.forEach((count, schoolId) => {
+        studentCountsMap.set(`school_${schoolId}`, count);
+      });
+      branchCounts.forEach((count, branchId) => {
+        studentCountsMap.set(`branch_${branchId}`, count);
+      });
+    }
+  }
+
+  // Group branches by school
+  const branchesBySchool = new Map<string, BranchData[]>();
+  branches.forEach((branch: BranchData) => {
+    if (!branchesBySchool.has(branch.school_id)) {
+      branchesBySchool.set(branch.school_id, []);
+    }
+    branchesBySchool.get(branch.school_id)!.push({
+      ...branch,
+      additional: branchesAdditionalMap.get(branch.id),
+      student_count: studentCountsMap.get(`branch_${branch.id}`) || 0
+    });
+  });
+
+  // Handle company additional data
+  const companyAdditional = companyAdditionalResult.status === 'fulfilled' 
+    ? companyAdditionalResult.value.data 
+    : null;
+
+  // Assemble schools with their branches and counts
+  const schoolsWithDetails = schools.map((school: SchoolData) => ({
+    ...school,
+    additional: schoolsAdditionalMap.get(school.id),
+    branches: branchesBySchool.get(school.id) || [],
+    student_count: studentCountsMap.get(`school_${school.id}`) || 0
+  }));
+
+  return {
+    ...company,
+    additional: companyAdditional,
+    schools: schoolsWithDetails
+  };
 
   // Handle company data
   if (companyResult.status === 'rejected') {
