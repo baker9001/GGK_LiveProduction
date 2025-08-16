@@ -1,6 +1,6 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * Complete Organization Management Page with Enhanced Card Display
+ * Complete Organization Management Page with All Fixes and Enhancements
  * 
  * Dependencies: 
  *   - @/lib/supabase
@@ -13,22 +13,26 @@
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * Features:
- *   - Enhanced card display with more visible data
- *   - Square logo placeholders with initials
- *   - Optimized card sizing
- *   - Fixed form clearing on add operations
- *   - Navigation tabs (Expand/Colleagues view toggle)
+ *   - Complete data display with all contact information
+ *   - Fixed StatusBadge display
+ *   - Square logo placeholders with smart initials
+ *   - Optimized card sizing with better data visibility
+ *   - Fixed form clearing on all operations
+ *   - CEO/Manager information properly displayed
+ *   - Student/Staff counts visible
+ *   - Location information displayed
  *   - Complete CRUD operations
  *   - Department and Academic Year management
  *   - Dark mode support throughout
  * 
  * Database Tables:
- *   - companies → companies_additional
+ *   - companies → companies_additional (with CEO fields)
  *   - schools → schools_additional
  *   - branches → branches_additional
  *   - entity_departments
  *   - academic_years
  *   - entity_users
+ *   - students (for counts)
  */
 
 'use client';
@@ -40,7 +44,7 @@ import {
   Activity, AlertCircle, Loader2, Phone, Mail, Eye,
   Globe, User, MoreVertical, UserPlus, ChevronUp,
   FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
-  Edit2, PlusCircle
+  Edit2, PlusCircle, GraduationCap, UserCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -50,7 +54,28 @@ import { useUser } from '../../../contexts/UserContext';
 import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
 import { Button } from '../../../components/shared/Button';
-import { StatusBadge } from '../../../components/shared/StatusBadge';
+
+// ===== STATUS BADGE COMPONENT (INLINE) =====
+const StatusBadge = ({ status }: { status: string }) => {
+  const getStatusColor = () => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+    }
+  };
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getStatusColor()}`}>
+      {status || 'Unknown'}
+    </span>
+  );
+};
 
 // ===== TYPE DEFINITIONS =====
 interface Company {
@@ -78,6 +103,9 @@ interface CompanyAdditional {
   registration_number?: string;
   tax_id?: string;
   logo_url?: string;
+  ceo_name?: string;
+  ceo_email?: string;
+  ceo_phone?: string;
 }
 
 interface SchoolData {
@@ -90,6 +118,7 @@ interface SchoolData {
   created_at: string;
   additional?: SchoolAdditional;
   branches?: BranchData[];
+  student_count?: number;
 }
 
 interface SchoolAdditional {
@@ -99,6 +128,7 @@ interface SchoolAdditional {
   curriculum_type?: string[];
   total_capacity?: number;
   teachers_count?: number;
+  student_count?: number;
   principal_name?: string;
   principal_email?: string;
   principal_phone?: string;
@@ -126,6 +156,7 @@ interface BranchData {
   status: 'active' | 'inactive';
   created_at: string;
   additional?: BranchAdditional;
+  student_count?: number;
 }
 
 interface BranchAdditional {
@@ -195,13 +226,13 @@ export default function OrganisationManagement() {
   // Tab states for detail panel
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
   
-  // Form states
+  // Form states - RESET on modal open
   const [formData, setFormData] = useState<any>({});
 
   // Helper function to get initials from name
   const getInitials = (name: string): string => {
     if (!name) return 'NA';
-    const words = name.trim().split(' ');
+    const words = name.trim().split(' ').filter(w => w.length > 0);
     if (words.length >= 2) {
       return (words[0][0] + words[words.length - 1][0]).toUpperCase();
     }
@@ -258,7 +289,7 @@ export default function OrganisationManagement() {
     }
   }, [companyData, expandAll]);
 
-  // ===== FETCH ORGANIZATION DATA =====
+  // ===== FETCH ORGANIZATION DATA WITH COUNTS =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
     async () => {
@@ -268,6 +299,7 @@ export default function OrganisationManagement() {
 
       console.log('Fetching organization data for company:', userCompanyId);
 
+      // Fetch company
       const { data: company, error: companyError } = await supabase
         .from('companies')
         .select('*')
@@ -279,12 +311,14 @@ export default function OrganisationManagement() {
         throw companyError;
       }
 
+      // Fetch company additional data
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
         .maybeSingle();
 
+      // Fetch schools
       const { data: schools, error: schoolsError } = await supabase
         .from('schools')
         .select('*')
@@ -293,19 +327,29 @@ export default function OrganisationManagement() {
 
       if (schoolsError) throw schoolsError;
 
+      // Process schools with additional data and counts
       const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
+        // Fetch school additional data
         const { data: schoolAdditional } = await supabase
           .from('schools_additional')
           .select('*')
           .eq('school_id', school.id)
           .maybeSingle();
 
+        // Fetch student count for school
+        const { count: studentCount } = await supabase
+          .from('students')
+          .select('*', { count: 'exact', head: true })
+          .eq('school_id', school.id);
+
+        // Fetch branches
         const { data: branches } = await supabase
           .from('branches')
           .select('*')
           .eq('school_id', school.id)
           .order('name');
 
+        // Process branches with additional data
         const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
           const { data: branchAdditional } = await supabase
             .from('branches_additional')
@@ -313,10 +357,25 @@ export default function OrganisationManagement() {
             .eq('branch_id', branch.id)
             .maybeSingle();
 
-          return { ...branch, additional: branchAdditional };
+          // Fetch student count for branch
+          const { count: branchStudentCount } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('branch_id', branch.id);
+
+          return { 
+            ...branch, 
+            additional: branchAdditional,
+            student_count: branchStudentCount || 0
+          };
         }));
 
-        return { ...school, additional: schoolAdditional, branches: branchesWithDetails };
+        return { 
+          ...school, 
+          additional: schoolAdditional, 
+          branches: branchesWithDetails,
+          student_count: studentCount || 0
+        };
       }));
 
       const fullData = { 
@@ -447,6 +506,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success('School created successfully');
         setShowModal(false);
+        // Clear form data
         setFormData({});
         setFormErrors({});
       },
@@ -478,6 +538,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success('Branch created successfully');
         setShowModal(false);
+        // Clear form data
         setFormData({});
         setFormErrors({});
       },
@@ -500,6 +561,7 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['departments']);
         toast.success('Department created successfully');
         setShowModal(false);
+        // Clear form data
         setFormData({});
         setFormErrors({});
       },
@@ -602,29 +664,43 @@ export default function OrganisationManagement() {
     setExpandAll(false);
   };
 
-  // ===== ENHANCED ORG CHART NODE COMPONENT =====
+  // ===== ENHANCED ORG CHART NODE COMPONENT WITH ALL DATA =====
   const OrgChartNode = ({ item, type, isRoot = false }: { item: any; type: 'company' | 'school' | 'branch'; isRoot?: boolean; }) => {
+    // Calculate employee count
     const employeeCount = type === 'company' ? 
       item.schools?.reduce((acc: number, school: SchoolData) => 
         acc + (school.additional?.teachers_count || 0), 0) || 0 :
       type === 'school' ? item.additional?.teachers_count || 0 :
       item.additional?.teachers_count || 0;
 
-    const managerName = type === 'company' ? item.additional?.ceo_name || null :
-                       type === 'school' ? item.additional?.principal_name || null :
-                       item.additional?.branch_head_name || null;
+    // Calculate student count
+    const studentCount = type === 'company' ?
+      item.schools?.reduce((acc: number, school: SchoolData) => 
+        acc + (school.student_count || 0), 0) || 0 :
+      type === 'school' ? item.student_count || 0 :
+      item.student_count || 0;
+
+    // Get manager information
+    const managerName = type === 'company' ? item.additional?.ceo_name :
+                       type === 'school' ? item.additional?.principal_name :
+                       item.additional?.branch_head_name;
 
     const managerTitle = type === 'company' ? 'CEO' :
                         type === 'school' ? 'Principal' : 
                         'Branch Head';
 
-    const managerEmail = type === 'company' ? item.additional?.main_email :
+    const managerEmail = type === 'company' ? item.additional?.ceo_email || item.additional?.main_email :
                         type === 'school' ? item.additional?.principal_email :
                         item.additional?.branch_head_email;
 
-    const managerPhone = type === 'company' ? item.additional?.main_phone :
+    const managerPhone = type === 'company' ? item.additional?.ceo_phone || item.additional?.main_phone :
                         type === 'school' ? item.additional?.principal_phone :
                         item.additional?.branch_head_phone;
+
+    // Get location
+    const location = type === 'company' ? item.additional?.head_office_city :
+                    type === 'school' ? item.additional?.campus_city :
+                    item.additional?.building_name;
 
     const logoUrl = item.additional?.logo_url;
     const initials = getInitials(item.name);
@@ -654,7 +730,7 @@ export default function OrganisationManagement() {
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center space-x-2">
             {/* Square Logo/Initials */}
-            <div className={`w-10 h-10 rounded-md ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md overflow-hidden`}>
+            <div className={`w-10 h-10 rounded-md ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md overflow-hidden flex-shrink-0`}>
               {logoUrl ? (
                 <img src={logoUrl} alt={item.name} className="w-full h-full object-cover" />
               ) : (
@@ -662,12 +738,15 @@ export default function OrganisationManagement() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+              <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-1">
                 {item.name}
               </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">
-                {item.code}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {item.code}
+                </p>
+                <StatusBadge status={item.status} />
+              </div>
             </div>
           </div>
           {/* Action Buttons */}
@@ -687,7 +766,7 @@ export default function OrganisationManagement() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Clear form data before opening modal
+                  // IMPORTANT: Clear all form data
                   setFormData({});
                   setFormErrors({});
                   setModalType(type === 'company' ? 'school' : 'branch');
@@ -712,34 +791,29 @@ export default function OrganisationManagement() {
           </div>
         </div>
 
-        {/* Status Badge */}
-        <div className="mb-2">
-          <StatusBadge status={item.status} />
-        </div>
-
         {/* Manager Info */}
-        <div className="mb-2">
-          <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">{managerTitle}</div>
+        <div className="mb-2 bg-white/50 dark:bg-gray-900/50 rounded p-1.5">
+          <div className="text-xs text-gray-500 dark:text-gray-400">{managerTitle}</div>
           <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
             {managerName || 'Not Assigned'}
           </p>
         </div>
 
-        {/* Contact Info - Now Visible */}
+        {/* Contact Info - Visible when available */}
         {(managerEmail || managerPhone) && (
-          <div className="space-y-1 mb-2">
+          <div className="space-y-0.5 mb-2 text-xs">
             {managerEmail && (
               <div className="flex items-center space-x-1">
-                <Mail className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                <Mail className="h-3 w-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                <p className="text-gray-600 dark:text-gray-400 truncate">
                   {managerEmail}
                 </p>
               </div>
             )}
             {managerPhone && (
               <div className="flex items-center space-x-1">
-                <Phone className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400">
+                <Phone className="h-3 w-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                <p className="text-gray-600 dark:text-gray-400">
                   {managerPhone}
                 </p>
               </div>
@@ -747,24 +821,37 @@ export default function OrganisationManagement() {
           </div>
         )}
 
-        {/* Additional Info */}
-        <div className="flex items-center justify-between text-xs">
-          <div className="text-gray-700 dark:text-gray-300">
-            <span className="font-semibold text-sm">{employeeCount}</span> Users
+        {/* Stats Row */}
+        <div className="flex items-center justify-between text-xs border-t dark:border-gray-600 pt-2">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1">
+              <Users className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+              <span className="text-gray-700 dark:text-gray-300">
+                <span className="font-semibold">{employeeCount}</span> Staff
+              </span>
+            </div>
+            {studentCount > 0 && (
+              <div className="flex items-center space-x-1">
+                <GraduationCap className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+                <span className="text-gray-700 dark:text-gray-300">
+                  <span className="font-semibold">{studentCount}</span> Students
+                </span>
+              </div>
+            )}
           </div>
-          {type === 'school' && item.branches && (
+          {type === 'school' && item.branches && item.branches.length > 0 && (
             <div className="text-gray-600 dark:text-gray-400">
               {item.branches.length} Branches
             </div>
           )}
         </div>
 
-        {/* Location for School/Branch */}
-        {type !== 'company' && (item.additional?.campus_city || item.additional?.building_name) && (
-          <div className="mt-1 flex items-center space-x-1">
-            <MapPin className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-              {type === 'school' ? item.additional?.campus_city : item.additional?.building_name}
+        {/* Location */}
+        {location && (
+          <div className="mt-1.5 flex items-center space-x-1 text-xs">
+            <MapPin className="h-3 w-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+            <p className="text-gray-600 dark:text-gray-400 truncate">
+              {location}
             </p>
           </div>
         )}
@@ -772,7 +859,7 @@ export default function OrganisationManagement() {
     );
   };
 
-  // ===== RENDER ORGANIZATION CHART WITH SECTION IDS =====
+  // ===== RENDER ORGANIZATION CHART =====
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
@@ -965,6 +1052,42 @@ export default function OrganisationManagement() {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CEO Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.ceo_name || ''}
+                        onChange={(e) => setFormData({...formData, ceo_name: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Enter CEO name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CEO Email
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.ceo_email || ''}
+                        onChange={(e) => setFormData({...formData, ceo_email: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Enter CEO email"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CEO Phone
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.ceo_phone || ''}
+                        onChange={(e) => setFormData({...formData, ceo_phone: e.target.value})}
+                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Enter CEO phone"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Main Phone
                       </label>
                       <input
@@ -1117,9 +1240,7 @@ export default function OrganisationManagement() {
     );
   };
 
-  // Rest of the component remains the same...
-  // (Authentication checks, loading states, main render, etc.)
-
+  // ===== CHECK AUTHENTICATION =====
   if (!authenticatedUser) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1187,6 +1308,7 @@ export default function OrganisationManagement() {
               <Button
                 variant="outline"
                 onClick={() => {
+                  // Clear form completely
                   setModalType('school');
                   setFormData({});
                   setFormErrors({});
@@ -1251,7 +1373,7 @@ export default function OrganisationManagement() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -1291,6 +1413,21 @@ export default function OrganisationManagement() {
                 </div>
                 <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Students</p>
+                  <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                    {companyData?.schools?.reduce((acc, school) => 
+                      acc + (school.student_count || 0), 0) || 0}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                  <GraduationCap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
             </div>
