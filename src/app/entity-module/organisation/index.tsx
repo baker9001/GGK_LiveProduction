@@ -1,20 +1,18 @@
 /**
  * File: /src/app/entity-module/organisation/index.tsx
  * 
- * Organisation Module Router - Handles sub-routes for organisation module
- * Including the wizard page
+ * Organisation Module Router - Simple version without wizard
+ * Only includes the main organization management page
  */
 
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import OrganisationManagement from './page';
-import OrganizationWizard from './wizard/page';
 
 const OrganisationRouter = () => {
   return (
     <Routes>
       <Route index element={<OrganisationManagement />} />
-      <Route path="wizard" element={<OrganizationWizard />} />
     </Routes>
   );
 };
