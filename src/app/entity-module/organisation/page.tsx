@@ -10,21 +10,6 @@
  *   - @/contexts/UserContext
  *   - @/components/shared/* (SlideInForm, FormField, Button)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, react-router-dom
- * 
- * Preserved Features:
- *   - Full organization chart with zoom controls
- *   - Quick create modals for simple entities
- *   - Department management
- *   - Academic years management
- *   - Details panel with inline edit
- *   - All original queries and mutations
- *   - View mode toggle (expand/colleagues)
- *   - Summary cards
- *   - Node expand/collapse controls
- * 
- * Enhanced Features:
- *   - Edit button navigates to wizard for comprehensive editing
- *   - Option to use wizard for complex creation scenarios
  */
 
 'use client';
@@ -49,7 +34,7 @@ import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
 import { Button } from '../../../components/shared/Button';
 
-// ===== STATUS BADGE COMPONENT (PRESERVED FROM ORIGINAL) =====
+// ===== STATUS BADGE COMPONENT =====
 const StatusBadge = memo(({ status }: { status: string }) => {
   const getStatusColor = () => {
     switch (status?.toLowerCase()) {
@@ -77,7 +62,7 @@ const StatusBadge = memo(({ status }: { status: string }) => {
 
 StatusBadge.displayName = 'StatusBadge';
 
-// ===== TYPE DEFINITIONS (PRESERVED FROM ORIGINAL) =====
+// ===== TYPE DEFINITIONS =====
 interface Company {
   id: string;
   name: string;
@@ -201,7 +186,7 @@ interface AcademicYear {
   status: 'planned' | 'active' | 'completed';
 }
 
-// ===== OPTIMIZED FETCH FUNCTION (PRESERVED FROM ORIGINAL) =====
+// ===== OPTIMIZED FETCH FUNCTION =====
 const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   try {
     const [companyRes, companyAddRes, schoolsRes] = await Promise.all([
@@ -278,7 +263,7 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   }
 };
 
-// ===== MEMOIZED ORG NODE COMPONENT (PRESERVED WITH WIZARD OPTION) =====
+// ===== MEMOIZED ORG NODE COMPONENT =====
 const OrgChartNode = memo(({ 
   item, 
   type, 
@@ -431,7 +416,7 @@ export default function OrganisationManagement() {
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
   
-  // State management (ALL PRESERVED FROM ORIGINAL)
+  // State management
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
@@ -446,7 +431,7 @@ export default function OrganisationManagement() {
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
   const [formData, setFormData] = useState<any>({});
   
-  // Zoom state (PRESERVED)
+  // Zoom state
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -454,7 +439,7 @@ export default function OrganisationManagement() {
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
 
-  // ===== ZOOM CONTROLS (PRESERVED) =====
+  // ===== ZOOM CONTROLS =====
   const handleZoomIn = useCallback(() => {
     setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
   }, []);
@@ -505,7 +490,7 @@ export default function OrganisationManagement() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // ===== FETCH USER'S COMPANY (PRESERVED) =====
+  // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
     const fetchUserCompany = async () => {
       try {
@@ -535,7 +520,7 @@ export default function OrganisationManagement() {
     }
   }, [authenticatedUser]);
 
-  // ===== FETCH ORGANIZATION DATA (PRESERVED) =====
+  // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
     () => fetchOrganizationData(userCompanyId!),
@@ -556,7 +541,7 @@ export default function OrganisationManagement() {
     }
   }, [organizationData]);
 
-  // ===== LAZY LOAD DEPARTMENTS (PRESERVED) =====
+  // ===== LAZY LOAD DEPARTMENTS =====
   const { data: departments } = useQuery(
     ['departments', selectedItem?.id, selectedType],
     async () => {
@@ -582,7 +567,7 @@ export default function OrganisationManagement() {
     }
   );
 
-  // ===== LAZY LOAD ACADEMIC YEARS (PRESERVED) =====
+  // ===== LAZY LOAD ACADEMIC YEARS =====
   const { data: academicYears } = useQuery(
     ['academicYears', selectedItem?.id],
     async () => {
@@ -602,7 +587,7 @@ export default function OrganisationManagement() {
     }
   );
 
-  // ===== ALL MUTATIONS (PRESERVED) =====
+  // ===== ALL MUTATIONS =====
   const updateCompanyMutation = useMutation(
     async (data: CompanyAdditional) => {
       const { data: existing } = await supabase
@@ -719,7 +704,7 @@ export default function OrganisationManagement() {
     }
   );
 
-  // ===== UI HELPER FUNCTIONS (ALL PRESERVED) =====
+  // ===== UI HELPER FUNCTIONS =====
   const toggleNode = useCallback((id: string) => {
     setExpandedNodes(prev => {
       const newExpanded = new Set(prev);
@@ -755,7 +740,6 @@ export default function OrganisationManagement() {
     setShowModal(true);
   }, []);
 
-  // New function for wizard navigation
   const handleEditInWizard = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
     navigate(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
   }, [navigate]);
@@ -830,7 +814,7 @@ export default function OrganisationManagement() {
     setExpandedNodes(new Set());
   };
 
-  // ===== RENDER ORGANIZATION CHART (PRESERVED WITH WIZARD EDIT OPTION) =====
+  // ===== RENDER ORGANIZATION CHART =====
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
@@ -958,7 +942,7 @@ export default function OrganisationManagement() {
     );
   };
 
-  // ===== RENDER DETAILS PANEL (PRESERVED WITH WIZARD OPTION) =====
+  // ===== RENDER DETAILS PANEL =====
   const renderDetailsPanel = () => {
     if (!selectedItem || !showDetailsPanel) return null;
 
@@ -1200,7 +1184,7 @@ export default function OrganisationManagement() {
     );
   };
 
-  // ===== LOADING & ERROR STATES (PRESERVED) =====
+  // ===== LOADING & ERROR STATES =====
   if (!authenticatedUser) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -1249,7 +1233,7 @@ export default function OrganisationManagement() {
     );
   }
 
-  // ===== MAIN RENDER (FULLY PRESERVED WITH WIZARD OPTION) =====
+  // ===== MAIN RENDER =====
   return (
     <div className="org-main-container min-h-screen bg-gray-50 dark:bg-gray-900 p-6 relative">
       <div className="max-w-full mx-auto space-y-6">
@@ -1300,7 +1284,7 @@ export default function OrganisationManagement() {
           </div>
         </div>
 
-        {/* Stats Cards (PRESERVED) */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center justify-between">
@@ -1374,7 +1358,7 @@ export default function OrganisationManagement() {
           </div>
         </div>
 
-        {/* Organization Chart (FULLY PRESERVED WITH ALL CONTROLS) */}
+        {/* Organization Chart */}
         <div id="org-chart-wrapper" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
             <div className="flex items-center justify-between">
@@ -1501,3 +1485,157 @@ export default function OrganisationManagement() {
                       onClick={handleCollapseAll}
                       className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div id="org-chart-container" className="p-6 overflow-x-auto overflow-y-hidden" style={{ minHeight: '600px' }}>
+            {viewMode === 'expand' ? (
+              <div id="org-chart" className="inline-block min-w-full">
+                {renderOrganizationChart()}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">
+                  Colleagues view will display all users in card format
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  This feature is coming soon
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Zoom Hint */}
+          {viewMode === 'expand' && (
+            <div className="absolute bottom-4 left-4 text-xs text-gray-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 px-2 py-1 rounded">
+              Tip: Use Ctrl+Mouse Wheel or Ctrl+/- to zoom
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Details Panel */}
+      {renderDetailsPanel()}
+      
+      {/* Create Modal using SlideInForm */}
+      <SlideInForm
+        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('#create-form') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+      >
+        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              <Info className="w-4 h-4 inline mr-2" />
+              This is a quick create form. For comprehensive data entry with all fields, use the wizard.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowModal(false);
+                const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
+                const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
+                navigate(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+              }}
+              className="mt-2 text-xs"
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Use Wizard Instead
+            </Button>
+          </div>
+
+          <FormField
+            id="name"
+            label="Name"
+            required
+            error={formErrors.name}
+          >
+            <Input
+              id="name"
+              name="name"
+              placeholder={`Enter ${modalType} name`}
+              autoFocus
+            />
+          </FormField>
+
+          <FormField
+            id="code"
+            label="Code"
+            required
+            error={formErrors.code}
+          >
+            <Input
+              id="code"
+              name="code"
+              placeholder={`Enter ${modalType} code`}
+            />
+          </FormField>
+
+          {modalType === 'school' && (
+            <FormField
+              id="description"
+              label="Description"
+              error={formErrors.description}
+            >
+              <Textarea
+                id="description"
+                name="description"
+                placeholder={`Enter ${modalType} description`}
+                rows={3}
+              />
+            </FormField>
+          )}
+
+          {modalType === 'branch' && formData.school_id && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
+              </p>
+            </div>
+          )}
+
+          {modalType === 'department' && (
+            <FormField
+              id="department_type"
+              label="Department Type"
+              error={formErrors.department_type}
+            >
+              <Select
+                id="department_type"
+                name="department_type"
+                options={[
+                  { value: 'academic', label: 'Academic' },
+                  { value: 'administrative', label: 'Administrative' },
+                  { value: 'support', label: 'Support' },
+                  { value: 'operations', label: 'Operations' }
+                ]}
+              />
+            </FormField>
+          )}
+        </form>
+      </SlideInForm>
+    </div>
+  );
+}
