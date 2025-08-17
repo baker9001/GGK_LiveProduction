@@ -511,7 +511,8 @@ export default function OrganisationManagement() {
   }, []);
 
   const toggleFullscreen = useCallback(() => {
-    const element = document.getElementById('org-chart-wrapper');
+    // Target the main container instead of just the chart wrapper
+    const element = document.querySelector('.org-main-container') as HTMLElement;
     
     if (!isFullscreen && element) {
       if (element.requestFullscreen) {
@@ -526,31 +527,15 @@ export default function OrganisationManagement() {
     }
   }, [isFullscreen]);
 
-  // Keyboard shortcuts for zoom
+  // Listen for fullscreen changes to update state
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch(e.key) {
-          case '=':
-          case '+':
-            e.preventDefault();
-            handleZoomIn();
-            break;
-          case '-':
-            e.preventDefault();
-            handleZoomOut();
-            break;
-          case '0':
-            e.preventDefault();
-            handleZoomReset();
-            break;
-        }
-      }
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleZoomIn, handleZoomOut, handleZoomReset]);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
@@ -1276,7 +1261,7 @@ export default function OrganisationManagement() {
 
   // ===== MAIN RENDER =====
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+    <div className="org-main-container min-h-screen bg-gray-50 dark:bg-gray-900 p-6 relative">
       <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
