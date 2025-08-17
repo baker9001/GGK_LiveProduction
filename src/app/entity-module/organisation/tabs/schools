@@ -1,0 +1,632 @@
+/**
+ * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
+ * 
+ * Schools Management Tab - Handles all school-related operations
+ * 
+ * Dependencies: 
+ *   - @/lib/supabase
+ *   - @/lib/auth
+ *   - @/contexts/UserContext
+ *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Database Tables:
+ *   - schools & schools_additional
+ *   - companies (for reference)
+ */
+
+'use client';
+
+import React, { useState, useEffect, memo } from 'react';
+import { 
+  School, Plus, Edit2, Trash2, Search, Filter, MoreVertical,
+  Users, MapPin, Calendar, Phone, Mail, Globe, Building,
+  CheckCircle2, XCircle, Clock, AlertTriangle, BookOpen,
+  FlaskConical, Dumbbell, Coffee, GraduationCap
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../../../lib/supabase';
+import { toast } from 'react-hot-toast';
+import { getAuthenticatedUser } from '../../../../lib/auth';
+import { useUser } from '../../../../contexts/UserContext';
+import { SlideInForm } from '../../../../components/shared/SlideInForm';
+import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
+import { Button } from '../../../../components/shared/Button';
+import { StatusBadge } from '../../components/StatusBadge';
+import { OrgChartNode } from '../../components/OrgChartNode';
+import type { SchoolData, SchoolAdditional } from '../../types';
+
+export default function SchoolsTab() {
+  const queryClient = useQueryClient();
+  const { user } = useUser();
+  const authenticatedUser = getAuthenticatedUser();
+  
+  // State management
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [formData, setFormData] = useState<Partial<SchoolData & SchoolAdditional>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+
+  // Fetch user's company
+  useEffect(() => {
+    const fetchUserCompany = async () => {
+      if (!authenticatedUser) return;
+      
+      const { data: entityUser } = await supabase
+        .from('entity_users')
+        .select('company_id')
+        .eq('user_id', authenticatedUser.id)
+        .single();
+      
+      if (entityUser?.company_id) {
+        setUserCompanyId(entityUser.company_id);
+      }
+    };
+    
+    if (authenticatedUser) {
+      fetchUserCompany();
+    }
+  }, [authenticatedUser]);
+
+  // Fetch schools
+  const { data: schools = [], isLoading } = useQuery(
+    ['schools', userCompanyId],
+    async () => {
+      if (!userCompanyId) return [];
+      
+      const { data: schoolsData, error } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .order('name');
+      
+      if (error) throw error;
+      
+      // Fetch additional data for each school
+      const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
+        const { data: additional } = await supabase
+          .from('schools_additional')
+          .select('*')
+          .eq('school_id', school.id)
+          .maybeSingle();
+        
+        return { ...school, additional };
+      }));
+      
+      return schoolsWithAdditional;
+    },
+    { enabled: !!userCompanyId }
+  );
+
+  // Create school mutation
+  const createSchoolMutation = useMutation(
+    async (data: Partial<SchoolData & SchoolAdditional>) => {
+      const mainFields = ['name', 'code', 'description', 'status', 'company_id', 'address', 'notes', 'logo'];
+      const mainData: any = { company_id: userCompanyId };
+      
+      mainFields.forEach(field => {
+        if (data[field as keyof typeof data] !== undefined) {
+          mainData[field] = data[field as keyof typeof data];
+        }
+      });
+      
+      const { data: school, error } = await supabase
+        .from('schools')
+        .insert([mainData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Create additional record
+      const additionalData: any = { school_id: school.id };
+      Object.keys(data).forEach(key => {
+        if (!mainFields.includes(key) && data[key as keyof typeof data] !== undefined) {
+          additionalData[key] = data[key as keyof typeof data];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        await supabase.from('schools_additional').insert([additionalData]);
+      }
+      
+      return school;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['schools']);
+        toast.success('School created successfully');
+        setShowCreateModal(false);
+        setFormData({});
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to create school');
+      }
+    }
+  );
+
+  // Update school mutation
+  const updateSchoolMutation = useMutation(
+    async ({ id, data }: { id: string; data: Partial<SchoolData & SchoolAdditional> }) => {
+      const mainFields = ['name', 'code', 'description', 'status', 'address', 'notes', 'logo'];
+      const mainData: any = {};
+      
+      mainFields.forEach(field => {
+        if (data[field as keyof typeof data] !== undefined) {
+          mainData[field] = data[field as keyof typeof data];
+        }
+      });
+      
+      const { error } = await supabase
+        .from('schools')
+        .update(mainData)
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update or insert additional record
+      const additionalData: any = { school_id: id };
+      Object.keys(data).forEach(key => {
+        if (!mainFields.includes(key) && data[key as keyof typeof data] !== undefined) {
+          additionalData[key] = data[key as keyof typeof data];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        const { error: updateError } = await supabase
+          .from('schools_additional')
+          .update(additionalData)
+          .eq('school_id', id);
+        
+        if (updateError?.code === 'PGRST116') {
+          await supabase.from('schools_additional').insert([additionalData]);
+        }
+      }
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['schools']);
+        toast.success('School updated successfully');
+        setShowEditModal(false);
+        setFormData({});
+        setFormErrors({});
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to update school');
+      }
+    }
+  );
+
+  // Validation
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.name) errors.name = 'Name is required';
+    if (!formData.code) errors.code = 'Code is required';
+    if (!formData.status) errors.status = 'Status is required';
+    
+    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
+      errors.principal_email = 'Invalid email address';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle submit
+  const handleSubmit = (mode: 'create' | 'edit') => {
+    if (!validateForm()) {
+      toast.error('Please fix the errors before submitting');
+      return;
+    }
+    
+    if (mode === 'create') {
+      createSchoolMutation.mutate(formData);
+    } else if (selectedSchool) {
+      updateSchoolMutation.mutate({ id: selectedSchool.id, data: formData });
+    }
+  };
+
+  // Filter schools
+  const filteredSchools = schools.filter(school =>
+    school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    school.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Render school form
+  const renderSchoolForm = () => (
+    <>
+      {activeTab === 'basic' && (
+        <div className="space-y-4">
+          <FormField id="name" label="School Name" required error={formErrors.name}>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter school name"
+            />
+          </FormField>
+
+          <FormField id="code" label="School Code" required error={formErrors.code}>
+            <Input
+              id="code"
+              value={formData.code || ''}
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              placeholder="e.g., SCH-001"
+            />
+          </FormField>
+
+          <FormField id="status" label="Status" required error={formErrors.status}>
+            <Select
+              id="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={formData.status || 'active'}
+              onChange={(value) => setFormData({...formData, status: value})}
+            />
+          </FormField>
+
+          <FormField id="school_type" label="School Type">
+            <Select
+              id="school_type"
+              options={[
+                { value: 'primary', label: 'Primary School' },
+                { value: 'secondary', label: 'Secondary School' },
+                { value: 'other', label: 'Other' }
+              ]}
+              value={formData.school_type || ''}
+              onChange={(value) => setFormData({...formData, school_type: value})}
+              placeholder="Select school type"
+            />
+          </FormField>
+
+          <FormField id="description" label="Description">
+            <Textarea
+              id="description"
+              value={formData.description || ''}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Enter school description"
+              rows={3}
+            />
+          </FormField>
+
+          <FormField id="curriculum_type" label="Curriculum Types">
+            <div className="space-y-2">
+              {['national', 'cambridge', 'ib', 'american', 'other'].map(type => (
+                <label key={type} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={(formData.curriculum_type || []).includes(type)}
+                    onChange={(e) => {
+                      const current = formData.curriculum_type || [];
+                      if (e.target.checked) {
+                        setFormData({...formData, curriculum_type: [...current, type]});
+                      } else {
+                        setFormData({...formData, curriculum_type: current.filter((t: string) => t !== type)});
+                      }
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm capitalize">{type}</span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'additional' && (
+        <div className="space-y-4">
+          <FormField id="campus_address" label="Campus Address">
+            <Input
+              id="campus_address"
+              value={formData.campus_address || ''}
+              onChange={(e) => setFormData({...formData, campus_address: e.target.value})}
+              placeholder="Enter campus address"
+            />
+          </FormField>
+
+          <FormField id="campus_city" label="Campus City">
+            <Input
+              id="campus_city"
+              value={formData.campus_city || ''}
+              onChange={(e) => setFormData({...formData, campus_city: e.target.value})}
+              placeholder="Enter city"
+            />
+          </FormField>
+
+          <FormField id="total_capacity" label="Total Capacity">
+            <Input
+              id="total_capacity"
+              type="number"
+              value={formData.total_capacity || ''}
+              onChange={(e) => setFormData({...formData, total_capacity: parseInt(e.target.value)})}
+              placeholder="Maximum student capacity"
+            />
+          </FormField>
+
+          <FormField id="student_count" label="Current Students">
+            <Input
+              id="student_count"
+              type="number"
+              value={formData.student_count || ''}
+              onChange={(e) => setFormData({...formData, student_count: parseInt(e.target.value)})}
+              placeholder="Current number of students"
+            />
+          </FormField>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
+            <div className="space-y-2">
+              {['has_library', 'has_laboratory', 'has_sports_facilities', 'has_cafeteria'].map(facility => (
+                <label key={facility} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData[facility as keyof typeof formData] || false}
+                    onChange={(e) => setFormData({...formData, [facility]: e.target.checked})}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm">{facility.replace(/_/g, ' ').replace('has ', 'Has ')}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'contact' && (
+        <div className="space-y-4">
+          <FormField id="principal_name" label="Principal Name">
+            <Input
+              id="principal_name"
+              value={formData.principal_name || ''}
+              onChange={(e) => setFormData({...formData, principal_name: e.target.value})}
+              placeholder="Enter principal name"
+            />
+          </FormField>
+
+          <FormField id="principal_email" label="Principal Email" error={formErrors.principal_email}>
+            <Input
+              id="principal_email"
+              type="email"
+              value={formData.principal_email || ''}
+              onChange={(e) => setFormData({...formData, principal_email: e.target.value})}
+              placeholder="principal@school.com"
+            />
+          </FormField>
+
+          <FormField id="principal_phone" label="Principal Phone">
+            <Input
+              id="principal_phone"
+              type="tel"
+              value={formData.principal_phone || ''}
+              onChange={(e) => setFormData({...formData, principal_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+
+          <FormField id="teachers_count" label="Total Teachers">
+            <Input
+              id="teachers_count"
+              type="number"
+              value={formData.teachers_count || ''}
+              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of teachers"
+            />
+          </FormField>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Schools Management</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Manage all schools in your organization
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setFormData({ status: 'active', company_id: userCompanyId! });
+            setFormErrors({});
+            setActiveTab('basic');
+            setShowCreateModal(true);
+          }}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add School
+        </Button>
+      </div>
+
+      {/* Search */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search schools by name or code..."
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Schools Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredSchools.map(school => (
+          <div
+            key={school.id}
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                  <School className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{school.code}</p>
+                </div>
+              </div>
+              <StatusBadge status={school.status} size="xs" />
+            </div>
+
+            {school.additional && (
+              <div className="space-y-2 text-sm">
+                {school.additional.principal_name && (
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {school.additional.principal_name}
+                    </span>
+                  </div>
+                )}
+                {school.additional.campus_city && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {school.additional.campus_city}
+                    </span>
+                  </div>
+                )}
+                {(school.additional.student_count || school.additional.teachers_count) && (
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <GraduationCap className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.additional.student_count || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.additional.teachers_count || 0}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedSchool(school);
+                  setFormData({ ...school, ...(school.additional || {}) });
+                  setFormErrors({});
+                  setActiveTab('basic');
+                  setShowEditModal(true);
+                }}
+              >
+                <Edit2 className="w-3 h-3 mr-1" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Create Modal */}
+      <SlideInForm
+        title="Create School"
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => handleSubmit('create')}
+      >
+        <div className="space-y-4">
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
+          </div>
+          <div className="mt-4">
+            {renderSchoolForm()}
+          </div>
+        </div>
+      </SlideInForm>
+
+      {/* Edit Modal */}
+      <SlideInForm
+        title="Edit School"
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedSchool(null);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => handleSubmit('edit')}
+      >
+        <div className="space-y-4">
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
+          </div>
+          <div className="mt-4">
+            {renderSchoolForm()}
+          </div>
+        </div>
+      </SlideInForm>
+    </div>
+  );
+}
