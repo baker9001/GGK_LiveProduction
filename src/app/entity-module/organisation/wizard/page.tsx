@@ -32,12 +32,13 @@ import {
   UserCheck, Edit, Activity
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '../../../../lib/auth';
-import { useUser } from '../../../../contexts/UserContext';
-import { Button } from '../../../../components/shared/Button';
-import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
+import { Button } from '@/components/shared/Button';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 
 // ===== TYPE DEFINITIONS =====
 type EntityType = 'company' | 'school' | 'branch';
@@ -777,8 +778,8 @@ export default function OrganizationWizard() {
         required: true,
         icon: Activity,
         options: [
-          { value: 'active', label: 'Active', description: 'Fully operational' },
-          { value: 'inactive', label: 'Inactive', description: 'Temporarily disabled' }
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' }
         ]
       },
       
@@ -788,10 +789,10 @@ export default function OrganizationWizard() {
         type: 'select',
         icon: Briefcase,
         options: [
-          { value: 'education_group', label: 'Education Group', description: 'Multiple institutions' },
-          { value: 'single_institution', label: 'Single Institution', description: 'One organization' },
-          { value: 'franchise', label: 'Franchise', description: 'Franchised operations' },
-          { value: 'partnership', label: 'Partnership', description: 'Joint venture' }
+          { value: 'education_group', label: 'Education Group' },
+          { value: 'single_institution', label: 'Single Institution' },
+          { value: 'franchise', label: 'Franchise' },
+          { value: 'partnership', label: 'Partnership' }
         ]
       },
       fiscal_year_start: { label: 'Fiscal Year Start Month', type: 'number', min: 1, max: 12, icon: Calendar, placeholder: '1-12' },
@@ -824,9 +825,9 @@ export default function OrganizationWizard() {
         type: 'select',
         icon: GraduationCap,
         options: [
-          { value: 'primary', label: 'Primary School', description: 'Grades 1-5' },
-          { value: 'secondary', label: 'Secondary School', description: 'Grades 6-12' },
-          { value: 'other', label: 'Other', description: 'Specialized institution' }
+          { value: 'primary', label: 'Primary School' },
+          { value: 'secondary', label: 'Secondary School' },
+          { value: 'other', label: 'Other' }
         ]
       },
       curriculum_type: {
@@ -834,11 +835,11 @@ export default function OrganizationWizard() {
         type: 'multiselect',
         icon: BookOpen,
         options: [
-          { value: 'national', label: 'National', description: 'Government curriculum' },
-          { value: 'cambridge', label: 'Cambridge', description: 'Cambridge International' },
-          { value: 'ib', label: 'IB', description: 'International Baccalaureate' },
-          { value: 'american', label: 'American', description: 'US curriculum' },
-          { value: 'other', label: 'Other', description: 'Custom curriculum' }
+          { value: 'national', label: 'National' },
+          { value: 'cambridge', label: 'Cambridge' },
+          { value: 'ib', label: 'IB' },
+          { value: 'american', label: 'American' },
+          { value: 'other', label: 'Other' }
         ]
       },
       total_capacity: { label: 'Total Capacity', type: 'number', min: 0, icon: Users, placeholder: 'Maximum students' },
@@ -906,7 +907,7 @@ export default function OrganizationWizard() {
           id={fieldName}
           label="Region"
           required
-          helpText="Region is set based on your company assignment"
+          description="Region is set based on your company assignment"
           error={hasError ? formErrors[fieldName] : undefined}
         >
           <div className="flex items-center gap-2">
@@ -929,7 +930,7 @@ export default function OrganizationWizard() {
           id={fieldName}
           label="Country"
           required
-          helpText="Country is set based on your company assignment"
+          description="Country is set based on your company assignment"
           error={hasError ? formErrors[fieldName] : undefined}
         >
           <div className="flex items-center gap-2">
@@ -957,16 +958,17 @@ export default function OrganizationWizard() {
         >
           <div className="relative">
             {config.icon && (
-              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
                 <config.icon className="w-4 h-4" />
               </div>
             )}
             <Select
               id={fieldName}
               options={config.options}
-              value={formData[fieldName as keyof FormData] as string}
+              value={formData[fieldName as keyof FormData] as string || ''}
               onChange={(value) => handleFieldChange(fieldName, value)}
               className={config.icon ? 'pl-10' : ''}
+              placeholder="Select an option"
             />
           </div>
         </FormField>
@@ -993,16 +995,13 @@ export default function OrganizationWizard() {
                     if (e.target.checked) {
                       handleFieldChange(fieldName, [...currentValue, option.value]);
                     } else {
-                      handleFieldChange(fieldName, currentValue.filter(v => v !== option.value));
+                      handleFieldChange(fieldName, currentValue.filter((v: string) => v !== option.value));
                     }
                   }}
                   className="mt-1 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{option.label}</span>
-                  {option.description && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">{option.description}</span>
-                  )}
                 </div>
               </label>
             ))}
@@ -1068,7 +1067,7 @@ export default function OrganizationWizard() {
       >
         <div className="relative">
           {config.icon && (
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
               <config.icon className="w-4 h-4" />
             </div>
           )}
