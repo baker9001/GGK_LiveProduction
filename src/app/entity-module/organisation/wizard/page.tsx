@@ -6,10 +6,10 @@
  * Enhanced UI/UX with better forms and validation
  * 
  * Dependencies:
- *   - @/lib/supabase
- *   - @/lib/auth
- *   - @/contexts/UserContext
- *   - @/components/shared/*
+ *   - ../../../lib/supabase (FIXED: relative path)
+ *   - ../../../lib/auth (FIXED: relative path)
+ *   - ../../../contexts/UserContext (FIXED: relative path)
+ *   - ../../../components/shared/* (FIXED: relative paths)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * Database Tables:
@@ -29,16 +29,67 @@ import {
   Home, Flag, CreditCard, BookOpen, FlaskConical, Dumbbell,
   Coffee, ArrowLeft, CheckCircle2, AlertTriangle, Building,
   MapPinned, Sparkles, Zap, Target, TrendingUp, RotateCcw,
-  UserCheck, Edit, Activity
+  UserCheck, Edit, Activity, XCircle
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '@/lib/auth';
-import { useUser } from '@/contexts/UserContext';
-import { Button } from '@/components/shared/Button';
-import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
-import { StatusBadge } from '@/components/shared/StatusBadge';
+import { getAuthenticatedUser } from '../../../../lib/auth';
+import { useUser } from '../../../../contexts/UserContext';
+import { Button } from '../../../../components/shared/Button';
+import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
+
+// ===== STATUS BADGE COMPONENT (LOCAL IMPLEMENTATION) =====
+const StatusBadge = ({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
+  const getStatusConfig = () => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+        return {
+          color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700',
+          icon: <CheckCircle2 className="w-3 h-3" />,
+          pulse: true
+        };
+      case 'inactive':
+        return {
+          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+          icon: <XCircle className="w-3 h-3" />,
+          pulse: false
+        };
+      case 'pending':
+        return {
+          color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
+          icon: <Clock className="w-3 h-3" />,
+          pulse: true
+        };
+      default:
+        return {
+          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+          icon: <AlertTriangle className="w-3 h-3" />,
+          pulse: false
+        };
+    }
+  };
+
+  const config = getStatusConfig();
+  const sizeClasses = {
+    xs: 'px-1.5 py-0.5 text-xs',
+    sm: 'px-2 py-0.5 text-xs',
+    md: 'px-3 py-1 text-sm'
+  };
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full font-medium border ${config.color} ${sizeClasses[size]} relative`}>
+      {config.pulse && status?.toLowerCase() === 'active' && (
+        <span className="absolute -top-0.5 -right-0.5 h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        </span>
+      )}
+      {config.icon}
+      {status || 'Unknown'}
+    </span>
+  );
+};
 
 // ===== TYPE DEFINITIONS =====
 type EntityType = 'company' | 'school' | 'branch';
@@ -437,7 +488,7 @@ export default function OrganizationWizard() {
   // ===== FETCH USER COMPANY =====
   useEffect(() => {
     const fetchUserCompany = async () => {
-      const authenticatedUser = await getAuthenticatedUser();
+      const authenticatedUser = getAuthenticatedUser();
       if (!authenticatedUser) return;
       
       const { data: entityUser } = await supabase
@@ -753,7 +804,7 @@ export default function OrganizationWizard() {
       
       // Redirect after animation
       setTimeout(() => {
-        navigate('/entity-module/organisation');
+        navigate('/app/entity-module/organisation');
       }, 1500);
       
     } catch (error: any) {
@@ -1125,7 +1176,7 @@ export default function OrganizationWizard() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => navigate('/entity-module/organisation')}
+            onClick={() => navigate('/app/entity-module/organisation')}
             className="mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -1307,7 +1358,7 @@ export default function OrganizationWizard() {
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    onClick={() => navigate('/entity-module/organisation')}
+                    onClick={() => navigate('/app/entity-module/organisation')}
                   >
                     Cancel
                   </Button>
@@ -1324,63 +1375,16 @@ export default function OrganizationWizard() {
                           Saving...
                         </>
                       ) : (
-                        <>
-                          <Save className="w-4 h-4 mr-2" />
-                          {mode === 'create' ? 'Create' : 'Update'} {entityType}
-                        </>
-                      )}
-                    </Button>
-                  ) : (
                     <Button
                       onClick={handleNext}
                       className="min-w-[120px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                     >
                       Next
                       <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>    <>
+                          <Save className="w-4 h-4 mr-2" />
+                          {mode === 'create' ? 'Create' : 'Update'} {entityType}
+                        </>
+                      )}
                     </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* Quick Save Draft */}
-            {mode === 'create' && (
-              <div className="mt-4 text-center">
-                <button
-                  type="button"
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  onClick={() => {
-                    localStorage.setItem(`wizard_draft_${entityType}`, JSON.stringify(formData));
-                    toast.success('Draft saved locally');
-                  }}
-                >
-                  <Save className="w-3 h-3 inline mr-1" />
-                  Save as draft
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Tips Card */}
-        <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800 p-4">
-          <div className="flex items-start gap-3">
-            <Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                Pro Tips
-              </p>
-              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
-                <li>• You can navigate between completed steps by clicking on them</li>
-                <li>• All fields marked with * are required</li>
-                <li>• Your progress is saved automatically as you complete each step</li>
-                <li>• Use Ctrl+S to save draft locally (restored on next visit)</li>
-                <li>• Status can be changed later by entity administrators</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+                  ) : (
