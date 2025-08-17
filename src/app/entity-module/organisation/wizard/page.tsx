@@ -1366,4 +1366,24 @@ export default function OrganizationWizard() {
         </div>
         
         {/* Tips Card */}
-        <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl border border
+        <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800 p-4">
+          <div className="flex items-start gap-3">
+            <Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                Pro Tips
+              </p>
+              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                <li>• You can navigate between completed steps by clicking on them</li>
+                <li>• All fields marked with * are required</li>
+                <li>• Your progress is saved automatically as you complete each step</li>
+                <li>• Use Ctrl+S to save draft locally (restored on next visit)</li>
+                <li>• Status can be changed later by entity administrators</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
