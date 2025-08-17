@@ -1431,4 +1431,44 @@ export default function OrganisationManagement() {
                       <ZoomOut className="w-4 h-4" />
                     </button>
                     
-                    <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-
+                    <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
+                      {Math.round(zoomLevel * 100)}%
+                    </span>
+                    
+                    <button
+                      onClick={handleZoomIn}
+                      disabled={zoomLevel >= MAX_ZOOM}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom In (Ctrl++)"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+                    
+                    <button
+                      onClick={handleZoomReset}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title="Reset Zoom (Ctrl+0)"
+                    >
+                      <span className="text-xs font-medium">100%</span>
+                    </button>
+                    
+                    <button
+                      onClick={handleFitToScreen}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title="Fit to Screen"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
