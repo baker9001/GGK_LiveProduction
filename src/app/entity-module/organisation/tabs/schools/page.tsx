@@ -948,4 +948,4 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
                 <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {schools.reduce((acc
+                  {schools.reduce((acc, s) => acc + (s.additional?.teachers_count || 0), 0)}
