@@ -1,10 +1,14 @@
-// src/app/entity-module/page.tsx
+/**
+ * File: /src/app/entity-module/page.tsx
+ * 
+ * Updated Entity Module Page with proper routing for organisation sub-routes
+ */
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { Building2, Network, Settings, BarChart3, Users } from 'lucide-react';
-import OrganisationPage from './organisation/page';
+import OrganisationRouter from './organisation'; // Import the router instead of the page directly
 
 interface EntityModulePageProps {
   moduleKey?: string;
@@ -172,7 +176,7 @@ export default function EntityModulePage({ moduleKey }: EntityModulePageProps) {
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="organisation/*" element={<OrganisationPage />} />
+        <Route path="organisation/*" element={<OrganisationRouter />} />
         <Route path="relationships" element={<RelationshipsPage />} />
         <Route path="configuration" element={<ConfigurationPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
