@@ -275,21 +275,19 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   }
 };
 
-// ===== MEMOIZED ORG NODE COMPONENT WITH ZOOM SUPPORT =====
+// ===== MEMOIZED ORG NODE COMPONENT =====
 const OrgChartNode = memo(({ 
   item, 
   type, 
   isRoot = false,
   onItemClick,
-  onAddClick,
-  zoomLevel
+  onAddClick
 }: { 
   item: any; 
   type: 'company' | 'school' | 'branch';
   isRoot?: boolean;
   onItemClick: (item: any, type: 'company' | 'school' | 'branch') => void;
   onAddClick: (parentItem: any, parentType: 'company' | 'school') => void;
-  zoomLevel: number;
 }) => {
   const getInitials = (name: string): string => {
     if (!name) return 'NA';
@@ -305,8 +303,6 @@ const OrgChartNode = memo(({
       acc + (school.additional?.teachers_count || 0), 0) || 0 :
     type === 'school' ? item.additional?.teachers_count || 0 :
     item.additional?.teachers_count || 0;
-
-  const studentCount = item.student_count || 0;
 
   const managerName = type === 'company' ? item.additional?.ceo_name :
                      type === 'school' ? item.additional?.principal_name :
@@ -347,18 +343,9 @@ const OrgChartNode = memo(({
     return 'bg-purple-500';
   };
 
-  // Calculate scaled dimensions based on zoom level
-  const baseWidth = 280;
-  const scaledWidth = baseWidth * zoomLevel;
-
   return (
     <div 
-      className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 cursor-pointer ${getCardBackground()}`}
-      style={{ 
-        width: `${scaledWidth}px`,
-        transform: `scale(${zoomLevel})`,
-        transformOrigin: 'center'
-      }}
+      className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 w-[280px] cursor-pointer ${getCardBackground()}`}
       onClick={() => onItemClick(item, type)}
     >
       <div className="flex items-start justify-between mb-2">
@@ -890,10 +877,7 @@ export default function OrganisationManagement() {
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
-    // Check what level to show based on expandedNodes
-    const showCompanyOnly = expandedNodes.has('company-only');
     const showSchools = expandedNodes.has('company');
-    const showBranches = companyData.schools?.some(school => expandedNodes.has(school.id));
 
     return (
       <div 
@@ -907,9 +891,8 @@ export default function OrganisationManagement() {
             isRoot={true}
             onItemClick={handleItemClick}
             onAddClick={handleAddClick}
-            zoomLevel={1}
           />
-          {companyData.schools && companyData.schools.length > 0 && showSchools && (
+          {companyData.schools && companyData.schools.length > 0 && (
             <button
               onClick={() => toggleNode('company')}
               className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
@@ -954,9 +937,8 @@ export default function OrganisationManagement() {
                           type="school"
                           onItemClick={handleItemClick}
                           onAddClick={handleAddClick}
-                          zoomLevel={1}
                         />
-                        {school.branches && school.branches.length > 0 && showBranches && (
+                        {school.branches && school.branches.length > 0 && (
                           <button
                             onClick={() => toggleNode(school.id)}
                             className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
@@ -971,7 +953,7 @@ export default function OrganisationManagement() {
                         )}
                       </div>
                       
-                      <div id={school.id === companyData.schools![0].id ? 'org-branches' : undefined}>
+                      <div>
                         {isSchoolExpanded && school.branches && school.branches.length > 0 && (
                           <>
                             <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
@@ -998,7 +980,6 @@ export default function OrganisationManagement() {
                                     type="branch"
                                     onItemClick={handleItemClick}
                                     onAddClick={() => {}}
-                                    zoomLevel={1}
                                   />
                                 </div>
                               ))}
@@ -1433,8 +1414,6 @@ export default function OrganisationManagement() {
                     
                     <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
                       {Math.round(zoomLevel * 100)}%
-                    </span>w-[3rem] text-center">
-                      {Math.round(zoomLevel * 100)}%
                     </span>
                     
                     <button
@@ -1473,4 +1452,209 @@ export default function OrganisationManagement() {
                     </button>
                   </div>
 
+                  {/* Show/Hide Controls */}
                   <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
+                  
+                  {/* Entity Tab - Shows only Entity level */}
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set<string>();
+                      newExpanded.add('company-only');
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company-only') && !expandedNodes.has('company')
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                  >
+                    Entity
+                  </button>
+                  
+                  {/* Schools Tab - Shows Entity + Schools level */}
+                  <button
+                    onClick={() => {
+                      if (!companyData || !companyData.schools?.length) return;
+                      const newExpanded = new Set<string>();
+                      newExpanded.add('company');
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                  >
+                    Schools
+                  </button>
+                  
+                  {/* Branches Tab - Shows Entity + Schools + Branches */}
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set<string>();
+                      newExpanded.add('company');
+                      companyData.schools?.forEach(school => {
+                        if (school.branches && school.branches.length > 0) {
+                          newExpanded.add(school.id);
+                        }
+                      });
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      )
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    Branches
+                  </button>
+                  
+                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                    <button
+                      onClick={handleExpandAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                      Expand All
+                    </button>
+                    <button
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div id="org-chart-container" className="p-6 overflow-x-auto overflow-y-hidden" style={{ minHeight: '600px' }}>
+            {viewMode === 'expand' ? (
+              <div id="org-chart" className="inline-block min-w-full">
+                {renderOrganizationChart()}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">
+                  Colleagues view will display all users in card format
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  This feature is coming soon
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Zoom Hint */}
+          {viewMode === 'expand' && (
+            <div className="absolute bottom-4 left-4 text-xs text-gray-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 px-2 py-1 rounded">
+              Tip: Use Ctrl+Mouse Wheel or Ctrl+/- to zoom
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Details Panel */}
+      {renderDetailsPanel()}
+      
+      {/* Create Modal using SlideInForm */}
+      <SlideInForm
+        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('#create-form') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+      >
+        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <FormField
+            id="name"
+            label="Name"
+            required
+            error={formErrors.name}
+          >
+            <Input
+              id="name"
+              name="name"
+              placeholder={`Enter ${modalType} name`}
+              autoFocus
+            />
+          </FormField>
+
+          <FormField
+            id="code"
+            label="Code"
+            required
+            error={formErrors.code}
+          >
+            <Input
+              id="code"
+              name="code"
+              placeholder={`Enter ${modalType} code`}
+            />
+          </FormField>
+
+          {modalType === 'school' && (
+            <FormField
+              id="description"
+              label="Description"
+              error={formErrors.description}
+            >
+              <Textarea
+                id="description"
+                name="description"
+                placeholder={`Enter ${modalType} description`}
+                rows={3}
+              />
+            </FormField>
+          )}
+
+          {modalType === 'branch' && formData.school_id && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
+              </p>
+            </div>
+          )}
+
+          {modalType === 'department' && (
+            <FormField
+              id="department_type"
+              label="Department Type"
+              error={formErrors.department_type}
+            >
+              <Select
+                id="department_type"
+                name="department_type"
+                options={[
+                  { value: 'academic', label: 'Academic' },
+                  { value: 'administrative', label: 'Administrative' },
+                  { value: 'support', label: 'Support' },
+                  { value: 'operations', label: 'Operations' }
+                ]}
+              />
+            </FormField>
+          )}
+        </form>
+      </SlideInForm>
+    </div>
+  );
+}
