@@ -115,6 +115,7 @@ export default function OrganisationManagement() {
   const [formData, setFormData] = useState<any>({});
   const [formActiveTab, setFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   const [detailsTab, setDetailsTab] = useState<'details' | 'departments' | 'academic'>('details');
+  const [lazyLoadBranches, setLazyLoadBranches] = useState(true); // Option to control lazy loading
 
   // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
@@ -164,78 +165,123 @@ export default function OrganisationManagement() {
 
   // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
-    ['organization', userCompanyId],
+    ['organization', userCompanyId, lazyLoadBranches],
     async () => {
       if (!userCompanyId) return null;
       
       try {
-        // Step 1: Fetch company data
-        const companyResponse = await supabase
-          .from('companies')
-          .select('*')
-          .eq('id', userCompanyId)
-          .single();
+        // Use Promise.all to fetch data in parallel instead of sequentially
+        const [
+          companyResponse,
+          companyAdditionalResponse,
+          schoolsResponse
+        ] = await Promise.all([
+          supabase.from('companies').select('*').eq('id', userCompanyId).single(),
+          supabase.from('companies_additional').select('*').eq('company_id', userCompanyId).maybeSingle(),
+          supabase.from('schools').select('*').eq('company_id', userCompanyId).order('name')
+        ]);
 
         if (companyResponse.error) throw companyResponse.error;
-        const company = companyResponse.data;
-        
-        // Step 2: Fetch company additional data separately
-        const companyAdditionalResponse = await supabase
-          .from('companies_additional')
-          .select('*')
-          .eq('company_id', userCompanyId)
-          .maybeSingle();
-        
-        // Step 3: Fetch all schools for this company (no nested select)
-        const schoolsResponse = await supabase
-          .from('schools')
-          .select('*')
-          .eq('company_id', userCompanyId)
-          .order('name');
-        
         if (schoolsResponse.error) throw schoolsResponse.error;
+        
+        const company = companyResponse.data;
         const schools = schoolsResponse.data || [];
         
-        // Step 4: For each school, fetch additional data and branches separately
-        const schoolsWithDetails = [];
-        for (const school of schools) {
-          // Fetch school additional data
-          const schoolAdditionalResponse = await supabase
-            .from('schools_additional')
-            .select('*')
-            .eq('school_id', school.id)
-            .maybeSingle();
-          
-          // Fetch branches for this school
-          const branchesResponse = await supabase
-            .from('branches')
-            .select('*')
-            .eq('school_id', school.id)
-            .order('name');
+        if (schools.length === 0) {
+          return {
+            ...company,
+            additional: companyAdditionalResponse.data,
+            schools: []
+          };
+        }
+
+        // Get all school IDs
+        const schoolIds = schools.map(s => s.id);
+        
+        // Fetch schools additional data in bulk
+        const schoolsAdditionalResponse = await supabase
+          .from('schools_additional')
+          .select('*')
+          .in('school_id', schoolIds);
+        
+        const schoolsAdditional = schoolsAdditionalResponse.data || [];
+        
+        // Create lookup map for O(1) access
+        const schoolsAdditionalMap = new Map(
+          schoolsAdditional.map(sa => [sa.school_id, sa])
+        );
+        
+        let schoolsWithDetails;
+        
+        // If lazy loading is disabled, fetch all branches upfront
+        if (!lazyLoadBranches) {
+          const [branchesResponse] = await Promise.all([
+            supabase.from('branches').select('*').in('school_id', schoolIds).order('name')
+          ]);
           
           const branches = branchesResponse.data || [];
           
-          // For each branch, fetch additional data
-          const branchesWithDetails = [];
-          for (const branch of branches) {
-            const branchAdditionalResponse = await supabase
+          // If there are branches, fetch their additional data in bulk
+          let branchesAdditional: any[] = [];
+          if (branches.length > 0) {
+            const branchIds = branches.map(b => b.id);
+            const branchesAdditionalResponse = await supabase
               .from('branches_additional')
               .select('*')
-              .eq('branch_id', branch.id)
-              .maybeSingle();
-            
-            branchesWithDetails.push({
-              ...branch,
-              additional: branchAdditionalResponse.data
-            });
+              .in('branch_id', branchIds);
+            branchesAdditional = branchesAdditionalResponse.data || [];
           }
           
-          schoolsWithDetails.push({
-            ...school,
-            additional: schoolAdditionalResponse.data,
-            branches: branchesWithDetails,
-            student_count: schoolAdditionalResponse.data?.student_count || 0
+          const branchesAdditionalMap = new Map(
+            branchesAdditional.map(ba => [ba.branch_id, ba])
+          );
+          
+          const branchesBySchoolMap = new Map<string, any[]>();
+          branches.forEach(branch => {
+            if (!branchesBySchoolMap.has(branch.school_id)) {
+              branchesBySchoolMap.set(branch.school_id, []);
+            }
+            const branchWithAdditional = {
+              ...branch,
+              additional: branchesAdditionalMap.get(branch.id)
+            };
+            branchesBySchoolMap.get(branch.school_id)!.push(branchWithAdditional);
           });
+          
+          // Combine all data using the lookup maps
+          schoolsWithDetails = schools.map(school => ({
+            ...school,
+            additional: schoolsAdditionalMap.get(school.id),
+            branches: branchesBySchoolMap.get(school.id) || [],
+            student_count: schoolsAdditionalMap.get(school.id)?.student_count || 0
+          }));
+        } else {
+          // If lazy loading is enabled, just get branch counts for display
+          const branchCountsResponse = await supabase
+            .from('branches')
+            .select('school_id', { count: 'exact' })
+            .in('school_id', schoolIds);
+          
+          // Count branches per school
+          const branchCounts = new Map<string, number>();
+          if (branchCountsResponse.data) {
+            for (const schoolId of schoolIds) {
+              const { count } = await supabase
+                .from('branches')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', schoolId);
+              branchCounts.set(schoolId, count || 0);
+            }
+          }
+          
+          // Combine data without branches (they'll be loaded on demand)
+          schoolsWithDetails = schools.map(school => ({
+            ...school,
+            additional: schoolsAdditionalMap.get(school.id),
+            branches: [], // Empty array, will be loaded on demand
+            branch_count: branchCounts.get(school.id) || 0,
+            student_count: schoolsAdditionalMap.get(school.id)?.student_count || 0
+          }));
         }
 
         return {
@@ -250,8 +296,8 @@ export default function OrganisationManagement() {
     },
     {
       enabled: !!userCompanyId,
-      staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000,
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
