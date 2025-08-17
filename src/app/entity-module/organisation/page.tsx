@@ -29,7 +29,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { 
   Building2, School, MapPin, Edit, ChevronDown, ChevronRight,
   Plus, X, Save, Trash2, Users, Search, Filter, Settings,
@@ -393,7 +393,7 @@ OrgChartNode.displayName = 'OrgChartNode';
 
 // ===== MAIN COMPONENT =====
 export default function OrganizationPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
@@ -569,12 +569,12 @@ export default function OrganizationPage() {
   const handleAddClick = useCallback((parentItem: any, parentType: 'company' | 'school') => {
     const type = parentType === 'company' ? 'school' : 'branch';
     const parentId = parentItem.id;
-    router.push(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
-  }, [router]);
+    navigate(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+  }, [navigate]);
 
   const handleEditClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    router.push(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
-  }, [router]);
+    navigate(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
+  }, [navigate]);
 
   // ===== RENDER ORGANIZATION CHART (PRESERVED WITH EDIT SUPPORT) =====
   const renderOrganizationChart = () => {
@@ -969,7 +969,7 @@ export default function OrganizationPage() {
         </div>
         <div className="flex gap-3">
           <Button
-            onClick={() => router.push('/entity-module/organisation/wizard?type=company&mode=create')}
+            onClick={() => navigate('/entity-module/organisation/wizard?type=company&mode=create')}
             className="flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
