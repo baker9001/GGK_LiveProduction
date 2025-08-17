@@ -32,12 +32,12 @@ import {
   UserCheck, Edit, Activity
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '@/lib/auth';
-import { useUser } from '@/contexts/UserContext';
-import { Button } from '@/components/shared/Button';
-import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
+import { getAuthenticatedUser } from '../../../../lib/auth';
+import { useUser } from '../../../../contexts/UserContext';
+import { Button } from '../../../../components/shared/Button';
+import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 
 // ===== TYPE DEFINITIONS =====
 type EntityType = 'company' | 'school' | 'branch';
@@ -1377,3 +1377,11 @@ export default function OrganizationWizard() {
                 <li>• Your progress is saved automatically as you complete each step</li>
                 <li>• Use Ctrl+S to save draft locally (restored on next visit)</li>
                 <li>• Status can be changed later by entity administrators</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
