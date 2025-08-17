@@ -1,21 +1,26 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
  * 
- * Organization Management Page - Complete with Fixed Wizard Integration
- * All functionality preserved and navigation issues corrected
+ * Organization Management Page - Complete with Simple Create/Edit Forms
+ * All wizard functionality removed, replaced with comprehensive forms
  * 
  * Dependencies: 
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/components/shared/* (SlideInForm, FormField, Button)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, react-router-dom
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Database Tables:
+ *   - companies & companies_additional
+ *   - schools & schools_additional  
+ *   - branches & branches_additional
+ *   - regions, countries (for reference data)
  */
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
   Building2, School, MapPin, Edit, ChevronDown, ChevronRight,
   Plus, X, Save, Trash2, Users, Search, Filter, Settings,
@@ -23,8 +28,9 @@ import {
   Globe, User, MoreVertical, UserPlus, ChevronUp,
   FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
   Edit2, PlusCircle, GraduationCap, UserCheck,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw, Info, ExternalLink,
-  Building, Flag, MapPinned, Clock, CheckCircle2, XCircle, AlertTriangle
+  ZoomIn, ZoomOut, Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw, Info,
+  Building, Flag, MapPinned, Clock, CheckCircle2, XCircle, AlertTriangle,
+  Home, CreditCard, BookOpen, FlaskConical, Dumbbell, Coffee, Navigation
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -35,7 +41,7 @@ import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
 import { Button } from '../../../components/shared/Button';
 
-// ===== STATUS BADGE COMPONENT WITH ENHANCED STYLING =====
+// ===== STATUS BADGE COMPONENT =====
 const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
   const getStatusConfig = () => {
     switch (status?.toLowerCase()) {
@@ -56,18 +62,6 @@ const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs'
           color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
           icon: <Clock className="w-3 h-3" />,
           pulse: true
-        };
-      case 'planned':
-        return {
-          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-          icon: <Calendar className="w-3 h-3" />,
-          pulse: false
-        };
-      case 'completed':
-        return {
-          color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-          icon: <CheckCircle2 className="w-3 h-3" />,
-          pulse: false
         };
       default:
         return {
@@ -108,6 +102,11 @@ interface Company {
   code: string;
   description: string;
   status: 'active' | 'inactive';
+  region_id?: string;
+  country_id?: string;
+  address?: string;
+  notes?: string;
+  logo?: string;
   created_at: string;
   additional?: CompanyAdditional;
   schools?: SchoolData[];
@@ -116,7 +115,7 @@ interface Company {
 interface CompanyAdditional {
   id?: string;
   company_id: string;
-  organization_type?: 'education_group' | 'single_institution' | 'franchise' | 'partnership';
+  organization_type?: string;
   fiscal_year_start?: number;
   main_phone?: string;
   main_email?: string;
@@ -139,6 +138,9 @@ interface SchoolData {
   company_id: string;
   description: string;
   status: 'active' | 'inactive';
+  address?: string;
+  notes?: string;
+  logo?: string;
   created_at: string;
   additional?: SchoolAdditional;
   branches?: BranchData[];
@@ -148,11 +150,12 @@ interface SchoolData {
 interface SchoolAdditional {
   id?: string;
   school_id: string;
-  school_type?: 'primary' | 'secondary' | 'other';
+  school_type?: string;
   curriculum_type?: string[];
   total_capacity?: number;
   teachers_count?: number;
   student_count?: number;
+  active_teachers_count?: number;
   principal_name?: string;
   principal_email?: string;
   principal_phone?: string;
@@ -177,6 +180,8 @@ interface BranchData {
   code: string;
   school_id: string;
   status: 'active' | 'inactive';
+  address?: string;
+  notes?: string;
   created_at: string;
   additional?: BranchAdditional;
   student_count?: number;
@@ -187,7 +192,9 @@ interface BranchAdditional {
   branch_id: string;
   student_capacity?: number;
   current_students?: number;
+  student_count?: number;
   teachers_count?: number;
+  active_teachers_count?: number;
   branch_head_name?: string;
   branch_head_email?: string;
   branch_head_phone?: string;
@@ -198,34 +205,7 @@ interface BranchAdditional {
   working_days?: string[];
 }
 
-interface Department {
-  id: string;
-  company_id: string;
-  school_id?: string;
-  branch_id?: string;
-  name: string;
-  code: string;
-  department_type?: 'academic' | 'administrative' | 'support' | 'operations';
-  parent_department_id?: string;
-  head_of_department?: string;
-  head_email?: string;
-  employee_count: number;
-  status: 'active' | 'inactive';
-}
-
-interface AcademicYear {
-  id: string;
-  school_id: string;
-  year_name: string;
-  start_date: string;
-  end_date: string;
-  total_terms: number;
-  current_term?: number;
-  is_current: boolean;
-  status: 'planned' | 'active' | 'completed';
-}
-
-// ===== OPTIMIZED FETCH FUNCTION =====
+// ===== FETCH ORGANIZATION DATA =====
 const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   try {
     const [companyRes, companyAddRes, schoolsRes] = await Promise.all([
@@ -302,7 +282,7 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   }
 };
 
-// ===== ENHANCED ORG NODE COMPONENT =====
+// ===== ORG CHART NODE COMPONENT =====
 const OrgChartNode = memo(({ 
   item, 
   type, 
@@ -400,9 +380,9 @@ const OrgChartNode = memo(({
                 onEditClick(item, type);
               }}
               className="p-1.5 bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all transform hover:scale-110"
-              title="Edit in Wizard"
+              title="Edit"
             >
-              <ExternalLink className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </button>
           )}
           {(type === 'company' || type === 'school') && (
@@ -465,7 +445,6 @@ OrgChartNode.displayName = 'OrgChartNode';
 
 // ===== MAIN COMPONENT =====
 export default function OrganisationManagement() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -475,74 +454,24 @@ export default function OrganisationManagement() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'school' | 'branch' | 'department' | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [modalType, setModalType] = useState<'company' | 'school' | 'branch' | 'department' | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [viewMode, setViewMode] = useState<'expand' | 'colleagues'>('expand');
-  const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
   const [formData, setFormData] = useState<any>({});
+  const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+  const [detailsTab, setDetailsTab] = useState<'details' | 'departments' | 'academic'>('details');
+  const [viewMode, setViewMode] = useState<'expand' | 'colleagues'>('expand');
+  const [editMode, setEditMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Zoom state
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
-
-  // ===== ZOOM CONTROLS =====
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
-  }, []);
-
-  const handleZoomReset = useCallback(() => {
-    setZoomLevel(1);
-  }, []);
-
-  const handleFitToScreen = useCallback(() => {
-    const container = document.getElementById('org-chart-container');
-    const chart = document.getElementById('org-chart');
-    
-    if (container && chart) {
-      const containerWidth = container.clientWidth;
-      const chartWidth = chart.scrollWidth;
-      
-      const optimalZoom = Math.min(containerWidth / chartWidth, 1);
-      setZoomLevel(Math.max(optimalZoom, MIN_ZOOM));
-    }
-  }, []);
-
-  const toggleFullscreen = useCallback(() => {
-    const element = document.querySelector('.org-main-container') as HTMLElement;
-    
-    if (!isFullscreen && element) {
-      if (element.requestFullscreen) {
-        element.requestFullscreen();
-      }
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-      setIsFullscreen(false);
-    }
-  }, [isFullscreen]);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
 
   // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
@@ -595,8 +524,8 @@ export default function OrganisationManagement() {
     }
   }, [organizationData]);
 
-  // ===== LAZY LOAD DEPARTMENTS =====
-  const { data: departments } = useQuery(
+  // ===== FETCH DEPARTMENTS =====
+  const { data: departments = [] } = useQuery(
     ['departments', selectedItem?.id, selectedType],
     async () => {
       if (!selectedItem) return [];
@@ -613,16 +542,16 @@ export default function OrganisationManagement() {
       
       const { data, error } = await query.order('name');
       
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       return data || [];
     },
     {
-      enabled: !!selectedItem && activeTab === 'departments'
+      enabled: !!selectedItem && detailsTab === 'departments'
     }
   );
 
-  // ===== LAZY LOAD ACADEMIC YEARS =====
-  const { data: academicYears } = useQuery(
+  // ===== FETCH ACADEMIC YEARS =====
+  const { data: academicYears = [] } = useQuery(
     ['academicYears', selectedItem?.id],
     async () => {
       if (!selectedItem || selectedType !== 'school') return [];
@@ -633,111 +562,211 @@ export default function OrganisationManagement() {
         .eq('school_id', selectedItem.id)
         .order('start_date', { ascending: false });
       
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
       return data || [];
     },
     {
-      enabled: selectedType === 'school' && activeTab === 'academic'
+      enabled: selectedType === 'school' && detailsTab === 'academic'
+    }
+  );
+  const { data: companies = [] } = useQuery(
+    ['companies-list'],
+    async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
     }
   );
 
-  // ===== ALL MUTATIONS =====
-  const updateCompanyMutation = useMutation(
-    async (data: CompanyAdditional) => {
-      const { data: existing } = await supabase
-        .from('companies_additional')
-        .select('id')
-        .eq('company_id', data.company_id)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('companies_additional')
-          .update(data)
-          .eq('company_id', data.company_id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('companies_additional')
-          .insert([data]);
-        if (error) throw error;
-      }
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['organization']);
-        toast.success('Company information updated successfully');
-        setEditMode(false);
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to update company information');
-      }
-    }
-  );
-
-  const createSchoolMutation = useMutation(
-    async (data: Partial<SchoolData>) => {
-      const { data: school, error } = await supabase
+  const { data: schools = [] } = useQuery(
+    ['schools-list', formData.company_id || userCompanyId],
+    async () => {
+      const companyId = formData.company_id || userCompanyId;
+      if (!companyId) return [];
+      
+      const { data, error } = await supabase
         .from('schools')
-        .insert([{
-          name: data.name,
-          code: data.code,
-          company_id: userCompanyId,
-          description: data.description || '',
-          status: data.status || 'active'
-        }])
+        .select('id, name')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    { enabled: modalType === 'branch' }
+  );
+
+  const { data: regions = [] } = useQuery(
+    ['regions'],
+    async () => {
+      const { data, error } = await supabase
+        .from('regions')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    }
+  );
+
+  const { data: countries = [] } = useQuery(
+    ['countries'],
+    async () => {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    }
+  );
+
+  // ===== MUTATIONS =====
+  const createEntityMutation = useMutation(
+    async ({ type, data }: { type: 'company' | 'school' | 'branch', data: any }) => {
+      const tableName = type === 'company' ? 'companies' : `${type}s`;
+      const additionalTableName = `${tableName}_additional`;
+      
+      // Prepare main data
+      const mainFields = type === 'company' 
+        ? ['name', 'code', 'description', 'status', 'region_id', 'country_id', 'address', 'notes', 'logo']
+        : type === 'school'
+        ? ['name', 'code', 'description', 'status', 'company_id', 'address', 'notes', 'logo']
+        : ['name', 'code', 'description', 'status', 'school_id', 'address', 'notes'];
+      
+      const mainData: any = {};
+      mainFields.forEach(field => {
+        if (data[field] !== undefined) {
+          mainData[field] = data[field];
+        }
+      });
+      
+      // Create main record
+      const { data: entity, error } = await supabase
+        .from(tableName)
+        .insert([mainData])
         .select()
         .single();
-
+      
       if (error) throw error;
-      return school;
+      
+      // Create additional record
+      const additionalData: any = {
+        [`${type}_id`]: entity.id
+      };
+      
+      Object.keys(data).forEach(key => {
+        if (!mainFields.includes(key) && data[key] !== undefined) {
+          additionalData[key] = data[key];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        const { error: additionalError } = await supabase
+          .from(additionalTableName)
+          .insert([additionalData]);
+        
+        if (additionalError && additionalError.code !== '23505') {
+          console.error('Additional data error:', additionalError);
+        }
+      }
+      
+      return entity;
     },
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['organization']);
-        toast.success('School created successfully');
-        setShowModal(false);
+        toast.success(`${modalType} created successfully`);
+        setShowCreateModal(false);
         setFormData({});
         setFormErrors({});
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to create school');
+        toast.error(error.message || 'Failed to create entity');
       }
     }
   );
 
-  const createBranchMutation = useMutation(
-    async (data: Partial<BranchData>) => {
-      const { data: branch, error } = await supabase
-        .from('branches')
-        .insert([{
-          name: data.name,
-          code: data.code,
-          school_id: data.school_id,
-          status: data.status || 'active'
-        }])
-        .select()
-        .single();
-
+  const updateEntityMutation = useMutation(
+    async ({ type, id, data }: { type: 'company' | 'school' | 'branch', id: string, data: any }) => {
+      const tableName = type === 'company' ? 'companies' : `${type}s`;
+      const additionalTableName = `${tableName}_additional`;
+      
+      // Prepare main data
+      const mainFields = type === 'company' 
+        ? ['name', 'code', 'description', 'status', 'region_id', 'country_id', 'address', 'notes', 'logo']
+        : type === 'school'
+        ? ['name', 'code', 'description', 'status', 'company_id', 'address', 'notes', 'logo']
+        : ['name', 'code', 'description', 'status', 'school_id', 'address', 'notes'];
+      
+      const mainData: any = {};
+      mainFields.forEach(field => {
+        if (data[field] !== undefined) {
+          mainData[field] = data[field];
+        }
+      });
+      
+      // Update main record
+      const { error } = await supabase
+        .from(tableName)
+        .update(mainData)
+        .eq('id', id);
+      
       if (error) throw error;
-      return branch;
+      
+      // Update or insert additional record
+      const additionalData: any = {
+        [`${type}_id`]: id
+      };
+      
+      Object.keys(data).forEach(key => {
+        if (!mainFields.includes(key) && data[key] !== undefined) {
+          additionalData[key] = data[key];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        // Try update first
+        const { error: updateError } = await supabase
+          .from(additionalTableName)
+          .update(additionalData)
+          .eq(`${type}_id`, id);
+        
+        // If no rows updated, insert
+        if (updateError?.code === 'PGRST116') {
+          const { error: insertError } = await supabase
+            .from(additionalTableName)
+            .insert([additionalData]);
+          
+          if (insertError && insertError.code !== '23505') {
+            console.error('Additional insert error:', insertError);
+          }
+        }
+      }
     },
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['organization']);
-        toast.success('Branch created successfully');
-        setShowModal(false);
+        toast.success(`${modalType} updated successfully`);
+        setShowEditModal(false);
         setFormData({});
         setFormErrors({});
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to create branch');
+        toast.error(error.message || 'Failed to update entity');
       }
     }
   );
 
   const createDepartmentMutation = useMutation(
-    async (data: Partial<Department>) => {
+    async (data: any) => {
       const { error } = await supabase
         .from('entity_departments')
         .insert([data]);
@@ -748,7 +777,7 @@ export default function OrganisationManagement() {
       onSuccess: () => {
         queryClient.invalidateQueries(['departments']);
         toast.success('Department created successfully');
-        setShowModal(false);
+        setShowCreateModal(false);
         setFormData({});
         setFormErrors({});
       },
@@ -759,6 +788,70 @@ export default function OrganisationManagement() {
   );
 
   // ===== UI HELPER FUNCTIONS =====
+  // ===== UI HELPER FUNCTIONS =====
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
+
+  const handleFitToScreen = useCallback(() => {
+    const container = document.getElementById('org-chart-container');
+    const chart = document.getElementById('org-chart');
+    
+    if (container && chart) {
+      const containerWidth = container.clientWidth;
+      const chartWidth = chart.scrollWidth;
+      
+      const optimalZoom = Math.min(containerWidth / chartWidth, 1);
+      setZoomLevel(Math.max(optimalZoom, MIN_ZOOM));
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const element = document.querySelector('.org-main-container') as HTMLElement;
+    
+    if (!isFullscreen && element) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  }, [isFullscreen]);
+
+  const handleExpandAll = useCallback(() => {
+    if (!companyData) return;
+    const allNodes = new Set<string>(['company']);
+    companyData.schools?.forEach(school => {
+      allNodes.add(school.id);
+    });
+    setExpandedNodes(allNodes);
+  }, [companyData]);
+
+  const handleCollapseAll = useCallback(() => {
+    setExpandedNodes(new Set());
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const toggleNode = useCallback((id: string) => {
     setExpandedNodes(prev => {
       const newExpanded = new Set(prev);
@@ -775,99 +868,886 @@ export default function OrganisationManagement() {
     setSelectedItem(item);
     setSelectedType(type);
     setShowDetailsPanel(true);
+    setDetailsTab('details');
     setEditMode(false);
-    setActiveTab('details');
-    setFormData(item.additional || {});
   }, []);
 
   const handleAddClick = useCallback((parentItem: any, parentType: 'company' | 'school') => {
-    setFormData({});
+    setFormData({
+      status: 'active',
+      ...(parentType === 'company' ? { company_id: parentItem.id } : { school_id: parentItem.id })
+    });
     setFormErrors({});
-    
-    if (parentType === 'company') {
-      setModalType('school');
-    } else if (parentType === 'school') {
-      setModalType('branch');
-      setFormData({ school_id: parentItem.id });
-    }
-    
-    setShowModal(true);
+    setModalType(parentType === 'company' ? 'school' : 'branch');
+    setShowCreateModal(true);
+    setActiveTab('basic');
   }, []);
 
-  // FIXED: Correct navigation path for wizard
-  const handleEditInWizard = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    navigate(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
-  }, [navigate]);
+  const handleEditClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
+    const combinedData = {
+      ...item,
+      ...(item.additional || {})
+    };
+    setFormData(combinedData);
+    setFormErrors({});
+    setModalType(type);
+    setSelectedItem(item);
+    setShowEditModal(true);
+    setActiveTab('basic');
+  }, []);
 
   const handleSaveDetails = () => {
-    if (selectedType === 'company') {
-      updateCompanyMutation.mutate({
-        ...formData,
-        company_id: selectedItem.id
+    if (selectedType === 'company' && editMode) {
+      updateEntityMutation.mutate({
+        type: 'company',
+        id: selectedItem.id,
+        data: formData
       });
     }
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const formDataFromForm = new FormData(form);
-    
-    const data: any = {
-      name: formDataFromForm.get('name') as string,
-      code: formDataFromForm.get('code') as string,
-      status: formDataFromForm.get('status') as string || 'active',
-    };
-
-    if (modalType === 'school') {
-      data.description = formDataFromForm.get('description') as string;
-    }
-
+  const validateForm = () => {
     const errors: Record<string, string> = {};
-    if (!data.name) errors.name = 'Name is required';
-    if (!data.code) errors.code = 'Code is required';
     
-    if (modalType === 'branch') {
-      data.school_id = formData.school_id;
-      if (!data.school_id) errors.school_id = 'School is required';
+    if (!formData.name) errors.name = 'Name is required';
+    if (!formData.code) errors.code = 'Code is required';
+    if (!formData.status) errors.status = 'Status is required';
+    
+    // Email validations
+    if (formData.main_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.main_email)) {
+      errors.main_email = 'Invalid email address';
     }
+    if (formData.ceo_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.ceo_email)) {
+      errors.ceo_email = 'Invalid email address';
+    }
+    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
+      errors.principal_email = 'Invalid email address';
+    }
+    if (formData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.branch_head_email)) {
+      errors.branch_head_email = 'Invalid email address';
+    }
+    
+    // URL validation
+    if (formData.website && !/^https?:\/\/.+/.test(formData.website)) {
+      errors.website = 'URL must start with http:// or https://';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+  const handleSubmit = (mode: 'create' | 'edit') => {
+    if (!validateForm()) {
+      toast.error('Please fix the errors before submitting');
       return;
     }
-
-    setFormErrors({});
-
-    if (modalType === 'school') {
-      createSchoolMutation.mutate(data);
-    } else if (modalType === 'branch') {
-      createBranchMutation.mutate(data);
-    } else if (modalType === 'department') {
-      const deptData: Partial<Department> = {
-        ...data,
+    
+    if (modalType === 'department') {
+      const deptData = {
+        ...formData,
         company_id: userCompanyId!,
         school_id: selectedType === 'school' ? selectedItem?.id : undefined,
         branch_id: selectedType === 'branch' ? selectedItem?.id : undefined,
-        department_type: formDataFromForm.get('department_type') as any,
         employee_count: 0,
-        status: data.status || 'active'
+        status: formData.status || 'active'
       };
       createDepartmentMutation.mutate(deptData);
+    } else if (mode === 'create') {
+      createEntityMutation.mutate({ type: modalType as 'company' | 'school' | 'branch', data: formData });
+    } else {
+      updateEntityMutation.mutate({ 
+        type: modalType as 'company' | 'school' | 'branch', 
+        id: selectedItem.id, 
+        data: formData 
+      });
     }
   };
 
-  const handleExpandAll = () => {
-    if (!companyData) return;
-    const allNodes = new Set<string>(['company']);
-    companyData.schools?.forEach(school => {
-      allNodes.add(school.id);
-    });
-    setExpandedNodes(allNodes);
-  };
+  // ===== RENDER FORMS =====
+  const renderCompanyForm = () => (
+    <>
+      {activeTab === 'basic' && (
+        <div className="space-y-4">
+          <FormField id="name" label="Company Name" required error={formErrors.name}>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter company name"
+            />
+          </FormField>
 
-  const handleCollapseAll = () => {
-    setExpandedNodes(new Set());
+          <FormField id="code" label="Company Code" required error={formErrors.code}>
+            <Input
+              id="code"
+              value={formData.code || ''}
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              placeholder="e.g., COMP-001"
+            />
+          </FormField>
+
+          <FormField id="status" label="Status" required error={formErrors.status}>
+            <Select
+              id="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={formData.status || 'active'}
+              onChange={(value) => setFormData({...formData, status: value})}
+            />
+          </FormField>
+
+          <FormField id="organization_type" label="Organization Type">
+            <Select
+              id="organization_type"
+              options={[
+                { value: 'education_group', label: 'Education Group' },
+                { value: 'single_institution', label: 'Single Institution' },
+                { value: 'franchise', label: 'Franchise' },
+                { value: 'partnership', label: 'Partnership' }
+              ]}
+              value={formData.organization_type || ''}
+              onChange={(value) => setFormData({...formData, organization_type: value})}
+              placeholder="Select organization type"
+            />
+          </FormField>
+
+          <FormField id="description" label="Description">
+            <Textarea
+              id="description"
+              value={formData.description || ''}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Enter company description"
+              rows={3}
+            />
+          </FormField>
+
+          <FormField id="region_id" label="Region">
+            <Select
+              id="region_id"
+              options={regions.map(r => ({ value: r.id, label: r.name }))}
+              value={formData.region_id || ''}
+              onChange={(value) => setFormData({...formData, region_id: value})}
+              placeholder="Select region"
+            />
+          </FormField>
+
+          <FormField id="country_id" label="Country">
+            <Select
+              id="country_id"
+              options={countries.map(c => ({ value: c.id, label: c.name }))}
+              value={formData.country_id || ''}
+              onChange={(value) => setFormData({...formData, country_id: value})}
+              placeholder="Select country"
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'additional' && (
+        <div className="space-y-4">
+          <FormField id="registration_number" label="Registration Number">
+            <Input
+              id="registration_number"
+              value={formData.registration_number || ''}
+              onChange={(e) => setFormData({...formData, registration_number: e.target.value})}
+              placeholder="Enter registration number"
+            />
+          </FormField>
+
+          <FormField id="tax_id" label="Tax ID">
+            <Input
+              id="tax_id"
+              value={formData.tax_id || ''}
+              onChange={(e) => setFormData({...formData, tax_id: e.target.value})}
+              placeholder="Enter tax ID"
+            />
+          </FormField>
+
+          <FormField id="fiscal_year_start" label="Fiscal Year Start Month">
+            <Input
+              id="fiscal_year_start"
+              type="number"
+              min="1"
+              max="12"
+              value={formData.fiscal_year_start || ''}
+              onChange={(e) => setFormData({...formData, fiscal_year_start: parseInt(e.target.value)})}
+              placeholder="1-12"
+            />
+          </FormField>
+
+          <FormField id="head_office_address" label="Head Office Address">
+            <Input
+              id="head_office_address"
+              value={formData.head_office_address || ''}
+              onChange={(e) => setFormData({...formData, head_office_address: e.target.value})}
+              placeholder="Enter head office address"
+            />
+          </FormField>
+
+          <FormField id="head_office_city" label="Head Office City">
+            <Input
+              id="head_office_city"
+              value={formData.head_office_city || ''}
+              onChange={(e) => setFormData({...formData, head_office_city: e.target.value})}
+              placeholder="Enter city"
+            />
+          </FormField>
+
+          <FormField id="head_office_country" label="Head Office Country">
+            <Input
+              id="head_office_country"
+              value={formData.head_office_country || ''}
+              onChange={(e) => setFormData({...formData, head_office_country: e.target.value})}
+              placeholder="Enter country"
+            />
+          </FormField>
+
+          <FormField id="logo_url" label="Logo URL">
+            <Input
+              id="logo_url"
+              type="url"
+              value={formData.logo_url || ''}
+              onChange={(e) => setFormData({...formData, logo_url: e.target.value})}
+              placeholder="https://example.com/logo.png"
+            />
+          </FormField>
+
+          <FormField id="notes" label="Notes">
+            <Textarea
+              id="notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              placeholder="Additional notes"
+              rows={3}
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'contact' && (
+        <div className="space-y-4">
+          <FormField id="main_phone" label="Main Phone">
+            <Input
+              id="main_phone"
+              type="tel"
+              value={formData.main_phone || ''}
+              onChange={(e) => setFormData({...formData, main_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+
+          <FormField id="main_email" label="Main Email" error={formErrors.main_email}>
+            <Input
+              id="main_email"
+              type="email"
+              value={formData.main_email || ''}
+              onChange={(e) => setFormData({...formData, main_email: e.target.value})}
+              placeholder="contact@company.com"
+            />
+          </FormField>
+
+          <FormField id="website" label="Website" error={formErrors.website}>
+            <Input
+              id="website"
+              type="url"
+              value={formData.website || ''}
+              onChange={(e) => setFormData({...formData, website: e.target.value})}
+              placeholder="https://www.example.com"
+            />
+          </FormField>
+
+          <FormField id="ceo_name" label="CEO Name">
+            <Input
+              id="ceo_name"
+              value={formData.ceo_name || ''}
+              onChange={(e) => setFormData({...formData, ceo_name: e.target.value})}
+              placeholder="Enter CEO name"
+            />
+          </FormField>
+
+          <FormField id="ceo_email" label="CEO Email" error={formErrors.ceo_email}>
+            <Input
+              id="ceo_email"
+              type="email"
+              value={formData.ceo_email || ''}
+              onChange={(e) => setFormData({...formData, ceo_email: e.target.value})}
+              placeholder="ceo@company.com"
+            />
+          </FormField>
+
+          <FormField id="ceo_phone" label="CEO Phone">
+            <Input
+              id="ceo_phone"
+              type="tel"
+              value={formData.ceo_phone || ''}
+              onChange={(e) => setFormData({...formData, ceo_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+        </div>
+      )}
+    </>
+  );
+
+  const renderSchoolForm = () => (
+    <>
+      {activeTab === 'basic' && (
+        <div className="space-y-4">
+          <FormField id="name" label="School Name" required error={formErrors.name}>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter school name"
+            />
+          </FormField>
+
+          <FormField id="code" label="School Code" required error={formErrors.code}>
+            <Input
+              id="code"
+              value={formData.code || ''}
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              placeholder="e.g., SCH-001"
+            />
+          </FormField>
+
+          <FormField id="status" label="Status" required error={formErrors.status}>
+            <Select
+              id="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={formData.status || 'active'}
+              onChange={(value) => setFormData({...formData, status: value})}
+            />
+          </FormField>
+
+          <FormField id="school_type" label="School Type">
+            <Select
+              id="school_type"
+              options={[
+                { value: 'primary', label: 'Primary School' },
+                { value: 'secondary', label: 'Secondary School' },
+                { value: 'other', label: 'Other' }
+              ]}
+              value={formData.school_type || ''}
+              onChange={(value) => setFormData({...formData, school_type: value})}
+              placeholder="Select school type"
+            />
+          </FormField>
+
+          <FormField id="description" label="Description">
+            <Textarea
+              id="description"
+              value={formData.description || ''}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Enter school description"
+              rows={3}
+            />
+          </FormField>
+
+          <FormField id="curriculum_type" label="Curriculum Types">
+            <div className="space-y-2">
+              {['national', 'cambridge', 'ib', 'american', 'other'].map(type => (
+                <label key={type} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={(formData.curriculum_type || []).includes(type)}
+                    onChange={(e) => {
+                      const current = formData.curriculum_type || [];
+                      if (e.target.checked) {
+                        setFormData({...formData, curriculum_type: [...current, type]});
+                      } else {
+                        setFormData({...formData, curriculum_type: current.filter((t: string) => t !== type)});
+                      }
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm capitalize">{type}</span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+
+          <FormField id="total_capacity" label="Total Capacity">
+            <Input
+              id="total_capacity"
+              type="number"
+              value={formData.total_capacity || ''}
+              onChange={(e) => setFormData({...formData, total_capacity: parseInt(e.target.value)})}
+              placeholder="Maximum student capacity"
+            />
+          </FormField>
+
+          <FormField id="student_count" label="Current Students">
+            <Input
+              id="student_count"
+              type="number"
+              value={formData.student_count || ''}
+              onChange={(e) => setFormData({...formData, student_count: parseInt(e.target.value)})}
+              placeholder="Current number of students"
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'additional' && (
+        <div className="space-y-4">
+          <FormField id="campus_address" label="Campus Address">
+            <Input
+              id="campus_address"
+              value={formData.campus_address || ''}
+              onChange={(e) => setFormData({...formData, campus_address: e.target.value})}
+              placeholder="Enter campus address"
+            />
+          </FormField>
+
+          <FormField id="campus_city" label="Campus City">
+            <Input
+              id="campus_city"
+              value={formData.campus_city || ''}
+              onChange={(e) => setFormData({...formData, campus_city: e.target.value})}
+              placeholder="Enter city"
+            />
+          </FormField>
+
+          <FormField id="campus_state" label="Campus State">
+            <Input
+              id="campus_state"
+              value={formData.campus_state || ''}
+              onChange={(e) => setFormData({...formData, campus_state: e.target.value})}
+              placeholder="Enter state/province"
+            />
+          </FormField>
+
+          <FormField id="campus_postal_code" label="Postal Code">
+            <Input
+              id="campus_postal_code"
+              value={formData.campus_postal_code || ''}
+              onChange={(e) => setFormData({...formData, campus_postal_code: e.target.value})}
+              placeholder="Enter postal code"
+            />
+          </FormField>
+
+          <FormField id="established_date" label="Established Date">
+            <Input
+              id="established_date"
+              type="date"
+              value={formData.established_date || ''}
+              onChange={(e) => setFormData({...formData, established_date: e.target.value})}
+            />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField id="academic_year_start" label="Academic Year Start">
+              <Input
+                id="academic_year_start"
+                type="number"
+                min="1"
+                max="12"
+                value={formData.academic_year_start || ''}
+                onChange={(e) => setFormData({...formData, academic_year_start: parseInt(e.target.value)})}
+                placeholder="Month (1-12)"
+              />
+            </FormField>
+
+            <FormField id="academic_year_end" label="Academic Year End">
+              <Input
+                id="academic_year_end"
+                type="number"
+                min="1"
+                max="12"
+                value={formData.academic_year_end || ''}
+                onChange={(e) => setFormData({...formData, academic_year_end: parseInt(e.target.value)})}
+                placeholder="Month (1-12)"
+              />
+            </FormField>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.has_library || false}
+                  onChange={(e) => setFormData({...formData, has_library: e.target.checked})}
+                  className="rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm">Has Library</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.has_laboratory || false}
+                  onChange={(e) => setFormData({...formData, has_laboratory: e.target.checked})}
+                  className="rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm">Has Laboratory</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.has_sports_facilities || false}
+                  onChange={(e) => setFormData({...formData, has_sports_facilities: e.target.checked})}
+                  className="rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm">Has Sports Facilities</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.has_cafeteria || false}
+                  onChange={(e) => setFormData({...formData, has_cafeteria: e.target.checked})}
+                  className="rounded border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm">Has Cafeteria</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'contact' && (
+        <div className="space-y-4">
+          <FormField id="principal_name" label="Principal Name">
+            <Input
+              id="principal_name"
+              value={formData.principal_name || ''}
+              onChange={(e) => setFormData({...formData, principal_name: e.target.value})}
+              placeholder="Enter principal name"
+            />
+          </FormField>
+
+          <FormField id="principal_email" label="Principal Email" error={formErrors.principal_email}>
+            <Input
+              id="principal_email"
+              type="email"
+              value={formData.principal_email || ''}
+              onChange={(e) => setFormData({...formData, principal_email: e.target.value})}
+              placeholder="principal@school.com"
+            />
+          </FormField>
+
+          <FormField id="principal_phone" label="Principal Phone">
+            <Input
+              id="principal_phone"
+              type="tel"
+              value={formData.principal_phone || ''}
+              onChange={(e) => setFormData({...formData, principal_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+
+          <FormField id="teachers_count" label="Total Teachers">
+            <Input
+              id="teachers_count"
+              type="number"
+              value={formData.teachers_count || ''}
+              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of teachers"
+            />
+          </FormField>
+
+          <FormField id="active_teachers_count" label="Active Teachers">
+            <Input
+              id="active_teachers_count"
+              type="number"
+              value={formData.active_teachers_count || ''}
+              onChange={(e) => setFormData({...formData, active_teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of active teachers"
+            />
+          </FormField>
+        </div>
+      )}
+    </>
+  );
+
+  const renderBranchForm = () => (
+    <>
+      {activeTab === 'basic' && (
+        <div className="space-y-4">
+          {modalType === 'branch' && !showEditModal && (
+            <FormField id="school_id" label="School" required>
+              <Select
+                id="school_id"
+                options={schools.map(s => ({ value: s.id, label: s.name }))}
+                value={formData.school_id || ''}
+                onChange={(value) => setFormData({...formData, school_id: value})}
+                placeholder="Select school"
+              />
+            </FormField>
+          )}
+
+          <FormField id="name" label="Branch Name" required error={formErrors.name}>
+            <Input
+              id="name"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter branch name"
+            />
+          </FormField>
+
+          <FormField id="code" label="Branch Code" required error={formErrors.code}>
+            <Input
+              id="code"
+              value={formData.code || ''}
+              onChange={(e) => setFormData({...formData, code: e.target.value})}
+              placeholder="e.g., BR-001"
+            />
+          </FormField>
+
+          <FormField id="status" label="Status" required error={formErrors.status}>
+            <Select
+              id="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={formData.status || 'active'}
+              onChange={(value) => setFormData({...formData, status: value})}
+            />
+          </FormField>
+
+          <FormField id="building_name" label="Building Name">
+            <Input
+              id="building_name"
+              value={formData.building_name || ''}
+              onChange={(e) => setFormData({...formData, building_name: e.target.value})}
+              placeholder="Enter building name"
+            />
+          </FormField>
+
+          <FormField id="floor_details" label="Floor Details">
+            <Input
+              id="floor_details"
+              value={formData.floor_details || ''}
+              onChange={(e) => setFormData({...formData, floor_details: e.target.value})}
+              placeholder="e.g., 2nd Floor, Wing A"
+            />
+          </FormField>
+
+          <FormField id="description" label="Description">
+            <Textarea
+              id="description"
+              value={formData.description || ''}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Enter branch description"
+              rows={3}
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'additional' && (
+        <div className="space-y-4">
+          <FormField id="student_capacity" label="Student Capacity">
+            <Input
+              id="student_capacity"
+              type="number"
+              value={formData.student_capacity || ''}
+              onChange={(e) => setFormData({...formData, student_capacity: parseInt(e.target.value)})}
+              placeholder="Maximum students"
+            />
+          </FormField>
+
+          <FormField id="current_students" label="Current Students">
+            <Input
+              id="current_students"
+              type="number"
+              value={formData.current_students || ''}
+              onChange={(e) => setFormData({...formData, current_students: parseInt(e.target.value)})}
+              placeholder="Current number of students"
+            />
+          </FormField>
+
+          <FormField id="teachers_count" label="Teachers Count">
+            <Input
+              id="teachers_count"
+              type="number"
+              value={formData.teachers_count || ''}
+              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
+              placeholder="Number of teachers"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField id="opening_time" label="Opening Time">
+              <Input
+                id="opening_time"
+                type="time"
+                value={formData.opening_time || ''}
+                onChange={(e) => setFormData({...formData, opening_time: e.target.value})}
+              />
+            </FormField>
+
+            <FormField id="closing_time" label="Closing Time">
+              <Input
+                id="closing_time"
+                type="time"
+                value={formData.closing_time || ''}
+                onChange={(e) => setFormData({...formData, closing_time: e.target.value})}
+              />
+            </FormField>
+          </div>
+
+          <FormField id="working_days" label="Working Days">
+            <div className="space-y-2">
+              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                <label key={day} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={(formData.working_days || []).includes(day)}
+                    onChange={(e) => {
+                      const current = formData.working_days || [];
+                      if (e.target.checked) {
+                        setFormData({...formData, working_days: [...current, day]});
+                      } else {
+                        setFormData({...formData, working_days: current.filter((d: string) => d !== day)});
+                      }
+                    }}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <span className="text-sm capitalize">{day}</span>
+                </label>
+              ))}
+            </div>
+          </FormField>
+
+          <FormField id="address" label="Address">
+            <Textarea
+              id="address"
+              value={formData.address || ''}
+              onChange={(e) => setFormData({...formData, address: e.target.value})}
+              placeholder="Enter branch address"
+              rows={3}
+            />
+          </FormField>
+
+          <FormField id="notes" label="Notes">
+            <Textarea
+              id="notes"
+              value={formData.notes || ''}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              placeholder="Additional notes"
+              rows={3}
+            />
+          </FormField>
+        </div>
+      )}
+
+      {activeTab === 'contact' && (
+        <div className="space-y-4">
+          <FormField id="branch_head_name" label="Branch Head Name">
+            <Input
+              id="branch_head_name"
+              value={formData.branch_head_name || ''}
+              onChange={(e) => setFormData({...formData, branch_head_name: e.target.value})}
+              placeholder="Enter branch head name"
+            />
+          </FormField>
+
+          <FormField id="branch_head_email" label="Branch Head Email" error={formErrors.branch_head_email}>
+            <Input
+              id="branch_head_email"
+              type="email"
+              value={formData.branch_head_email || ''}
+              onChange={(e) => setFormData({...formData, branch_head_email: e.target.value})}
+              placeholder="branchhead@school.com"
+            />
+          </FormField>
+
+          <FormField id="branch_head_phone" label="Branch Head Phone">
+            <Input
+              id="branch_head_phone"
+              type="tel"
+              value={formData.branch_head_phone || ''}
+              onChange={(e) => setFormData({...formData, branch_head_phone: e.target.value})}
+              placeholder="+1 (555) 123-4567"
+            />
+          </FormField>
+        </div>
+      )}
+    </>
+  );
+
+  const renderDepartmentForm = () => (
+    <div className="space-y-4">
+      <FormField id="name" label="Department Name" required error={formErrors.name}>
+        <Input
+          id="name"
+          value={formData.name || ''}
+          onChange={(e) => setFormData({...formData, name: e.target.value})}
+          placeholder="Enter department name"
+        />
+      </FormField>
+
+      <FormField id="code" label="Department Code" required error={formErrors.code}>
+        <Input
+          id="code"
+          value={formData.code || ''}
+          onChange={(e) => setFormData({...formData, code: e.target.value})}
+          placeholder="e.g., DEPT-001"
+        />
+      </FormField>
+
+      <FormField id="department_type" label="Department Type">
+        <Select
+          id="department_type"
+          options={[
+            { value: 'academic', label: 'Academic' },
+            { value: 'administrative', label: 'Administrative' },
+            { value: 'support', label: 'Support' },
+            { value: 'operations', label: 'Operations' }
+          ]}
+          value={formData.department_type || ''}
+          onChange={(value) => setFormData({...formData, department_type: value})}
+          placeholder="Select department type"
+        />
+      </FormField>
+
+      <FormField id="head_of_department" label="Head of Department">
+        <Input
+          id="head_of_department"
+          value={formData.head_of_department || ''}
+          onChange={(e) => setFormData({...formData, head_of_department: e.target.value})}
+          placeholder="Enter department head name"
+        />
+      </FormField>
+
+      <FormField id="head_email" label="Head Email">
+        <Input
+          id="head_email"
+          type="email"
+          value={formData.head_email || ''}
+          onChange={(e) => setFormData({...formData, head_email: e.target.value})}
+          placeholder="head@department.com"
+        />
+      </FormField>
+
+      <FormField id="status" label="Status" required error={formErrors.status}>
+        <Select
+          id="status"
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' }
+          ]}
+          value={formData.status || 'active'}
+          onChange={(value) => setFormData({...formData, status: value})}
+        />
+      </FormField>
+    </div>
+  );
+
+  const renderForm = () => {
+    if (modalType === 'company') return renderCompanyForm();
+    if (modalType === 'school') return renderSchoolForm();
+    if (modalType === 'branch') return renderBranchForm();
+    if (modalType === 'department') return renderDepartmentForm();
+    return null;
   };
 
   // ===== RENDER ORGANIZATION CHART =====
@@ -881,14 +1761,14 @@ export default function OrganisationManagement() {
         className="flex flex-col items-center py-8"
         style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center top' }}
       >
-        <div id="org-company" className="relative">
+        <div className="relative">
           <OrgChartNode 
             item={companyData} 
             type="company" 
             isRoot={true}
             onItemClick={handleItemClick}
             onAddClick={handleAddClick}
-            onEditClick={handleEditInWizard}
+            onEditClick={handleEditClick}
           />
           {companyData.schools && companyData.schools.length > 0 && (
             <button
@@ -905,363 +1785,91 @@ export default function OrganisationManagement() {
           )}
         </div>
 
-        <div id="org-schools">
-          {showSchools && companyData.schools && companyData.schools.length > 0 && (
-            <>
-              <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
-              {companyData.schools.length > 1 && (
-                <div className="relative h-0.5">
-                  <div 
-                    className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
-                    style={{
-                      width: `${(companyData.schools.length - 1) * 316 + 100}px`,
-                      left: '50%',
-                      transform: 'translateX(-50%)'
-                    }}
-                  ></div>
-                </div>
-              )}
-              <div className="flex items-stretch space-x-4 mt-8">
-                {companyData.schools.map((school) => {
-                  const isSchoolExpanded = expandedNodes.has(school.id);
-                  return (
-                    <div key={school.id} className="flex flex-col items-center">
-                      {companyData.schools!.length > 1 && (
-                        <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
-                      )}
-                      <div className="relative">
-                        <OrgChartNode 
-                          item={school} 
-                          type="school"
-                          onItemClick={handleItemClick}
-                          onAddClick={handleAddClick}
-                          onEditClick={handleEditInWizard}
-                        />
-                        {school.branches && school.branches.length > 0 && (
-                          <button
-                            onClick={() => toggleNode(school.id)}
-                            className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-lg hover:shadow-xl transition-all"
-                            title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
-                          >
-                            {isSchoolExpanded ? (
-                              <ChevronUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                            ) : (
-                              <ChevronDown className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div>
-                        {isSchoolExpanded && school.branches && school.branches.length > 0 && (
-                          <>
-                            <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
-                            {school.branches.length > 1 && (
-                              <div className="relative h-0.5">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
-                                  style={{
-                                    width: `${(school.branches.length - 1) * 316 + 100}px`,
-                                    left: '50%',
-                                    transform: 'translateX(-50%)'
-                                  }}
-                                ></div>
-                              </div>
-                            )}
-                            <div className="flex items-stretch space-x-4 mt-8">
-                              {school.branches.map((branch) => (
-                                <div key={branch.id} className="flex flex-col items-center">
-                                  {school.branches!.length > 1 && (
-                                    <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
-                                  )}
-                                  <OrgChartNode 
-                                    item={branch} 
-                                    type="branch"
-                                    onItemClick={handleItemClick}
-                                    onAddClick={() => {}}
-                                    onEditClick={handleEditInWizard}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== RENDER DETAILS PANEL =====
-  const renderDetailsPanel = () => {
-    if (!selectedItem || !showDetailsPanel) return null;
-
-    return (
-      <div className="fixed inset-0 z-50">
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDetailsPanel(false)} />
-        <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
-          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 z-10">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
-              </h2>
-              <button
-                onClick={() => setShowDetailsPanel(false)}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              </button>
-            </div>
-            <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
-              <button
-                onClick={() => setActiveTab('details')}
-                className={`pb-2 px-1 ${activeTab === 'details' 
-                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-              >
-                Details
-              </button>
-              <button
-                onClick={() => setActiveTab('departments')}
-                className={`pb-2 px-1 ${activeTab === 'departments' 
-                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-              >
-                Departments
-              </button>
-              {selectedType === 'school' && (
-                <button
-                  onClick={() => setActiveTab('academic')}
-                  className={`pb-2 px-1 ${activeTab === 'academic' 
-                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-                >
-                  Academic Years
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="p-6">
-            {activeTab === 'details' && (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-800 dark:text-blue-200 flex items-start gap-2">
-                    <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>For comprehensive editing with all fields and advanced options, use the wizard editor</span>
-                  </p>
-                  <Button
-                    onClick={() => handleEditInWizard(selectedItem, selectedType!)}
-                    variant="outline"
-                    className="mt-3 w-full"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open in Wizard Editor
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      Name
-                    </label>
-                    <p className="text-gray-900 dark:text-white font-medium">{selectedItem.name}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      Code
-                    </label>
-                    <p className="text-gray-900 dark:text-white font-mono text-sm">{selectedItem.code}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      Status
-                    </label>
-                    <StatusBadge status={selectedItem.status} size="md" />
-                  </div>
-                  {selectedItem.description && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        Description
-                      </label>
-                      <p className="text-gray-700 dark:text-gray-300 text-sm">{selectedItem.description}</p>
-                    </div>
-                  )}
-                </div>
-
-                {selectedType === 'company' && editMode && (
-                  <div className="space-y-4 pt-4 border-t dark:border-gray-700">
-                    <FormField
-                      id="ceo_name"
-                      label="CEO Name"
-                    >
-                      <Input
-                        id="ceo_name"
-                        value={formData.ceo_name || ''}
-                        onChange={(e) => setFormData({...formData, ceo_name: e.target.value})}
-                        placeholder="Enter CEO name"
-                      />
-                    </FormField>
-                    <FormField
-                      id="ceo_email"
-                      label="CEO Email"
-                    >
-                      <Input
-                        id="ceo_email"
-                        type="email"
-                        value={formData.ceo_email || ''}
-                        onChange={(e) => setFormData({...formData, ceo_email: e.target.value})}
-                        placeholder="ceo@company.com"
-                      />
-                    </FormField>
-                    <FormField
-                      id="ceo_phone"
-                      label="CEO Phone"
-                    >
-                      <Input
-                        id="ceo_phone"
-                        type="tel"
-                        value={formData.ceo_phone || ''}
-                        onChange={(e) => setFormData({...formData, ceo_phone: e.target.value})}
-                        placeholder="+1234567890"
-                      />
-                    </FormField>
-                  </div>
-                )}
-
-                <div className="flex space-x-3 pt-4">
-                  {editMode ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setEditMode(false);
-                          setFormData(selectedItem.additional || {});
-                        }}
-                        className="flex-1"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleSaveDetails}
-                        disabled={updateCompanyMutation.isLoading}
-                        className="flex-1"
-                      >
-                        <Save className="w-4 h-4 inline mr-2" />
-                        {updateCompanyMutation.isLoading ? 'Saving...' : 'Save'}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      onClick={() => setEditMode(true)}
-                      className="w-full"
-                    >
-                      <Edit className="w-4 h-4 inline mr-2" />
-                      Quick Edit (Basic Fields)
-                    </Button>
-                  )}
-                </div>
+        {showSchools && companyData.schools && companyData.schools.length > 0 && (
+          <>
+            <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
+            {companyData.schools.length > 1 && (
+              <div className="relative h-0.5">
+                <div 
+                  className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
+                  style={{
+                    width: `${(companyData.schools.length - 1) * 316 + 100}px`,
+                    left: '50%',
+                    transform: 'translateX(-50%)'
+                  }}
+                ></div>
               </div>
             )}
-
-            {activeTab === 'departments' && (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
-                  <button
-                    onClick={() => {
-                      setModalType('department');
-                      setFormData({
-                        company_id: userCompanyId!,
-                        school_id: selectedType === 'school' ? selectedItem?.id : undefined,
-                        branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
-                      });
-                      setShowModal(true);
-                    }}
-                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {departments && departments.length > 0 ? (
-                    departments.map((dept: Department) => (
-                      <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {dept.code} • {dept.employee_count || 0} employees
-                            </p>
-                          </div>
-                          <StatusBadge status={dept.status} />
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <FolderOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-500 dark:text-gray-400">
-                        No departments found
-                      </p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                        Click the + button to add a department
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'academic' && selectedType === 'school' && (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
-                  <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {academicYears && academicYears.length > 0 ? (
-                    academicYears.map((year: AcademicYear) => (
-                      <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          {year.is_current && (
-                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
-                              Current
-                            </span>
+            <div className="flex items-stretch space-x-4 mt-8">
+              {companyData.schools.map((school) => {
+                const isSchoolExpanded = expandedNodes.has(school.id);
+                return (
+                  <div key={school.id} className="flex flex-col items-center">
+                    {companyData.schools!.length > 1 && (
+                      <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
+                    )}
+                    <div className="relative">
+                      <OrgChartNode 
+                        item={school} 
+                        type="school"
+                        onItemClick={handleItemClick}
+                        onAddClick={handleAddClick}
+                        onEditClick={handleEditClick}
+                      />
+                      {school.branches && school.branches.length > 0 && (
+                        <button
+                          onClick={() => toggleNode(school.id)}
+                          className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-lg hover:shadow-xl transition-all"
+                          title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
+                        >
+                          {isSchoolExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                           )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-500 dark:text-gray-400">
-                        No academic years found
-                      </p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                        Click the + button to add an academic year
-                      </p>
+                        </button>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+                    
+                    {isSchoolExpanded && school.branches && school.branches.length > 0 && (
+                      <>
+                        <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
+                        {school.branches.length > 1 && (
+                          <div className="relative h-0.5">
+                            <div 
+                              className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
+                              style={{
+                                width: `${(school.branches.length - 1) * 316 + 100}px`,
+                                left: '50%',
+                                transform: 'translateX(-50%)'
+                              }}
+                            ></div>
+                          </div>
+                        )}
+                        <div className="flex items-stretch space-x-4 mt-8">
+                          {school.branches.map((branch) => (
+                            <div key={branch.id} className="flex flex-col items-center">
+                              {school.branches!.length > 1 && (
+                                <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
+                              )}
+                              <OrgChartNode 
+                                item={branch} 
+                                type="branch"
+                                onItemClick={handleItemClick}
+                                onAddClick={() => {}}
+                                onEditClick={handleEditClick}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -1317,11 +1925,11 @@ export default function OrganisationManagement() {
 
   // ===== MAIN RENDER =====
   return (
-    <div className="org-main-container min-h-screen bg-gray-50 dark:bg-gray-900 p-6 relative">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Organization Structure
@@ -1331,38 +1939,17 @@ export default function OrganisationManagement() {
               </p>
             </div>
             <Button
-              onClick={() => navigate('/entity-module/organisation/wizard?type=company&mode=create')}
-              variant="outline"
-              title="Create new organization with comprehensive wizard"
+              onClick={() => {
+                setFormData({ status: 'active' });
+                setFormErrors({});
+                setModalType('company');
+                setShowCreateModal(true);
+                setActiveTab('basic');
+              }}
             >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Create with Wizard
+              <Plus className="w-4 h-4 mr-2" />
+              Add Company
             </Button>
-          </div>
-
-          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 w-fit">
-            <button
-              onClick={() => setViewMode('expand')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'expand'
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <ChevronRight className="w-4 h-4 inline-block mr-2" />
-              Expand View
-            </button>
-            <button
-              onClick={() => setViewMode('colleagues')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'colleagues'
-                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Users className="w-4 h-4 inline-block mr-2" />
-              Colleagues
-            </button>
           </div>
         </div>
 
@@ -1442,22 +2029,94 @@ export default function OrganisationManagement() {
         </div>
 
         {/* Organization Chart */}
-        <div id="org-chart-wrapper" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
-              </h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Organization Structure
+                </h2>
+                
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('expand')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      viewMode === 'expand'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    <ChevronRight className="w-4 h-4 inline-block mr-1" />
+                    Expand
+                  </button>
+                  <button
+                    onClick={() => setViewMode('colleagues')}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                      viewMode === 'colleagues'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    <Users className="w-4 h-4 inline-block mr-1" />
+                    Colleagues
+                  </button>
+                </div>
+              </div>
               
               {viewMode === 'expand' && (
                 <div className="flex items-center gap-2">
+                  {/* Show/Hide Controls */}
+                  <div className="flex items-center gap-2 mr-4">
+                    <button
+                      onClick={() => setExpandedNodes(new Set())}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        expandedNodes.size === 0
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                          : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                      }`}
+                    >
+                      Entity
+                    </button>
+                    <button
+                      onClick={() => setExpandedNodes(new Set(['company']))}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        expandedNodes.has('company') && !Array.from(expandedNodes).some(id => id !== 'company')
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                      }`}
+                    >
+                      Schools
+                    </button>
+                    <button
+                      onClick={handleExpandAll}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        companyData?.schools?.every(s => expandedNodes.has(s.id))
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                          : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                      }`}
+                    >
+                      Branches
+                    </button>
+                    
+                    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+                    
+                    <button onClick={handleExpandAll} className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                      <ChevronDown className="w-3 h-3 inline mr-1" />
+                      Expand All
+                    </button>
+                    <button onClick={handleCollapseAll} className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                      <ChevronUp className="w-3 h-3 inline mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
+                  
                   {/* Zoom Controls */}
-                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mr-4">
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                     <button
                       onClick={handleZoomOut}
                       disabled={zoomLevel <= MIN_ZOOM}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom Out (Ctrl+-)"
                     >
                       <ZoomOut className="w-4 h-4" />
                     </button>
@@ -1470,17 +2129,13 @@ export default function OrganisationManagement() {
                       onClick={handleZoomIn}
                       disabled={zoomLevel >= MAX_ZOOM}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom In (Ctrl++)"
                     >
                       <ZoomIn className="w-4 h-4" />
                     </button>
                     
-                    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-                    
                     <button
                       onClick={handleZoomReset}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Reset Zoom to 100% (Ctrl+0)"
                     >
                       <RotateCcw className="w-4 h-4" />
                     </button>
@@ -1488,7 +2143,6 @@ export default function OrganisationManagement() {
                     <button
                       onClick={handleFitToScreen}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Fit to Screen"
                     >
                       <ScanLine className="w-4 h-4" />
                     </button>
@@ -1496,80 +2150,8 @@ export default function OrganisationManagement() {
                     <button
                       onClick={toggleFullscreen}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen (F11)"}
                     >
                       {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Fullscreen className="w-4 h-4" />}
-                    </button>
-                  </div>
-
-                  {/* Show/Hide Controls */}
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
-                  
-                  <button
-                    onClick={() => {
-                      setExpandedNodes(new Set());
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.size === 0
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                    }`}
-                  >
-                    Entity
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set<string>();
-                      newExpanded.add('company');
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                  >
-                    Schools
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      const newExpanded = new Set<string>();
-                      newExpanded.add('company');
-                      companyData.schools?.forEach(school => {
-                        if (school.branches && school.branches.length > 0) {
-                          newExpanded.add(school.id);
-                        }
-                      });
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      )
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                    }`}
-                  >
-                    Branches
-                  </button>
-                  
-                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
-                    <button
-                      onClick={handleExpandAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                      Expand All
-                    </button>
-                    <button
-                      onClick={handleCollapseAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                      Collapse All
                     </button>
                   </div>
                 </div>
@@ -1594,146 +2176,318 @@ export default function OrganisationManagement() {
               </div>
             )}
           </div>
-          
-          {/* Zoom Hint */}
-          {viewMode === 'expand' && (
-            <div className="absolute bottom-4 left-4 text-xs text-gray-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 px-2 py-1 rounded">
-              Tip: Use Ctrl+Mouse Wheel or Ctrl+/- to zoom
-            </div>
-          )}
         </div>
       </div>
 
       {/* Details Panel */}
-      {renderDetailsPanel()}
+      {showDetailsPanel && selectedItem && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDetailsPanel(false)} />
+          <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 z-10">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
+                </h2>
+                <button
+                  onClick={() => setShowDetailsPanel(false)}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+              <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
+                <button
+                  onClick={() => setDetailsTab('details')}
+                  className={`pb-2 px-1 ${detailsTab === 'details' 
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                >
+                  Details
+                </button>
+                <button
+                  onClick={() => setDetailsTab('departments')}
+                  className={`pb-2 px-1 ${detailsTab === 'departments' 
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                >
+                  Departments
+                </button>
+                {selectedType === 'school' && (
+                  <button
+                    onClick={() => setDetailsTab('academic')}
+                    className={`pb-2 px-1 ${detailsTab === 'academic' 
+                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                  >
+                    Academic Years
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div className="p-6">
+              {detailsTab === 'details' && (
+                <div className="space-y-4">
+                  {!editMode ? (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Name</label>
+                        <p className="text-gray-900 dark:text-white font-medium">{selectedItem.name}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Code</label>
+                        <p className="text-gray-900 dark:text-white font-mono text-sm">{selectedItem.code}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</label>
+                        <StatusBadge status={selectedItem.status} size="md" />
+                      </div>
+                      
+                      {selectedItem.description && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Description</label>
+                          <p className="text-gray-700 dark:text-gray-300 text-sm">{selectedItem.description}</p>
+                        </div>
+                      )}
+                      
+                      {selectedType === 'company' && (
+                        <Button onClick={() => {
+                          setEditMode(true);
+                          setFormData(selectedItem.additional || {});
+                        }} className="w-full">
+                          <Edit className="w-4 h-4 mr-2" />
+                          Quick Edit Additional Info
+                        </Button>
+                      )}
+                      
+                      <Button onClick={() => handleEditClick(selectedItem, selectedType!)} variant="outline" className="w-full">
+                        <Edit2 className="w-4 h-4 mr-2" />
+                        Full Edit
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <FormField id="ceo_name" label="CEO Name">
+                        <Input
+                          id="ceo_name"
+                          value={formData.ceo_name || ''}
+                          onChange={(e) => setFormData({...formData, ceo_name: e.target.value})}
+                        />
+                      </FormField>
+                      <FormField id="ceo_email" label="CEO Email">
+                        <Input
+                          id="ceo_email"
+                          type="email"
+                          value={formData.ceo_email || ''}
+                          onChange={(e) => setFormData({...formData, ceo_email: e.target.value})}
+                        />
+                      </FormField>
+                      <FormField id="ceo_phone" label="CEO Phone">
+                        <Input
+                          id="ceo_phone"
+                          type="tel"
+                          value={formData.ceo_phone || ''}
+                          onChange={(e) => setFormData({...formData, ceo_phone: e.target.value})}
+                        />
+                      </FormField>
+                      <div className="flex space-x-3">
+                        <Button variant="outline" onClick={() => {
+                          setEditMode(false);
+                          setFormData(selectedItem.additional || {});
+                        }} className="flex-1">
+                          Cancel
+                        </Button>
+                        <Button onClick={handleSaveDetails} className="flex-1">
+                          <Save className="w-4 h-4 mr-2" />
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailsTab === 'departments' && (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
+                    <button
+                      onClick={() => {
+                        setModalType('department');
+                        setFormData({
+                          status: 'active',
+                          company_id: userCompanyId!,
+                          school_id: selectedType === 'school' ? selectedItem?.id : undefined,
+                          branch_id: selectedType === 'branch' ? selectedItem?.id : undefined
+                        });
+                        setShowCreateModal(true);
+                      }}
+                      className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {departments && departments.length > 0 ? (
+                      departments.map((dept: any) => (
+                        <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {dept.code} • {dept.employee_count || 0} employees
+                              </p>
+                            </div>
+                            <StatusBadge status={dept.status} />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <FolderOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                        <p className="text-gray-500 dark:text-gray-400">No departments found</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {detailsTab === 'academic' && selectedType === 'school' && (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
+                    <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {academicYears && academicYears.length > 0 ? (
+                      academicYears.map((year: any) => (
+                        <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
+                              </p>
+                            </div>
+                            {year.is_current && (
+                              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                        <p className="text-gray-500 dark:text-gray-400">No academic years found</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
-      {/* Create Modal using SlideInForm */}
+      {/* Create Modal */}
       <SlideInForm
-        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
-        isOpen={showModal}
+        title={`Create ${modalType === 'company' ? 'Company' : modalType === 'school' ? 'School' : 'Branch'}`}
+        isOpen={showCreateModal}
         onClose={() => {
-          setShowModal(false);
+          setShowCreateModal(false);
           setFormData({});
           setFormErrors({});
         }}
-        onSave={() => {
-          const form = document.querySelector('#create-form') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }}
+        onSave={() => handleSubmit('create')}
       >
-        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-              {formErrors.form}
-            </div>
-          )}
-
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <Info className="w-4 h-4 inline mr-2" />
-              This is a quick create form. For comprehensive data entry with all fields, use the wizard.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowModal(false);
-                const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
-                const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
-                navigate(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
-              }}
-              className="mt-2 text-xs"
+        <div className="space-y-4">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
             >
-              <ExternalLink className="w-3 h-3 mr-1" />
-              Use Wizard Instead
-            </Button>
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
           </div>
 
-          <FormField
-            id="name"
-            label="Name"
-            required
-            error={formErrors.name}
-          >
-            <Input
-              id="name"
-              name="name"
-              placeholder={`Enter ${modalType} name`}
-              autoFocus
-            />
-          </FormField>
+          {/* Form Content */}
+          <div className="mt-4">
+            {renderForm()}
+          </div>
+        </div>
+      </SlideInForm>
 
-          <FormField
-            id="code"
-            label="Code"
-            required
-            error={formErrors.code}
-          >
-            <Input
-              id="code"
-              name="code"
-              placeholder={`Enter ${modalType} code`}
-            />
-          </FormField>
-
-          <FormField
-            id="status"
-            label="Status"
-            error={formErrors.status}
-          >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              defaultValue="active"
-            />
-          </FormField>
-
-          {modalType === 'school' && (
-            <FormField
-              id="description"
-              label="Description"
-              error={formErrors.description}
+      {/* Edit Modal */}
+      <SlideInForm
+        title={`Edit ${modalType === 'company' ? 'Company' : modalType === 'school' ? 'School' : 'Branch'}`}
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => handleSubmit('edit')}
+      >
+        <div className="space-y-4">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 ${activeTab === 'basic' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
             >
-              <Textarea
-                id="description"
-                name="description"
-                placeholder={`Enter ${modalType} description`}
-                rows={3}
-              />
-            </FormField>
-          )}
-
-          {modalType === 'branch' && formData.school_id && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
-              </p>
-            </div>
-          )}
-
-          {modalType === 'department' && (
-            <FormField
-              id="department_type"
-              label="Department Type"
-              error={formErrors.department_type}
+              Basic Info
+            </button>
+            <button
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 ${activeTab === 'additional' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
             >
-              <Select
-                id="department_type"
-                name="department_type"
-                options={[
-                  { value: 'academic', label: 'Academic' },
-                  { value: 'administrative', label: 'Administrative' },
-                  { value: 'support', label: 'Support' },
-                  { value: 'operations', label: 'Operations' }
-                ]}
-              />
-            </FormField>
-          )}
-        </form>
+              Additional
+            </button>
+            <button
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 ${activeTab === 'contact' 
+                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Contact
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <div className="mt-4">
+            {renderForm()}
+          </div>
+        </div>
       </SlideInForm>
     </div>
   );
