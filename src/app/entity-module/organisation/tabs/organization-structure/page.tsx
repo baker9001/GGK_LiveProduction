@@ -336,6 +336,62 @@ export default function OrganizationStructureTab({
     });
   }, [companyData, expandedNodes, lazyLoadedBranches, loadBranchesForSchool]);
 
+  // Handle expand all functionality
+  const handleExpandAll = useCallback(async () => {
+    if (!companyData?.schools) return;
+    
+    const allNodeIds = new Set(['company']);
+    
+    // Add all school IDs
+    companyData.schools.forEach((school: any) => {
+      allNodeIds.add(school.id);
+    });
+    
+    // Load branches for all schools that don't have them loaded yet
+    const loadPromises = companyData.schools
+      .filter((school: any) => !lazyLoadedBranches.has(school.id))
+      .map((school: any) => loadBranchesForSchool(school.id));
+    
+    await Promise.all(loadPromises);
+    
+    setExpandedNodes(allNodeIds);
+  }, [companyData, lazyLoadedBranches, loadBranchesForSchool]);
+
+  // Handle collapse all functionality
+  const handleCollapseAll = useCallback(() => {
+    setExpandedNodes(new Set());
+  }, []);
+
+  // Handle zoom functions
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
+
+  const handleFitToScreen = useCallback(() => {
+    // Calculate optimal zoom level based on container size
+    const container = document.getElementById('org-chart-container');
+    const chart = document.getElementById('org-chart');
+    
+    if (container && chart) {
+      const containerWidth = container.clientWidth;
+      const chartWidth = chart.scrollWidth;
+      const optimalZoom = Math.min(containerWidth / chartWidth, 1);
+      setZoomLevel(Math.max(optimalZoom, MIN_ZOOM));
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
   // Render organization chart
   const renderOrganizationChart = () => {
     if (!companyData) return null;
