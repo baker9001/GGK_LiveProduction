@@ -126,6 +126,13 @@ export default function OrganisationManagement() {
           return;
         }
 
+        // Check if Supabase is properly configured
+        if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+          console.error('Supabase configuration missing. Please check your environment variables.');
+          toast.error('Configuration error. Please contact support.');
+          return;
+        }
+
         const { data: entityUser, error } = await supabase
           .from('entity_users')
           .select('company_id')
@@ -151,10 +158,21 @@ export default function OrganisationManagement() {
             }));
           }
         } else {
-          console.error('Error fetching entity user:', error);
+          if (error) {
+            console.error('Error fetching entity user:', error);
+            toast.error('Failed to load user company data. Please try refreshing the page.');
+          } else {
+            console.error('No company found for user');
+            toast.error('No company associated with your account. Please contact support.');
+          }
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
+        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+          toast.error('Network error. Please check your internet connection and try again.');
+        } else {
+          toast.error('An unexpected error occurred. Please try refreshing the page.');
+        }
       }
     };
     
