@@ -907,327 +907,7 @@ export default function OrganisationManagement() {
         <div id="org-schools">
           {showSchools && companyData.schools && companyData.schools.length > 0 && (
             <>
-              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Students</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => 
-                    acc + (school.additional?.student_count || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Organization Chart */}
-        <div id="org-chart-wrapper" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
-              </h2>
-              
-              {viewMode === 'expand' && (
-                <div className="flex items-center gap-2">
-                  {/* Zoom Controls */}
-                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mr-4">
-                    <button
-                      onClick={handleZoomOut}
-                      disabled={zoomLevel <= MIN_ZOOM}
-                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom Out (Ctrl+-)"
-                    >
-                      <ZoomOut className="w-4 h-4" />
-                    </button>
-                    
-                    <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
-                      {Math.round(zoomLevel * 100)}%
-                    </span>
-                    
-                    <button
-                      onClick={handleZoomIn}
-                      disabled={zoomLevel >= MAX_ZOOM}
-                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom In (Ctrl++)"
-                    >
-                      <ZoomIn className="w-4 h-4" />
-                    </button>
-                    
-                    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-                    
-                    <button
-                      onClick={handleZoomReset}
-                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Reset Zoom to 100% (Ctrl+0)"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </button>
-                    
-                    <button
-                      onClick={handleFitToScreen}
-                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Fit to Screen"
-                    >
-                      <ScanLine className="w-4 h-4" />
-                    </button>
-                    
-                    <button
-                      onClick={toggleFullscreen}
-                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen (F11)"}
-                    >
-                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Fullscreen className="w-4 h-4" />}
-                    </button>
-                  </div>
-
-                  {/* Show/Hide Controls */}
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
-                  
-                  <button
-                    onClick={() => {
-                      setExpandedNodes(new Set());
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.size === 0
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                    }`}
-                  >
-                    Entity
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set<string>();
-                      newExpanded.add('company');
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                  >
-                    Schools
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      const newExpanded = new Set<string>();
-                      newExpanded.add('company');
-                      companyData.schools?.forEach(school => {
-                        if (school.branches && school.branches.length > 0) {
-                          newExpanded.add(school.id);
-                        }
-                      });
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      )
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                    }`}
-                  >
-                    Branches
-                  </button>
-                  
-                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
-                    <button
-                      onClick={handleExpandAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                      Expand All
-                    </button>
-                    <button
-                      onClick={handleCollapseAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                      Collapse All
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div id="org-chart-container" className="p-6 overflow-x-auto overflow-y-hidden" style={{ minHeight: '600px' }}>
-            {viewMode === 'expand' ? (
-              <div id="org-chart" className="inline-block min-w-full">
-                {renderOrganizationChart()}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400">
-                  Colleagues view will display all users in card format
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                  This feature is coming soon
-                </p>
-              </div>
-            )}
-          </div>
-          
-          {/* Zoom Hint */}
-          {viewMode === 'expand' && (
-            <div className="absolute bottom-4 left-4 text-xs text-gray-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 px-2 py-1 rounded">
-              Tip: Use Ctrl+Mouse Wheel or Ctrl+/- to zoom
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Details Panel */}
-      {renderDetailsPanel()}
-      
-      {/* Create Modal using SlideInForm */}
-      <SlideInForm
-        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setFormData({});
-          setFormErrors({});
-        }}
-        onSave={() => {
-          const form = document.querySelector('#create-form') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }}
-      >
-        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-              {formErrors.form}
-            </div>
-          )}
-
-          <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <Info className="w-4 h-4 inline mr-2" />
-              This is a quick create form. For comprehensive data entry with all fields, use the wizard.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowModal(false);
-                const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
-                const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
-                router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
-              }}
-              className="mt-2 text-xs"
-            >
-              <ExternalLink className="w-3 h-3 mr-1" />
-              Use Wizard Instead
-            </Button>
-          </div>
-
-          <FormField
-            id="name"
-            label="Name"
-            required
-            error={formErrors.name}
-          >
-            <Input
-              id="name"
-              name="name"
-              placeholder={`Enter ${modalType} name`}
-              autoFocus
-            />
-          </FormField>
-
-          <FormField
-            id="code"
-            label="Code"
-            required
-            error={formErrors.code}
-          >
-            <Input
-              id="code"
-              name="code"
-              placeholder={`Enter unique ${modalType} code`}
-            />
-          </FormField>
-
-          <FormField
-            id="status"
-            label="Status"
-            required
-            error={formErrors.status}
-          >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              defaultValue="active"
-            />
-          </FormField>
-
-          {modalType === 'school' && (
-            <FormField
-              id="description"
-              label="Description"
-              error={formErrors.description}
-            >
-              <Textarea
-                id="description"
-                name="description"
-                placeholder={`Enter ${modalType} description`}
-                rows={3}
-              />
-            </FormField>
-          )}
-
-          {modalType === 'branch' && formData.school_id && (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-              <p className="text-sm text-green-800 dark:text-green-200">
-                <School className="w-4 h-4 inline mr-2" />
-                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
-              </p>
-            </div>
-          )}
-
-          {modalType === 'department' && (
-            <FormField
-              id="department_type"
-              label="Department Type"
-              error={formErrors.department_type}
-            >
-              <Select
-                id="department_type"
-                name="department_type"
-                options={[
-                  { value: 'academic', label: 'Academic' },
-                  { value: 'administrative', label: 'Administrative' },
-                  { value: 'support', label: 'Support' },
-                  { value: 'operations', label: 'Operations' }
-                ]}
-              />
-            </FormField>
-          )}
-        </form>
-      </SlideInForm>
-    </div>
-  );
-}0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
+              <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
               {companyData.schools.length > 1 && (
                 <div className="relative h-0.5">
                   <div 
@@ -1695,7 +1375,327 @@ export default function OrganisationManagement() {
                   {companyData?.schools?.length || 0}
                 </p>
               </div>
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Students</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc, school) => 
+                    acc + (school.additional?.student_count || 0), 0) || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Organization Chart */}
+        <div id="org-chart-wrapper" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {viewMode === 'expand' ? 'Organization Structure' : 'All Colleagues'}
+              </h2>
+              
+              {viewMode === 'expand' && (
+                <div className="flex items-center gap-2">
+                  {/* Zoom Controls */}
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mr-4">
+                    <button
+                      onClick={handleZoomOut}
+                      disabled={zoomLevel <= MIN_ZOOM}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom Out (Ctrl+-)"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    
+                    <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
+                      {Math.round(zoomLevel * 100)}%
+                    </span>
+                    
+                    <button
+                      onClick={handleZoomIn}
+                      disabled={zoomLevel >= MAX_ZOOM}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom In (Ctrl++)"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
+                    
+                    <button
+                      onClick={handleZoomReset}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title="Reset Zoom to 100% (Ctrl+0)"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      onClick={handleFitToScreen}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title="Fit to Screen"
+                    >
+                      <ScanLine className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen (F11)"}
+                    >
+                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Fullscreen className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {/* Show/Hide Controls */}
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
+                  
+                  <button
+                    onClick={() => {
+                      setExpandedNodes(new Set());
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.size === 0
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                  >
+                    Entity
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      const newExpanded = new Set<string>();
+                      newExpanded.add('company');
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                  >
+                    Schools
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set<string>();
+                      newExpanded.add('company');
+                      companyData.schools?.forEach(school => {
+                        if (school.branches && school.branches.length > 0) {
+                          newExpanded.add(school.id);
+                        }
+                      });
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      )
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    Branches
+                  </button>
+                  
+                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                    <button
+                      onClick={handleExpandAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                      Expand All
+                    </button>
+                    <button
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div id="org-chart-container" className="p-6 overflow-x-auto overflow-y-hidden" style={{ minHeight: '600px' }}>
+            {viewMode === 'expand' ? (
+              <div id="org-chart" className="inline-block min-w-full">
+                {renderOrganizationChart()}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">
+                  Colleagues view will display all users in card format
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  This feature is coming soon
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Zoom Hint */}
+          {viewMode === 'expand' && (
+            <div className="absolute bottom-4 left-4 text-xs text-gray-500 dark:text-gray-400 bg-white/90 dark:bg-gray-800/90 px-2 py-1 rounded">
+              Tip: Use Ctrl+Mouse Wheel or Ctrl+/- to zoom
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Details Panel */}
+      {renderDetailsPanel()}
+      
+      {/* Create Modal using SlideInForm */}
+      <SlideInForm
+        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setFormData({});
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('#create-form') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+      >
+        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              <Info className="w-4 h-4 inline mr-2" />
+              This is a quick create form. For comprehensive data entry with all fields, use the wizard.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowModal(false);
+                const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
+                const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
+                router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+              }}
+              className="mt-2 text-xs"
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Use Wizard Instead
+            </Button>
+          </div>
+
+          <FormField
+            id="name"
+            label="Name"
+            required
+            error={formErrors.name}
+          >
+            <Input
+              id="name"
+              name="name"
+              placeholder={`Enter ${modalType} name`}
+              autoFocus
+            />
+          </FormField>
+
+          <FormField
+            id="code"
+            label="Code"
+            required
+            error={formErrors.code}
+          >
+            <Input
+              id="code"
+              name="code"
+              placeholder={`Enter unique ${modalType} code`}
+            />
+          </FormField>
+
+          <FormField
+            id="status"
+            label="Status"
+            required
+            error={formErrors.status}
+          >
+            <Select
+              id="status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              defaultValue="active"
+            />
+          </FormField>
+
+          {modalType === 'school' && (
+            <FormField
+              id="description"
+              label="Description"
+              error={formErrors.description}
+            >
+              <Textarea
+                id="description"
+                name="description"
+                placeholder={`Enter ${modalType} description`}
+                rows={3}
+              />
+            </FormField>
+          )}
+
+          {modalType === 'branch' && formData.school_id && (
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+              <p className="text-sm text-green-800 dark:text-green-200">
+                <School className="w-4 h-4 inline mr-2" />
+                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
+              </p>
+            </div>
+          )}
+
+          {modalType === 'department' && (
+            <FormField
+              id="department_type"
+              label="Department Type"
+              error={formErrors.department_type}
+            >
+              <Select
+                id="department_type"
+                name="department_type"
+                options={[
+                  { value: 'academic', label: 'Academic' },
+                  { value: 'administrative', label: 'Administrative' },
+                  { value: 'support', label: 'Support' },
+                  { value: 'operations', label: 'Operations' }
+                ]}
+              />
+            </FormField>
+          )}
+        </form>
+      </SlideInForm>
+    </div>
+  );
+}bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                 <School className="w-5 h-5 text-green-600 dark:text-green-400" />
               </div>
             </div>
@@ -1738,4 +1738,8 @@ export default function OrganisationManagement() {
                     acc + (school.additional?.teachers_count || 0), 0) || 0}
                 </p>
               </div>
-              <div className="w-
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              </div>
+            </div>
+          </div>
