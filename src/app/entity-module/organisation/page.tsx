@@ -547,71 +547,77 @@ export default function OrganisationManagement() {
       
       try {
         // Step 1: Fetch company data
-        const { data: company, error: companyError } = await supabase
+        const companyResponse = await supabase
           .from('companies')
           .select('*')
           .eq('id', userCompanyId)
           .single();
 
-        if (companyError) throw companyError;
+        if (companyResponse.error) throw companyResponse.error;
+        const company = companyResponse.data;
         
-        // Step 2: Fetch company additional data
-        const { data: companyAdditional } = await supabase
+        // Step 2: Fetch company additional data separately
+        const companyAdditionalResponse = await supabase
           .from('companies_additional')
           .select('*')
           .eq('company_id', userCompanyId)
           .maybeSingle();
         
-        // Step 3: Fetch all schools for this company
-        const { data: schools, error: schoolsError } = await supabase
+        // Step 3: Fetch all schools for this company (no nested select)
+        const schoolsResponse = await supabase
           .from('schools')
           .select('*')
           .eq('company_id', userCompanyId)
           .order('name');
         
-        if (schoolsError) throw schoolsError;
+        if (schoolsResponse.error) throw schoolsResponse.error;
+        const schools = schoolsResponse.data || [];
         
-        // Step 4: For each school, fetch additional data and branches
-        const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
+        // Step 4: For each school, fetch additional data and branches separately
+        const schoolsWithDetails = [];
+        for (const school of schools) {
           // Fetch school additional data
-          const { data: schoolAdditional } = await supabase
+          const schoolAdditionalResponse = await supabase
             .from('schools_additional')
             .select('*')
             .eq('school_id', school.id)
             .maybeSingle();
           
           // Fetch branches for this school
-          const { data: branches } = await supabase
+          const branchesResponse = await supabase
             .from('branches')
             .select('*')
             .eq('school_id', school.id)
             .order('name');
           
+          const branches = branchesResponse.data || [];
+          
           // For each branch, fetch additional data
-          const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
-            const { data: branchAdditional } = await supabase
+          const branchesWithDetails = [];
+          for (const branch of branches) {
+            const branchAdditionalResponse = await supabase
               .from('branches_additional')
               .select('*')
               .eq('branch_id', branch.id)
               .maybeSingle();
             
-            return {
+            branchesWithDetails.push({
               ...branch,
-              additional: branchAdditional
-            };
-          }));
+              additional: branchAdditionalResponse.data
+            });
+          }
           
-          return {
+          schoolsWithDetails.push({
             ...school,
-            additional: schoolAdditional,
+            additional: schoolAdditionalResponse.data,
             branches: branchesWithDetails,
-            student_count: schoolAdditional?.student_count || 0
-          };
-        }));
+            student_count: schoolAdditionalResponse.data?.student_count || 0
+          });
+        }
 
         return {
           ...company,
-          additional: companyAdditional,
+          additional: companyAdditionalResponse.data,
           schools: schoolsWithDetails
         };
       } catch (error) {
