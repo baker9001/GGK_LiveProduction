@@ -295,12 +295,12 @@ export default function OrganizationStructureTab({
       // Create lookup map for additional data
       const additionalMap = new Map(
         branchesAdditional
-          .filter(ba => branches.some(b => b.id === ba.branch_id))
-          .map(ba => [ba.branch_id, ba])
+          .filter((ba: any) => branches.some((b: any) => b.id === ba.branch_id))
+          .map((ba: any) => [ba.branch_id, ba])
       );
 
       // Combine branches with their additional data
-      const branchesWithAdditional = branches.map(branch => ({
+      const branchesWithAdditional = branches.map((branch: any) => ({
         ...branch,
         additional: additionalMap.get(branch.id)
       }));
@@ -320,7 +320,7 @@ export default function OrganizationStructureTab({
   // Modified toggle node to load branches when expanding
   const toggleNode = useCallback(async (id: string) => {
     // If expanding a school node and branches aren't loaded, load them first
-    const school = companyData?.schools?.find(s => s.id === id);
+    const school = companyData?.schools?.find((s: any) => s.id === id);
     if (school && !expandedNodes.has(id) && !lazyLoadedBranches.has(id)) {
       await loadBranchesForSchool(id);
     }
