@@ -1327,14 +1327,19 @@ export default function OrganisationManagement() {
                     onClick={() => {
                       if (!companyData) return;
                       const newExpanded = new Set(expandedNodes);
+                      
+                      // Toggle only the company node visibility
                       if (newExpanded.has('company')) {
+                        // Collapse company and all its children
                         newExpanded.delete('company');
                         companyData.schools?.forEach(school => {
                           newExpanded.delete(school.id);
                         });
                       } else {
+                        // Only expand company, not its children
                         newExpanded.add('company');
                       }
+                      
                       setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
@@ -1352,17 +1357,20 @@ export default function OrganisationManagement() {
                       if (!companyData || !companyData.schools?.length) return;
                       
                       const newExpanded = new Set(expandedNodes);
-                      newExpanded.add('company');
                       
+                      // Check if any school is currently expanded
                       const anySchoolExpanded = companyData.schools.some(school => 
                         expandedNodes.has(school.id)
                       );
                       
                       if (anySchoolExpanded) {
+                        // Collapse all schools (hide branches)
                         companyData.schools.forEach(school => {
                           newExpanded.delete(school.id);
                         });
                       } else {
+                        // Expand all schools (show branches) - but first ensure company is visible
+                        newExpanded.add('company');
                         companyData.schools.forEach(school => {
                           if (school.branches && school.branches.length > 0) {
                             newExpanded.add(school.id);
@@ -1386,15 +1394,23 @@ export default function OrganisationManagement() {
                     onClick={() => {
                       if (!companyData) return;
                       
-                      const newExpanded = new Set<string>(['company']);
+                      const newExpanded = new Set(expandedNodes);
                       
+                      // Check if branches are currently visible (schools are expanded)
                       const anyBranchesVisible = companyData.schools?.some(school => 
                         school.branches?.length && expandedNodes.has(school.id)
                       );
                       
                       if (anyBranchesVisible) {
-                        // Just keep company expanded
+                        // Hide branches (collapse all schools but keep company and schools visible)
+                        companyData.schools?.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
+                        // Ensure company is still visible to see schools
+                        newExpanded.add('company');
                       } else {
+                        // Show branches (expand everything)
+                        newExpanded.add('company');
                         companyData.schools?.forEach(school => {
                           if (school.branches && school.branches.length > 0) {
                             newExpanded.add(school.id);
