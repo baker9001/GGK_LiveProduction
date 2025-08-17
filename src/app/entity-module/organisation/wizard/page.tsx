@@ -21,7 +21,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2, School, MapPin, ChevronLeft, ChevronRight,
   Save, X, Check, AlertCircle, Loader2, User, Phone,
@@ -224,8 +224,8 @@ const BRANCH_STEPS: WizardStep[] = [
 
 // ===== MAIN WIZARD COMPONENT =====
 export default function OrganizationWizard() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useUser();
   
@@ -533,7 +533,7 @@ export default function OrganizationWizard() {
       toast.success(`${entityType} ${mode === 'create' ? 'created' : 'updated'} successfully!`);
       
       // Redirect back to organization page
-      router.push('/entity-module/organisation');
+      navigate('/entity-module/organisation');
       
     } catch (error: any) {
       console.error('Submit error:', error);
@@ -840,7 +840,7 @@ export default function OrganizationWizard() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => router.push('/entity-module/organisation')}
+            onClick={() => navigate('/entity-module/organisation')}
             className="mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -941,7 +941,7 @@ export default function OrganizationWizard() {
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => router.push('/entity-module/organisation')}
+                onClick={() => navigate('/entity-module/organisation')}
               >
                 Cancel
               </Button>
