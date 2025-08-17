@@ -1208,20 +1208,6 @@ export default function OrganisationManagement() {
                 Manage your organization hierarchy and structure
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setModalType('school');
-                  setFormData({});
-                  setFormErrors({});
-                  setShowModal(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add School
-              </Button>
-            </div>
           </div>
 
           <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 w-fit">
@@ -1334,20 +1320,117 @@ export default function OrganisationManagement() {
               
               {viewMode === 'expand' && (
                 <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
+                  
+                  {/* Entity Tab */}
                   <button
-                    onClick={handleExpandAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => {
+                      if (!companyData) return;
+                      const newExpanded = new Set(expandedNodes);
+                      if (newExpanded.has('company')) {
+                        newExpanded.delete('company');
+                        companyData.schools?.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
+                      } else {
+                        newExpanded.add('company');
+                      }
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      expandedNodes.has('company')
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
                   >
-                    <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                    Expand All
+                    Entity
                   </button>
+                  
+                  {/* Schools Tab */}
                   <button
-                    onClick={handleCollapseAll}
-                    className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => {
+                      if (!companyData || !companyData.schools?.length) return;
+                      
+                      const newExpanded = new Set(expandedNodes);
+                      newExpanded.add('company');
+                      
+                      const anySchoolExpanded = companyData.schools.some(school => 
+                        expandedNodes.has(school.id)
+                      );
+                      
+                      if (anySchoolExpanded) {
+                        companyData.schools.forEach(school => {
+                          newExpanded.delete(school.id);
+                        });
+                      } else {
+                        companyData.schools.forEach(school => {
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
+                        });
+                      }
+                      
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(s => expandedNodes.has(s.id))
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
                   >
-                    <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                    Collapse All
+                    Schools
                   </button>
+                  
+                  {/* Branches Tab */}
+                  <button
+                    onClick={() => {
+                      if (!companyData) return;
+                      
+                      const newExpanded = new Set<string>(['company']);
+                      
+                      const anyBranchesVisible = companyData.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      );
+                      
+                      if (anyBranchesVisible) {
+                        // Just keep company expanded
+                      } else {
+                        companyData.schools?.forEach(school => {
+                          if (school.branches && school.branches.length > 0) {
+                            newExpanded.add(school.id);
+                          }
+                        });
+                      }
+                      
+                      setExpandedNodes(newExpanded);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      companyData?.schools?.some(school => 
+                        school.branches?.length && expandedNodes.has(school.id)
+                      )
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                    }`}
+                  >
+                    Branches
+                  </button>
+                  
+                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                    <button
+                      onClick={handleExpandAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
+                      Expand All
+                    </button>
+                    <button
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
+                      Collapse All
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
