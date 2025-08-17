@@ -13,6 +13,7 @@
  *   - Remember Me functionality with extended sessions
  *   - Session expiration management
  *   - Auto-logout on expiration
+ *   - FIXED: Exclude landing page from automatic redirects
  * 
  * Database Tables:
  *   - None (auth managed in localStorage)
@@ -39,6 +40,19 @@ const REMEMBER_SESSION_KEY = 'ggk_remember_session';
 // Session durations
 const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const REMEMBER_SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Pages that don't require authentication
+const PUBLIC_PAGES = [
+  '/',
+  '/landing',
+  '/signin',
+  '/forgot-password',
+  '/reset-password',
+  '/about',
+  '/contact',
+  '/features',
+  '/pricing'
+];
 
 // Generate a simple JWT-like token for API calls
 export function generateAuthToken(user: User, rememberMe: boolean = false): string {
@@ -265,6 +279,20 @@ export async function refreshSession(): Promise<boolean> {
   return false;
 }
 
+// Check if current page is public (doesn't require auth)
+function isPublicPage(): boolean {
+  const currentPath = window.location.pathname;
+  
+  // Check exact matches and prefix matches
+  return PUBLIC_PAGES.some(page => {
+    // Exact match
+    if (currentPath === page) return true;
+    // Prefix match for nested routes (e.g., /landing/something)
+    if (page !== '/' && currentPath.startsWith(page + '/')) return true;
+    return false;
+  });
+}
+
 // Session monitoring - check every minute
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 
@@ -274,15 +302,17 @@ export function startSessionMonitoring(): void {
   }
   
   sessionCheckInterval = setInterval(() => {
+    // Skip monitoring for public pages
+    if (isPublicPage()) {
+      return; // Don't check authentication on public pages
+    }
+    
     const user = getAuthenticatedUser();
     if (!user) {
-      // Session expired, redirect to login
-      if (window.location.pathname !== '/signin' && 
-          window.location.pathname !== '/forgot-password' && 
-          window.location.pathname !== '/reset-password') {
-        console.log('Session expired. Redirecting to login.');
-        window.location.href = '/signin';
-      }
+      // Session expired or no user, redirect to login
+      // But only if we're not already on a public page
+      console.log('Session expired. Redirecting to login.');
+      window.location.href = '/signin';
     } else if (isSessionExpiringSoon()) {
       // Optional: Show warning to user
       console.warn('Session expiring soon. Consider extending.');
@@ -300,7 +330,8 @@ export function stopSessionMonitoring(): void {
 // Setup periodic token refresh
 export function setupSessionRefresh(): void {
   setInterval(async () => {
-    if (isAuthenticated() && !isSessionExpiringSoon()) {
+    // Only refresh if authenticated and not on public page
+    if (isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
       await refreshSession();
     }
   }, 30 * 60 * 1000); // 30 minutes
