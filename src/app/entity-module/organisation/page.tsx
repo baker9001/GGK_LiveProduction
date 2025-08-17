@@ -208,72 +208,90 @@ interface BranchAdditional {
 // ===== FETCH ORGANIZATION DATA =====
 const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   try {
-    const [companyRes, companyAddRes, schoolsRes] = await Promise.all([
-      supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .single(),
-      
-      supabase
-        .from('companies_additional')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle(),
-      
-      supabase
-        .from('schools')
-        .select(`
-          *,
-          schools_additional (*)
-        `)
-        .eq('company_id', companyId)
-        .order('name')
-    ]);
+    // Fetch company main data
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', companyId)
+      .single();
 
-    if (companyRes.error) throw companyRes.error;
+    if (companyError) throw companyError;
     
-    const company = companyRes.data;
-    const schools = schoolsRes.data || [];
+    // Fetch company additional data separately
+    const { data: companyAdditional } = await supabase
+      .from('companies_additional')
+      .select('*')
+      .eq('company_id', companyId)
+      .maybeSingle();
     
-    const schoolIds = schools.map(s => s.id);
+    // Fetch schools with their additional data
+    const { data: schools, error: schoolsError } = await supabase
+      .from('schools')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('name');
     
-    let branches: any[] = [];
+    if (schoolsError) throw schoolsError;
+    
+    // Fetch schools additional data
+    const schoolsWithAdditional = await Promise.all((schools || []).map(async (school) => {
+      const { data: schoolAdditional } = await supabase
+        .from('schools_additional')
+        .select('*')
+        .eq('school_id', school.id)
+        .maybeSingle();
+      
+      return {
+        ...school,
+        additional: schoolAdditional
+      };
+    }));
+    
+    // Fetch all branches for all schools
+    const schoolIds = schools?.map(s => s.id) || [];
+    let branchesWithAdditional: any[] = [];
+    
     if (schoolIds.length > 0) {
-      const branchesRes = await supabase
+      const { data: branches } = await supabase
         .from('branches')
-        .select(`
-          *,
-          branches_additional (*)
-        `)
+        .select('*')
         .in('school_id', schoolIds)
         .order('name');
       
-      branches = branchesRes.data || [];
+      // Fetch branches additional data
+      branchesWithAdditional = await Promise.all((branches || []).map(async (branch) => {
+        const { data: branchAdditional } = await supabase
+          .from('branches_additional')
+          .select('*')
+          .eq('branch_id', branch.id)
+          .maybeSingle();
+        
+        return {
+          ...branch,
+          additional: branchAdditional
+        };
+      }));
     }
 
-    const branchesBySchool = branches.reduce((acc, branch) => {
+    // Group branches by school
+    const branchesBySchool = branchesWithAdditional.reduce((acc, branch) => {
       if (!acc[branch.school_id]) {
         acc[branch.school_id] = [];
       }
-      acc[branch.school_id].push({
-        ...branch,
-        additional: branch.branches_additional?.[0] || null,
-        student_count: 0
-      });
+      acc[branch.school_id].push(branch);
       return acc;
     }, {} as Record<string, BranchData[]>);
 
-    const schoolsWithBranches = schools.map(school => ({
+    // Combine schools with their branches
+    const schoolsWithBranches = schoolsWithAdditional.map(school => ({
       ...school,
-      additional: school.schools_additional?.[0] || null,
       branches: branchesBySchool[school.id] || [],
-      student_count: 0
+      student_count: school.additional?.student_count || 0
     }));
 
     return {
       ...company,
-      additional: companyAddRes.data,
+      additional: companyAdditional,
       schools: schoolsWithBranches
     };
   } catch (error) {
