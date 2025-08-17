@@ -1433,6 +1433,8 @@ export default function OrganisationManagement() {
                     
                     <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
                       {Math.round(zoomLevel * 100)}%
+                    </span>w-[3rem] text-center">
+                      {Math.round(zoomLevel * 100)}%
                     </span>
                     
                     <button
