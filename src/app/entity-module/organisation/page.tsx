@@ -217,14 +217,14 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
 
     if (companyError) throw companyError;
     
-    // Fetch company additional data separately
+    // Fetch company additional data
     const { data: companyAdditional } = await supabase
       .from('companies_additional')
       .select('*')
       .eq('company_id', companyId)
       .maybeSingle();
     
-    // Fetch schools with their additional data
+    // Fetch all schools for this company
     const { data: schools, error: schoolsError } = await supabase
       .from('schools')
       .select('*')
@@ -233,7 +233,7 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
     
     if (schoolsError) throw schoolsError;
     
-    // Fetch schools additional data
+    // Fetch additional data for all schools
     const schoolsWithAdditional = await Promise.all((schools || []).map(async (school) => {
       const { data: schoolAdditional } = await supabase
         .from('schools_additional')
@@ -247,18 +247,20 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
       };
     }));
     
-    // Fetch all branches for all schools
+    // Get all school IDs to fetch branches
     const schoolIds = schools?.map(s => s.id) || [];
+    
     let branchesWithAdditional: any[] = [];
     
     if (schoolIds.length > 0) {
+      // Fetch all branches for all schools
       const { data: branches } = await supabase
         .from('branches')
         .select('*')
         .in('school_id', schoolIds)
         .order('name');
       
-      // Fetch branches additional data
+      // Fetch additional data for all branches
       branchesWithAdditional = await Promise.all((branches || []).map(async (branch) => {
         const { data: branchAdditional } = await supabase
           .from('branches_additional')
@@ -540,7 +542,83 @@ export default function OrganisationManagement() {
   // ===== FETCH ORGANIZATION DATA =====
   const { data: organizationData, isLoading, error, refetch } = useQuery(
     ['organization', userCompanyId],
-    () => fetchOrganizationData(userCompanyId!),
+    async () => {
+      if (!userCompanyId) return null;
+      
+      try {
+        // Step 1: Fetch company data
+        const { data: company, error: companyError } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', userCompanyId)
+          .single();
+
+        if (companyError) throw companyError;
+        
+        // Step 2: Fetch company additional data
+        const { data: companyAdditional } = await supabase
+          .from('companies_additional')
+          .select('*')
+          .eq('company_id', userCompanyId)
+          .maybeSingle();
+        
+        // Step 3: Fetch all schools for this company
+        const { data: schools, error: schoolsError } = await supabase
+          .from('schools')
+          .select('*')
+          .eq('company_id', userCompanyId)
+          .order('name');
+        
+        if (schoolsError) throw schoolsError;
+        
+        // Step 4: For each school, fetch additional data and branches
+        const schoolsWithDetails = await Promise.all((schools || []).map(async (school) => {
+          // Fetch school additional data
+          const { data: schoolAdditional } = await supabase
+            .from('schools_additional')
+            .select('*')
+            .eq('school_id', school.id)
+            .maybeSingle();
+          
+          // Fetch branches for this school
+          const { data: branches } = await supabase
+            .from('branches')
+            .select('*')
+            .eq('school_id', school.id)
+            .order('name');
+          
+          // For each branch, fetch additional data
+          const branchesWithDetails = await Promise.all((branches || []).map(async (branch) => {
+            const { data: branchAdditional } = await supabase
+              .from('branches_additional')
+              .select('*')
+              .eq('branch_id', branch.id)
+              .maybeSingle();
+            
+            return {
+              ...branch,
+              additional: branchAdditional
+            };
+          }));
+          
+          return {
+            ...school,
+            additional: schoolAdditional,
+            branches: branchesWithDetails,
+            student_count: schoolAdditional?.student_count || 0
+          };
+        }));
+
+        return {
+          ...company,
+          additional: companyAdditional,
+          schools: schoolsWithDetails
+        };
+      } catch (error) {
+        console.error('Error fetching organization:', error);
+        throw error;
+      }
+    },
     {
       enabled: !!userCompanyId,
       staleTime: 60 * 1000,
