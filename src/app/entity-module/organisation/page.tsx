@@ -2,20 +2,20 @@
  * File: /home/project/src/app/entity-module/organisation/page.tsx
  * 
  * Organization Management Page - Enhanced with Wizard Integration
- * ALL original functionality preserved, only navigation to wizard added for complex create/edit
+ * ALL original functionality preserved, navigation to wizard fixed
  * 
  * Dependencies: 
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/components/shared/* (SlideInForm, FormField, Button)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, react-router-dom
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  */
 
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { 
   Building2, School, MapPin, Edit, ChevronDown, ChevronRight,
   Plus, X, Save, Trash2, Users, Search, Filter, Settings,
@@ -23,7 +23,8 @@ import {
   Globe, User, MoreVertical, UserPlus, ChevronUp,
   FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
   Edit2, PlusCircle, GraduationCap, UserCheck,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw, Info, ExternalLink
+  ZoomIn, ZoomOut, Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw, Info, ExternalLink,
+  Building, Flag, MapPinned, Clock, CheckCircle2, XCircle, AlertTriangle
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -34,27 +35,65 @@ import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
 import { Button } from '../../../components/shared/Button';
 
-// ===== STATUS BADGE COMPONENT =====
-const StatusBadge = memo(({ status }: { status: string }) => {
-  const getStatusColor = () => {
+// ===== STATUS BADGE COMPONENT WITH ENHANCED STYLING =====
+const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
+  const getStatusConfig = () => {
     switch (status?.toLowerCase()) {
       case 'active':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700';
+        return {
+          color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700',
+          icon: <CheckCircle2 className="w-3 h-3" />,
+          pulse: true
+        };
       case 'inactive':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+        return {
+          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+          icon: <XCircle className="w-3 h-3" />,
+          pulse: false
+        };
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700';
+        return {
+          color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
+          icon: <Clock className="w-3 h-3" />,
+          pulse: true
+        };
       case 'planned':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+        return {
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+          icon: <Calendar className="w-3 h-3" />,
+          pulse: false
+        };
       case 'completed':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
+        return {
+          color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+          icon: <CheckCircle2 className="w-3 h-3" />,
+          pulse: false
+        };
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+        return {
+          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+          icon: <AlertTriangle className="w-3 h-3" />,
+          pulse: false
+        };
     }
   };
 
+  const config = getStatusConfig();
+  const sizeClasses = {
+    xs: 'px-1.5 py-0.5 text-xs',
+    sm: 'px-2 py-0.5 text-xs',
+    md: 'px-3 py-1 text-sm'
+  };
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${getStatusColor()}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full font-medium border ${config.color} ${sizeClasses[size]} relative`}>
+      {config.pulse && status?.toLowerCase() === 'active' && (
+        <span className="absolute -top-0.5 -right-0.5 h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        </span>
+      )}
+      {config.icon}
       {status || 'Unknown'}
     </span>
   );
@@ -263,7 +302,7 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   }
 };
 
-// ===== MEMOIZED ORG NODE COMPONENT =====
+// ===== ENHANCED ORG NODE COMPONENT =====
 const OrgChartNode = memo(({ 
   item, 
   type, 
@@ -308,53 +347,62 @@ const OrgChartNode = memo(({
 
   const getCardBackground = () => {
     if (type === 'company') {
-      return 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700';
+      return 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600';
     }
     if (type === 'school') {
-      return 'bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700';
+      return 'bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700 hover:border-green-300 dark:hover:border-green-600';
     }
-    return 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700';
+    return 'bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700 hover:border-purple-300 dark:hover:border-purple-600';
   };
 
   const getAvatarColor = () => {
-    if (type === 'company') return 'bg-blue-500';
-    if (type === 'school') return 'bg-green-500';
-    return 'bg-purple-500';
+    if (type === 'company') return 'bg-gradient-to-br from-blue-500 to-blue-600';
+    if (type === 'school') return 'bg-gradient-to-br from-green-500 to-green-600';
+    return 'bg-gradient-to-br from-purple-500 to-purple-600';
+  };
+
+  const getTypeIcon = () => {
+    if (type === 'company') return <Building2 className="w-4 h-4" />;
+    if (type === 'school') return <School className="w-4 h-4" />;
+    return <MapPin className="w-4 h-4" />;
   };
 
   return (
     <div 
-      className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 w-[280px] cursor-pointer ${getCardBackground()}`}
+      className={`rounded-xl border-2 shadow-sm hover:shadow-xl transition-all duration-300 p-4 w-[300px] cursor-pointer group ${getCardBackground()}`}
       onClick={() => onItemClick(item, type)}
     >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <div className={`w-10 h-10 rounded-md ${getAvatarColor()} flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center space-x-3">
+          <div className={`w-12 h-12 rounded-lg ${getAvatarColor()} flex items-center justify-center text-white font-bold text-sm shadow-lg transform group-hover:scale-105 transition-transform`}>
             {getInitials(item.name)}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-1">
-              {item.name}
-            </h3>
             <div className="flex items-center gap-2">
-              <p className="text-xs text-gray-600 dark:text-gray-400">
+              {getTypeIcon()}
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm line-clamp-1">
+                {item.name}
+              </h3>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                 {item.code}
-              </p>
-              <StatusBadge status={item.status} />
+              </span>
+              <StatusBadge status={item.status} size="xs" />
             </div>
           </div>
         </div>
-        <div className="flex items-center space-x-0.5">
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {onEditClick && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onEditClick(item, type);
               }}
-              className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
+              className="p-1.5 bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all transform hover:scale-110"
               title="Edit in Wizard"
             >
-              <ExternalLink className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+              <ExternalLink className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </button>
           )}
           {(type === 'company' || type === 'school') && (
@@ -363,41 +411,47 @@ const OrgChartNode = memo(({
                 e.stopPropagation();
                 onAddClick(item, type);
               }}
-              className="p-1 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-colors"
+              className="p-1.5 bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all transform hover:scale-110"
               title={`Add ${type === 'company' ? 'School' : 'Branch'}`}
             >
-              <PlusCircle className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+              <PlusCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             </button>
           )}
         </div>
       </div>
 
-      <div className="mb-2 bg-white/50 dark:bg-gray-900/50 rounded p-1.5">
-        <div className="text-xs text-gray-500 dark:text-gray-400">{managerTitle}</div>
-        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+      <div className="mb-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur rounded-lg p-2">
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <User className="w-3 h-3" />
+          <span>{managerTitle}</span>
+        </div>
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
           {managerName || 'Not Assigned'}
         </p>
       </div>
 
-      <div className="flex items-center justify-between text-xs border-t dark:border-gray-600 pt-2">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1">
-            <Users className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+      <div className="flex items-center justify-between text-xs border-t dark:border-gray-600 pt-3">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-1.5">
+            <Users className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
             <span className="text-gray-700 dark:text-gray-300">
-              <span className="font-semibold">{employeeCount}</span> Staff
+              <span className="font-bold">{employeeCount}</span> Staff
             </span>
           </div>
+          {type === 'school' && item.branches && item.branches.length > 0 && (
+            <div className="flex items-center space-x-1.5">
+              <Building className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+              <span className="text-gray-700 dark:text-gray-300">
+                <span className="font-bold">{item.branches.length}</span> Branches
+              </span>
+            </div>
+          )}
         </div>
-        {type === 'school' && item.branches && item.branches.length > 0 && (
-          <div className="text-gray-600 dark:text-gray-400">
-            {item.branches.length} Branches
-          </div>
-        )}
       </div>
 
       {location && (
-        <div className="mt-1.5 flex items-center space-x-1 text-xs">
-          <MapPin className="h-3 w-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+        <div className="mt-2 flex items-center space-x-1.5 text-xs">
+          <MapPinned className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
           <p className="text-gray-600 dark:text-gray-400 truncate">
             {location}
           </p>
@@ -411,7 +465,7 @@ OrgChartNode.displayName = 'OrgChartNode';
 
 // ===== MAIN COMPONENT =====
 export default function OrganisationManagement() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -630,7 +684,7 @@ export default function OrganisationManagement() {
           code: data.code,
           company_id: userCompanyId,
           description: data.description || '',
-          status: 'active'
+          status: data.status || 'active'
         }])
         .select()
         .single();
@@ -660,7 +714,7 @@ export default function OrganisationManagement() {
           name: data.name,
           code: data.code,
           school_id: data.school_id,
-          status: 'active'
+          status: data.status || 'active'
         }])
         .select()
         .single();
@@ -741,8 +795,8 @@ export default function OrganisationManagement() {
   }, []);
 
   const handleEditInWizard = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    navigate(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
-  }, [navigate]);
+    router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
+  }, [router]);
 
   const handleSaveDetails = () => {
     if (selectedType === 'company') {
@@ -761,6 +815,7 @@ export default function OrganisationManagement() {
     const data: any = {
       name: formDataFromForm.get('name') as string,
       code: formDataFromForm.get('code') as string,
+      status: formDataFromForm.get('status') as string || 'active',
     };
 
     if (modalType === 'school') {
@@ -795,7 +850,7 @@ export default function OrganisationManagement() {
         branch_id: selectedType === 'branch' ? selectedItem?.id : undefined,
         department_type: formDataFromForm.get('department_type') as any,
         employee_count: 0,
-        status: 'active'
+        status: data.status || 'active'
       };
       createDepartmentMutation.mutate(deptData);
     }
@@ -837,13 +892,13 @@ export default function OrganisationManagement() {
           {companyData.schools && companyData.schools.length > 0 && (
             <button
               onClick={() => toggleNode('company')}
-              className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
+              className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-lg hover:shadow-xl transition-all"
               title={showSchools ? 'Collapse Schools' : 'Expand Schools'}
             >
               {showSchools ? (
-                <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <ChevronUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               ) : (
-                <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <ChevronDown className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               )}
             </button>
           )}
@@ -858,7 +913,7 @@ export default function OrganisationManagement() {
                   <div 
                     className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                     style={{
-                      width: `${(companyData.schools.length - 1) * 296 + 100}px`,
+                      width: `${(companyData.schools.length - 1) * 316 + 100}px`,
                       left: '50%',
                       transform: 'translateX(-50%)'
                     }}
@@ -884,13 +939,13 @@ export default function OrganisationManagement() {
                         {school.branches && school.branches.length > 0 && (
                           <button
                             onClick={() => toggleNode(school.id)}
-                            className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
+                            className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-lg hover:shadow-xl transition-all"
                             title={isSchoolExpanded ? 'Collapse Branches' : 'Expand Branches'}
                           >
                             {isSchoolExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                              <ChevronUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                             ) : (
-                              <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                              <ChevronDown className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                             )}
                           </button>
                         )}
@@ -905,7 +960,7 @@ export default function OrganisationManagement() {
                                 <div 
                                   className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                                   style={{
-                                    width: `${(school.branches.length - 1) * 296 + 100}px`,
+                                    width: `${(school.branches.length - 1) * 316 + 100}px`,
                                     left: '50%',
                                     transform: 'translateX(-50%)'
                                   }}
@@ -948,16 +1003,16 @@ export default function OrganisationManagement() {
 
     return (
       <div className="fixed inset-0 z-50">
-        <div className="absolute inset-0 bg-black/20" onClick={() => setShowDetailsPanel(false)} />
-        <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-xl overflow-y-auto">
-          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDetailsPanel(false)} />
+        <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
+          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 z-10">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
               </h2>
               <button
                 onClick={() => setShowDetailsPanel(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
@@ -967,7 +1022,7 @@ export default function OrganisationManagement() {
                 onClick={() => setActiveTab('details')}
                 className={`pb-2 px-1 ${activeTab === 'details' 
                   ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-600 dark:text-gray-400'}`}
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
               >
                 Details
               </button>
@@ -975,7 +1030,7 @@ export default function OrganisationManagement() {
                 onClick={() => setActiveTab('departments')}
                 className={`pb-2 px-1 ${activeTab === 'departments' 
                   ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-600 dark:text-gray-400'}`}
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
               >
                 Departments
               </button>
@@ -984,7 +1039,7 @@ export default function OrganisationManagement() {
                   onClick={() => setActiveTab('academic')}
                   className={`pb-2 px-1 ${activeTab === 'academic' 
                     ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                    : 'text-gray-600 dark:text-gray-400'}`}
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
                 >
                   Academic Years
                 </button>
@@ -995,76 +1050,90 @@ export default function OrganisationManagement() {
           <div className="p-6">
             {activeTab === 'details' && (
               <div className="space-y-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <Info className="w-4 h-4 inline mr-2" />
-                    For comprehensive editing with all fields, use the wizard
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                    <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>For comprehensive editing with all fields and advanced options, use the wizard editor</span>
                   </p>
                   <Button
                     onClick={() => handleEditInWizard(selectedItem, selectedType!)}
                     variant="outline"
-                    className="mt-2 w-full"
+                    className="mt-3 w-full"
                   >
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Open in Wizard Editor
                   </Button>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Name
-                  </label>
-                  <p className="text-gray-900 dark:text-white">{selectedItem.name}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Code
-                  </label>
-                  <p className="text-gray-900 dark:text-white">{selectedItem.code}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Status
-                  </label>
-                  <StatusBadge status={selectedItem.status} />
-                </div>
-                {selectedType === 'company' && editMode && (
-                  <>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      Name
+                    </label>
+                    <p className="text-gray-900 dark:text-white font-medium">{selectedItem.name}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      Code
+                    </label>
+                    <p className="text-gray-900 dark:text-white font-mono text-sm">{selectedItem.code}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      Status
+                    </label>
+                    <StatusBadge status={selectedItem.status} size="md" />
+                  </div>
+                  {selectedItem.description && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        CEO Name
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Description
                       </label>
-                      <input
-                        type="text"
+                      <p className="text-gray-700 dark:text-gray-300 text-sm">{selectedItem.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                {selectedType === 'company' && editMode && (
+                  <div className="space-y-4 pt-4 border-t dark:border-gray-700">
+                    <FormField
+                      id="ceo_name"
+                      label="CEO Name"
+                    >
+                      <Input
+                        id="ceo_name"
                         value={formData.ceo_name || ''}
                         onChange={(e) => setFormData({...formData, ceo_name: e.target.value})}
-                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="Enter CEO name"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        CEO Email
-                      </label>
-                      <input
+                    </FormField>
+                    <FormField
+                      id="ceo_email"
+                      label="CEO Email"
+                    >
+                      <Input
+                        id="ceo_email"
                         type="email"
                         value={formData.ceo_email || ''}
                         onChange={(e) => setFormData({...formData, ceo_email: e.target.value})}
-                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="ceo@company.com"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        CEO Phone
-                      </label>
-                      <input
-                        type="text"
+                    </FormField>
+                    <FormField
+                      id="ceo_phone"
+                      label="CEO Phone"
+                    >
+                      <Input
+                        id="ceo_phone"
+                        type="tel"
                         value={formData.ceo_phone || ''}
                         onChange={(e) => setFormData({...formData, ceo_phone: e.target.value})}
-                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        placeholder="+1234567890"
                       />
-                    </div>
-                  </>
+                    </FormField>
+                  </div>
                 )}
+
                 <div className="flex space-x-3 pt-4">
                   {editMode ? (
                     <>
@@ -1114,7 +1183,7 @@ export default function OrganisationManagement() {
                       });
                       setShowModal(true);
                     }}
-                    className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -1122,12 +1191,12 @@ export default function OrganisationManagement() {
                 <div className="space-y-2">
                   {departments && departments.length > 0 ? (
                     departments.map((dept: Department) => (
-                      <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                      <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                         <div className="flex items-center justify-between">
                           <div>
                             <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {dept.code} • {dept.employee_count || 0} users
+                              {dept.code} • {dept.employee_count || 0} employees
                             </p>
                           </div>
                           <StatusBadge status={dept.status} />
@@ -1135,9 +1204,15 @@ export default function OrganisationManagement() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                      No departments found
-                    </p>
+                    <div className="text-center py-8">
+                      <FolderOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No departments found
+                      </p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                        Click the + button to add a department
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1147,14 +1222,14 @@ export default function OrganisationManagement() {
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
-                  <button className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                  <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="space-y-2">
                   {academicYears && academicYears.length > 0 ? (
                     academicYears.map((year: AcademicYear) => (
-                      <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                      <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                         <div className="flex items-center justify-between">
                           <div>
                             <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
@@ -1163,7 +1238,7 @@ export default function OrganisationManagement() {
                             </p>
                           </div>
                           {year.is_current && (
-                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">
+                            <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
                               Current
                             </span>
                           )}
@@ -1171,9 +1246,15 @@ export default function OrganisationManagement() {
                       </div>
                     ))
                   ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                      No academic years found
-                    </p>
+                    <div className="text-center py-8">
+                      <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No academic years found
+                      </p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                        Click the + button to add an academic year
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1249,7 +1330,7 @@ export default function OrganisationManagement() {
               </p>
             </div>
             <Button
-              onClick={() => navigate('/entity-module/organisation/wizard?type=company&mode=create')}
+              onClick={() => router.push('/app/entity-module/organisation/wizard?type=company&mode=create')}
               variant="outline"
               title="Create new organization with comprehensive wizard"
             >
@@ -1305,34 +1386,6 @@ export default function OrganisationManagement() {
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.reduce((acc, school) => 
                     acc + (school.additional?.teachers_count || 0), 0) || 0}
                 </p>
@@ -1348,7 +1401,8 @@ export default function OrganisationManagement() {
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Total Students</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  -
+                  {companyData?.schools?.reduce((acc, school) => 
+                    acc + (school.additional?.student_count || 0), 0) || 0}
                 </p>
               </div>
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
@@ -1545,7 +1599,7 @@ export default function OrganisationManagement() {
             </div>
           )}
 
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+          <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <Info className="w-4 h-4 inline mr-2" />
               This is a quick create form. For comprehensive data entry with all fields, use the wizard.
@@ -1557,7 +1611,7 @@ export default function OrganisationManagement() {
                 setShowModal(false);
                 const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
                 const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
-                navigate(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+                router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
               }}
               className="mt-2 text-xs"
             >
@@ -1589,7 +1643,24 @@ export default function OrganisationManagement() {
             <Input
               id="code"
               name="code"
-              placeholder={`Enter ${modalType} code`}
+              placeholder={`Enter unique ${modalType} code`}
+            />
+          </FormField>
+
+          <FormField
+            id="status"
+            label="Status"
+            required
+            error={formErrors.status}
+          >
+            <Select
+              id="status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              defaultValue="active"
             />
           </FormField>
 
@@ -1609,8 +1680,9 @@ export default function OrganisationManagement() {
           )}
 
           {modalType === 'branch' && formData.school_id && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+              <p className="text-sm text-green-800 dark:text-green-200">
+                <School className="w-4 h-4 inline mr-2" />
                 Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
               </p>
             </div>
@@ -1638,4 +1710,32 @@ export default function OrganisationManagement() {
       </SlideInForm>
     </div>
   );
-}
+} school) => acc + (school.branches?.length || 0), 0) || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc,
