@@ -49,6 +49,7 @@ interface SchoolData {
   additional?: SchoolAdditional;
   branches?: any[];
   student_count?: number;
+  branch_count?: number;
 }
 
 interface SchoolAdditional {
@@ -388,6 +389,10 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
     const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  // Calculate stats
+  const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
+  const totalTeachers = schools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
 
   // ===== RENDER FORM =====
   const renderSchoolForm = () => (
@@ -741,7 +746,18 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
                 <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  {schools.reduce((acc, s) => acc + (s.additional?.teachers_count || 0), 0)}
+                  {totalStudents}
+                </p>
+              </div>
+              <GraduationCap className="w-8 h-8 text-blue-400" />
+            </div>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
+                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
+                  {totalTeachers}
                 </p>
               </div>
               <Users className="w-8 h-8 text-purple-400" />
@@ -937,15 +953,4 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
       </SlideInForm>
     </div>
   );
-}, s) => acc + (s.student_count || 0), 0)}
-                </p>
-              </div>
-              <GraduationCap className="w-8 h-8 text-blue-400" />
-            </div>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
-                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {schools.reduce((acc, s) => acc + (s.additional?.teachers_count || 0), 0)}
+}
