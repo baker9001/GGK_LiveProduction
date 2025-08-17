@@ -1,6 +1,6 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * Performance-Optimized Organization Management Page
+ * Performance-Optimized Organization Management Page with Zoom Controls
  * 
  * Optimizations Applied:
  *   - Single optimized query with joins instead of multiple sequential queries
@@ -9,6 +9,7 @@
  *   - React.memo for preventing unnecessary re-renders
  *   - Virtualization ready for large datasets
  *   - Debounced search and filters
+ *   - Added zoom controls for better viewing experience
  * 
  * Dependencies: 
  *   - @/lib/supabase
@@ -29,7 +30,8 @@ import {
   Activity, AlertCircle, Loader2, Phone, Mail, Eye,
   Globe, User, MoreVertical, UserPlus, ChevronUp,
   FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
-  Edit2, PlusCircle, GraduationCap, UserCheck
+  Edit2, PlusCircle, GraduationCap, UserCheck,
+  ZoomIn, ZoomOut, Maximize2, Minimize2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -273,19 +275,21 @@ const fetchOrganizationData = async (companyId: string): Promise<Company> => {
   }
 };
 
-// ===== MEMOIZED ORG NODE COMPONENT =====
+// ===== MEMOIZED ORG NODE COMPONENT WITH ZOOM SUPPORT =====
 const OrgChartNode = memo(({ 
   item, 
   type, 
   isRoot = false,
   onItemClick,
-  onAddClick
+  onAddClick,
+  zoomLevel
 }: { 
   item: any; 
   type: 'company' | 'school' | 'branch';
   isRoot?: boolean;
   onItemClick: (item: any, type: 'company' | 'school' | 'branch') => void;
   onAddClick: (parentItem: any, parentType: 'company' | 'school') => void;
+  zoomLevel: number;
 }) => {
   const getInitials = (name: string): string => {
     if (!name) return 'NA';
@@ -343,9 +347,18 @@ const OrgChartNode = memo(({
     return 'bg-purple-500';
   };
 
+  // Calculate scaled dimensions based on zoom level
+  const baseWidth = 280;
+  const scaledWidth = baseWidth * zoomLevel;
+
   return (
     <div 
-      className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 w-[280px] cursor-pointer ${getCardBackground()}`}
+      className={`rounded-lg border-2 shadow-sm hover:shadow-lg transition-all p-3 cursor-pointer ${getCardBackground()}`}
+      style={{ 
+        width: `${scaledWidth}px`,
+        transform: `scale(${zoomLevel})`,
+        transformOrigin: 'center'
+      }}
       onClick={() => onItemClick(item, type)}
     >
       <div className="flex items-start justify-between mb-2">
@@ -473,6 +486,84 @@ export default function OrganisationManagement() {
   const [viewMode, setViewMode] = useState<'expand' | 'colleagues'>('expand');
   const [activeTab, setActiveTab] = useState<'details' | 'departments' | 'academic'>('details');
   const [formData, setFormData] = useState<any>({});
+  
+  // Zoom state
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Zoom constants
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 2;
+  const ZOOM_STEP = 0.1;
+
+  // ===== ZOOM CONTROLS =====
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(1);
+  }, []);
+
+  const handleFitToScreen = useCallback(() => {
+    // Calculate optimal zoom to fit all content
+    const container = document.getElementById('org-chart-container');
+    const chart = document.getElementById('org-chart');
+    
+    if (container && chart) {
+      const containerWidth = container.clientWidth;
+      const chartWidth = chart.scrollWidth;
+      
+      const optimalZoom = Math.min(containerWidth / chartWidth, 1);
+      setZoomLevel(Math.max(optimalZoom, MIN_ZOOM));
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const element = document.getElementById('org-chart-wrapper');
+    
+    if (!isFullscreen && element) {
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  }, [isFullscreen]);
+
+  // Keyboard shortcuts for zoom
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+          case '=':
+          case '+':
+            e.preventDefault();
+            handleZoomIn();
+            break;
+          case '-':
+            e.preventDefault();
+            handleZoomOut();
+            break;
+          case '0':
+            e.preventDefault();
+            handleZoomReset();
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleZoomIn, handleZoomOut, handleZoomReset]);
 
   // ===== FETCH USER'S COMPANY =====
   useEffect(() => {
@@ -805,7 +896,10 @@ export default function OrganisationManagement() {
     const showBranches = companyData.schools?.some(school => expandedNodes.has(school.id));
 
     return (
-      <div className="flex flex-col items-center py-8">
+      <div 
+        className="flex flex-col items-center py-8"
+        style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center top' }}
+      >
         <div id="org-company" className="relative">
           <OrgChartNode 
             item={companyData} 
@@ -813,6 +907,7 @@ export default function OrganisationManagement() {
             isRoot={true}
             onItemClick={handleItemClick}
             onAddClick={handleAddClick}
+            zoomLevel={1}
           />
           {companyData.schools && companyData.schools.length > 0 && showSchools && (
             <button
@@ -859,6 +954,7 @@ export default function OrganisationManagement() {
                           type="school"
                           onItemClick={handleItemClick}
                           onAddClick={handleAddClick}
+                          zoomLevel={1}
                         />
                         {school.branches && school.branches.length > 0 && showBranches && (
                           <button
@@ -902,6 +998,7 @@ export default function OrganisationManagement() {
                                     type="branch"
                                     onItemClick={handleItemClick}
                                     onAddClick={() => {}}
+                                    zoomLevel={1}
                                   />
                                 </div>
                               ))}
@@ -1314,7 +1411,7 @@ export default function OrganisationManagement() {
         </div>
 
         {/* Organization Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
+        <div id="org-chart-wrapper" className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 relative">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-20">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1323,213 +1420,15 @@ export default function OrganisationManagement() {
               
               {viewMode === 'expand' && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
-                  
-                  {/* Entity Tab - Shows only Entity level */}
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      const newExpanded = new Set<string>();
-                      
-                      // Show only company, no schools or branches
-                      newExpanded.add('company-only');
-                      
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company-only') && !expandedNodes.has('company')
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                    }`}
-                  >
-                    Entity
-                  </button>
-                  
-                  {/* Schools Tab - Shows Entity + Schools level */}
-                  <button
-                    onClick={() => {
-                      if (!companyData || !companyData.schools?.length) return;
-                      
-                      const newExpanded = new Set<string>();
-                      
-                      // Show company and schools, but not branches
-                      newExpanded.add('company');
-                      // Don't expand any schools (which would show branches)
-                      
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                    }`}
-                  >
-                    Schools
-                  </button>
-                  
-                  {/* Branches Tab - Shows Entity + Schools + Branches */}
-                  <button
-                    onClick={() => {
-                      if (!companyData) return;
-                      
-                      const newExpanded = new Set<string>();
-                      
-                      // Show everything - company, schools, and branches
-                      newExpanded.add('company');
-                      companyData.schools?.forEach(school => {
-                        if (school.branches && school.branches.length > 0) {
-                          newExpanded.add(school.id);
-                        }
-                      });
-                      
-                      setExpandedNodes(newExpanded);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      )
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                        : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-                    }`}
-                  >
-                    Branches
-                  </button>
-                  
-                  <div className="flex items-center gap-2 border-l dark:border-gray-600 pl-4 ml-2">
+                  {/* Zoom Controls */}
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mr-4">
                     <button
-                      onClick={handleExpandAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      onClick={handleZoomOut}
+                      disabled={zoomLevel <= MIN_ZOOM}
+                      className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom Out (Ctrl+-)"
                     >
-                      <ChevronDown className="w-4 h-4 inline-block mr-1" />
-                      Expand All
+                      <ZoomOut className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={handleCollapseAll}
-                      className="px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <ChevronUp className="w-4 h-4 inline-block mr-1" />
-                      Collapse All
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <div className="p-6 overflow-x-auto overflow-y-hidden">
-            {viewMode === 'expand' ? (
-              <div id="org-chart" className="inline-block min-w-full">
-                {renderOrganizationChart()}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400">
-                  Colleagues view will display all users in card format
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                  This feature is coming soon
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Details Panel */}
-      {renderDetailsPanel()}
-      
-      {/* Create Modal using SlideInForm */}
-      <SlideInForm
-        title={`Create ${modalType === 'school' ? 'School' : modalType === 'branch' ? 'Branch' : 'Department'}`}
-        isOpen={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setFormData({});
-          setFormErrors({});
-        }}
-        onSave={() => {
-          const form = document.querySelector('#create-form') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }}
-      >
-        <form id="create-form" onSubmit={handleCreateSubmit} className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-              {formErrors.form}
-            </div>
-          )}
-
-          <FormField
-            id="name"
-            label="Name"
-            required
-            error={formErrors.name}
-          >
-            <Input
-              id="name"
-              name="name"
-              placeholder={`Enter ${modalType} name`}
-              autoFocus
-            />
-          </FormField>
-
-          <FormField
-            id="code"
-            label="Code"
-            required
-            error={formErrors.code}
-          >
-            <Input
-              id="code"
-              name="code"
-              placeholder={`Enter ${modalType} code`}
-            />
-          </FormField>
-
-          {modalType === 'school' && (
-            <FormField
-              id="description"
-              label="Description"
-              error={formErrors.description}
-            >
-              <Textarea
-                id="description"
-                name="description"
-                placeholder={`Enter ${modalType} description`}
-                rows={3}
-              />
-            </FormField>
-          )}
-
-          {modalType === 'branch' && formData.school_id && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
-              </p>
-            </div>
-          )}
-
-          {modalType === 'department' && (
-            <FormField
-              id="department_type"
-              label="Department Type"
-              error={formErrors.department_type}
-            >
-              <Select
-                id="department_type"
-                name="department_type"
-                options={[
-                  { value: 'academic', label: 'Academic' },
-                  { value: 'administrative', label: 'Administrative' },
-                  { value: 'support', label: 'Support' },
-                  { value: 'operations', label: 'Operations' }
-                ]}
-              />
-            </FormField>
-          )}
-        </form>
-      </SlideInForm>
-    </div>
-  );
-}
+                    
+                    <span className="px-2 text-sm font-medium text-gray-700 dark:text-gray-300 min-
