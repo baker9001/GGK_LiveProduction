@@ -799,7 +799,10 @@ export default function OrganisationManagement() {
   const renderOrganizationChart = () => {
     if (!companyData) return null;
 
-    const isCompanyExpanded = expandedNodes.has('company');
+    // Check what level to show based on expandedNodes
+    const showCompanyOnly = expandedNodes.has('company-only');
+    const showSchools = expandedNodes.has('company');
+    const showBranches = companyData.schools?.some(school => expandedNodes.has(school.id));
 
     return (
       <div className="flex flex-col items-center py-8">
@@ -811,13 +814,13 @@ export default function OrganisationManagement() {
             onItemClick={handleItemClick}
             onAddClick={handleAddClick}
           />
-          {companyData.schools && companyData.schools.length > 0 && (
+          {companyData.schools && companyData.schools.length > 0 && showSchools && (
             <button
               onClick={() => toggleNode('company')}
               className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
-              title={isCompanyExpanded ? 'Collapse Schools' : 'Expand Schools'}
+              title={showSchools ? 'Collapse Schools' : 'Expand Schools'}
             >
-              {isCompanyExpanded ? (
+              {showSchools ? (
                 <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               ) : (
                 <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -827,7 +830,7 @@ export default function OrganisationManagement() {
         </div>
 
         <div id="org-schools">
-          {isCompanyExpanded && companyData.schools && companyData.schools.length > 0 && (
+          {showSchools && companyData.schools && companyData.schools.length > 0 && (
             <>
               <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700"></div>
               {companyData.schools.length > 1 && (
@@ -857,7 +860,7 @@ export default function OrganisationManagement() {
                           onItemClick={handleItemClick}
                           onAddClick={handleAddClick}
                         />
-                        {school.branches && school.branches.length > 0 && (
+                        {school.branches && school.branches.length > 0 && showBranches && (
                           <button
                             onClick={() => toggleNode(school.id)}
                             className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-md"
@@ -1322,28 +1325,19 @@ export default function OrganisationManagement() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Show/Hide:</span>
                   
-                  {/* Entity Tab */}
+                  {/* Entity Tab - Shows only Entity level */}
                   <button
                     onClick={() => {
                       if (!companyData) return;
-                      const newExpanded = new Set(expandedNodes);
+                      const newExpanded = new Set<string>();
                       
-                      // Toggle only the company node visibility
-                      if (newExpanded.has('company')) {
-                        // Collapse company and all its children
-                        newExpanded.delete('company');
-                        companyData.schools?.forEach(school => {
-                          newExpanded.delete(school.id);
-                        });
-                      } else {
-                        // Only expand company, not its children
-                        newExpanded.add('company');
-                      }
+                      // Show only company, no schools or branches
+                      newExpanded.add('company-only');
                       
                       setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      expandedNodes.has('company')
+                      expandedNodes.has('company-only') && !expandedNodes.has('company')
                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                         : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                     }`}
@@ -1351,37 +1345,21 @@ export default function OrganisationManagement() {
                     Entity
                   </button>
                   
-                  {/* Schools Tab */}
+                  {/* Schools Tab - Shows Entity + Schools level */}
                   <button
                     onClick={() => {
                       if (!companyData || !companyData.schools?.length) return;
                       
-                      const newExpanded = new Set(expandedNodes);
+                      const newExpanded = new Set<string>();
                       
-                      // Check if any school is currently expanded
-                      const anySchoolExpanded = companyData.schools.some(school => 
-                        expandedNodes.has(school.id)
-                      );
-                      
-                      if (anySchoolExpanded) {
-                        // Collapse all schools (hide branches)
-                        companyData.schools.forEach(school => {
-                          newExpanded.delete(school.id);
-                        });
-                      } else {
-                        // Expand all schools (show branches) - but first ensure company is visible
-                        newExpanded.add('company');
-                        companyData.schools.forEach(school => {
-                          if (school.branches && school.branches.length > 0) {
-                            newExpanded.add(school.id);
-                          }
-                        });
-                      }
+                      // Show company and schools, but not branches
+                      newExpanded.add('company');
+                      // Don't expand any schools (which would show branches)
                       
                       setExpandedNodes(newExpanded);
                     }}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                      companyData?.schools?.some(s => expandedNodes.has(s.id))
+                      expandedNodes.has('company') && !companyData?.schools?.some(s => expandedNodes.has(s.id))
                         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                         : 'text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
                     }`}
@@ -1389,34 +1367,20 @@ export default function OrganisationManagement() {
                     Schools
                   </button>
                   
-                  {/* Branches Tab */}
+                  {/* Branches Tab - Shows Entity + Schools + Branches */}
                   <button
                     onClick={() => {
                       if (!companyData) return;
                       
-                      const newExpanded = new Set(expandedNodes);
+                      const newExpanded = new Set<string>();
                       
-                      // Check if branches are currently visible (schools are expanded)
-                      const anyBranchesVisible = companyData.schools?.some(school => 
-                        school.branches?.length && expandedNodes.has(school.id)
-                      );
-                      
-                      if (anyBranchesVisible) {
-                        // Hide branches (collapse all schools but keep company and schools visible)
-                        companyData.schools?.forEach(school => {
-                          newExpanded.delete(school.id);
-                        });
-                        // Ensure company is still visible to see schools
-                        newExpanded.add('company');
-                      } else {
-                        // Show branches (expand everything)
-                        newExpanded.add('company');
-                        companyData.schools?.forEach(school => {
-                          if (school.branches && school.branches.length > 0) {
-                            newExpanded.add(school.id);
-                          }
-                        });
-                      }
+                      // Show everything - company, schools, and branches
+                      newExpanded.add('company');
+                      companyData.schools?.forEach(school => {
+                        if (school.branches && school.branches.length > 0) {
+                          newExpanded.add(school.id);
+                        }
+                      });
                       
                       setExpandedNodes(newExpanded);
                     }}
