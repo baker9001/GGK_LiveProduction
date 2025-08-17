@@ -1,15 +1,15 @@
 /**
- * File: /home/project/src/app/entity-module/organisation/page.tsx
+ * File: /src/app/entity-module/organisation/page.tsx
  * 
- * Organization Management Page - Enhanced with Wizard Integration
- * ALL original functionality preserved, navigation to wizard fixed
+ * Organization Management Page - Complete with Fixed Wizard Integration
+ * All functionality preserved and navigation issues corrected
  * 
  * Dependencies: 
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/components/shared/* (SlideInForm, FormField, Button)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, next/navigation
  */
 
 'use client';
@@ -794,8 +794,9 @@ export default function OrganisationManagement() {
     setShowModal(true);
   }, []);
 
+  // FIXED: Correct navigation path for wizard
   const handleEditInWizard = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
+    router.push(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
   }, [router]);
 
   const handleSaveDetails = () => {
@@ -1330,7 +1331,7 @@ export default function OrganisationManagement() {
               </p>
             </div>
             <Button
-              onClick={() => router.push('/app/entity-module/organisation/wizard?type=company&mode=create')}
+              onClick={() => router.push('/entity-module/organisation/wizard?type=company&mode=create')}
               variant="outline"
               title="Create new organization with comprehensive wizard"
             >
@@ -1373,6 +1374,49 @@ export default function OrganisationManagement() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {companyData?.schools?.length || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <School className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {companyData?.schools?.reduce((acc, school) => 
+                    acc + (school.additional?.teachers_count || 0), 0) || 0}
                 </p>
               </div>
               <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
@@ -1584,7 +1628,7 @@ export default function OrganisationManagement() {
             </div>
           )}
 
-          <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <Info className="w-4 h-4 inline mr-2" />
               This is a quick create form. For comprehensive data entry with all fields, use the wizard.
@@ -1596,7 +1640,7 @@ export default function OrganisationManagement() {
                 setShowModal(false);
                 const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
                 const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
-                router.push(`/app/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+                router.push(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
               }}
               className="mt-2 text-xs"
             >
@@ -1628,14 +1672,13 @@ export default function OrganisationManagement() {
             <Input
               id="code"
               name="code"
-              placeholder={`Enter unique ${modalType} code`}
+              placeholder={`Enter ${modalType} code`}
             />
           </FormField>
 
           <FormField
             id="status"
             label="Status"
-            required
             error={formErrors.status}
           >
             <Select
@@ -1665,9 +1708,8 @@ export default function OrganisationManagement() {
           )}
 
           {modalType === 'branch' && formData.school_id && (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-              <p className="text-sm text-green-800 dark:text-green-200">
-                <School className="w-4 h-4 inline mr-2" />
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
                 Adding branch to: <strong>{companyData?.schools?.find(s => s.id === formData.school_id)?.name}</strong>
               </p>
             </div>
@@ -1695,51 +1737,4 @@ export default function OrganisationManagement() {
       </SlideInForm>
     </div>
   );
-}bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <School className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => acc + (school.branches?.length || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.filter(s => s.status === 'active').length || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {companyData?.schools?.reduce((acc, school) => 
-                    acc + (school.additional?.teachers_count || 0), 0) || 0}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </div>
+}
