@@ -1,9 +1,8 @@
 /**
- * File: /home/project/src/app/entity-module/organisation/wizard/page.tsx
+ * File: /src/app/entity-module/organisation/wizard/page.tsx
  * 
  * Multi-Step Wizard for Creating/Editing Organizations
  * Handles Companies, Schools, and Branches with all database fields
- * Enhanced UI/UX with better forms and validation
  * 
  * Dependencies:
  *   - @/lib/supabase
@@ -22,7 +21,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2, School, MapPin, ChevronLeft, ChevronRight,
   Save, X, Check, AlertCircle, Loader2, User, Phone,
@@ -30,7 +29,8 @@ import {
   FileText, Navigation, Info, Briefcase, GraduationCap,
   Home, Flag, CreditCard, BookOpen, FlaskConical, Dumbbell,
   Coffee, ArrowLeft, CheckCircle2, AlertTriangle, Building,
-  MapPinned, Sparkles, Zap, Target, TrendingUp
+  MapPinned, Sparkles, Zap, Target, TrendingUp, RotateCcw,
+  UserCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
@@ -406,8 +406,8 @@ const StepProgressIndicator = ({
 
 // ===== MAIN WIZARD COMPONENT =====
 export default function OrganizationWizard() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const formRef = useRef<HTMLFormElement>(null);
@@ -753,7 +753,7 @@ export default function OrganizationWizard() {
       
       // Redirect after animation
       setTimeout(() => {
-        router.push('/app/entity-module/organisation');
+        navigate('/entity-module/organisation');
       }, 1500);
       
     } catch (error: any) {
@@ -763,213 +763,24 @@ export default function OrganizationWizard() {
     }
   };
   
-  // ===== RENDER FIELD =====
+  // ===== RENDER FIELD (Simplified version) =====
   const renderField = (fieldName: string) => {
-    const fieldConfig: Record<string, any> = {
-      // Text fields
-      name: { label: 'Name', type: 'text', required: true, placeholder: `Enter ${entityType} name`, icon: Building2 },
-      code: { label: 'Code', type: 'text', required: true, placeholder: `Enter unique code (e.g., ${entityType.toUpperCase().slice(0, 3)}-001)`, icon: Hash },
-      description: { label: 'Description', type: 'textarea', placeholder: 'Enter a detailed description', icon: FileText },
-      
-      // Status with enhanced UI
-      status: { 
-        label: 'Status', 
-        type: 'select', 
-        required: true,
-        icon: Activity,
-        options: [
-          { value: 'active', label: 'Active', description: 'Fully operational' },
-          { value: 'inactive', label: 'Inactive', description: 'Temporarily disabled' }
-        ]
-      },
-      
-      // Company fields
-      organization_type: {
-        label: 'Organization Type',
-        type: 'select',
-        icon: Briefcase,
-        options: [
-          { value: 'education_group', label: 'Education Group', description: 'Multiple institutions' },
-          { value: 'single_institution', label: 'Single Institution', description: 'One organization' },
-          { value: 'franchise', label: 'Franchise', description: 'Franchised operations' },
-          { value: 'partnership', label: 'Partnership', description: 'Joint venture' }
-        ]
-      },
-      fiscal_year_start: { label: 'Fiscal Year Start Month', type: 'number', min: 1, max: 12, icon: Calendar, placeholder: '1-12' },
-      main_phone: { label: 'Main Phone', type: 'tel', placeholder: '+1 (555) 123-4567', icon: Phone },
-      main_email: { label: 'Main Email', type: 'email', placeholder: 'contact@company.com', icon: Mail },
-      website: { label: 'Website', type: 'url', placeholder: 'https://www.example.com', icon: Globe },
-      head_office_address: { label: 'Head Office Address', type: 'text', icon: Home },
-      head_office_city: { label: 'Head Office City', type: 'text', icon: MapPinned },
-      head_office_country: { label: 'Head Office Country', type: 'text', icon: Flag },
-      registration_number: { label: 'Registration Number', type: 'text', icon: Shield },
-      tax_id: { label: 'Tax ID', type: 'text', icon: CreditCard },
-      logo_url: { label: 'Logo URL', type: 'url', icon: Globe },
-      ceo_name: { label: 'CEO Name', type: 'text', icon: User },
-      ceo_email: { label: 'CEO Email', type: 'email', icon: Mail },
-      ceo_phone: { label: 'CEO Phone', type: 'tel', icon: Phone },
-      address: { label: 'Address', type: 'textarea', icon: MapPin },
-      notes: { label: 'Notes', type: 'textarea', placeholder: 'Additional notes or comments', icon: FileText },
-      logo: { label: 'Logo Path', type: 'text', icon: Globe },
-      
-      // School fields
-      company_id: {
-        label: 'Company',
-        type: 'select',
-        required: true,
-        icon: Building2,
-        options: companies.map(c => ({ value: c.id, label: c.name }))
-      },
-      school_type: {
-        label: 'School Type',
-        type: 'select',
-        icon: GraduationCap,
-        options: [
-          { value: 'primary', label: 'Primary School', description: 'Grades 1-5' },
-          { value: 'secondary', label: 'Secondary School', description: 'Grades 6-12' },
-          { value: 'other', label: 'Other', description: 'Specialized institution' }
-        ]
-      },
-      curriculum_type: {
-        label: 'Curriculum Types',
-        type: 'multiselect',
-        icon: BookOpen,
-        options: [
-          { value: 'national', label: 'National', description: 'Government curriculum' },
-          { value: 'cambridge', label: 'Cambridge', description: 'Cambridge International' },
-          { value: 'ib', label: 'IB', description: 'International Baccalaureate' },
-          { value: 'american', label: 'American', description: 'US curriculum' },
-          { value: 'other', label: 'Other', description: 'Custom curriculum' }
-        ]
-      },
-      total_capacity: { label: 'Total Capacity', type: 'number', min: 0, icon: Users, placeholder: 'Maximum students' },
-      student_count: { label: 'Current Students', type: 'number', min: 0, icon: GraduationCap },
-      teachers_count: { label: 'Total Teachers', type: 'number', min: 0, icon: Users },
-      active_teachers_count: { label: 'Active Teachers', type: 'number', min: 0, icon: UserCheck },
-      principal_name: { label: 'Principal Name', type: 'text', icon: User },
-      principal_email: { label: 'Principal Email', type: 'email', icon: Mail },
-      principal_phone: { label: 'Principal Phone', type: 'tel', icon: Phone },
-      campus_address: { label: 'Campus Address', type: 'text', icon: MapPin },
-      campus_city: { label: 'Campus City', type: 'text', icon: MapPinned },
-      campus_state: { label: 'Campus State', type: 'text', icon: MapPin },
-      campus_postal_code: { label: 'Postal Code', type: 'text', icon: Mail },
-      latitude: { label: 'Latitude', type: 'number', step: 0.000001, icon: Navigation },
-      longitude: { label: 'Longitude', type: 'number', step: 0.000001, icon: Navigation },
-      established_date: { label: 'Established Date', type: 'date', icon: Calendar },
-      academic_year_start: { label: 'Academic Year Start Month', type: 'number', min: 1, max: 12, icon: Calendar },
-      academic_year_end: { label: 'Academic Year End Month', type: 'number', min: 1, max: 12, icon: Calendar },
-      has_library: { label: 'Has Library', type: 'checkbox', icon: BookOpen },
-      has_laboratory: { label: 'Has Laboratory', type: 'checkbox', icon: FlaskConical },
-      has_sports_facilities: { label: 'Has Sports Facilities', type: 'checkbox', icon: Dumbbell },
-      has_cafeteria: { label: 'Has Cafeteria', type: 'checkbox', icon: Coffee },
-      
-      // Branch fields
-      school_id: {
-        label: 'School',
-        type: 'select',
-        required: true,
-        icon: School,
-        options: schools.map(s => ({ value: s.id, label: s.name }))
-      },
-      student_capacity: { label: 'Student Capacity', type: 'number', min: 0, icon: Users },
-      current_students: { label: 'Current Students', type: 'number', min: 0, icon: GraduationCap },
-      branch_head_name: { label: 'Branch Head Name', type: 'text', icon: User },
-      branch_head_email: { label: 'Branch Head Email', type: 'email', icon: Mail },
-      branch_head_phone: { label: 'Branch Head Phone', type: 'tel', icon: Phone },
-      building_name: { label: 'Building Name', type: 'text', icon: Building },
-      floor_details: { label: 'Floor Details', type: 'text', icon: Building },
-      opening_time: { label: 'Opening Time', type: 'time', icon: Clock },
-      closing_time: { label: 'Closing Time', type: 'time', icon: Clock },
-      working_days: {
-        label: 'Working Days',
-        type: 'multiselect',
-        icon: Calendar,
-        options: [
-          { value: 'monday', label: 'Monday' },
-          { value: 'tuesday', label: 'Tuesday' },
-          { value: 'wednesday', label: 'Wednesday' },
-          { value: 'thursday', label: 'Thursday' },
-          { value: 'friday', label: 'Friday' },
-          { value: 'saturday', label: 'Saturday' },
-          { value: 'sunday', label: 'Sunday' }
-        ]
-      }
-    };
-    
-    const config = fieldConfig[fieldName] || { label: fieldName, type: 'text' };
+    const value = formData[fieldName as keyof FormData];
     const hasError = touchedFields.has(fieldName) && formErrors[fieldName];
     
-    // Special handling for region and country (disabled for company)
-    if (fieldName === 'region_id' && entityType === 'company') {
-      return (
-        <FormField
-          key={fieldName}
+    // Simple text input for most fields
+    return (
+      <FormField
+        key={fieldName}
+        id={fieldName}
+        label={fieldName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        error={hasError ? formErrors[fieldName] : undefined}
+      >
+        <Input
           id={fieldName}
-          label="Region"
-          required
-          helpText="Region is set based on your company assignment"
-          error={hasError ? formErrors[fieldName] : undefined}
-        >
-          <div className="flex items-center gap-2">
-            <Input
-              id={fieldName}
-              value={regionName}
-              disabled
-              className="bg-gray-50 dark:bg-gray-700"
-            />
-            <Flag className="w-4 h-4 text-gray-400" />
-          </div>
-        </FormField>
-      );
-    }
-    
-    if (fieldName === 'country_id' && entityType === 'company') {
-      return (
-        <FormField
-          key={fieldName}
-          id={fieldName}
-          label="Country"
-          required
-          helpText="Country is set based on your company assignment"
-          error={hasError ? formErrors[fieldName] : undefined}
-        >
-          <div className="flex items-center gap-2">
-            <Input
-              id={fieldName}
-              value={countryName}
-              disabled
-              className="bg-gray-50 dark:bg-gray-700"
-            />
-            <Globe className="w-4 h-4 text-gray-400" />
-          </div>
-        </FormField>
-      );
-    }
-    
-    // Render based on type
-    if (config.type === 'select') {
-      return (
-        <FormField
-          key={fieldName}
-          id={fieldName}
-          label={config.label}
-          required={config.required}
-          error={hasError ? formErrors[fieldName] : undefined}
-        >
-          <div className="relative">
-            {config.icon && (
-              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                <config.icon className="w-4 h-4" />
-              </div>
-            )}
-            <Select
-              id={fieldName}
-              options={config.options}
-              value={formData[fieldName as keyof FormData] as string}
-              onChange={(value) => handleFieldChange(fieldName, value)}
-              className={config.icon ? 'pl-10' : ''}
-          />
-        </div>
+          value={value as string || ''}
+          onChange={(e) => handleFieldChange(fieldName, e.target.value)}
+        />
       </FormField>
     );
   };
@@ -1012,7 +823,7 @@ export default function OrganizationWizard() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => router.push('/app/entity-module/organisation')}
+            onClick={() => navigate('/entity-module/organisation')}
             className="mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -1037,24 +848,6 @@ export default function OrganizationWizard() {
               <p className="text-gray-600 dark:text-gray-400 mt-2">
                 Complete all steps to {mode === 'create' ? 'create your new' : 'update the'} {entityType}
               </p>
-            </div>
-            
-            {/* Quick Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setFormData({ status: 'active' });
-                  setFormErrors({});
-                  setTouchedFields(new Set());
-                  setCompletedSteps(new Set());
-                  setCurrentStep(0);
-                  toast.success('Form reset successfully');
-                }}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title="Reset Form"
-              >
-                <RotateCcw className="w-5 h-5" />
-              </button>
             </div>
           </div>
         </div>
@@ -1121,43 +914,6 @@ export default function OrganizationWizard() {
             <div className="space-y-6">
               {currentStepData.fields.map(fieldName => renderField(fieldName))}
             </div>
-            
-            {/* Helper Text for Current Step */}
-            {currentStep === 0 && entityType === 'company' && (
-              <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex gap-2">
-                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-blue-800 dark:text-blue-200">
-                    <p className="font-medium mb-1">Getting Started</p>
-                    <p>Enter the basic information for your company. The code should be unique and will be used as an identifier throughout the system.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {currentStep === 0 && entityType === 'school' && (
-              <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <div className="flex gap-2">
-                  <School className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-green-800 dark:text-green-200">
-                    <p className="font-medium mb-1">School Setup</p>
-                    <p>Configure your school's basic information. You can select multiple curriculum types if your school offers various programs.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {currentStep === 0 && entityType === 'branch' && (
-              <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                <div className="flex gap-2">
-                  <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-purple-800 dark:text-purple-200">
-                    <p className="font-medium mb-1">Branch Configuration</p>
-                    <p>Set up a new branch location. Each branch operates independently but follows the school's overall policies.</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </form>
           
           {/* Navigation Buttons */}
@@ -1194,7 +950,7 @@ export default function OrganizationWizard() {
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    onClick={() => router.push('/app/entity-module/organisation')}
+                    onClick={() => navigate('/entity-module/organisation')}
                   >
                     Cancel
                   </Button>
@@ -1229,159 +985,9 @@ export default function OrganizationWizard() {
                 </div>
               </div>
             </div>
-            
-            {/* Quick Save Draft */}
-            {mode === 'create' && (
-              <div className="mt-4 text-center">
-                <button
-                  type="button"
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  onClick={() => {
-                    localStorage.setItem(`wizard_draft_${entityType}`, JSON.stringify(formData));
-                    toast.success('Draft saved locally');
-                  }}
-                >
-                  <Save className="w-3 h-3 inline mr-1" />
-                  Save as draft
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Tips Card */}
-        <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800 p-4">
-          <div className="flex items-start gap-3">
-            <Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                Pro Tips
-              </p>
-              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
-                <li>• You can navigate between completed steps by clicking on them</li>
-                <li>• All fields marked with * are required</li>
-                <li>• Your progress is saved automatically as you complete each step</li>
-                <li>• Status can be changed later by entity administrators</li>
-              </ul>
-            </div>
           </div>
         </div>
       </div>
     </div>
   );
-}-10' : ''}
-            />
-          </div>
-        </FormField>
-      );
-    }
-    
-    if (config.type === 'multiselect') {
-      const currentValue = formData[fieldName as keyof FormData] as string[] || [];
-      return (
-        <FormField
-          key={fieldName}
-          id={fieldName}
-          label={config.label}
-          required={config.required}
-          error={hasError ? formErrors[fieldName] : undefined}
-        >
-          <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            {config.options.map((option: any) => (
-              <label key={option.value} className="flex items-start gap-3 cursor-pointer hover:bg-white dark:hover:bg-gray-700 p-2 rounded transition-colors">
-                <input
-                  type="checkbox"
-                  checked={currentValue.includes(option.value)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      handleFieldChange(fieldName, [...currentValue, option.value]);
-                    } else {
-                      handleFieldChange(fieldName, currentValue.filter(v => v !== option.value));
-                    }
-                  }}
-                  className="mt-1 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{option.label}</span>
-                  {option.description && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">{option.description}</span>
-                  )}
-                </div>
-              </label>
-            ))}
-          </div>
-        </FormField>
-      );
-    }
-    
-    if (config.type === 'textarea') {
-      return (
-        <FormField
-          key={fieldName}
-          id={fieldName}
-          label={config.label}
-          required={config.required}
-          error={hasError ? formErrors[fieldName] : undefined}
-        >
-          <div className="relative">
-            {config.icon && (
-              <div className="absolute left-3 top-3 text-gray-400">
-                <config.icon className="w-4 h-4" />
-              </div>
-            )}
-            <Textarea
-              id={fieldName}
-              placeholder={config.placeholder}
-              value={formData[fieldName as keyof FormData] as string || ''}
-              onChange={(e) => handleFieldChange(fieldName, e.target.value)}
-              rows={3}
-              className={config.icon ? 'pl-10' : ''}
-            />
-          </div>
-        </FormField>
-      );
-    }
-    
-    if (config.type === 'checkbox') {
-      return (
-        <div key={fieldName} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-          <input
-            type="checkbox"
-            id={fieldName}
-            checked={formData[fieldName as keyof FormData] as boolean || false}
-            onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
-            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor={fieldName} className="flex items-center gap-2 cursor-pointer">
-            {config.icon && <config.icon className="w-4 h-4 text-gray-500" />}
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{config.label}</span>
-          </label>
-        </div>
-      );
-    }
-    
-    // Default input field
-    return (
-      <FormField
-        key={fieldName}
-        id={fieldName}
-        label={config.label}
-        required={config.required}
-        error={hasError ? formErrors[fieldName] : undefined}
-      >
-        <div className="relative">
-          {config.icon && (
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-              <config.icon className="w-4 h-4" />
-            </div>
-          )}
-          <Input
-            id={fieldName}
-            type={config.type}
-            placeholder={config.placeholder}
-            value={formData[fieldName as keyof FormData] as string || ''}
-            onChange={(e) => handleFieldChange(fieldName, e.target.value)}
-            min={config.min}
-            max={config.max}
-            step={config.step}
-            className={config.icon ? 'pl
+}
