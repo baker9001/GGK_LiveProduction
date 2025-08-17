@@ -9,13 +9,13 @@
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/components/shared/* (SlideInForm, FormField, Button)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, next/navigation
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast, react-router-dom
  */
 
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { 
   Building2, School, MapPin, Edit, ChevronDown, ChevronRight,
   Plus, X, Save, Trash2, Users, Search, Filter, Settings,
@@ -465,7 +465,7 @@ OrgChartNode.displayName = 'OrgChartNode';
 
 // ===== MAIN COMPONENT =====
 export default function OrganisationManagement() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -796,8 +796,8 @@ export default function OrganisationManagement() {
 
   // FIXED: Correct navigation path for wizard
   const handleEditInWizard = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    router.push(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
-  }, [router]);
+    navigate(`/entity-module/organisation/wizard?type=${type}&mode=edit&id=${item.id}`);
+  }, [navigate]);
 
   const handleSaveDetails = () => {
     if (selectedType === 'company') {
@@ -1331,7 +1331,7 @@ export default function OrganisationManagement() {
               </p>
             </div>
             <Button
-              onClick={() => router.push('/entity-module/organisation/wizard?type=company&mode=create')}
+              onClick={() => navigate('/entity-module/organisation/wizard?type=company&mode=create')}
               variant="outline"
               title="Create new organization with comprehensive wizard"
             >
@@ -1640,7 +1640,7 @@ export default function OrganisationManagement() {
                 setShowModal(false);
                 const type = modalType === 'school' ? 'school' : modalType === 'branch' ? 'branch' : 'company';
                 const parentId = modalType === 'branch' ? formData.school_id : userCompanyId;
-                router.push(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
+                navigate(`/entity-module/organisation/wizard?type=${type}&mode=create&parentId=${parentId}`);
               }}
               className="mt-2 text-xs"
             >
