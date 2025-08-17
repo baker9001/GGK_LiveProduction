@@ -31,7 +31,7 @@ import {
   Globe, User, MoreVertical, UserPlus, ChevronUp,
   FolderOpen, FileText, Calendar, Shield, Hash, Briefcase,
   Edit2, PlusCircle, GraduationCap, UserCheck,
-  ZoomIn, ZoomOut, Maximize2, Minimize2
+  ZoomIn, ZoomOut, Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
@@ -1430,9 +1430,9 @@ export default function OrganisationManagement() {
                     <button
                       onClick={handleZoomReset}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title="Reset Zoom (Ctrl+0)"
+                      title="Reset Zoom to 100% (Ctrl+0)"
                     >
-                      <span className="text-xs font-medium">100%</span>
+                      <RotateCcw className="w-4 h-4" />
                     </button>
                     
                     <button
@@ -1440,15 +1440,15 @@ export default function OrganisationManagement() {
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
                       title="Fit to Screen"
                     >
-                      <Maximize2 className="w-4 h-4" />
+                      <ScanLine className="w-4 h-4" />
                     </button>
                     
                     <button
                       onClick={toggleFullscreen}
                       className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-600 rounded transition-colors"
-                      title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                      title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen (F11)"}
                     >
-                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Fullscreen className="w-4 h-4" />}
                     </button>
                   </div>
 
