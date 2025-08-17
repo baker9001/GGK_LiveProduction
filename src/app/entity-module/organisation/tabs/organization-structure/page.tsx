@@ -265,12 +265,76 @@ export default function OrganizationStructureTab({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [viewMode, setViewMode] = useState<'expand' | 'colleagues'>('expand');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [lazyLoadedBranches, setLazyLoadedBranches] = useState<Map<string, any[]>>(new Map());
+  const [loadingBranches, setLoadingBranches] = useState<Set<string>>(new Set());
   
   // Zoom state
   const [zoomLevel, setZoomLevel] = useState(1);
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
+
+  // Lazy load branches for a school
+  const loadBranchesForSchool = useCallback(async (schoolId: string) => {
+    if (lazyLoadedBranches.has(schoolId) || loadingBranches.has(schoolId)) {
+      return;
+    }
+
+    setLoadingBranches(prev => new Set(prev).add(schoolId));
+
+    try {
+      // Fetch branches and their additional data in parallel
+      const [branchesResponse, branchesAdditionalResponse] = await Promise.all([
+        supabase.from('branches').select('*').eq('school_id', schoolId).order('name'),
+        supabase.from('branches_additional').select('*')
+      ]);
+
+      const branches = branchesResponse.data || [];
+      const branchesAdditional = branchesAdditionalResponse.data || [];
+
+      // Create lookup map for additional data
+      const additionalMap = new Map(
+        branchesAdditional
+          .filter(ba => branches.some(b => b.id === ba.branch_id))
+          .map(ba => [ba.branch_id, ba])
+      );
+
+      // Combine branches with their additional data
+      const branchesWithAdditional = branches.map(branch => ({
+        ...branch,
+        additional: additionalMap.get(branch.id)
+      }));
+
+      setLazyLoadedBranches(prev => new Map(prev).set(schoolId, branchesWithAdditional));
+    } catch (error) {
+      console.error('Error loading branches:', error);
+    } finally {
+      setLoadingBranches(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(schoolId);
+        return newSet;
+      });
+    }
+  }, []);
+
+  // Modified toggle node to load branches when expanding
+  const toggleNode = useCallback(async (id: string) => {
+    // If expanding a school node and branches aren't loaded, load them first
+    const school = companyData?.schools?.find(s => s.id === id);
+    if (school && !expandedNodes.has(id) && !lazyLoadedBranches.has(id)) {
+      await loadBranchesForSchool(id);
+    }
+
+    setExpandedNodes(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(id)) {
+        newExpanded.delete(id);
+      } else {
+        newExpanded.add(id);
+      }
+      return newExpanded;
+    });
+  }, [companyData, expandedNodes, lazyLoadedBranches, loadBranchesForSchool]);
 
   // Zoom control functions
   const handleZoomIn = useCallback(() => {
@@ -314,14 +378,36 @@ export default function OrganizationStructureTab({
     }
   }, [isFullscreen]);
 
-  const handleExpandAll = useCallback(() => {
+  const handleExpandAll = useCallback(async () => {
     if (!companyData) return;
+    
+    // Show company and all schools
     const allNodes = new Set<string>(['company']);
-    companyData.schools?.forEach((school: any) => {
+    
+    // Load branches for all schools in parallel if not already loaded
+    const schoolsToLoad = companyData.schools?.filter(school => !lazyLoadedBranches.has(school.id)) || [];
+    
+    if (schoolsToLoad.length > 0) {
+      // Show loading state
+      schoolsToLoad.forEach(school => {
+        setLoadingBranches(prev => new Set(prev).add(school.id));
+      });
+
+      try {
+        // Load all branches in parallel
+        await Promise.all(schoolsToLoad.map(school => loadBranchesForSchool(school.id)));
+      } catch (error) {
+        console.error('Error loading all branches:', error);
+      }
+    }
+    
+    // Expand all nodes
+    companyData.schools?.forEach(school => {
       allNodes.add(school.id);
     });
+    
     setExpandedNodes(allNodes);
-  }, [companyData]);
+  }, [companyData, lazyLoadedBranches, loadBranchesForSchool]);
 
   const handleCollapseAll = useCallback(() => {
     setExpandedNodes(new Set());
@@ -414,7 +500,7 @@ export default function OrganizationStructureTab({
                         onAddClick={onAddClick}
                         onEditClick={onEditClick}
                       />
-                      {school.branches && school.branches.length > 0 && (
+                      {((school.branch_count && school.branch_count > 0) || (school.branches && school.branches.length > 0)) && (
                         <button
                           onClick={() => toggleNode(school.id)}
                           className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-full p-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 z-10 shadow-lg hover:shadow-xl transition-all"
@@ -429,15 +515,16 @@ export default function OrganizationStructureTab({
                       )}
                     </div>
                     
-                    {isSchoolExpanded && school.branches && school.branches.length > 0 && (
+                    {isSchoolExpanded && ((school.branch_count && school.branch_count > 0) || (school.branches && school.branches.length > 0)) && (
                       <>
                         <div className="w-0.5 h-16 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 mt-6"></div>
-                        {school.branches.length > 1 && (
+                        {/* Use branch_count or branches length for calculating width */}
+                        {((lazyLoadedBranches.get(school.id)?.length || school.branches?.length || school.branch_count || 0) > 1) && (
                           <div className="relative h-0.5">
                             <div 
                               className="h-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 absolute top-0"
                               style={{
-                                width: `${(school.branches.length - 1) * 316 + 100}px`,
+                                width: `${((lazyLoadedBranches.get(school.id)?.length || school.branches?.length || school.branch_count || 1) - 1) * 316 + 100}px`,
                                 left: '50%',
                                 transform: 'translateX(-50%)'
                               }}
@@ -445,20 +532,31 @@ export default function OrganizationStructureTab({
                           </div>
                         )}
                         <div className="flex items-stretch space-x-4 mt-8">
-                          {school.branches.map((branch: any) => (
-                            <div key={branch.id} className="flex flex-col items-center">
-                              {school.branches!.length > 1 && (
-                                <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
-                              )}
-                              <OrgChartNode 
-                                item={branch} 
-                                type="branch"
-                                onItemClick={onItemClick}
-                                onAddClick={() => {}}
-                                onEditClick={onEditClick}
-                              />
+                          {/* Show loading indicator if branches are being loaded */}
+                          {loadingBranches.has(school.id) ? (
+                            <div className="flex items-center justify-center w-[300px] h-[150px] bg-gray-100 dark:bg-gray-700 rounded-xl border-2 border-gray-300 dark:border-gray-600">
+                              <div className="text-center">
+                                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white mb-2"></div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Loading branches...</p>
+                              </div>
                             </div>
-                          ))}
+                          ) : (
+                            // Use lazy-loaded branches if available, otherwise use initial branches
+                            (lazyLoadedBranches.get(school.id) || school.branches || []).map((branch: any) => (
+                              <div key={branch.id} className="flex flex-col items-center">
+                                {((lazyLoadedBranches.get(school.id)?.length || school.branches?.length || 0) > 1) && (
+                                  <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
+                                )}
+                                <OrgChartNode 
+                                  item={branch} 
+                                  type="branch"
+                                  onItemClick={onItemClick}
+                                  onAddClick={() => {}}
+                                  onEditClick={onEditClick}
+                                />
+                              </div>
+                            ))
+                          )}
                         </div>
                       </>
                     )}
