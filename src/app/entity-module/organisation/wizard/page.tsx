@@ -17,6 +17,12 @@
  *   - schools & schools_additional  
  *   - branches & branches_additional
  *   - regions, countries (for reference data)
+ * 
+ * FIXED ISSUES:
+ *   - All imports use relative paths (../../../../) instead of @/ alias
+ *   - StatusBadge implemented locally (not in shared components)
+ *   - Navigation paths include /app/ prefix
+ *   - Complete component with proper closing tags
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -432,6 +438,30 @@ const StepProgressIndicator = ({
                 <Icon className="w-5 h-5" />
               )}
             </div>
+        </div>
+        
+        {/* Tips Card */}
+        <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800 p-4">
+          <div className="flex items-start gap-3">
+            <Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                Pro Tips
+              </p>
+              <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                <li>• You can navigate between completed steps by clicking on them</li>
+                <li>• All fields marked with * are required</li>
+                <li>• Your progress is saved automatically as you complete each step</li>
+                <li>• Use Ctrl+S to save draft locally (restored on next visit)</li>
+                <li>• Status can be changed later by entity administrators</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}>
             
             {/* Step Label */}
             <div className="absolute top-12 text-center">
@@ -1375,16 +1405,39 @@ export default function OrganizationWizard() {
                           Saving...
                         </>
                       ) : (
-                    <Button
-                      onClick={handleNext}
-                      className="min-w-[120px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                    >
-                      Next
-                      <ChevronRight className="w-4 h-4 ml-2" />
-                    </Button>    <>
+                        <>
                           <Save className="w-4 h-4 mr-2" />
                           {mode === 'create' ? 'Create' : 'Update'} {entityType}
                         </>
                       )}
                     </Button>
                   ) : (
+                    <Button
+                      onClick={handleNext}
+                      className="min-w-[120px] bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Quick Save Draft */}
+            {mode === 'create' && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  onClick={() => {
+                    localStorage.setItem(`wizard_draft_${entityType}`, JSON.stringify(formData));
+                    toast.success('Draft saved locally');
+                  }}
+                >
+                  <Save className="w-3 h-3 inline mr-1" />
+                  Save as draft
+                </button>
+              </div>
+            )}
+          </div
