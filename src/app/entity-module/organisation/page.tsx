@@ -490,6 +490,22 @@ export default function OrganisationManagement() {
         
         if (!error && entityUser?.company_id) {
           setUserCompanyId(entityUser.company_id);
+          
+          // Fetch company's region and country for default values
+          const { data: company } = await supabase
+            .from('companies')
+            .select('region_id, country_id')
+            .eq('id', entityUser.company_id)
+            .single();
+          
+          if (company) {
+            // Store default region and country for new entities
+            setFormData(prev => ({
+              ...prev,
+              region_id: company.region_id,
+              country_id: company.country_id
+            }));
+          }
         } else {
           console.error('Error fetching entity user:', error);
         }
@@ -685,8 +701,12 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success(`${modalType} created successfully`);
         setShowCreateModal(false);
-        setFormData({});
-        setFormErrors({});
+        // Clear form data after modal closes
+        setTimeout(() => {
+          setFormData({});
+          setFormErrors({});
+          setActiveTab('basic');
+        }, 300);
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to create entity');
@@ -756,8 +776,13 @@ export default function OrganisationManagement() {
         queryClient.invalidateQueries(['organization']);
         toast.success(`${modalType} updated successfully`);
         setShowEditModal(false);
-        setFormData({});
-        setFormErrors({});
+        setEditMode(false);
+        // Clear form data after modal closes
+        setTimeout(() => {
+          setFormData({});
+          setFormErrors({});
+          setActiveTab('basic');
+        }, 300);
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to update entity');
@@ -873,28 +898,50 @@ export default function OrganisationManagement() {
   }, []);
 
   const handleAddClick = useCallback((parentItem: any, parentType: 'company' | 'school') => {
-    setFormData({
+    const newFormData: any = {
       status: 'active',
       ...(parentType === 'company' ? { company_id: parentItem.id } : { school_id: parentItem.id })
-    });
+    };
+    
+    // For new companies, inherit region and country from user's company
+    if (parentType === 'company' && companyData) {
+      newFormData.region_id = companyData.region_id;
+      newFormData.country_id = companyData.country_id;
+    }
+    
+    setFormData(newFormData);
     setFormErrors({});
     setModalType(parentType === 'company' ? 'school' : 'branch');
-    setShowCreateModal(true);
     setActiveTab('basic');
-  }, []);
+    // Small delay to prevent flickering
+    setTimeout(() => {
+      setShowCreateModal(true);
+    }, 50);
+  }, [companyData]);
 
   const handleEditClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
+    // Combine main data with additional data
     const combinedData = {
       ...item,
       ...(item.additional || {})
     };
+    
+    // Ensure region and country are set for companies
+    if (type === 'company' && companyData) {
+      combinedData.region_id = combinedData.region_id || companyData.region_id;
+      combinedData.country_id = combinedData.country_id || companyData.country_id;
+    }
+    
     setFormData(combinedData);
     setFormErrors({});
     setModalType(type);
     setSelectedItem(item);
-    setShowEditModal(true);
     setActiveTab('basic');
-  }, []);
+    // Small delay to prevent flickering
+    setTimeout(() => {
+      setShowEditModal(true);
+    }, 50);
+  }, [companyData]);
 
   const handleSaveDetails = () => {
     if (selectedType === 'company' && editMode) {
@@ -1023,24 +1070,40 @@ export default function OrganisationManagement() {
             />
           </FormField>
 
-          <FormField id="region_id" label="Region">
-            <Select
-              id="region_id"
-              options={regions.map(r => ({ value: r.id, label: r.name }))}
-              value={formData.region_id || ''}
-              onChange={(value) => setFormData({...formData, region_id: value})}
-              placeholder="Select region"
-            />
+          <FormField 
+            id="region_id" 
+            label="Region"
+            description="Region is determined by your company assignment and cannot be changed"
+          >
+            <div className="relative">
+              <Select
+                id="region_id"
+                options={regions.map(r => ({ value: r.id, label: r.name }))}
+                value={formData.region_id || ''}
+                onChange={() => {}}
+                disabled={true}
+                placeholder="Region is auto-assigned"
+              />
+              <div className="absolute inset-0 bg-gray-50/50 dark:bg-gray-900/20 rounded cursor-not-allowed" />
+            </div>
           </FormField>
 
-          <FormField id="country_id" label="Country">
-            <Select
-              id="country_id"
-              options={countries.map(c => ({ value: c.id, label: c.name }))}
-              value={formData.country_id || ''}
-              onChange={(value) => setFormData({...formData, country_id: value})}
-              placeholder="Select country"
-            />
+          <FormField 
+            id="country_id" 
+            label="Country"
+            description="Country is determined by your company assignment and cannot be changed"
+          >
+            <div className="relative">
+              <Select
+                id="country_id"
+                options={countries.map(c => ({ value: c.id, label: c.name }))}
+                value={formData.country_id || ''}
+                onChange={() => {}}
+                disabled={true}
+                placeholder="Country is auto-assigned"
+              />
+              <div className="absolute inset-0 bg-gray-50/50 dark:bg-gray-900/20 rounded cursor-not-allowed" />
+            </div>
           </FormField>
         </div>
       )}
