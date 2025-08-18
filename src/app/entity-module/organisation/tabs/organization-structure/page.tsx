@@ -15,11 +15,10 @@
  *   - Show inactive toggle
  * 
  * Added/Modified:
- *   - Fixed branch cards visibility when expanding schools
- *   - Fixed left-side arrow cutoff with proper SVG padding
+ *   - Fixed school expand arrows to work independently of branches tab visibility
+ *   - Fixed continuous resizing issue with proper memoization and debouncing
+ *   - Fixed branch cards visibility when expanding schools regardless of tab state
  *   - Fixed auto-centering and responsive sizing
- *   - Fixed arrow visibility when all levels collapsed
- *   - Fixed school expand arrows to work independently of branches tab
  * 
  * Database Tables:
  *   - companies, schools, branches, years, sections
@@ -360,12 +359,14 @@ export default function OrganizationStructureTab({
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
   const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
+  const [hasInitialized, setHasInitialized] = useState(false);
   
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
   const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Filter schools based on active/inactive toggle - MUST BE BEFORE allBranches query
   const filteredSchools = useMemo(() => {
@@ -450,14 +451,14 @@ export default function OrganizationStructureTab({
     maxCardWidth: 300
   }), []);
 
-  // Measure node dimensions
+  // Measure node dimensions - with less frequent updates
   const nodeDimensions = useNodeMeasurements(
     cardRefs,
     zoomLevel,
-    [expandedNodes, visibleLevels, filteredSchools, allBranches, showInactive]
+    [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, showInactive]
   );
 
-  // FIXED: Build tree structure from data - only show branches when schools are expanded
+  // FIXED: Build tree structure from data - always include branches of expanded schools
   const treeNodes = useMemo(() => {
     if (!companyData) return new Map();
     
@@ -467,56 +468,71 @@ export default function OrganizationStructureTab({
       schools: filteredSchools
     };
     
-    // FIXED: Pass visibleLevels to control what gets included in the tree
+    // Always pass null for visibleLevels to include all nodes in tree structure
+    // The visibility will be controlled during rendering
     return buildTreeFromData(
       filteredCompanyData,
       expandedNodes,
       lazyLoadedData,
       branchesData,
-      visibleLevels // Pass this to control visibility
+      undefined // Don't pass visibleLevels here
     );
-  }, [companyData, filteredSchools, expandedNodes, visibleLevels, lazyLoadedData, branchesData]);
+  }, [companyData, filteredSchools, expandedNodes, lazyLoadedData, branchesData]);
 
-  // Calculate layout positions with proper padding
+  // FIXED: Calculate layout positions with debouncing to prevent continuous updates
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
-    // Always use default dimensions if measurements aren't available yet
-    const dimensionsToUse = new Map<string, NodeDimensions>();
-    treeNodes.forEach((node, nodeId) => {
-      const measured = nodeDimensions.get(nodeId);
-      dimensionsToUse.set(nodeId, measured || { width: 260, height: 140 });
-    });
-
-    const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
-    const result = layoutEngine.layout('company');
-    
-    // FIXED: Add extra padding to canvas size for left/right margins
-    const paddedSize = {
-      width: result.totalSize.width + 100, // Add 50px padding on each side
-      height: result.totalSize.height
-    };
-    
-    // Shift all positions to the right to prevent left cutoff
-    const shiftedPositions = new Map<string, NodePosition>();
-    result.positions.forEach((pos, nodeId) => {
-      shiftedPositions.set(nodeId, {
-        x: pos.x + 50, // Shift right by 50px
-        y: pos.y
-      });
-    });
-    
-    setLayoutPositions(shiftedPositions);
-    setCanvasSize(paddedSize);
-    
-    // Trigger auto-resize check after layout calculation
-    if (autoResizeTimeoutRef.current) {
-      clearTimeout(autoResizeTimeoutRef.current);
+    // Clear any existing timeout
+    if (layoutUpdateTimeoutRef.current) {
+      clearTimeout(layoutUpdateTimeoutRef.current);
     }
-    autoResizeTimeoutRef.current = setTimeout(() => {
-      checkAndAutoResize();
-    }, 300); // Small delay to allow DOM updates
-  }, [treeNodes, nodeDimensions, layoutConfig]);
+    
+    // Debounce layout updates
+    layoutUpdateTimeoutRef.current = setTimeout(() => {
+      // Always use default dimensions if measurements aren't available yet
+      const dimensionsToUse = new Map<string, NodeDimensions>();
+      treeNodes.forEach((node, nodeId) => {
+        const measured = nodeDimensions.get(nodeId);
+        dimensionsToUse.set(nodeId, measured || { width: 260, height: 140 });
+      });
+
+      const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
+      const result = layoutEngine.layout('company');
+      
+      // FIXED: Add extra padding to canvas size for left/right margins
+      const paddedSize = {
+        width: result.totalSize.width + 100, // Add 50px padding on each side
+        height: result.totalSize.height
+      };
+      
+      // Shift all positions to the right to prevent left cutoff
+      const shiftedPositions = new Map<string, NodePosition>();
+      result.positions.forEach((pos, nodeId) => {
+        shiftedPositions.set(nodeId, {
+          x: pos.x + 50, // Shift right by 50px
+          y: pos.y
+        });
+      });
+      
+      setLayoutPositions(shiftedPositions);
+      setCanvasSize(paddedSize);
+      
+      // Only auto-resize on initial load or significant changes
+      if (!hasInitialized) {
+        setTimeout(() => {
+          checkAndAutoResize();
+          setHasInitialized(true);
+        }, 100);
+      }
+    }, 200); // 200ms debounce
+    
+    return () => {
+      if (layoutUpdateTimeoutRef.current) {
+        clearTimeout(layoutUpdateTimeoutRef.current);
+      }
+    };
+  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized]);
 
   // Calculate hierarchical data from actual data
   const hierarchicalData = useMemo(() => {
@@ -541,7 +557,7 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
 
-  // FIXED: Enhanced auto-resize function to keep diagram centered
+  // FIXED: Enhanced auto-resize function to keep diagram centered - only on demand
   const checkAndAutoResize = useCallback(() => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
@@ -570,30 +586,32 @@ export default function OrganizationStructureTab({
     });
   }, [canvasSize]);
 
-  // Listen for container resize to trigger auto-resize
+  // FIXED: Only observe resize on mount and fullscreen changes
   useEffect(() => {
+    if (!hasInitialized) return;
+    
     const viewport = scrollAreaRef.current;
     if (!viewport) return;
 
-    const resizeObserver = new ResizeObserver(() => {
-      // Debounce resize events
+    // Only resize on window resize, not on every change
+    const handleWindowResize = () => {
       if (autoResizeTimeoutRef.current) {
         clearTimeout(autoResizeTimeoutRef.current);
       }
       autoResizeTimeoutRef.current = setTimeout(() => {
         checkAndAutoResize();
-      }, 150);
-    });
+      }, 300);
+    };
 
-    resizeObserver.observe(viewport);
+    window.addEventListener('resize', handleWindowResize);
 
     return () => {
-      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
       if (autoResizeTimeoutRef.current) {
         clearTimeout(autoResizeTimeoutRef.current);
       }
     };
-  }, [checkAndAutoResize]);
+  }, [hasInitialized, checkAndAutoResize]);
 
   // Group branches by school when data is available
   useEffect(() => {
@@ -759,16 +777,10 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'branches') {
-          // When turning OFF branches, collapse all schools but keep them expandable
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            if (filteredSchools) {
-              filteredSchools.forEach((school: any) => {
-                newExpanded.delete(`school-${school.id}`);
-              });
-            }
-            return newExpanded;
-          });
+          // When turning OFF branches tab, don't collapse schools
+          // Just hide the branches from view
+          newSet.delete('years');
+          newSet.delete('sections');
         } else if (level === 'years') {
           newSet.delete('sections');
         }
@@ -780,7 +792,7 @@ export default function OrganizationStructureTab({
         if (level === 'branches') {
           if (!newSet.has('schools')) newSet.add('schools');
           
-          // When turning ON branches, expand all schools that have branches
+          // When turning ON branches tab, expand all schools that have branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (filteredSchools) {
@@ -805,7 +817,7 @@ export default function OrganizationStructureTab({
           // Turning ON schools
           newSet.add(level);
           
-          // If branches are also visible, expand schools with branches
+          // If branches tab is also visible, expand schools with branches
           if (newSet.has('branches')) {
             setExpandedNodes(prevExpanded => {
               const newExpanded = new Set(prevExpanded);
@@ -855,11 +867,15 @@ export default function OrganizationStructureTab({
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
+      // Trigger resize when entering/exiting fullscreen
+      setTimeout(() => {
+        checkAndAutoResize();
+      }, 100);
     };
     
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+  }, [checkAndAutoResize]);
 
   if (!companyData) {
     return (
@@ -923,16 +939,22 @@ export default function OrganizationStructureTab({
           };
           
           const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
-          if (levelKey && !visibleLevels.has(levelKey)) {
-            return null; // Don't render but keep in tree for arrow functionality
-          }
           
-          // FIXED: Show branches only when school is expanded
+          // FIXED: Special handling for branches - show if parent school is expanded OR branches tab is on
           if (node.type === 'branch') {
             const parentSchoolId = node.parentId;
-            if (!parentSchoolId || !expandedNodes.has(parentSchoolId)) {
-              return null; // Don't show branch if parent school is not expanded
+            const isSchoolExpanded = parentSchoolId && expandedNodes.has(parentSchoolId);
+            const isBranchesTabOn = visibleLevels.has('branches');
+            
+            // Show branch if school is expanded, regardless of branches tab
+            // OR if branches tab is on and school is expanded
+            if (!isSchoolExpanded) {
+              return null;
             }
+            // If branches tab is off and school is expanded, still show the branches
+          } else if (levelKey && !visibleLevels.has(levelKey)) {
+            // For non-branch nodes, respect the tab visibility
+            return null;
           }
           
           const isSchoolLoading = loadingNodes.has(nodeId);
@@ -1029,7 +1051,7 @@ export default function OrganizationStructureTab({
           );
         })}
 
-        {/* SVG Connections - FIXED: Only show when appropriate */}
+        {/* SVG Connections - FIXED: Show connections appropriately */}
         {shouldShowConnections && (
           <svg
             className="absolute pointer-events-none z-0"
@@ -1077,14 +1099,17 @@ export default function OrganizationStructureTab({
               const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
               const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
               
-              // Don't show connection if either node level is not visible
-              if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
-                return null;
-              }
-              
-              // FIXED: Don't show branch connections if parent school is not expanded
-              if (node.type === 'branch' && !expandedNodes.has(node.parentId)) {
-                return null;
+              // FIXED: Special handling for branch connections
+              if (node.type === 'branch') {
+                // Show connection if parent school is expanded
+                if (!expandedNodes.has(node.parentId)) {
+                  return null;
+                }
+              } else {
+                // For non-branch nodes, check if levels are visible
+                if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
+                  return null;
+                }
               }
 
               const parentPos = layoutPositions.get(node.parentId);
