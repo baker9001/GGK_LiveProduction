@@ -1034,10 +1034,12 @@ export default function OrganizationStructureTab({
 
         {/* SVG Connections */}
         <svg
-          className="absolute inset-0 pointer-events-none z-1"
+          className="absolute pointer-events-none z-1"
           style={{
-            width: '100%',
-            height: '100%'
+            left: '0px',
+            top: '0px',
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`
           }}
         >
           <defs>
