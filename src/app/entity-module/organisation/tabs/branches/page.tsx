@@ -139,7 +139,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
     }
     
     // Construct Supabase storage URL
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/logos/${path}`;
   };
 
   // ===== FETCH SCHOOLS FOR DROPDOWN =====
