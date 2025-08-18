@@ -1,31 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
  * 
- * FINAL OPTIMIZED VERSION - Achieving <500ms load time
+ * FIXED VERSION - Stats Cards Updated
  * 
- * Performance Achievements:
- * - Database query: 0.272ms (184x faster than target!)
- * - View query: 0.080ms (625x faster than target!)
- * - Fallback to direct calculation if view unavailable
- * - Expected page load: 400-500ms
- * 
- * Optimizations Implemented:
- * 1. ✅ Lazy load tab components with React.lazy()
- * 2. ✅ View-based stats with fallback to direct calculation
- * 3. ✅ Database indexes for all foreign keys
- * 4. ✅ Progressive data loading
- * 5. ✅ Aggressive caching with React Query
- * 6. ✅ Memoization of expensive computations
- * 7. ✅ Skeleton loading for perceived performance
- * 8. ✅ Prefetch on hover for instant tab switching
- * 9. ✅ Optimized queries with proper indexes
- * 10. ✅ Graceful permission handling
- * 
- * Database Performance:
- * - Regular query: 0.272ms
- * - View query: 0.080ms (when available)
- * - Direct calculation: ~5ms (fallback)
- * - All indexes properly utilized
+ * Changes Applied:
+ * ✅ Changed "Total Staff" to "Total Teachers" 
+ * ✅ Added "Total Users" as new card
+ * ✅ Removed "Active Schools" card
+ * ✅ Reordered cards logically: Schools, Branches, Students, Teachers, Users
  */
 
 'use client';
@@ -35,7 +17,7 @@ import {
   Building2, School, MapPin, Plus, X, Save, Users, 
   Activity, AlertCircle, Loader2, GraduationCap, Shield,
   FolderOpen, Calendar, FileText, Home, BarChart3, 
-  RefreshCw, CheckCircle
+  RefreshCw, CheckCircle, User
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -129,6 +111,7 @@ interface CompanyAdditional {
   ceo_name?: string;
   ceo_email?: string;
   ceo_phone?: string;
+  admin_users_count?: number;
 }
 
 interface SchoolData {
@@ -152,10 +135,10 @@ interface SchoolData {
 interface OrganizationStats {
   company_id: string;
   total_schools: number;
-  active_schools: number;
   total_branches: number;
   total_students: number;
-  total_staff: number;
+  total_teachers: number;
+  total_users: number;
 }
 
 // ===== MAIN OPTIMIZED COMPONENT =====
@@ -239,7 +222,7 @@ export default function OrganizationManagement() {
     return company;
   };
 
-  // ===== FETCH STATS FROM VIEW OR CALCULATE =====
+  // ===== FETCH STATS FROM VIEW OR CALCULATE - UPDATED =====
   const fetchOrganizationStatsFromMV = async (companyId: string): Promise<OrganizationStats> => {
     const startTime = performance.now();
     try {
@@ -255,10 +238,10 @@ export default function OrganizationManagement() {
         return {
           company_id: companyId,
           total_schools: data.total_schools || 0,
-          active_schools: data.active_schools || 0,
           total_branches: data.total_branches || 0,
           total_students: data.total_students || 0,
-          total_staff: data.total_staff || 0
+          total_teachers: data.total_teachers || 0,
+          total_users: data.total_users || 0
         };
       }
       
@@ -277,47 +260,56 @@ export default function OrganizationManagement() {
         return {
           company_id: companyId,
           total_schools: 0,
-          active_schools: 0,
           total_branches: 0,
           total_students: 0,
-          total_staff: 0
+          total_teachers: 0,
+          total_users: 0
         };
       }
       
       const schoolIds = schools.map(s => s.id);
-      const activeSchoolCount = schools.filter(s => s.status === 'active').length;
       
       // Parallel fetch for additional stats
-      const [branchStats, schoolsAdditionalData] = await Promise.all([
+      const [branchStats, schoolsAdditionalData, companyAdditional] = await Promise.all([
         supabase
           .from('branches')
           .select('id', { count: 'exact' })
           .in('school_id', schoolIds),
         supabase
           .from('schools_additional')
-          .select('student_count, teachers_count')
-          .in('school_id', schoolIds)
+          .select('student_count, teachers_count, admin_users_count')
+          .in('school_id', schoolIds),
+        supabase
+          .from('companies_additional')
+          .select('admin_users_count')
+          .eq('company_id', companyId)
+          .maybeSingle()
       ]);
       
       let totalStudents = 0;
-      let totalStaff = 0;
+      let totalTeachers = 0;
+      let totalUsers = 0;
       
       if (schoolsAdditionalData.data) {
         schoolsAdditionalData.data.forEach(school => {
           totalStudents += school.student_count || 0;
-          totalStaff += school.teachers_count || 0;
+          totalTeachers += school.teachers_count || 0;
+          totalUsers += school.admin_users_count || 0;
         });
       }
+      
+      // Add company admin users
+      totalUsers += companyAdditional?.data?.admin_users_count || 0;
       
       logPerformance('Stats calculated directly', startTime);
       
       return {
         company_id: companyId,
         total_schools: schoolCount || 0,
-        active_schools: activeSchoolCount,
         total_branches: branchStats.count || 0,
         total_students: totalStudents,
-        total_staff: totalStaff
+        total_teachers: totalTeachers,
+        total_users: totalUsers
       };
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -325,10 +317,10 @@ export default function OrganizationManagement() {
       return {
         company_id: companyId,
         total_schools: 0,
-        active_schools: 0,
         total_branches: 0,
         total_students: 0,
-        total_staff: 0
+        total_teachers: 0,
+        total_users: 0
       };
     }
   };
@@ -457,7 +449,7 @@ export default function OrganizationManagement() {
           const [schoolsAdditionalResponse, branchCountsPromise] = await Promise.all([
             supabase
               .from('schools_additional')
-              .select('school_id, student_count, teachers_count')
+              .select('school_id, student_count, teachers_count, admin_users_count, principal_name')
               .in('school_id', schoolIds),
             Promise.all(schoolIds.map(async (schoolId) => {
               const { count } = await supabase
@@ -517,29 +509,34 @@ export default function OrganizationManagement() {
     }
   );
 
-  // ===== MEMOIZED STATS =====
+  // ===== MEMOIZED STATS - UPDATED =====
   const memoizedStats = useMemo(() => {
     if (stats) return stats;
     
     // Fallback calculation from full data if MV is not available
     if (organizationData?.schools) {
+      let totalUsers = organizationData.additional?.admin_users_count || 0;
+      organizationData.schools.forEach(s => {
+        totalUsers += s.additional?.admin_users_count || 0;
+      });
+      
       return {
         company_id: userCompanyId!,
         total_schools: organizationData.schools.length,
-        active_schools: organizationData.schools.filter(s => s.status === 'active').length,
         total_branches: organizationData.schools.reduce((acc, s) => acc + (s.branch_count || 0), 0),
         total_students: organizationData.schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
-        total_staff: organizationData.schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0)
+        total_teachers: organizationData.schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0),
+        total_users: totalUsers
       };
     }
     
     return {
       company_id: userCompanyId || '',
       total_schools: 0,
-      active_schools: 0,
       total_branches: 0,
       total_students: 0,
-      total_staff: 0
+      total_teachers: 0,
+      total_users: 0
     };
   }, [stats, organizationData, userCompanyId]);
 
@@ -799,12 +796,13 @@ export default function OrganizationManagement() {
           </div>
         </div>
 
-        {/* Stats Cards - Using Materialized View Data (0.080ms!) */}
+        {/* Stats Cards - FIXED ORDER AND LABELS */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {isLoadingStats ? (
             [...Array(5)].map((_, i) => <StatCardSkeleton key={i} />)
           ) : (
             <>
+              {/* Card 1: Total Schools */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -819,6 +817,7 @@ export default function OrganizationManagement() {
                 </div>
               </div>
 
+              {/* Card 2: Total Branches */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -833,34 +832,7 @@ export default function OrganizationManagement() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Active Schools</p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {memoizedStats.active_schools}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Staff</p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {memoizedStats.total_staff}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                    <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                  </div>
-                </div>
-              </div>
-
+              {/* Card 3: Total Students */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -869,8 +841,38 @@ export default function OrganizationManagement() {
                       {memoizedStats.total_students}
                     </p>
                   </div>
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Card 4: Total Teachers (Changed from Total Staff) */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Teachers</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_teachers}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Total Users (New) */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_users}
+                    </p>
+                  </div>
                   <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-                    <GraduationCap className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
                 </div>
               </div>
