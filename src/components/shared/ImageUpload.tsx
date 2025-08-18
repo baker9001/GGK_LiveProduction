@@ -124,7 +124,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         } else if (error.message?.includes('duplicate')) {
           // Try with a different filename
           const altFileName = `${Math.random().toString(36).slice(2)}_${Date.now()}_alt.${fileExt}`;
-          const altUploadPath = bucket === 'company-logos' ? `companies/${altFileName}` : altFileName;
+          const altUploadPath = bucket === 'logos' ? `companies/${altFileName}` : altFileName;
           
           const { data: retryData, error: retryError } = await supabase.storage
             .from(bucket)

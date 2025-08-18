@@ -204,7 +204,7 @@ export function SchoolFormContent({
                 id="logo"
                 bucket="school-logos"
                 value={formData.logo}
-                publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${formData.logo}` : null}
+                publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/logos/${formData.logo}` : null}
                 onChange={(path) => updateFormData('logo', path)}
               />
             </FormField>

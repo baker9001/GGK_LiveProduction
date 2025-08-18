@@ -382,7 +382,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
     
     // Construct Supabase storage URL
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/logos/${path}`;
     console.log('Generated school logo URL:', url); // Debug log
     return url;
   };
