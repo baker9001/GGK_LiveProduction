@@ -438,17 +438,14 @@ export default function OrganizationStructureTab({
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
-    // If we don't have dimensions yet, use default dimensions for initial layout
-    const defaultDimensions = new Map<string, NodeDimensions>();
-    if (nodeDimensions.size === 0) {
-      treeNodes.forEach((node, nodeId) => {
-        defaultDimensions.set(nodeId, { width: 260, height: 140 });
-      });
-    }
-    
-    const dimensionsToUse = nodeDimensions.size > 0 ? nodeDimensions : defaultDimensions;
+    // Always use default dimensions if measurements aren't available yet
+    const dimensionsToUse = new Map<string, NodeDimensions>();
+    treeNodes.forEach((node, nodeId) => {
+      const measured = nodeDimensions.get(nodeId);
+      dimensionsToUse.set(nodeId, measured || { width: 260, height: 140 });
+    });
 
-    const layoutEngine = new TreeLayoutEngine(treeNodes, nodeDimensions, layoutConfig);
+    const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
     const result = layoutEngine.layout('company');
     
     setLayoutPositions(result.positions);
@@ -636,8 +633,8 @@ export default function OrganizationStructureTab({
           // Collapse all schools when turning off schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
-            if (companyData?.schools) {
-              companyData.schools.forEach((school: any) => {
+            if (filteredSchools) {
+              filteredSchools.forEach((school: any) => {
                 newExpanded.delete(`school-${school.id}`);
               });
             }
@@ -647,8 +644,8 @@ export default function OrganizationStructureTab({
           // When turning OFF branches, collapse all schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
-            if (companyData?.schools) {
-              companyData.schools.forEach((school: any) => {
+            if (filteredSchools) {
+              filteredSchools.forEach((school: any) => {
                 newExpanded.delete(`school-${school.id}`);
               });
             }
@@ -668,8 +665,8 @@ export default function OrganizationStructureTab({
           // When turning ON branches, expand all schools that have branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
-            if (companyData?.schools) {
-              companyData.schools.forEach((school: any) => {
+            if (filteredSchools) {
+              filteredSchools.forEach((school: any) => {
                 if (school.branch_count > 0) {
                   newExpanded.add(`school-${school.id}`);
                   // Load data for these schools
@@ -694,8 +691,8 @@ export default function OrganizationStructureTab({
           if (newSet.has('branches')) {
             setExpandedNodes(prevExpanded => {
               const newExpanded = new Set(prevExpanded);
-              if (companyData?.schools) {
-                companyData.schools.forEach((school: any) => {
+              if (filteredSchools) {
+                filteredSchools.forEach((school: any) => {
                   if (school.branch_count > 0) {
                     newExpanded.add(`school-${school.id}`);
                     loadNodeData(school.id, 'school');
@@ -710,19 +707,33 @@ export default function OrganizationStructureTab({
       
       return newSet;
     });
-  }, [companyData, loadNodeData]);
+  }, [filteredSchools, loadNodeData]);
 
   // Zoom controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => setZoomLevel(1);
-  const handleFitToPage = () => {
-    // Calculate optimal zoom level based on content
-    const containerWidth = 1200; // Approximate container width
-    const contentWidth = Math.max(800, (filteredSchools?.length || 1) * 320);
-    const optimalZoom = Math.min(1, containerWidth / contentWidth);
-    setZoomLevel(Math.max(0.5, optimalZoom));
-  };
+  
+  const handleFitToPage = useCallback(() => {
+    if (!chartContainerRef.current || canvasSize.width === 0) return;
+    
+    const container = chartContainerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    
+    // Get available space (subtract padding)
+    const availableWidth = containerRect.width - 64; // 32px padding on each side
+    const availableHeight = containerRect.height - 64;
+    
+    // Calculate zoom to fit content
+    const scaleX = availableWidth / canvasSize.width;
+    const scaleY = availableHeight / canvasSize.height;
+    
+    // Use the smaller scale to ensure everything fits, with reasonable bounds
+    const optimalZoom = Math.min(scaleX, scaleY);
+    const boundedZoom = Math.max(0.3, Math.min(1.5, optimalZoom));
+    
+    setZoomLevel(boundedZoom);
+  }, [canvasSize, chartContainerRef]);
 
   // Toggle fullscreen
   const toggleFullscreen = () => {
@@ -884,11 +895,32 @@ export default function OrganizationStructureTab({
         {/* SVG Connections */}
         <svg
           className="absolute inset-0 pointer-events-none z-1"
+          width="100%"
+          height="100%"
           style={{
-            width: '100%',
-            height: '100%'
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`
           }}
         >
+          <defs>
+            <marker
+              id="arrowhead"
+              markerWidth="10"
+              markerHeight="7"
+              refX="9"
+              refY="3.5"
+              orient="auto"
+            >
+              <polygon
+                points="0 0, 10 3.5, 0 7"
+                fill="#9CA3AF"
+                className="dark:fill-gray-500"
+              />
+            </marker>
+          </defs>
           {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
             if (!node.parentId) return null;
 
@@ -897,13 +929,17 @@ export default function OrganizationStructureTab({
             const parentDim = nodeDimensions.get(node.parentId);
             const childDim = nodeDimensions.get(nodeId);
 
-            if (!parentPos || !childPos || !parentDim || !childDim) return null;
+            // Use default dimensions if not measured yet
+            const parentDimensions = parentDim || { width: 260, height: 140 };
+            const childDimensions = childDim || { width: 260, height: 140 };
+            
+            if (!parentPos || !childPos) return null;
 
             const path = generateConnectionPath(
               parentPos,
               childPos,
-              parentDim.height,
-              childDim.height,
+              parentDimensions.height,
+              childDimensions.height,
               layoutConfig.gapY
             );
 
@@ -914,6 +950,7 @@ export default function OrganizationStructureTab({
                 stroke="#9CA3AF"
                 strokeWidth="2"
                 fill="none"
+                markerEnd="url(#arrowhead)"
                 className="dark:stroke-gray-500"
               />
             );
