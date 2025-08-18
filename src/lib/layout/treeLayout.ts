@@ -271,7 +271,10 @@ export function buildTreeFromData(
   if (visibleLevels.has('schools') && companyData?.schools) {
     const schoolChildren: string[] = [];
     
+    // Only process schools that are in the filtered data
     companyData.schools.forEach((school: any) => {
+      // Skip inactive schools if they shouldn't be shown
+      // (This filtering should already be done in the parent component)
       const schoolId = `school-${school.id}`;
       schoolChildren.push(schoolId);
       
@@ -293,15 +296,19 @@ export function buildTreeFromData(
 
   // Add branch nodes
   if (visibleLevels.has('branches')) {
+    // Only process schools that exist in our filtered tree
     companyData?.schools?.forEach((school: any) => {
       const schoolId = `school-${school.id}`;
       const schoolNode = nodes.get(schoolId);
       
+      // Only add branches if the school node exists (i.e., school is active/visible)
       if (schoolNode && expandedNodes.has(schoolId)) {
         const branches = lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
         const branchChildren: string[] = [];
 
         branches.forEach((branch: any) => {
+          // Skip inactive branches if they shouldn't be shown
+          // (This filtering should already be done in the query)
           const branchId = `branch-${branch.id}`;
           branchChildren.push(branchId);
           

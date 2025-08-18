@@ -433,14 +433,20 @@ export default function OrganizationStructureTab({
   const treeNodes = useMemo(() => {
     if (!companyData) return new Map();
     
+    // Use filtered schools instead of all schools
+    const filteredCompanyData = {
+      ...companyData,
+      schools: filteredSchools
+    };
+    
     return buildTreeFromData(
-      companyData,
+      filteredCompanyData,
       expandedNodes,
       visibleLevels,
       lazyLoadedData,
       branchesData
     );
-  }, [companyData, expandedNodes, visibleLevels, lazyLoadedData, branchesData]);
+  }, [companyData, filteredSchools, expandedNodes, visibleLevels, lazyLoadedData, branchesData]);
 
   // Calculate layout positions
   useEffect(() => {
@@ -979,12 +985,10 @@ export default function OrganizationStructureTab({
         {/* SVG Connections */}
         <svg
           className="absolute inset-0 pointer-events-none z-1"
-          width="100%"
-          height="100%"
           style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
+            top: '-64px',
+            left: '-64px',
             width: `${canvasSize.width}px`,
             height: `${canvasSize.height}px`
           }}
@@ -1005,7 +1009,18 @@ export default function OrganizationStructureTab({
               />
             </marker>
           </defs>
-          {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
+          {Array.from(treeNodes.entries())
+            .filter(([nodeId, node]) => {
+              // Only render connections for nodes that are actually visible
+              if (!node.parentId) return false;
+              
+              // Check if both parent and child nodes exist in our filtered tree
+              const parentExists = treeNodes.has(node.parentId);
+              const childExists = treeNodes.has(nodeId);
+              
+              return parentExists && childExists;
+            })
+            .map(([nodeId, node]) => {
             if (!node.parentId) return null;
 
             const parentPos = layoutPositions.get(node.parentId);
@@ -1019,9 +1034,10 @@ export default function OrganizationStructureTab({
             
             if (!parentPos || !childPos) return null;
 
+            // Adjust positions to account for SVG offset
             const path = generateConnectionPath(
-              parentPos,
-              childPos,
+              { x: parentPos.x + 64, y: parentPos.y + 64 },
+              { x: childPos.x + 64, y: childPos.y + 64 },
               parentDimensions.height,
               childDimensions.height,
               layoutConfig.gapY
