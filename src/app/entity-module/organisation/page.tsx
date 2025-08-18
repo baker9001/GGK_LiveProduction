@@ -1,7 +1,7 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
  * 
- * OPTIMIZED VERSION - Target: <1 second load time
+ * COMPLETE OPTIMIZED VERSION - Target: <1 second load time
  * 
  * Optimization strategies implemented:
  * 1. Lazy load tab components with React.lazy()
@@ -11,9 +11,25 @@
  * 5. Aggressive caching with React Query
  * 6. Memoization of expensive computations
  * 7. Skeleton loading for better perceived performance
- * 8. Debounced operations
- * 9. Virtual scrolling for large lists
+ * 8. Prefetch on hover for instant tab switching
+ * 9. Fixed stats query for correct table relationships
  * 10. Optimistic UI updates
+ * 
+ * Dependencies: 
+ *   - @/lib/supabase
+ *   - @/lib/auth
+ *   - @/contexts/UserContext
+ *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - ./tabs/* (All tab components)
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Database Tables:
+ *   - companies & companies_additional
+ *   - schools & schools_additional (linked via school_id)
+ *   - branches & branches_additional (linked via branch_id)
+ *   - entity_departments
+ *   - academic_years
+ *   - entity_users
  */
 
 'use client';
@@ -29,8 +45,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
-import { SlideInForm } from '../../../components/shared/SlideInForm';
-import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 
 // ===== LAZY LOAD TAB COMPONENTS FOR CODE SPLITTING =====
@@ -74,7 +90,7 @@ const StatCardSkeleton = () => (
   </div>
 );
 
-// ===== TYPE DEFINITIONS (UNCHANGED) =====
+// ===== TYPE DEFINITIONS =====
 interface Company {
   id: string;
   name: string;
@@ -127,7 +143,7 @@ interface SchoolData {
   branch_count?: number;
 }
 
-// ===== OPTIMIZED MAIN COMPONENT =====
+// ===== MAIN OPTIMIZED COMPONENT =====
 export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
@@ -200,33 +216,72 @@ export default function OrganizationManagement() {
   };
 
   const fetchOrganizationStats = async (companyId: string) => {
-    // Parallel fetch for stats only
-    const [schoolStats, branchStats, studentStats, staffStats] = await Promise.all([
-      supabase
+    try {
+      // First, get all schools for the company
+      const { data: schools, error: schoolsError, count: schoolCount } = await supabase
         .from('schools')
         .select('id, status', { count: 'exact' })
-        .eq('company_id', companyId),
-      supabase
-        .from('branches')
-        .select('id', { count: 'exact' })
-        .eq('company_id', companyId),
-      supabase
-        .from('schools_additional')
-        .select('student_count')
-        .eq('company_id', companyId),
-      supabase
-        .from('schools_additional')
-        .select('teachers_count')
-        .eq('company_id', companyId)
-    ]);
-
-    return {
-      totalSchools: schoolStats.count || 0,
-      activeSchools: schoolStats.data?.filter(s => s.status === 'active').length || 0,
-      totalBranches: branchStats.count || 0,
-      totalStudents: studentStats.data?.reduce((sum, s) => sum + (s.student_count || 0), 0) || 0,
-      totalStaff: staffStats.data?.reduce((sum, s) => sum + (s.teachers_count || 0), 0) || 0
-    };
+        .eq('company_id', companyId);
+      
+      if (schoolsError) throw schoolsError;
+      
+      // If no schools, return zeros
+      if (!schools || schools.length === 0) {
+        return {
+          totalSchools: 0,
+          activeSchools: 0,
+          totalBranches: 0,
+          totalStudents: 0,
+          totalStaff: 0
+        };
+      }
+      
+      const schoolIds = schools.map(s => s.id);
+      const activeSchoolCount = schools.filter(s => s.status === 'active').length;
+      
+      // Parallel fetch for additional stats using school IDs
+      const [branchStats, schoolsAdditionalData] = await Promise.all([
+        // Get branch count - branches are linked to schools
+        supabase
+          .from('branches')
+          .select('id', { count: 'exact' })
+          .in('school_id', schoolIds),
+        // Get schools_additional data for student and teacher counts
+        supabase
+          .from('schools_additional')
+          .select('student_count, teachers_count')
+          .in('school_id', schoolIds)
+      ]);
+      
+      // Calculate totals from schools_additional
+      let totalStudents = 0;
+      let totalStaff = 0;
+      
+      if (schoolsAdditionalData.data) {
+        schoolsAdditionalData.data.forEach(school => {
+          totalStudents += school.student_count || 0;
+          totalStaff += school.teachers_count || 0;
+        });
+      }
+      
+      return {
+        totalSchools: schoolCount || 0,
+        activeSchools: activeSchoolCount,
+        totalBranches: branchStats.count || 0,
+        totalStudents,
+        totalStaff
+      };
+    } catch (error) {
+      console.error('Error fetching organization stats:', error);
+      // Return default values on error
+      return {
+        totalSchools: 0,
+        activeSchools: 0,
+        totalBranches: 0,
+        totalStudents: 0,
+        totalStaff: 0
+      };
+    }
   };
 
   // ===== BASIC DATA QUERY (LOADS FIRST) =====
@@ -287,7 +342,7 @@ export default function OrganizationManagement() {
         // Step 2: Fetch schools with minimal fields
         const { data: schools, error: schoolsError } = await supabase
           .from('schools')
-          .select('id, name, code, status, company_id')
+          .select('id, name, code, status, company_id, description, address')
           .eq('company_id', userCompanyId)
           .order('name')
           .limit(50); // Limit initial load
@@ -298,22 +353,38 @@ export default function OrganizationManagement() {
         const schoolIds = schools?.map(s => s.id) || [];
         
         if (schoolIds.length > 0) {
-          // Parallel count queries
-          const countPromises = schoolIds.map(async (schoolId) => {
-            const { count } = await supabase
-              .from('branches')
-              .select('*', { count: 'exact', head: true })
-              .eq('school_id', schoolId);
-            return { schoolId, count: count || 0 };
-          });
+          // Parallel queries for counts and additional data
+          const [branchCountsPromise, schoolsAdditionalPromise] = await Promise.all([
+            // Get branch counts for each school
+            Promise.all(schoolIds.map(async (schoolId) => {
+              const { count } = await supabase
+                .from('branches')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', schoolId);
+              return { schoolId, count: count || 0 };
+            })),
+            // Get schools additional data
+            supabase
+              .from('schools_additional')
+              .select('school_id, student_count, teachers_count')
+              .in('school_id', schoolIds)
+          ]);
 
-          const branchCounts = await Promise.all(countPromises);
+          const branchCounts = branchCountsPromise;
+          const schoolsAdditional = schoolsAdditionalPromise.data || [];
+
+          // Create lookup maps for O(1) access
           const branchCountMap = new Map(branchCounts.map(bc => [bc.schoolId, bc.count]));
+          const schoolsAdditionalMap = new Map(
+            schoolsAdditional.map(sa => [sa.school_id, sa])
+          );
 
           // Combine with count data
           const schoolsWithCounts = schools?.map(school => ({
             ...school,
             branch_count: branchCountMap.get(school.id) || 0,
+            student_count: schoolsAdditionalMap.get(school.id)?.student_count || 0,
+            additional: schoolsAdditionalMap.get(school.id),
             branches: [] // Will be loaded on demand
           })) || [];
 
@@ -351,7 +422,7 @@ export default function OrganizationManagement() {
         activeSchools: organizationData.schools.filter(s => s.status === 'active').length,
         totalBranches: organizationData.schools.reduce((acc, s) => acc + (s.branch_count || 0), 0),
         totalStudents: organizationData.schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
-        totalStaff: 0 // Would need additional data
+        totalStaff: organizationData.schools.reduce((acc, s) => acc + (s.additional?.teachers_count || 0), 0)
       };
     }
     
@@ -470,17 +541,56 @@ export default function OrganizationManagement() {
     if (!userCompanyId) return;
     
     // Prefetch data for the tab on hover
-    if (tab === 'schools') {
-      queryClient.prefetchQuery(['schools', userCompanyId], async () => {
-        const { data } = await supabase
-          .from('schools')
-          .select('id, name, code, status')
-          .eq('company_id', userCompanyId)
-          .limit(20);
-        return data;
-      });
+    switch (tab) {
+      case 'schools':
+        queryClient.prefetchQuery(['schools', userCompanyId], async () => {
+          const { data } = await supabase
+            .from('schools')
+            .select('id, name, code, status')
+            .eq('company_id', userCompanyId)
+            .limit(20);
+          return data;
+        });
+        break;
+      case 'branches':
+        queryClient.prefetchQuery(['branches-preview', userCompanyId], async () => {
+          // Get schools first
+          const { data: schools } = await supabase
+            .from('schools')
+            .select('id')
+            .eq('company_id', userCompanyId);
+          
+          if (schools && schools.length > 0) {
+            const schoolIds = schools.map(s => s.id);
+            const { data: branches } = await supabase
+              .from('branches')
+              .select('id, name, code, status')
+              .in('school_id', schoolIds)
+              .limit(20);
+            return branches;
+          }
+          return [];
+        });
+        break;
+      case 'students':
+        queryClient.prefetchQuery(['students-count', userCompanyId], async () => {
+          const { count } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', userCompanyId);
+          return count;
+        });
+        break;
+      case 'teachers':
+        queryClient.prefetchQuery(['teachers-count', userCompanyId], async () => {
+          const { count } = await supabase
+            .from('teachers')
+            .select('*', { count: 'exact', head: true })
+            .eq('company_id', userCompanyId);
+          return count;
+        });
+        break;
     }
-    // Add similar prefetching for other tabs
   }, [userCompanyId, queryClient]);
 
   // ===== LOADING STATES WITH SKELETON =====
@@ -516,6 +626,17 @@ export default function OrganizationManagement() {
             {[...Array(5)].map((_, i) => (
               <StatCardSkeleton key={i} />
             ))}
+          </div>
+          
+          {/* Tab Content Skeleton */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="animate-pulse">
+              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-full mb-6"></div>
+              <div className="space-y-4">
+                <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -553,7 +674,7 @@ export default function OrganizationManagement() {
                 Organization Management
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
-                {basicData?.name || 'Loading...'} - Manage your organization
+                {basicData?.name || 'Loading...'} - Manage your organization hierarchy
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -758,7 +879,10 @@ export default function OrganizationManagement() {
         {/* Optimized Details Panel - Only loads data when opened */}
         {showDetailsPanel && selectedItem && (
           <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDetailsPanel(false)} />
+            <div 
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
+              onClick={() => setShowDetailsPanel(false)} 
+            />
             <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
               <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 z-10">
                 <div className="flex items-center justify-between">
@@ -806,17 +930,27 @@ export default function OrganizationManagement() {
                 {detailsTab === 'details' && (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Name</label>
-                      <p className="text-gray-900 dark:text-white font-medium">{selectedItem.name}</p>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Name
+                      </label>
+                      <p className="text-gray-900 dark:text-white font-medium">
+                        {selectedItem.name}
+                      </p>
                     </div>
                     
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Code</label>
-                      <p className="text-gray-900 dark:text-white font-mono text-sm">{selectedItem.code}</p>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Code
+                      </label>
+                      <p className="text-gray-900 dark:text-white font-mono text-sm">
+                        {selectedItem.code}
+                      </p>
                     </div>
                     
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</label>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Status
+                      </label>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         selectedItem.status === 'active' 
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
@@ -828,8 +962,23 @@ export default function OrganizationManagement() {
                     
                     {selectedItem.description && (
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Description</label>
-                        <p className="text-gray-700 dark:text-gray-300 text-sm">{selectedItem.description}</p>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Description
+                        </label>
+                        <p className="text-gray-700 dark:text-gray-300 text-sm">
+                          {selectedItem.description}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {selectedItem.address && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Address
+                        </label>
+                        <p className="text-gray-700 dark:text-gray-300 text-sm">
+                          {selectedItem.address}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -838,7 +987,9 @@ export default function OrganizationManagement() {
                 {detailsTab === 'departments' && (
                   <div>
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Departments</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        Departments
+                      </h3>
                       <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                         <Plus className="w-4 h-4" />
                       </button>
@@ -846,10 +997,15 @@ export default function OrganizationManagement() {
                     <div className="space-y-2">
                       {departments && departments.length > 0 ? (
                         departments.map((dept: any) => (
-                          <div key={dept.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                          <div 
+                            key={dept.id} 
+                            className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
-                                <h4 className="font-medium text-gray-900 dark:text-white">{dept.name}</h4>
+                                <h4 className="font-medium text-gray-900 dark:text-white">
+                                  {dept.name}
+                                </h4>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                   {dept.code} • {dept.employee_count || 0} employees
                                 </p>
@@ -860,7 +1016,9 @@ export default function OrganizationManagement() {
                       ) : (
                         <div className="text-center py-8">
                           <FolderOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                          <p className="text-gray-500 dark:text-gray-400">No departments found</p>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No departments found
+                          </p>
                         </div>
                       )}
                     </div>
@@ -870,7 +1028,9 @@ export default function OrganizationManagement() {
                 {detailsTab === 'academic' && selectedType === 'school' && (
                   <div>
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Academic Years</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        Academic Years
+                      </h3>
                       <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                         <Plus className="w-4 h-4" />
                       </button>
@@ -878,10 +1038,15 @@ export default function OrganizationManagement() {
                     <div className="space-y-2">
                       {academicYears && academicYears.length > 0 ? (
                         academicYears.map((year: any) => (
-                          <div key={year.id} className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                          <div 
+                            key={year.id} 
+                            className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                          >
                             <div className="flex items-center justify-between">
                               <div>
-                                <h4 className="font-medium text-gray-900 dark:text-white">{year.year_name}</h4>
+                                <h4 className="font-medium text-gray-900 dark:text-white">
+                                  {year.year_name}
+                                </h4>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                   {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
                                 </p>
@@ -897,7 +1062,9 @@ export default function OrganizationManagement() {
                       ) : (
                         <div className="text-center py-8">
                           <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                          <p className="text-gray-500 dark:text-gray-400">No academic years found</p>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No academic years found
+                          </p>
                         </div>
                       )}
                     </div>
