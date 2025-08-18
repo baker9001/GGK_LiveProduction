@@ -944,6 +944,7 @@ export default function OrganizationManagement() {
               {activeTab === 'structure' && (
                 <OrganizationStructureTab
                   companyData={companyData}
+                  companyId={userCompanyId!}
                   onAddClick={handleAddClick}
                   onEditClick={handleEditClick}
                   onItemClick={handleItemClick}

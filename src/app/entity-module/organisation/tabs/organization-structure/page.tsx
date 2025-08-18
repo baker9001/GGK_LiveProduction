@@ -33,6 +33,7 @@ import { supabase } from '@/lib/supabase';
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
   companyData: any;
+  companyId: string;
   onAddClick: (parentItem: any, parentType: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
   onEditClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
   onItemClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
@@ -315,6 +316,7 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
 // ===== MAIN COMPONENT =====
 export default function OrganizationStructureTab({ 
   companyData,
+  companyId,
   onAddClick, 
   onEditClick, 
   onItemClick,
