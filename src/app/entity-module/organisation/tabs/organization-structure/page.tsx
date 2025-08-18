@@ -345,6 +345,7 @@ export default function OrganizationStructureTab({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
+  const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Filter schools based on active/inactive toggle - MUST BE BEFORE allBranches query
   const filteredSchools = useMemo(() => {
@@ -464,8 +465,64 @@ export default function OrganizationStructureTab({
     
     setLayoutPositions(result.positions);
     setCanvasSize(result.totalSize);
+    
+    // Trigger auto-resize check after layout calculation
+    if (autoResizeTimeoutRef.current) {
+      clearTimeout(autoResizeTimeoutRef.current);
+    }
+    autoResizeTimeoutRef.current = setTimeout(() => {
+      checkAndAutoResize();
+    }, 300); // Small delay to allow DOM updates
   }, [treeNodes, nodeDimensions, layoutConfig]);
   // Calculate hierarchical data from actual data
+  // Auto-resize function to keep diagram within container
+  const checkAndAutoResize = useCallback(() => {
+    const viewport = scrollAreaRef.current;
+    const container = chartContainerRef.current;
+    if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
+
+    // Get available space (subtract padding)
+    const availableWidth = viewport.clientWidth - 128; // 64px padding on each side
+    const availableHeight = viewport.clientHeight - 128;
+    
+    // Calculate what zoom would be needed to fit
+    const scaleX = availableWidth / canvasSize.width;
+    const scaleY = availableHeight / canvasSize.height;
+    const optimalZoom = Math.min(scaleX, scaleY);
+    
+    // Only auto-resize if content is too large (zoom would be < 1.0)
+    // and current zoom is 1.0 (user hasn't manually adjusted)
+    if (optimalZoom < 1.0 && zoomLevel === 1.0) {
+      const boundedZoom = Math.max(0.5, Math.min(1.0, optimalZoom));
+      setZoomLevel(boundedZoom);
+    }
+  }, [canvasSize, zoomLevel]);
+
+  // Listen for container resize to trigger auto-resize
+  useEffect(() => {
+    const viewport = scrollAreaRef.current;
+    if (!viewport) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce resize events
+      if (autoResizeTimeoutRef.current) {
+        clearTimeout(autoResizeTimeoutRef.current);
+      }
+      autoResizeTimeoutRef.current = setTimeout(() => {
+        checkAndAutoResize();
+      }, 150);
+    });
+
+    resizeObserver.observe(viewport);
+
+    return () => {
+      resizeObserver.disconnect();
+      if (autoResizeTimeoutRef.current) {
+        clearTimeout(autoResizeTimeoutRef.current);
+      }
+    };
+  }, [checkAndAutoResize]);
+
   const hierarchicalData = useMemo(() => {
     if (!filteredSchools || filteredSchools.length === 0) {
       return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
@@ -797,13 +854,6 @@ export default function OrganizationStructureTab({
     });
   }, [computeContentBounds]);
 
-  // Optional: fit once after first meaningful paint
-  useEffect(() => {
-    // Don't auto-fit on load, let user control zoom
-    // const t = setTimeout(() => handleFitToScreen(), 200);
-    // return () => clearTimeout(t);
-  }, []);
-
   const handleFitToPage = useCallback(() => {
     if (!chartContainerRef.current || canvasSize.width === 0) return;
     
@@ -986,11 +1036,11 @@ export default function OrganizationStructureTab({
         <svg
           className="absolute inset-0 pointer-events-none z-1"
           style={{
-            position: 'absolute',
-            top: '-64px',
-            left: '-64px',
-            width: `${canvasSize.width}px`,
-            height: `${canvasSize.height}px`
+            position: 'absolute', 
+            top: '0px',
+            left: '0px',
+            width: `${canvasSize.width + 128}px`,
+            height: `${canvasSize.height + 128}px`
           }}
         >
           <defs>
@@ -1014,9 +1064,27 @@ export default function OrganizationStructureTab({
               // Only render connections for nodes that are actually visible
               if (!node.parentId) return false;
               
-              // Check if both parent and child nodes exist in our filtered tree
+              // Check if both parent and child nodes exist in our filtered tree AND are visible
               const parentExists = treeNodes.has(node.parentId);
               const childExists = treeNodes.has(nodeId);
+              
+              // Additional check: ensure both nodes are actually rendered (not filtered out)
+              const parentNode = treeNodes.get(node.parentId);
+              const childNode = treeNodes.get(nodeId);
+              
+              // For schools, check if they're in the filtered schools list
+              if (parentNode?.type === 'company' && childNode?.type === 'school') {
+                const schoolId = nodeId.replace('school-', '');
+                const isSchoolVisible = filteredSchools.some((s: any) => s.id === schoolId);
+                return parentExists && childExists && isSchoolVisible;
+              }
+              
+              // For branches, check if parent school is visible
+              if (parentNode?.type === 'school' && childNode?.type === 'branch') {
+                const parentSchoolId = node.parentId.replace('school-', '');
+                const isParentSchoolVisible = filteredSchools.some((s: any) => s.id === parentSchoolId);
+                return parentExists && childExists && isParentSchoolVisible;
+              }
               
               return parentExists && childExists;
             })
