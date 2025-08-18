@@ -1020,7 +1020,16 @@ export default function OrganizationStructureTab({
                 isExpanded={isExpanded}
                 onToggleExpand={() => {
                   if (node.type === 'company') {
-                    toggleNode('company', 'company');
+                    // Toggle company expansion - this controls whether schools are shown
+                    setExpandedNodes(prev => {
+                      const newSet = new Set(prev);
+                      if (newSet.has('company')) {
+                        newSet.delete('company');
+                      } else {
+                        newSet.add('company');
+                      }
+                      return newSet;
+                    });
                   } else if (node.type === 'school') {
                     const schoolId = node.id.replace('school-', '');
                     toggleNode(schoolId, 'school');
