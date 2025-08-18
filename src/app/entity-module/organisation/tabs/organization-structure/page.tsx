@@ -31,10 +31,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '@/lib/auth';
-import { useUser } from '../../../contexts/UserContext';
+import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
-import { Button } from '../../../components/shared/Button';
+import { Button } from '@/components/shared/Button';
 
 // Import tab components
 import OrganizationStructureTab from './tabs/organization-structure/page';
@@ -96,7 +96,7 @@ interface SchoolData {
 }
 
 // ===== MAIN COMPONENT =====
-export default function OrganisationManagement() {
+export default function OrganizationStructureTab() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
