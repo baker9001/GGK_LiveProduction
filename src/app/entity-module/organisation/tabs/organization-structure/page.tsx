@@ -777,10 +777,18 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'branches') {
-          // When turning OFF branches tab, don't collapse schools
-          // Just hide the branches from view
           newSet.delete('years');
           newSet.delete('sections');
+          // When turning OFF branches tab, collapse all schools
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            if (filteredSchools) {
+              filteredSchools.forEach((school: any) => {
+                newExpanded.delete(`school-${school.id}`);
+              });
+            }
+            return newExpanded;
+          });
         } else if (level === 'years') {
           newSet.delete('sections');
         }
@@ -799,7 +807,6 @@ export default function OrganizationStructureTab({
               filteredSchools.forEach((school: any) => {
                 if (school.branch_count > 0) {
                   newExpanded.add(`school-${school.id}`);
-                  // Load data for these schools
                   loadNodeData(school.id, 'school');
                 }
               });
