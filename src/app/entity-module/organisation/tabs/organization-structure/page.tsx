@@ -102,6 +102,39 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   onToggleExpand,
   hierarchicalData = {}
 }, ref) => {
+  // Helper function to get logo URL based on type and item data
+  const getLogoUrl = () => {
+    let logoPath = null;
+    let bucketName = '';
+    
+    switch (type) {
+      case 'company':
+        logoPath = item.logo || item.additional?.logo_url;
+        bucketName = 'company-logos';
+        break;
+      case 'school':
+        logoPath = item.logo;
+        bucketName = 'school-logos';
+        break;
+      case 'branch':
+        logoPath = item.logo;
+        bucketName = 'branch-logos';
+        break;
+      default:
+        return null;
+    }
+    
+    if (!logoPath) return null;
+    
+    // If it's already a full URL, return as is
+    if (logoPath.startsWith('http')) {
+      return logoPath;
+    }
+    
+    // Construct Supabase storage URL
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${logoPath}`;
+  };
+
   const getConfig = () => {
     switch (type) {
       case 'company':
@@ -185,6 +218,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   const config = getConfig();
   const Icon = config.icon;
   const managerName = item.additional?.[config.nameField] || item[config.nameField];
+  const logoUrl = getLogoUrl();
 
   return (
     <div className="relative inline-block">
@@ -200,10 +234,31 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         {/* Header with Icon */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {/* Color-coded Icon Badge */}
-            <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md`}>
-              <span className="text-sm font-bold">
-                {item.code?.substring(0, 2).toUpperCase() || (type === 'branch' && item.code) || (type === 'branch' && item.name?.substring(0, 2).toUpperCase()) || <Icon className="w-6 h-6" />}
+            {/* Logo or Icon Badge */}
+            <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden`}>
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={`${item.name} logo`}
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    // If logo fails to load, hide the image and show fallback
+                    e.currentTarget.style.display = 'none';
+                    const parent = e.currentTarget.parentElement;
+                    if (parent) {
+                      const fallback = parent.querySelector('.logo-fallback');
+                      if (fallback) {
+                        (fallback as HTMLElement).style.display = 'flex';
+                      }
+                    }
+                  }}
+                />
+              ) : null}
+              <span className={`text-sm font-bold logo-fallback ${logoUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>
+                {item.code?.substring(0, 2).toUpperCase() || 
+                 (type === 'branch' && item.code) || 
+                 (type === 'branch' && item.name?.substring(0, 2).toUpperCase()) || 
+                 <Icon className="w-6 h-6" />}
               </span>
             </div>
             
