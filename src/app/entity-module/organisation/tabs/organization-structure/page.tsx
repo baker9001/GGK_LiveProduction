@@ -340,6 +340,9 @@ export default function OrganizationStructureTab({
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
   const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
   
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -474,7 +477,7 @@ export default function OrganizationStructureTab({
       checkAndAutoResize();
     }, 300); // Small delay to allow DOM updates
   }, [treeNodes, nodeDimensions, layoutConfig]);
-  // Calculate hierarchical data from actual data
+  
   // Auto-resize function to keep diagram within container
   const checkAndAutoResize = useCallback(() => {
     const viewport = scrollAreaRef.current;
@@ -854,6 +857,48 @@ export default function OrganizationStructureTab({
     });
   }, [computeContentBounds]);
 
+  // Panning functionality
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start panning if clicking on the background (not on cards)
+    if ((e.target as HTMLElement).closest('[data-card-id]')) return;
+    
+    setIsPanning(true);
+    setPanStart({ x: e.clientX, y: e.clientY });
+    
+    const viewport = scrollAreaRef.current;
+    if (viewport) {
+      setScrollStart({ x: viewport.scrollLeft, y: viewport.scrollTop });
+    }
+    
+    e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    
+    const viewport = scrollAreaRef.current;
+    if (!viewport) return;
+    
+    const deltaX = panStart.x - e.clientX;
+    const deltaY = panStart.y - e.clientY;
+    
+    viewport.scrollLeft = scrollStart.x + deltaX;
+    viewport.scrollTop = scrollStart.y + deltaY;
+  }, [isPanning, panStart, scrollStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Add global mouse up listener for panning
+  useEffect(() => {
+    if (isPanning) {
+      const handleGlobalMouseUp = () => setIsPanning(false);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
+    }
+  }, [isPanning]);
+
   const handleFitToPage = useCallback(() => {
     if (!chartContainerRef.current || canvasSize.width === 0) return;
     
@@ -929,14 +974,7 @@ export default function OrganizationStructureTab({
     }
 
     return (
-      <div 
-        className="relative"
-        style={{
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-          minHeight: '400px'
-        }}
-      >
+      <>
         {/* Render all nodes with absolute positioning */}
         {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
           const position = layoutPositions.get(nodeId);
@@ -1034,10 +1072,13 @@ export default function OrganizationStructureTab({
 
         {/* SVG Connections */}
         <svg
-          className="absolute inset-0 pointer-events-none z-1"
+          className="absolute pointer-events-none"
           style={{
-            width: '100%',
-            height: '100%'
+            left: 0,
+            top: 0,
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`,
+            zIndex: 1
           }}
         >
           <defs>
@@ -1056,8 +1097,7 @@ export default function OrganizationStructureTab({
               />
             </marker>
           </defs>
-          {Array.from(treeNodes.entries())
-            .map(([nodeId, node]) => {
+          {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
             // Only render connections for nodes that have parents
             if (!node.parentId) return null;
 
@@ -1072,12 +1112,20 @@ export default function OrganizationStructureTab({
             
             if (!parentPos || !childPos) return null;
 
+            // Calculate connection points
+            const parentCenterX = parentPos.x;
+            const parentBottom = parentPos.y + parentDimensions.height;
+            const childCenterX = childPos.x;
+            const childTop = childPos.y;
+            
+            // Create orthogonal path
+            const midY = parentBottom + layoutConfig.gapY / 2;
             const path = generateConnectionPath(
-              { x: parentPos.x, y: parentPos.y },
-              { x: childPos.x, y: childPos.y },
-              parentDimensions.height,
-              childDimensions.height,
-              layoutConfig.gapY
+              { x: parentCenterX, y: parentBottom },
+              { x: childCenterX, y: childTop },
+              0, // parentHeight already included in parentBottom
+              0, // childHeight already included in childTop
+              midY
             );
 
             return (
@@ -1103,7 +1151,7 @@ export default function OrganizationStructureTab({
             </div>
           </div>
         )}
-      </div>
+      </>
     );
   };
 
@@ -1191,27 +1239,25 @@ export default function OrganizationStructureTab({
       {/* Chart Container with SVG Overlay */}
       <div 
         ref={scrollAreaRef}
-        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
+        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        style={{ userSelect: 'none' }}
       >
         <div 
           ref={chartContainerRef}
-          className="relative"
+          className="relative min-w-full min-h-full"
           style={{
             transform: `scale(${zoomLevel})`,
-            transformOrigin: 'center top',
+            transformOrigin: 'left top',
             transition: 'transform 0.2s ease-out',
-            width: `${Math.max(canvasSize.width, 1200)}px`,
-            height: `${Math.max(canvasSize.height, 800)}px`,
-            padding: '64px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start'
+            width: `${canvasSize.width + 128}px`,
+            height: `${canvasSize.height + 128}px`,
+            padding: '64px'
           }}
         >
-          {/* Organization Chart Content */}
-          <div className="relative">
-            {renderChart()}
-          </div>
+          {renderChart()}
         </div>
       </div>
     </div>
