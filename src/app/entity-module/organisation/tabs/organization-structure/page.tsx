@@ -343,9 +343,10 @@ export default function OrganizationStructureTab({
   
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
 
-  // Filter schools based on active/inactive toggle - MOVED BEFORE allBranches query
+  // Filter schools based on active/inactive toggle - MUST BE BEFORE allBranches query
   const filteredSchools = useMemo(() => {
     if (!companyData?.schools) return [];
     
@@ -356,7 +357,7 @@ export default function OrganizationStructureTab({
       : companyData.schools.filter((s: any) => s.status === 'active');
   }, [companyData?.schools, showInactive]);
 
-  // Fetch branches for all schools when branches tab is enabled - MOVED UP to fix initialization order
+  // Fetch branches for all schools when branches tab is enabled
   const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
     ['all-branches', companyId, showInactive],
     async () => {
@@ -719,6 +720,83 @@ export default function OrganizationStructureTab({
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => setZoomLevel(1);
   
+  // Helper functions for fit to screen
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  const computeContentBounds = useCallback(() => {
+    const container = chartContainerRef.current;
+    if (!container) return { width: 0, height: 0 };
+
+    const containerRect = container.getBoundingClientRect();
+
+    let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+
+    cardRefs.current.forEach(ref => {
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const x1 = r.left - containerRect.left;
+      const x2 = r.right - containerRect.left;
+      const y1 = r.top - containerRect.top;
+      const y2 = r.bottom - containerRect.top;
+      left = Math.min(left, x1);
+      right = Math.max(right, x2);
+      top = Math.min(top, y1);
+      bottom = Math.max(bottom, y2);
+    });
+
+    if (left === Infinity) {
+      // fallback if nothing measured yet
+      return {
+        width: container.scrollWidth,
+        height: container.scrollHeight
+      };
+    }
+
+    return { width: right - left, height: bottom - top };
+  }, []);
+
+  const SAFE_PADDING = 32; // px padding inside the viewport
+
+  const handleFitToScreen = useCallback(() => {
+    const viewport = scrollAreaRef.current;
+    const container = chartContainerRef.current;
+    if (!viewport || !container) return;
+
+    // visible viewport inside the scroll area (minus a bit of padding)
+    const viewportW = Math.max(0, viewport.clientWidth - SAFE_PADDING * 2);
+    const viewportH = Math.max(0, viewport.clientHeight - SAFE_PADDING * 2);
+
+    // size of our content (sum of cards), pre-scale
+    const { width: contentW, height: contentH } = computeContentBounds();
+    if (!contentW || !contentH) return;
+
+    // pick the limiting dimension
+    const scaleX = viewportW / contentW;
+    const scaleY = viewportH / contentH;
+    const nextZoom = clamp(Math.min(scaleX, scaleY), 0.5, 2);
+
+    setZoomLevel(nextZoom);
+
+    // after zoom state applies, center scroll to content
+    requestAnimationFrame(() => {
+      const scaledW = contentW * nextZoom;
+      const scaledH = contentH * nextZoom;
+
+      // center content within viewport
+      const targetLeft = Math.max(0, (scaledW - viewportW) / 2);
+      const targetTop  = Math.max(0, (scaledH - viewportH) / 2);
+
+      viewport.scrollTo({ left: targetLeft, top: targetTop, behavior: 'smooth' });
+    });
+  }, [computeContentBounds]);
+
+  // Optional: fit once after first meaningful paint
+  useEffect(() => {
+    const t = setTimeout(() => handleFitToScreen(), 200);
+    return () => clearTimeout(t);
+  }, [visibleLevels, expandedNodes, companyData, handleFitToScreen]);
+
   const handleFitToPage = useCallback(() => {
     if (!chartContainerRef.current || canvasSize.width === 0) return;
     
@@ -1028,9 +1106,9 @@ export default function OrganizationStructureTab({
               <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
             <button
-              onClick={handleFitToPage}
+              onClick={handleFitToScreen}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Fit to page"
+              title="Fit to screen"
             >
               <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
@@ -1059,19 +1137,24 @@ export default function OrganizationStructureTab({
       {/* Chart Container with SVG Overlay */}
       <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}>
         <div 
+          ref={scrollAreaRef}
+          className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
+        >
+          <div 
           ref={chartContainerRef}
-          className="p-8 w-full h-full flex justify-center items-start relative"
+            className="p-8 w-full min-w-full h-full flex flex-col items-center relative"
           style={{
             transform: `scale(${zoomLevel})`,
-            transformOrigin: 'top center',
+              transformOrigin: 'left top',
             transition: 'transform 0.2s',
             minWidth: `${canvasSize.width}px`,
             minHeight: `${canvasSize.height}px`
           }}
-        >
-          {/* Organization Chart Content */}
-          <div className="relative">
-            {renderChart()}
+          >
+            {/* Organization Chart Content */}
+            <div className="relative">
+              {renderChart()}
+            </div>
           </div>
         </div>
       </div>
