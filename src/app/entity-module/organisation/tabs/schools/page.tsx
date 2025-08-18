@@ -117,11 +117,11 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
 
   // ===== FETCH SCHOOLS =====
   const { data: schools = [], isLoading, refetch } = useQuery(
-    ['schools', companyId],
+    ['schools-tab', companyId], // Different cache key from organization page
     async () => {
       const { data: schoolsData, error: schoolsError } = await supabase
         .from('schools')
-        .select('*')
+        .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
         .eq('company_id', companyId)
         .order('name');
       
@@ -374,13 +374,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const getSchoolLogoUrl = (path: string | null) => {
     if (!path) return null;
     
+    console.log('School logo path:', path); // Debug log
+    
     // If it's already a full URL, return as is
     if (path.startsWith('http')) {
       return path;
     }
     
     // Construct Supabase storage URL
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
+    console.log('Generated school logo URL:', url); // Debug log
+    return url;
   };
 
   // ===== MAIN RENDER =====
@@ -489,7 +493,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       <img
                         src={getSchoolLogoUrl(school.logo)}
                         alt={`${school.name} logo`}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain p-1"
                         onError={(e) => {
                           // If logo fails to load, hide the image and show fallback
                           e.currentTarget.style.display = 'none';
