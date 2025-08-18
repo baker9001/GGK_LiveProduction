@@ -1,25 +1,18 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * FINAL FIXED Organization Structure with Best Practices
+ * ENHANCED Organization Structure with SVG Connection Lines
  * 
- * Tab Logic:
- * - Tabs control global visibility of levels
- * - Hierarchical dependencies enforced (can't show child without parent)
- * 
- * Arrow Logic:
- * - Arrows control local expansion state
- * - Children visible when: expanded AND tab is ON
- * 
- * Best Practices Applied:
- * ✅ Clear separation of concerns
- * ✅ Intuitive UI/UX behavior
- * ✅ Proper hierarchical relationships
+ * Features:
+ * ✅ SVG-based connection lines for perfect alignment
+ * ✅ Dynamic line calculation based on actual card positions
+ * ✅ Responsive and scalable connections
+ * ✅ Clean visual hierarchy
  */
 
 'use client';
 
-import React, { useState, useCallback, memo, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, memo, useEffect, useMemo, useRef } from 'react';
 import { 
   Building2, School, MapPin, ChevronDown, ChevronUp,
   PlusCircle, Users, User, Eye, EyeOff,
@@ -61,8 +54,17 @@ const CardSkeleton = () => (
   </div>
 );
 
-// ===== COLOR-CODED CARD COMPONENT =====
-const OrgCard = memo(({ 
+// ===== ENHANCED ORG CARD WITH REF FORWARDING =====
+const OrgCard = memo(React.forwardRef<HTMLDivElement, { 
+  item: any; 
+  type: 'company' | 'school' | 'branch' | 'year' | 'section';
+  onItemClick: (item: any, type: any) => void;
+  onAddClick?: (item: any, type: any) => void;
+  hasChildren?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  hierarchicalData?: any;
+}>(({ 
   item, 
   type, 
   onItemClick, 
@@ -71,16 +73,7 @@ const OrgCard = memo(({
   isExpanded = false,
   onToggleExpand,
   hierarchicalData = {}
-}: {
-  item: any;
-  type: 'company' | 'school' | 'branch' | 'year' | 'section';
-  onItemClick: (item: any, type: any) => void;
-  onAddClick?: (item: any, type: any) => void;
-  hasChildren?: boolean;
-  isExpanded?: boolean;
-  onToggleExpand?: () => void;
-  hierarchicalData?: any;
-}) => {
+}, ref) => {
   const getConfig = () => {
     switch (type) {
       case 'company':
@@ -168,10 +161,13 @@ const OrgCard = memo(({
   return (
     <div className="relative inline-block">
       <div 
+        ref={ref}
         onClick={() => onItemClick(item, type)}
         className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
                    hover:shadow-lg transition-all duration-200 cursor-pointer
                    w-[260px] p-4 relative`}
+        data-card-id={`${type}-${item.id}`}
+        data-card-type={type}
       >
         {/* Header with Icon */}
         <div className="flex items-start justify-between mb-3">
@@ -253,7 +249,7 @@ const OrgCard = memo(({
       )}
     </div>
   );
-});
+}));
 
 OrgCard.displayName = 'OrgCard';
 
@@ -313,6 +309,177 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   );
 };
 
+// ===== SVG CONNECTION LINES COMPONENT =====
+const SVGConnections = memo(({ 
+  containerRef, 
+  cardRefs, 
+  expandedNodes, 
+  filteredSchools, 
+  branchesData,
+  zoomLevel 
+}: {
+  containerRef: React.RefObject<HTMLDivElement>;
+  cardRefs: React.MutableRefObject<Map<string, React.RefObject<HTMLDivElement>>>;
+  expandedNodes: Set<string>;
+  filteredSchools: any[];
+  branchesData: Map<string, any[]>;
+  zoomLevel: number;
+}) => {
+  const [connections, setConnections] = useState<string[]>([]);
+
+  const calculateConnections = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const paths: string[] = [];
+
+    // Company to Schools connections
+    if (expandedNodes.has('company') && filteredSchools.length > 0) {
+      const companyRef = cardRefs.current.get('company');
+      if (companyRef?.current) {
+        const companyRect = companyRef.current.getBoundingClientRect();
+        const companyBottom = {
+          x: companyRect.left + companyRect.width / 2 - containerRect.left,
+          y: companyRect.bottom - containerRect.top
+        };
+
+        // Get all school positions
+        const schoolPositions = filteredSchools.map(school => {
+          const schoolRef = cardRefs.current.get(`school-${school.id}`);
+          if (schoolRef?.current) {
+            const schoolRect = schoolRef.current.getBoundingClientRect();
+            return {
+              x: schoolRect.left + schoolRect.width / 2 - containerRect.left,
+              y: schoolRect.top - containerRect.top
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (schoolPositions.length > 0) {
+          const verticalGap = 60; // Distance from company to horizontal line
+          const horizontalY = companyBottom.y + verticalGap;
+
+          // Vertical line from company down
+          paths.push(`M ${companyBottom.x} ${companyBottom.y} L ${companyBottom.x} ${horizontalY}`);
+
+          if (schoolPositions.length > 1) {
+            // Horizontal distribution line
+            const leftmostX = Math.min(...schoolPositions.map(p => p!.x));
+            const rightmostX = Math.max(...schoolPositions.map(p => p!.x));
+            paths.push(`M ${leftmostX} ${horizontalY} L ${rightmostX} ${horizontalY}`);
+          }
+
+          // Vertical lines to each school
+          schoolPositions.forEach(pos => {
+            if (pos) {
+              paths.push(`M ${pos.x} ${horizontalY} L ${pos.x} ${pos.y}`);
+            }
+          });
+        }
+      }
+    }
+
+    // School to Branches connections
+    filteredSchools.forEach(school => {
+      const schoolKey = `school-${school.id}`;
+      if (expandedNodes.has(schoolKey)) {
+        const branches = branchesData.get(school.id) || [];
+        if (branches.length > 0) {
+          const schoolRef = cardRefs.current.get(schoolKey);
+          if (schoolRef?.current) {
+            const schoolRect = schoolRef.current.getBoundingClientRect();
+            const schoolBottom = {
+              x: schoolRect.left + schoolRect.width / 2 - containerRect.left,
+              y: schoolRect.bottom - containerRect.top
+            };
+
+            // Get all branch positions for this school
+            const branchPositions = branches.map(branch => {
+              const branchRef = cardRefs.current.get(`branch-${branch.id}`);
+              if (branchRef?.current) {
+                const branchRect = branchRef.current.getBoundingClientRect();
+                return {
+                  x: branchRect.left + branchRect.width / 2 - containerRect.left,
+                  y: branchRect.top - containerRect.top
+                };
+              }
+              return null;
+            }).filter(Boolean);
+
+            if (branchPositions.length > 0) {
+              const verticalGap = 60; // Distance from school to horizontal line
+              const horizontalY = schoolBottom.y + verticalGap;
+
+              // Vertical line from school down
+              paths.push(`M ${schoolBottom.x} ${schoolBottom.y} L ${schoolBottom.x} ${horizontalY}`);
+
+              if (branchPositions.length > 1) {
+                // Horizontal distribution line
+                const leftmostX = Math.min(...branchPositions.map(p => p!.x));
+                const rightmostX = Math.max(...branchPositions.map(p => p!.x));
+                paths.push(`M ${leftmostX} ${horizontalY} L ${rightmostX} ${horizontalY}`);
+              }
+
+              // Vertical lines to each branch
+              branchPositions.forEach(pos => {
+                if (pos) {
+                  paths.push(`M ${pos.x} ${horizontalY} L ${pos.x} ${pos.y}`);
+                }
+              });
+            }
+          }
+        }
+      }
+    });
+
+    setConnections(paths);
+  }, [containerRef, cardRefs, expandedNodes, filteredSchools, branchesData]);
+
+  // Recalculate connections when layout changes
+  useEffect(() => {
+    const timer = setTimeout(calculateConnections, 100); // Small delay to ensure DOM is updated
+    return () => clearTimeout(timer);
+  }, [calculateConnections, expandedNodes, filteredSchools, branchesData]);
+
+  // Recalculate on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(calculateConnections, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [calculateConnections]);
+
+  if (!containerRef.current) return null;
+
+  return (
+    <svg
+      className="absolute inset-0 pointer-events-none z-0"
+      style={{
+        width: '100%',
+        height: '100%',
+        transform: `scale(${zoomLevel})`,
+        transformOrigin: 'top center'
+      }}
+    >
+      {connections.map((path, index) => (
+        <path
+          key={index}
+          d={path}
+          stroke="#D1D5DB"
+          strokeWidth="2"
+          fill="none"
+          className="dark:stroke-gray-600"
+        />
+      ))}
+    </svg>
+  );
+});
+
+SVGConnections.displayName = 'SVGConnections';
+
 // ===== MAIN COMPONENT =====
 export default function OrganizationStructureTab({ 
   companyData,
@@ -333,6 +500,18 @@ export default function OrganizationStructureTab({
   const [showInactive, setShowInactive] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
+
+  // Refs for SVG connections
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
+
+  // Helper to get or create card ref
+  const getCardRef = useCallback((id: string) => {
+    if (!cardRefs.current.has(id)) {
+      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
+    }
+    return cardRefs.current.get(id)!;
+  }, []);
 
   // Calculate hierarchical data from actual data
   const hierarchicalData = useMemo(() => {
@@ -431,6 +610,7 @@ export default function OrganizationStructureTab({
       });
     }
   }, [allBranches]);
+
   // Simulate initial loading
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -463,7 +643,6 @@ export default function OrganizationStructureTab({
 
       if (nodeType === 'school') {
         // Fetch branches for school
-        // Check if we have branches data from the global query first
         if (branchesData.has(nodeId)) {
           data = branchesData.get(nodeId) || [];
         } else {
@@ -499,28 +678,6 @@ export default function OrganizationStructureTab({
             }));
           }
         }
-      } else if (nodeType === 'branch') {
-        // Fetch years for branch
-        const { data: years, error } = await supabase
-          .from('academic_years')
-          .select('*')
-          .eq('branch_id', nodeId)
-          .order('year_name');
-        
-        if (!error && years) {
-          data = years;
-        }
-      } else if (nodeType === 'year') {
-        // Fetch sections for year
-        const { data: sections, error } = await supabase
-          .from('class_sections')
-          .select('*')
-          .eq('academic_year_id', nodeId)
-          .order('section_name');
-        
-        if (!error && sections) {
-          data = sections;
-        }
       }
 
       setLazyLoadedData(prev => {
@@ -537,7 +694,7 @@ export default function OrganizationStructureTab({
         return newSet;
       });
     }
-  }, [showInactive]);
+  }, [showInactive, branchesData, lazyLoadedData, loadingNodes]);
 
   // Toggle node expansion - Always loads data when expanding
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
@@ -560,9 +717,9 @@ export default function OrganizationStructureTab({
       }
       return newSet;
     });
-  }, [loadNodeData, branchesData]);
+  }, [loadNodeData]);
 
-  // Toggle level visibility with hierarchical rules
+  // Toggle level visibility with hierarchical rules and global expansion
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
@@ -592,9 +749,7 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'branches') {
-          newSet.delete('years');
-          newSet.delete('sections');
-          // Collapse all schools when turning off branches
+          // When turning OFF branches, collapse all schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (companyData?.schools) {
@@ -607,53 +762,28 @@ export default function OrganizationStructureTab({
         } else if (level === 'years') {
           newSet.delete('sections');
         }
-      } else if (level === 'branches') {
-        // Turning ON branches: expand all schools that have branches and load their data
-        newSet.add(level);
-        if (!newSet.has('schools')) {
-          newSet.add('schools'); // Ensure schools are visible if branches are turned on
-        }
-        
-        // Expand all schools that have branches and load their data
-        setExpandedNodes(prevExpanded => {
-          const newExpanded = new Set(prevExpanded);
-          if (companyData?.schools) {
-            companyData.schools.forEach((school: any) => {
-              if (school.branch_count > 0) {
-                newExpanded.add(`school-${school.id}`);
-                // Load data for these schools if not already loaded
-                loadNodeData(school.id, 'school');
-              }
-            });
-          }
-          return newExpanded;
-        });
-      } else if (level === 'schools') {
-        // Turning ON schools
+      } else {
+        // Turning ON a level
         newSet.add(level);
         
-        // If branches are also visible, expand schools with branches
-        if (newSet.has('branches')) {
+        // When turning on a child level, ensure parent levels are also on
+        if (level === 'branches') {
+          if (!newSet.has('schools')) newSet.add('schools');
+          
+          // When turning ON branches, expand all schools that have branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (companyData?.schools) {
               companyData.schools.forEach((school: any) => {
                 if (school.branch_count > 0) {
                   newExpanded.add(`school-${school.id}`);
+                  // Load data for these schools
                   loadNodeData(school.id, 'school');
                 }
               });
             }
             return newExpanded;
           });
-        }
-      } else {
-        // Turning ON a level
-        newSet.add(level);
-        
-        // When turning on a child level, ensure parent levels are also on
-        if (level === 'branches' && !newSet.has('schools')) {
-          newSet.add('schools');
         } else if (level === 'years') {
           if (!newSet.has('schools')) newSet.add('schools');
           if (!newSet.has('branches')) newSet.add('branches');
@@ -661,6 +791,25 @@ export default function OrganizationStructureTab({
           if (!newSet.has('schools')) newSet.add('schools');
           if (!newSet.has('branches')) newSet.add('branches');
           if (!newSet.has('years')) newSet.add('years');
+        } else if (level === 'schools') {
+          // Turning ON schools
+          newSet.add(level);
+          
+          // If branches are also visible, expand schools with branches
+          if (newSet.has('branches')) {
+            setExpandedNodes(prevExpanded => {
+              const newExpanded = new Set(prevExpanded);
+              if (companyData?.schools) {
+                companyData.schools.forEach((school: any) => {
+                  if (school.branch_count > 0) {
+                    newExpanded.add(`school-${school.id}`);
+                    loadNodeData(school.id, 'school');
+                  }
+                });
+              }
+              return newExpanded;
+            });
+          }
         }
       }
       
@@ -720,14 +869,15 @@ export default function OrganizationStructureTab({
   // Render the organizational chart
   const renderChart = () => {
     return (
-      <div className="w-full">
+      <div className="w-full relative">
         {/* LEVEL 1: Company/Entity */}
         {visibleLevels.has('entity') && (
-          <div className="flex justify-center mb-12">
+          <div className="flex justify-center mb-16">
             {initialLoading ? (
               <CardSkeleton />
             ) : (
               <OrgCard
+                ref={getCardRef('company')}
                 item={companyData}
                 type="company"
                 onItemClick={onItemClick}
@@ -741,164 +891,79 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* LEVEL 2: Schools WITH NESTED STRUCTURE */}
+        {/* LEVEL 2: Schools */}
         {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && !initialLoading && (
-          <div className="relative">
-            {/* Connection from Company to Schools */}
-            {visibleLevels.has('entity') && (
-              <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
-                   style={{ top: '-48px', height: '48px' }}>
-                <div className="w-0.5 h-full bg-gray-300 dark:bg-gray-600"></div>
-              </div>
-            )}
-            
-            {/* Horizontal spreader for multiple schools */}
-            {filteredSchools.length > 1 && (
-              <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
-                   style={{ 
-                     top: '0',
-                     width: `${280 * (filteredSchools.length - 1)}px`,
-                     height: '2px'
-                   }}>
-                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                
-                {/* Vertical drops to each school */}
-                {filteredSchools.map((_: any, index: number) => {
-                  if (index === 0 || index === filteredSchools.length - 1) return null;
-                  const totalWidth = 280 * (filteredSchools.length - 1);
-                  const spacing = totalWidth / (filteredSchools.length - 1);
-                  const position = spacing * (index - 1) + spacing / 2 - totalWidth / 2;
-                  
-                  return (
-                    <div 
-                      key={index}
-                      className="absolute w-0.5 bg-gray-300 dark:bg-gray-600 pointer-events-none"
-                      style={{ 
-                        left: '50%',
-                        transform: `translateX(${position}px)`,
-                        top: '0',
-                        height: '24px'
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            )}
-            
-            {/* Schools Grid */}
-            <div className="flex justify-center gap-16 pt-6">
+          <div className="mb-16">
+            <div className="flex justify-center gap-12 flex-wrap">
               {filteredSchools.map((school: any) => {
-                  const schoolKey = `school-${school.id}`;
-                  const isExpanded = expandedNodes.has(schoolKey);
-                  // Get branches from either lazy loaded data or branches data map
-                  const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
-                  const isSchoolLoading = loadingNodes.has(schoolKey);
-                  
-                  // Determine if school has children (branches)
-                  const hasChildren = school.branch_count > 0 || 
-                                    isSchoolLoading || 
-                                    branches.length > 0 ||
-                                    branchesData.has(school.id);
+                const schoolKey = `school-${school.id}`;
+                const isExpanded = expandedNodes.has(schoolKey);
+                const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
+                const isSchoolLoading = loadingNodes.has(schoolKey);
+                
+                const hasChildren = school.branch_count > 0 || 
+                                  isSchoolLoading || 
+                                  branches.length > 0 ||
+                                  branchesData.has(school.id);
 
-                  return (
-                    <div key={school.id} className="flex flex-col items-center relative">
-                      {/* School Card */}
-                      <OrgCard
-                        item={school}
-                        type="school"
-                        onItemClick={onItemClick}
-                        onAddClick={onAddClick}
-                        hasChildren={hasChildren}
-                        isExpanded={isExpanded}
-                        onToggleExpand={() => toggleNode(school.id, 'school')}
-                      />
-
-                      {/* BRANCHES - Show if expanded (independent of branches tab) */}
-                      {isExpanded && (
-                        <>
-                          {(isSchoolLoading || branches.length > 0) && (
-                            <div className="relative w-full flex flex-col items-center">
-                              {/* Vertical line to branches */}
-                              <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
-                              
-                              {/* Horizontal spreader for multiple branches */}
-                              {branches.length > 1 && (
-                                <div className="relative pointer-events-none"
-                                     style={{ 
-                                       width: `${Math.max(280, 280 * (branches.length - 1))}px`,
-                                       height: '2px'
-                                     }}>
-                                  <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                                  
-                                  {/* Vertical drops to each branch */}
-                                  {branches.length > 2 && branches.slice(1, -1).map((_: any, index: number) => {
-                                    const totalWidth = Math.max(280, 280 * (branches.length - 1));
-                                    const spacing = totalWidth / Math.max(1, branches.length - 1);
-                                    const position = spacing * (index + 1) - totalWidth / 2;
-                                    
-                                    return (
-                                      <div 
-                                        key={`drop-${index}`}
-                                        className="absolute w-0.5 bg-gray-300 dark:bg-gray-600"
-                                        style={{ 
-                                          left: '50%',
-                                          transform: `translateX(${position}px)`,
-                                          top: '0',
-                                          height: '24px'
-                                        }}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              
-                              {/* Branch cards */}
-                              <div className="flex justify-center gap-8 pt-6 flex-wrap">
-                                {isSchoolLoading ? (
-                                  <div className="flex gap-8 justify-center">
-                                    <CardSkeleton />
-                                    <CardSkeleton />
-                                  </div>
-                                ) : branches.length === 0 ? (
-                                  <div className="text-center py-4">
-                                    <MapPin className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                      No branches found for this school
-                                    </p>
-                                  </div>
-                                ) : (
-                                  branches.map((branch: any) => {
-                                    const branchKey = `branch-${branch.id}`;
-                                    const isBranchExpanded = expandedNodes.has(branchKey);
-                                    const years = lazyLoadedData.get(branchKey) || [];
-                                    const isBranchLoading = loadingNodes.has(branchKey);
-                                    
-                                    return (
-                                      <div key={branch.id} className="flex flex-col items-center">
-                                        <OrgCard
-                                          item={branch}
-                                          type="branch"
-                                          onItemClick={onItemClick}
-                                          onAddClick={onAddClick}
-                                          hasChildren={false} // Disable years for now as per original functionality
-                                          isExpanded={isBranchExpanded}
-                                          onToggleExpand={() => toggleNode(branch.id, 'branch')}
-                                        />
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                return (
+                  <div key={school.id} className="flex flex-col items-center">
+                    <OrgCard
+                      ref={getCardRef(schoolKey)}
+                      item={school}
+                      type="school"
+                      onItemClick={onItemClick}
+                      onAddClick={onAddClick}
+                      hasChildren={hasChildren}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleNode(school.id, 'school')}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* LEVEL 3: Branches */}
+        {filteredSchools.map((school: any) => {
+          const schoolKey = `school-${school.id}`;
+          const isExpanded = expandedNodes.has(schoolKey);
+          const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
+          const isSchoolLoading = loadingNodes.has(schoolKey);
+
+          if (!isExpanded || (!isSchoolLoading && branches.length === 0)) {
+            return null;
+          }
+
+          return (
+            <div key={`branches-${school.id}`} className="mb-16">
+              <div className="flex justify-center gap-8 flex-wrap">
+                {isSchoolLoading ? (
+                  <div className="flex gap-8 justify-center">
+                    <CardSkeleton />
+                    <CardSkeleton />
+                  </div>
+                ) : (
+                  branches.map((branch: any) => (
+                    <div key={branch.id} className="flex flex-col items-center">
+                      <OrgCard
+                        ref={getCardRef(`branch-${branch.id}`)}
+                        item={branch}
+                        type="branch"
+                        onItemClick={onItemClick}
+                        onAddClick={onAddClick}
+                        hasChildren={false}
+                        isExpanded={false}
+                        onToggleExpand={() => {}}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
 
         {/* Helper messages for better UX */}
         {!expandedNodes.has('company') && filteredSchools?.length > 0 && (
@@ -950,6 +1015,7 @@ export default function OrganizationStructureTab({
               onClick={handleZoomOut}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               disabled={zoomLevel <= 0.5}
+              title="Zoom out"
             >
               <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
@@ -960,26 +1026,28 @@ export default function OrganizationStructureTab({
               onClick={handleZoomIn}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               disabled={zoomLevel >= 2}
+              title="Zoom in"
             >
               <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
             <button
+              onClick={handleFitToPage}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title="Fit to page"
+            >
+              <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+            <button
               onClick={handleResetZoom}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-             title="Reset zoom to 100%"
+              title="Reset zoom to 100%"
             >
               <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
-           <button
-             onClick={handleFitToPage}
-             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-             title="Fit to page"
-           >
-             <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-           </button>
             <button
               onClick={toggleFullscreen}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
               {isFullscreen ? (
                 <Minimize2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -991,17 +1059,31 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Chart Container */}
-      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full`}>
+      {/* Chart Container with SVG Overlay */}
+      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}>
         <div 
-          className="p-8 w-full min-w-full h-full flex flex-col items-center"
+          ref={chartContainerRef}
+          className="p-8 w-full min-w-full h-full flex flex-col items-center relative"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
             transition: 'transform 0.2s'
           }}
         >
-          {renderChart()}
+          {/* SVG Connection Lines Overlay */}
+          <SVGConnections
+            containerRef={chartContainerRef}
+            cardRefs={cardRefs}
+            expandedNodes={expandedNodes}
+            filteredSchools={filteredSchools}
+            branchesData={branchesData}
+            zoomLevel={zoomLevel}
+          />
+          
+          {/* Organization Chart Content */}
+          <div className="relative z-10">
+            {renderChart()}
+          </div>
         </div>
       </div>
     </div>
