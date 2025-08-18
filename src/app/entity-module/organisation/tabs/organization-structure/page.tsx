@@ -345,6 +345,11 @@ export default function OrganizationStructureTab({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
 
+  // Filter schools based on active/inactive toggle - MOVED UP to fix initialization order
+  const filteredSchools = showInactive 
+    ? companyData.schools 
+    : companyData.schools?.filter((s: any) => s.status === 'active') || [];
+
   // Helper to get or create card ref
   const getCardRef = useCallback((id: string) => {
     if (!cardRefs.current.has(id)) {
@@ -738,11 +743,6 @@ export default function OrganizationStructureTab({
       </div>
     );
   }
-
-  // Filter schools based on active/inactive toggle
-  const filteredSchools = showInactive 
-    ? companyData.schools 
-    : companyData.schools?.filter((s: any) => s.status === 'active') || [];
 
   // Render the organizational chart
   const renderChart = () => {
