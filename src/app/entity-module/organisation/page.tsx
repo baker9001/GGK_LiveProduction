@@ -418,7 +418,7 @@ export default function OrganizationManagement() {
         const { data: schools, error: schoolsError } = await supabase
           .from('schools')
           .select(`
-            id, name, code, status, company_id, 
+            id, name, code, status, company_id, logo,
             description, address, created_at
           `)
           .eq('company_id', userCompanyId)
