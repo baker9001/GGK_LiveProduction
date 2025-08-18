@@ -165,7 +165,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         onClick={() => onItemClick(item, type)}
         className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
                    hover:shadow-lg transition-all duration-200 cursor-pointer
-                   w-[260px] p-4 relative`}
+                   min-w-[260px] max-w-[300px] flex-grow p-4 relative`}
         data-card-id={`${type}-${item.id}`}
         data-card-type={type}
       >
@@ -542,6 +542,10 @@ export default function OrganizationStructureTab({
   const [showInactive, setShowInactive] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
+  
+  // Constants for card dimensions and minimum gaps
+  const CARD_MIN_WIDTH = 260; // px
+  const MIN_GAP_Y = 32; // px (equivalent to Tailwind gap-8)
 
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -660,6 +664,37 @@ export default function OrganizationStructureTab({
     }, 600);
     return () => clearTimeout(timer);
   }, []);
+
+  // Dynamic Gap Calculation
+  useEffect(() => {
+    const calculateAndSetGaps = () => {
+      if (!chartContainerRef.current) return;
+
+      const containerWidth = chartContainerRef.current.offsetWidth;
+      
+      // Calculate optimal horizontal gap
+      // Try to fit as many cards as possible with at least MIN_GAP_X (Tailwind gap-12 = 48px)
+      const MIN_GAP_X = 48;
+      const maxCardsPerRow = Math.floor((containerWidth + MIN_GAP_X) / (CARD_MIN_WIDTH + MIN_GAP_X));
+      const actualCardsPerRow = Math.max(1, maxCardsPerRow); // Ensure at least 1 card per row
+
+      let calculatedGapX = MIN_GAP_X;
+      if (actualCardsPerRow > 1) {
+        calculatedGapX = (containerWidth - (actualCardsPerRow * CARD_MIN_WIDTH)) / (actualCardsPerRow - 1);
+        calculatedGapX = Math.max(MIN_GAP_X, calculatedGapX); // Ensure it's at least the minimum
+      } else {
+        // If only one card, center it by setting half the remaining space as gap
+        calculatedGapX = (containerWidth - CARD_MIN_WIDTH) / 2;
+      }
+      
+      calculatedGapX = Math.max(0, calculatedGapX); // Ensure gap is not negative
+
+      document.documentElement.style.setProperty('--card-gap-x', `${calculatedGapX}px`);
+      document.documentElement.style.setProperty('--card-gap-y', `${MIN_GAP_Y}px`);
+    };
+
+    calculateAndSetGaps(); // Initial calculation
+  }, [zoomLevel, companyData]); // Recalculate on zoom or if companyData changes (which might affect card counts)
 
   // Load data for expanded nodes
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
@@ -915,7 +950,7 @@ export default function OrganizationStructureTab({
         {/* LEVEL 1: Company/Entity */}
         {visibleLevels.has('entity') && (
           <div className="flex justify-center mb-16">
-            {initialLoading ? (
+            {initialLoading || isLoadingFull ? (
               <CardSkeleton />
             ) : (
               <OrgCard
@@ -935,8 +970,8 @@ export default function OrganizationStructureTab({
 
         {/* LEVEL 2: Schools */}
         {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && !initialLoading && (
-          <div className="mb-16 flex justify-center">
-            <div className="flex gap-12 flex-wrap justify-center max-w-6xl">
+          <div className="mb-16 flex flex-col items-center">
+            <div className="flex flex-wrap justify-evenly" style={{ gap: 'var(--card-gap-y) var(--card-gap-x)' }}>
               {filteredSchools.map((school: any) => {
                 const schoolKey = `school-${school.id}`;
                 const isExpanded = expandedNodes.has(schoolKey);
@@ -969,8 +1004,8 @@ export default function OrganizationStructureTab({
 
         {/* LEVEL 3: Branches */}
         {visibleLevels.has('branches') && (
-          <div className="mb-16 flex justify-center">
-            <div className="flex gap-8 flex-wrap justify-center max-w-7xl">
+          <div className="mb-16 flex flex-col items-center">
+            <div className="flex flex-wrap justify-evenly" style={{ gap: 'var(--card-gap-y) var(--card-gap-x)' }}>
               {filteredSchools.map((school: any) => {
                 const schoolKey = `school-${school.id}`;
                 const isExpanded = expandedNodes.has(schoolKey);
