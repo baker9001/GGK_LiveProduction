@@ -1,9 +1,8 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * Organization Structure Tab Component - Optimized with Lazy Loading
- * Handles the organization chart visualization with zoom controls and node interactions
- * Now fetches its own detailed data on demand when the tab is active
+ * Organization Structure Tab Component - Optimized Version
+ * Now accepts companyData directly from parent to avoid duplicate API calls
  * 
  * Dependencies:
  *   - @/lib/supabase
@@ -19,10 +18,10 @@
  *   - Branch lazy loading
  *   - All interaction handlers
  * 
- * Added/Modified:
- *   - Now accepts userCompanyId instead of companyData
- *   - Fetches detailed organization data on demand
- *   - Improved loading states for better UX
+ * Fixed:
+ *   - Now accepts companyData prop instead of userCompanyId
+ *   - Removed duplicate data fetching
+ *   - Fixed infinite loading issue
  * 
  * Database Tables:
  *   - companies & companies_additional
@@ -32,21 +31,18 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { 
   Building2, School, MapPin, ChevronDown, ChevronUp, ChevronRight,
   Plus, Edit2, PlusCircle, Users, Building, MapPinned, User,
   CheckCircle2, XCircle, Clock, AlertTriangle, ZoomIn, ZoomOut,
   Maximize2, Minimize2, ScanLine, Fullscreen, RotateCcw, Loader2, X
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../../../../../lib/supabase';
-import { useUser } from '../../../../../contexts/UserContext';
-import { getAuthenticatedUser } from '../../../../../lib/auth';
+import { supabase } from '@/lib/supabase';
 
 // ===== TYPE DEFINITIONS =====
 export interface OrgStructureProps {
-  userCompanyId: string;
+  companyData: any; // Changed from userCompanyId to companyData
   onAddClick: (parentItem: any, parentType: 'company' | 'school') => void;
   onEditClick: (item: any, type: 'company' | 'school' | 'branch') => void;
   onItemClick: (item: any, type: 'company' | 'school' | 'branch') => void;
@@ -132,7 +128,7 @@ const OrgChartNode = memo(({
 
   const managerTitle = type === 'company' ? 'CEO' : type === 'school' ? 'Principal' : 'Manager';
   const managerName = item.additional?.ceo_name || item.additional?.principal_name || item.additional?.manager_name;
-  const employeeCount = item.additional?.employee_count || 0;
+  const employeeCount = item.additional?.employee_count || item.additional?.teachers_count || 0;
   const location = item.address || item.additional?.head_office_city;
 
   return (
@@ -193,11 +189,11 @@ const OrgChartNode = memo(({
               <span className="font-bold">{employeeCount}</span> Staff
             </span>
           </div>
-          {type === 'school' && item.branches && item.branches.length > 0 && (
+          {type === 'school' && item.branch_count > 0 && (
             <div className="flex items-center space-x-1.5">
               <Building className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
               <span className="text-gray-700 dark:text-gray-300">
-                <span className="font-bold">{item.branches.length}</span> Branches
+                <span className="font-bold">{item.branch_count || 0}</span> Branches
               </span>
             </div>
           )}
@@ -220,7 +216,7 @@ OrgChartNode.displayName = 'OrgChartNode';
 
 // ===== MAIN COMPONENT =====
 export default function OrganizationStructureTab({ 
-  userCompanyId,
+  companyData,
   onAddClick, 
   onEditClick, 
   onItemClick,
@@ -237,83 +233,6 @@ export default function OrganizationStructureTab({
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
-
-  // ===== FETCH DETAILED ORGANIZATION DATA =====
-  const { data: companyData, isLoading: isDetailedLoading, error: detailedError } = useQuery(
-    ['detailedOrganizationData', userCompanyId],
-    async () => {
-      if (!userCompanyId) return null;
-      
-      try {
-        // Fetch detailed hierarchy data
-        const [
-          companyResponse,
-          companyAdditionalResponse,
-          schoolsResponse
-        ] = await Promise.all([
-          supabase.from('companies').select('*').eq('id', userCompanyId).single(),
-          supabase.from('companies_additional').select('*').eq('company_id', userCompanyId).maybeSingle(),
-          supabase.from('schools').select('*').eq('company_id', userCompanyId).order('name')
-        ]);
-
-        if (companyResponse.error) throw companyResponse.error;
-        if (schoolsResponse.error) throw schoolsResponse.error;
-        
-        const company = companyResponse.data;
-        const schools = schoolsResponse.data || [];
-        
-        if (schools.length === 0) {
-          return {
-            ...company,
-            additional: companyAdditionalResponse.data,
-            schools: []
-          };
-        }
-
-        // Get all school IDs
-        const schoolIds = schools.map(s => s.id);
-        
-        // Fetch schools additional data in bulk
-        const schoolsAdditionalResponse = await supabase
-          .from('schools_additional')
-          .select('*')
-          .in('school_id', schoolIds);
-        
-        const schoolsAdditional = schoolsAdditionalResponse.data || [];
-        
-        // Create lookup map for O(1) access
-        const schoolsAdditionalMap = new Map(
-          schoolsAdditional.map(sa => [sa.school_id, sa])
-        );
-        
-        // Combine schools with their additional data (branches will be lazy loaded)
-        const schoolsWithDetails = schools.map(school => ({
-          ...school,
-          additional: schoolsAdditionalMap.get(school.id),
-          branches: [], // Empty array, will be loaded on demand
-          student_count: schoolsAdditionalMap.get(school.id)?.student_count || 0
-        }));
-
-        return {
-          ...company,
-          additional: companyAdditionalResponse.data,
-          schools: schoolsWithDetails
-        };
-      } catch (error) {
-        console.error('Error fetching detailed organization:', error);
-        throw error;
-      }
-    },
-    {
-      enabled: !!userCompanyId,
-      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-      cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-      retry: 1,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      keepPreviousData: true
-    }
-  );
 
   // Lazy load branches for a school
   const loadBranchesForSchool = useCallback(async (schoolId: string) => {
@@ -382,43 +301,7 @@ export default function OrganizationStructureTab({
   const handleResetZoom = () => setZoomLevel(1);
   const handleFitToScreen = () => setZoomLevel(0.8);
 
-  // Loading state
-  if (isDetailedLoading) {
-    return (
-      <div className="flex items-center justify-center h-96 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-4 text-gray-600 dark:text-gray-400">
-            Loading organization structure...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (detailedError) {
-    return (
-      <div className="flex items-center justify-center h-96 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Failed to Load Structure
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {(detailedError as Error).message || 'Unable to load organization structure'}
-          </p>
-          <button
-            onClick={refreshData}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // Check if we have company data
   if (!companyData) {
     return (
       <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -451,8 +334,9 @@ export default function OrganizationStructureTab({
               {companyData.schools.map((school: any, index: number) => {
                 const schoolNodeId = `school-${school.id}`;
                 const isExpanded = expandedNodes.has(schoolNodeId);
-                const schoolBranches = lazyLoadedBranches.get(school.id) || school.branches || [];
+                const schoolBranches = lazyLoadedBranches.get(school.id) || [];
                 const isLoadingSchoolBranches = loadingBranches.has(school.id);
+                const hasBranches = school.branch_count > 0 || schoolBranches.length > 0;
 
                 return (
                   <div key={school.id} className="flex flex-col items-center space-y-4">
@@ -470,7 +354,7 @@ export default function OrganizationStructureTab({
                       />
                       
                       {/* Expand/Collapse Button */}
-                      {(schoolBranches.length > 0 || isLoadingSchoolBranches) && (
+                      {(hasBranches || isLoadingSchoolBranches) && (
                         <button
                           onClick={() => toggleNode(schoolNodeId)}
                           className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 p-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-full hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors z-10"
@@ -485,7 +369,7 @@ export default function OrganizationStructureTab({
                     </div>
 
                     {/* Branches */}
-                    {isExpanded && (
+                    {isExpanded && hasBranches && (
                       <>
                         <div className="w-0.5 h-8 bg-gradient-to-b from-green-300 to-purple-300 dark:from-green-600 dark:to-purple-600"></div>
                         <div className="flex flex-wrap gap-4 justify-center">
@@ -497,10 +381,9 @@ export default function OrganizationStructureTab({
                               </div>
                             </div>
                           ) : (
-                            // Use lazy-loaded branches if available, otherwise use initial branches
-                            (lazyLoadedBranches.get(school.id) || school.branches || []).map((branch: any) => (
+                            schoolBranches.map((branch: any) => (
                               <div key={branch.id} className="flex flex-col items-center">
-                                {((lazyLoadedBranches.get(school.id)?.length || school.branches?.length || 0) > 1) && (
+                                {schoolBranches.length > 1 && (
                                   <div className="w-0.5 h-8 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-700 -mt-8"></div>
                                 )}
                                 <OrgChartNode 
