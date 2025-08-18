@@ -1036,10 +1036,10 @@ export default function OrganizationStructureTab({
         <svg
           className="absolute pointer-events-none z-1"
           style={{
-            left: '0px',
-            top: '0px',
-            width: `${canvasSize.width}px`,
-            height: `${canvasSize.height}px`
+            left: '64px',
+            top: '64px',
+            width: `${canvasSize.width - 128}px`,
+            height: `${canvasSize.height - 128}px`
           }}
         >
           <defs>
@@ -1075,8 +1075,8 @@ export default function OrganizationStructureTab({
             if (!parentPos || !childPos) return null;
 
             const path = generateConnectionPath(
-              { x: parentPos.x, y: parentPos.y },
-              { x: childPos.x, y: childPos.y },
+              { x: parentPos.x - 64, y: parentPos.y - 64 },
+              { x: childPos.x - 64, y: childPos.y - 64 },
               parentDimensions.height,
               childDimensions.height,
               layoutConfig.gapY
