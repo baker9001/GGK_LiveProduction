@@ -718,7 +718,13 @@ export default function OrganizationStructureTab({
   // Zoom controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-  const handleResetZoom = () => setZoomLevel(1);
+  const handleResetZoom = () => {
+    setZoomLevel(1);
+    // Reset scroll position to center
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+    }
+  };
   
   // Helper functions for fit to screen
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -780,22 +786,17 @@ export default function OrganizationStructureTab({
 
     // after zoom state applies, center scroll to content
     requestAnimationFrame(() => {
-      const scaledW = contentW * nextZoom;
-      const scaledH = contentH * nextZoom;
-
-      // center content within viewport
-      const targetLeft = Math.max(0, (scaledW - viewportW) / 2);
-      const targetTop  = Math.max(0, (scaledH - viewportH) / 2);
-
-      viewport.scrollTo({ left: targetLeft, top: targetTop, behavior: 'smooth' });
+      // Reset scroll to top-left first, then let the content center naturally
+      viewport.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
     });
   }, [computeContentBounds]);
 
   // Optional: fit once after first meaningful paint
   useEffect(() => {
-    const t = setTimeout(() => handleFitToScreen(), 200);
-    return () => clearTimeout(t);
-  }, [visibleLevels, expandedNodes, companyData, handleFitToScreen]);
+    // Don't auto-fit on load, let user control zoom
+    // const t = setTimeout(() => handleFitToScreen(), 200);
+    // return () => clearTimeout(t);
+  }, []);
 
   const handleFitToPage = useCallback(() => {
     if (!chartContainerRef.current || canvasSize.width === 0) return;
@@ -1135,26 +1136,28 @@ export default function OrganizationStructureTab({
       </div>
 
       {/* Chart Container with SVG Overlay */}
-      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}>
+      <div 
+        ref={scrollAreaRef}
+        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
+      >
         <div 
-          ref={scrollAreaRef}
-          className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
-        >
-          <div 
           ref={chartContainerRef}
-            className="p-8 w-full min-w-full h-full flex flex-col items-center relative"
+          className="relative"
           style={{
             transform: `scale(${zoomLevel})`,
-              transformOrigin: 'left top',
-            transition: 'transform 0.2s',
-            minWidth: `${canvasSize.width}px`,
-            minHeight: `${canvasSize.height}px`
+            transformOrigin: 'center top',
+            transition: 'transform 0.2s ease-out',
+            width: `${Math.max(canvasSize.width, 1200)}px`,
+            height: `${Math.max(canvasSize.height, 800)}px`,
+            padding: '64px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start'
           }}
-          >
-            {/* Organization Chart Content */}
-            <div className="relative">
-              {renderChart()}
-            </div>
+        >
+          {/* Organization Chart Content */}
+          <div className="relative">
+            {renderChart()}
           </div>
         </div>
       </div>
