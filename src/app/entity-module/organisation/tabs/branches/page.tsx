@@ -32,6 +32,7 @@ import { useUser } from '../../../../../contexts/UserContext';
 import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
+import { ImageUpload } from '../../../../components/shared/ImageUpload';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -42,7 +43,6 @@ interface BranchData {
   status: 'active' | 'inactive';
   address?: string;
   notes?: string;
-  logo?: string;
   created_at: string;
   additional?: BranchAdditional;
   student_count?: number;
@@ -198,12 +198,6 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
     }
   );
 
-  // ===== HELPER FUNCTIONS =====
-  const getBranchLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
-  };
-
   // ===== MUTATIONS =====
   const createBranchMutation = useMutation(
     async (data: any) => {
@@ -214,8 +208,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes,
-        logo: data.logo || null
+        notes: data.notes
       };
       
       // Create main record
@@ -283,8 +276,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes,
-        logo: data.logo || null
+        notes: data.notes
       };
       
       // Update main record
@@ -384,8 +376,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   const handleEdit = (branch: BranchData) => {
     const combinedData = {
       ...branch,
-      ...(branch.additional || {}),
-      logo: branch.logo || ''
+      ...(branch.additional || {})
     };
     setFormData(combinedData);
     setFormErrors({});
@@ -395,7 +386,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   };
 
   const handleCreate = () => {
-    setFormData({ status: 'active', logo: '' });
+    setFormData({ status: 'active' });
     setFormErrors({});
     setActiveTab('basic');
     setShowCreateModal(true);
@@ -480,19 +471,6 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
               onChange={(e) => setFormData({...formData, address: e.target.value})}
               placeholder="Enter branch address"
               rows={3}
-            />
-          </FormField>
-
-          <FormField
-            id="logo"
-            label="Branch Logo"
-          >
-            <ImageUpload
-              id="branch-logo"
-              bucket="branch-logos"
-              value={formData.logo}
-              publicUrl={getBranchLogoUrl(formData.logo)}
-              onChange={(path) => setFormData(prev => ({ ...prev, logo: path || '' }))}
             />
           </FormField>
         </div>
