@@ -350,6 +350,53 @@ export default function OrganizationStructureTab({
     ? companyData.schools 
     : companyData.schools?.filter((s: any) => s.status === 'active') || [];
 
+  // Fetch branches for all schools when branches tab is enabled - MOVED UP to fix initialization order
+  const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
+    ['all-branches', companyId, showInactive],
+    async () => {
+      if (!companyData?.schools) return [];
+      
+      const schoolIds = companyData.schools.map((s: any) => s.id);
+      
+      if (schoolIds.length === 0) return [];
+      
+      let query = supabase
+        .from('branches')
+        .select(`
+          *,
+          branches_additional (*)
+        `)
+        .in('school_id', schoolIds)
+        .order('name');
+      
+      if (!showInactive) {
+        query = query.eq('status', 'active');
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      return (data || []).map(b => ({
+        ...b,
+        additional: Array.isArray(b.branches_additional) 
+          ? b.branches_additional[0] 
+          : b.branches_additional || {},
+        student_count: b.branches_additional?.[0]?.student_count || 
+                      b.branches_additional?.student_count || 
+                      b.branches_additional?.current_students || 0,
+        teachers_count: b.branches_additional?.[0]?.teachers_count || 
+                       b.branches_additional?.teachers_count || 
+                       b.branches_additional?.active_teachers_count || 0
+      }));
+    },
+    {
+      enabled: !!companyData?.schools && visibleLevels.has('branches'),
+      staleTime: 60 * 1000,
+      cacheTime: 5 * 60 * 1000
+    }
+  );
+
   // Helper to get or create card ref
   const getCardRef = useCallback((id: string) => {
     if (!cardRefs.current.has(id)) {
@@ -419,53 +466,6 @@ export default function OrganizationStructureTab({
     
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [companyData, showInactive]);
-
-  // Fetch branches for all schools when branches tab is enabled
-  const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
-    ['all-branches', companyId, showInactive],
-    async () => {
-      if (!companyData?.schools) return [];
-      
-      const schoolIds = companyData.schools.map((s: any) => s.id);
-      
-      if (schoolIds.length === 0) return [];
-      
-      let query = supabase
-        .from('branches')
-        .select(`
-          *,
-          branches_additional (*)
-        `)
-        .in('school_id', schoolIds)
-        .order('name');
-      
-      if (!showInactive) {
-        query = query.eq('status', 'active');
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      return (data || []).map(b => ({
-        ...b,
-        additional: Array.isArray(b.branches_additional) 
-          ? b.branches_additional[0] 
-          : b.branches_additional || {},
-        student_count: b.branches_additional?.[0]?.student_count || 
-                      b.branches_additional?.student_count || 
-                      b.branches_additional?.current_students || 0,
-        teachers_count: b.branches_additional?.[0]?.teachers_count || 
-                       b.branches_additional?.teachers_count || 
-                       b.branches_additional?.active_teachers_count || 0
-      }));
-    },
-    {
-      enabled: !!companyData?.schools && visibleLevels.has('branches'),
-      staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000
-    }
-  );
 
   // Group branches by school when data is available
   useEffect(() => {
