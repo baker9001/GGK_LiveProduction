@@ -581,33 +581,70 @@ export default function OrganizationStructureTab({
           newSet.delete('branches');
           newSet.delete('years');
           newSet.delete('sections');
+          // Collapse all schools when turning off schools
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            if (companyData?.schools) {
+              companyData.schools.forEach((school: any) => {
+                newExpanded.delete(`school-${school.id}`);
+              });
+            }
+            return newExpanded;
+          });
         } else if (level === 'branches') {
           newSet.delete('years');
           newSet.delete('sections');
+          // Collapse all schools when turning off branches
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            if (companyData?.schools) {
+              companyData.schools.forEach((school: any) => {
+                newExpanded.delete(`school-${school.id}`);
+              });
+            }
+            return newExpanded;
+          });
         } else if (level === 'years') {
           newSet.delete('sections');
         }
       } else if (level === 'branches') {
-        // Turning ON branches: expand all schools that have branches
+        // Turning ON branches: expand all schools that have branches and load their data
         newSet.add(level);
         if (!newSet.has('schools')) {
           newSet.add('schools'); // Ensure schools are visible if branches are turned on
         }
-        if (companyData?.schools) {
-          companyData.schools.forEach((school: any) => {
-            if (school.branch_count > 0) {
-              newSet.add(`school-${school.id}`);
-              // Also load data for these schools if not already loaded
-              loadNodeData(school.id, 'school');
+        
+        // Expand all schools that have branches and load their data
+        setExpandedNodes(prevExpanded => {
+          const newExpanded = new Set(prevExpanded);
+          if (companyData?.schools) {
+            companyData.schools.forEach((school: any) => {
+              if (school.branch_count > 0) {
+                newExpanded.add(`school-${school.id}`);
+                // Load data for these schools if not already loaded
+                loadNodeData(school.id, 'school');
+              }
+            });
+          }
+          return newExpanded;
+        });
+      } else if (level === 'schools') {
+        // Turning ON schools
+        newSet.add(level);
+        
+        // If branches are also visible, expand schools with branches
+        if (newSet.has('branches')) {
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            if (companyData?.schools) {
+              companyData.schools.forEach((school: any) => {
+                if (school.branch_count > 0) {
+                  newExpanded.add(`school-${school.id}`);
+                  loadNodeData(school.id, 'school');
+                }
+              });
             }
-          });
-        }
-      } else if (level === 'branches' && newSet.has(level)) {
-        // Turning OFF branches: collapse all schools
-        newSet.delete(level);
-        if (companyData?.schools) {
-          companyData.schools.forEach((school: any) => {
-            newSet.delete(`school-${school.id}`);
+            return newExpanded;
           });
         }
       } else {
@@ -629,7 +666,7 @@ export default function OrganizationStructureTab({
       
       return newSet;
     });
-  }, []);
+  }, [companyData, loadNodeData]);
 
   // Zoom controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
@@ -779,30 +816,29 @@ export default function OrganizationStructureTab({
                       {/* BRANCHES - Show if expanded (independent of branches tab) */}
                       {isExpanded && (
                         <>
-                          {(isSchoolLoading || branches.length > 0 || branchesData.has(school.id)) && (
+                          {(isSchoolLoading || branches.length > 0) && (
                             <div className="relative w-full flex flex-col items-center">
                               {/* Vertical line to branches */}
                               <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
                               
                               {/* Horizontal spreader for multiple branches */}
-                              {branches.length > 1 && !isSchoolLoading && (
+                              {branches.length > 1 && (
                                 <div className="relative pointer-events-none"
                                      style={{ 
-                                       width: `${280 * (branches.length - 1)}px`,
+                                       width: `${Math.max(280, 280 * (branches.length - 1))}px`,
                                        height: '2px'
                                      }}>
                                   <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
                                   
                                   {/* Vertical drops to each branch */}
-                                  {branches.map((_: any, index: number) => {
-                                    if (index === 0 || index === branches.length - 1) return null;
-                                    const totalWidth = 280 * (branches.length - 1);
-                                    const spacing = totalWidth / (branches.length - 1);
-                                    const position = spacing * (index - 1) + spacing / 2 - totalWidth / 2;
+                                  {branches.length > 2 && branches.slice(1, -1).map((_: any, index: number) => {
+                                    const totalWidth = Math.max(280, 280 * (branches.length - 1));
+                                    const spacing = totalWidth / Math.max(1, branches.length - 1);
+                                    const position = spacing * (index + 1) - totalWidth / 2;
                                     
                                     return (
                                       <div 
-                                        key={index}
+                                        key={`drop-${index}`}
                                         className="absolute w-0.5 bg-gray-300 dark:bg-gray-600"
                                         style={{ 
                                           left: '50%',
@@ -817,9 +853,9 @@ export default function OrganizationStructureTab({
                               )}
                               
                               {/* Branch cards */}
-                              <div className="flex justify-center gap-10 pt-6">
+                              <div className="flex justify-center gap-8 pt-6 flex-wrap">
                                 {isSchoolLoading ? (
-                                  <div className="flex gap-4">
+                                  <div className="flex gap-8 justify-center">
                                     <CardSkeleton />
                                     <CardSkeleton />
                                   </div>
