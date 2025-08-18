@@ -1,13 +1,20 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * COMPLETELY FIXED Organization Structure
+ * FINAL FIXED Organization Structure with Best Practices
  * 
- * Fixed Issues:
- * ✅ Branches now properly aligned under their respective schools
- * ✅ Full width utilization - no wasted space
- * ✅ Pointer events fixed for clickable arrows
- * ✅ Proper nesting structure maintained
+ * Tab Logic:
+ * - Tabs control global visibility of levels
+ * - Hierarchical dependencies enforced (can't show child without parent)
+ * 
+ * Arrow Logic:
+ * - Arrows control local expansion state
+ * - Children visible when: expanded AND tab is ON
+ * 
+ * Best Practices Applied:
+ * ✅ Clear separation of concerns
+ * ✅ Intuitive UI/UX behavior
+ * ✅ Proper hierarchical relationships
  */
 
 'use client';
@@ -284,13 +291,7 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
         return (
           <button
             key={level.id}
-            onClick={() => {
-              // Special handling for entity tab - never hide it when clicked
-              if (level.id === 'entity' && isVisible) {
-                return;
-              }
-              onToggleLevel(level.id);
-            }}
+            onClick={() => onToggleLevel(level.id)}
             className={`
               flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
               ${getColorClasses(level.color, isVisible)}
@@ -320,7 +321,7 @@ export default function OrganizationStructureTab({
   refreshData 
 }: OrgStructureProps) {
   const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
-    new Set(['entity', 'schools'])  // Branches OFF by default
+    new Set(['entity', 'schools'])  // Default: Entity and Schools visible
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [lazyLoadedData, setLazyLoadedData] = useState<Map<string, any[]>>(new Map());
@@ -363,7 +364,7 @@ export default function OrganizationStructureTab({
     return () => clearTimeout(timer);
   }, []);
 
-  // Load branches for expanded schools
+  // Load data for expanded nodes
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
     const key = `${nodeType}-${nodeId}`;
     if (lazyLoadedData.has(key) || loadingNodes.has(key)) return;
@@ -374,24 +375,21 @@ export default function OrganizationStructureTab({
       let data = [];
 
       if (nodeType === 'school') {
-        // Fetch branches that belong to this specific school
+        // Fetch branches for school
         const { data: branches, error } = await supabase
           .from('branches')
           .select(`
             *,
             branches_additional (*)
           `)
-          .eq('school_id', nodeId)  // Important: Filter by this specific school
-          .eq('status', 'active')    // Only active branches by default
+          .eq('school_id', nodeId)
+          .eq('status', 'active')
           .order('name');
 
-        if (error) {
-          console.error(`Error fetching branches for school ${nodeId}:`, error);
-        } else if (branches) {
-          // Process the branches data
+        if (!error && branches) {
           data = branches.map(b => ({
             ...b,
-            school_id: nodeId,  // Ensure school_id is set
+            school_id: nodeId,
             additional: Array.isArray(b.branches_additional) 
               ? b.branches_additional[0] 
               : b.branches_additional || {
@@ -409,14 +407,11 @@ export default function OrganizationStructureTab({
           }));
         }
         
-        // Filter by status if needed
         if (!showInactive && data.length > 0) {
           data = data.filter(d => d.status === 'active');
         }
-        
-        console.log(`Loaded ${data.length} branches for school ${nodeId}`);
       } else if (nodeType === 'branch') {
-        // Fetch academic years for this branch
+        // Fetch years for branch
         const { data: years, error } = await supabase
           .from('academic_years')
           .select('*')
@@ -427,7 +422,7 @@ export default function OrganizationStructureTab({
           data = years;
         }
       } else if (nodeType === 'year') {
-        // Fetch class sections for this year
+        // Fetch sections for year
         const { data: sections, error } = await supabase
           .from('class_sections')
           .select('*')
@@ -439,7 +434,6 @@ export default function OrganizationStructureTab({
         }
       }
 
-      // Store the loaded data with the correct key
       setLazyLoadedData(prev => {
         const newMap = new Map(prev);
         newMap.set(key, data);
@@ -456,7 +450,7 @@ export default function OrganizationStructureTab({
     }
   }, [showInactive]);
 
-  // Toggle node expansion
+  // Toggle node expansion - Always loads data when expanding
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
     
@@ -466,7 +460,7 @@ export default function OrganizationStructureTab({
         newSet.delete(key);
       } else {
         newSet.add(key);
-        // Always load data when expanding a node, regardless of tab visibility
+        // Always load data when expanding
         if (nodeType === 'school' && nodeId) {
           loadNodeData(nodeId, nodeType);
         } else if (nodeType === 'branch' && nodeId) {
@@ -479,19 +473,48 @@ export default function OrganizationStructureTab({
     });
   }, [loadNodeData]);
 
-  // Toggle level visibility
+  // Toggle level visibility with hierarchical rules
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
+      
+      // Entity tab can never be turned off
       if (level === 'entity' && newSet.has('entity')) {
-        return prev; // Never turn off entity tab
+        return prev;
       }
       
       if (newSet.has(level)) {
+        // Turning OFF a level
         newSet.delete(level);
+        
+        // When turning off a parent level, turn off all child levels
+        if (level === 'schools') {
+          newSet.delete('branches');
+          newSet.delete('years');
+          newSet.delete('sections');
+        } else if (level === 'branches') {
+          newSet.delete('years');
+          newSet.delete('sections');
+        } else if (level === 'years') {
+          newSet.delete('sections');
+        }
       } else {
+        // Turning ON a level
         newSet.add(level);
+        
+        // When turning on a child level, ensure parent levels are also on
+        if (level === 'branches' && !newSet.has('schools')) {
+          newSet.add('schools');
+        } else if (level === 'years') {
+          if (!newSet.has('schools')) newSet.add('schools');
+          if (!newSet.has('branches')) newSet.add('branches');
+        } else if (level === 'sections') {
+          if (!newSet.has('schools')) newSet.add('schools');
+          if (!newSet.has('branches')) newSet.add('branches');
+          if (!newSet.has('years')) newSet.add('years');
+        }
       }
+      
       return newSet;
     });
   }, []);
@@ -538,7 +561,7 @@ export default function OrganizationStructureTab({
     ? companyData.schools 
     : companyData.schools?.filter((s: any) => s.status === 'active') || [];
 
-  // Render the chart - FIXED STRUCTURE WITH PROPER NESTING
+  // Render the organizational chart
   const renderChart = () => {
     return (
       <div className="w-full">
@@ -562,52 +585,51 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* LEVEL 2: Schools WITH NESTED BRANCHES */}
+        {/* LEVEL 2: Schools WITH NESTED STRUCTURE */}
         {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && (
-          <div className="relative mb-12">
+          <div className="relative">
             {/* Connection from Company to Schools */}
             {visibleLevels.has('entity') && !initialLoading && (
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 pointer-events-none"
-                   style={{ top: '-48px' }}>
-                {/* Vertical line from company */}
-                <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
-                
-                {/* Horizontal line for multiple schools */}
-                {filteredSchools.length > 1 && (
-                  <>
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2"
-                         style={{ 
-                           width: `${300 * filteredSchools.length}px`,
-                           height: '1px'
-                         }}>
-                      <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                    </div>
-                    
-                    {/* Vertical drops to each school */}
-                    {filteredSchools.map((_: any, index: number) => {
-                      const totalWidth = 300 * filteredSchools.length;
-                      const spacing = totalWidth / filteredSchools.length;
-                      const position = spacing * index + spacing / 2 - totalWidth / 2;
-                      
-                      return (
-                        <div 
-                          key={index}
-                          className="absolute w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none"
-                          style={{ 
-                            left: '50%',
-                            transform: `translateX(${position}px)`,
-                            top: '48px'
-                          }}
-                        />
-                      );
-                    })}
-                  </>
-                )}
+              <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
+                   style={{ top: '-48px', height: '48px' }}>
+                <div className="w-0.5 h-full bg-gray-300 dark:bg-gray-600"></div>
               </div>
             )}
             
-            {/* Schools Grid with NESTED Branches */}
-            <div className="flex flex-wrap justify-center gap-16" style={{ marginTop: '60px' }}>
+            {/* Horizontal spreader for multiple schools */}
+            {filteredSchools.length > 1 && !initialLoading && (
+              <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
+                   style={{ 
+                     top: '0',
+                     width: `${320 * filteredSchools.length}px`,
+                     height: '2px'
+                   }}>
+                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                
+                {/* Vertical drops to each school */}
+                {filteredSchools.map((_: any, index: number) => {
+                  const totalWidth = 320 * filteredSchools.length;
+                  const spacing = totalWidth / filteredSchools.length;
+                  const position = spacing * index + spacing / 2 - totalWidth / 2;
+                  
+                  return (
+                    <div 
+                      key={index}
+                      className="absolute w-0.5 bg-gray-300 dark:bg-gray-600 pointer-events-none"
+                      style={{ 
+                        left: '50%',
+                        transform: `translateX(${position}px)`,
+                        top: '0',
+                        height: '24px'
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+            
+            {/* Schools Grid */}
+            <div className="flex flex-wrap justify-center gap-16 pt-6">
               {initialLoading ? (
                 <>
                   <CardSkeleton />
@@ -615,7 +637,7 @@ export default function OrganizationStructureTab({
                   <CardSkeleton />
                 </>
               ) : (
-                filteredSchools.map((school: any, schoolIndex: number) => {
+                filteredSchools.map((school: any) => {
                   const schoolKey = `school-${school.id}`;
                   const isExpanded = expandedNodes.has(schoolKey);
                   const branches = lazyLoadedData.get(schoolKey) || [];
@@ -634,29 +656,28 @@ export default function OrganizationStructureTab({
                         onToggleExpand={() => toggleNode(school.id, 'school')}
                       />
 
-                      {/* NESTED BRANCHES UNDER THIS SCHOOL */}
-                      {visibleLevels.has('branches') && isExpanded && (
+                      {/* BRANCHES - Show only if: expanded AND branches tab is ON */}
+                      {isExpanded && visibleLevels.has('branches') && (
                         <>
-                          {/* Vertical connector from school to branches */}
                           {(isLoading || branches.length > 0) && (
-                            <div className="relative pointer-events-none" style={{ height: '60px', marginTop: '24px' }}>
-                              <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-gray-300 dark:bg-gray-600"></div>
+                            <div className="relative w-full flex flex-col items-center">
+                              {/* Vertical line to branches */}
+                              <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
                               
-                              {/* Horizontal line for multiple branches */}
+                              {/* Horizontal spreader for multiple branches */}
                               {branches.length > 1 && (
-                                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2"
+                                <div className="relative pointer-events-none"
                                      style={{ 
-                                       width: `${280 * branches.length + 40 * (branches.length - 1)}px`,
+                                       width: `${320 * branches.length}px`,
                                        height: '2px'
                                      }}>
                                   <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
                                   
                                   {/* Vertical drops to each branch */}
                                   {branches.map((_: any, index: number) => {
-                                    const totalWidth = 280 * branches.length + 40 * (branches.length - 1);
-                                    const cardWidth = 280;
-                                    const gap = 40;
-                                    const position = index * (cardWidth + gap) + cardWidth / 2 - totalWidth / 2;
+                                    const totalWidth = 320 * branches.length;
+                                    const spacing = totalWidth / branches.length;
+                                    const position = spacing * index + spacing / 2 - totalWidth / 2;
                                     
                                     return (
                                       <div 
@@ -673,31 +694,106 @@ export default function OrganizationStructureTab({
                                   })}
                                 </div>
                               )}
+                              
+                              {/* Branch cards */}
+                              <div className="flex flex-wrap justify-center gap-10 pt-6">
+                                {isLoading ? (
+                                  <>
+                                    <CardSkeleton />
+                                    <CardSkeleton />
+                                  </>
+                                ) : (
+                                  branches.map((branch: any) => {
+                                    const branchKey = `branch-${branch.id}`;
+                                    const isBranchExpanded = expandedNodes.has(branchKey);
+                                    const years = lazyLoadedData.get(branchKey) || [];
+                                    const isBranchLoading = loadingNodes.has(branchKey);
+                                    
+                                    return (
+                                      <div key={branch.id} className="flex flex-col items-center">
+                                        <OrgCard
+                                          item={branch}
+                                          type="branch"
+                                          onItemClick={onItemClick}
+                                          onAddClick={onAddClick}
+                                          hasChildren={branch.year_count > 0 || isBranchLoading || years.length > 0}
+                                          isExpanded={isBranchExpanded}
+                                          onToggleExpand={() => toggleNode(branch.id, 'branch')}
+                                        />
+                                        
+                                        {/* YEARS - Show only if: expanded AND years tab is ON */}
+                                        {isBranchExpanded && visibleLevels.has('years') && (
+                                          <>
+                                            {(isBranchLoading || years.length > 0) && (
+                                              <div className="relative w-full flex flex-col items-center">
+                                                <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
+                                                
+                                                <div className="flex flex-wrap justify-center gap-10 pt-6">
+                                                  {isBranchLoading ? (
+                                                    <CardSkeleton />
+                                                  ) : (
+                                                    years.map((year: any) => {
+                                                      const yearKey = `year-${year.id}`;
+                                                      const isYearExpanded = expandedNodes.has(yearKey);
+                                                      const sections = lazyLoadedData.get(yearKey) || [];
+                                                      const isYearLoading = loadingNodes.has(yearKey);
+                                                      
+                                                      return (
+                                                        <div key={year.id} className="flex flex-col items-center">
+                                                          <OrgCard
+                                                            item={year}
+                                                            type="year"
+                                                            onItemClick={onItemClick}
+                                                            onAddClick={onAddClick}
+                                                            hasChildren={year.section_count > 0}
+                                                            isExpanded={isYearExpanded}
+                                                            onToggleExpand={() => toggleNode(year.id, 'year')}
+                                                          />
+                                                          
+                                                          {/* SECTIONS - Show only if: expanded AND sections tab is ON */}
+                                                          {isYearExpanded && visibleLevels.has('sections') && (
+                                                            <>
+                                                              {(isYearLoading || sections.length > 0) && (
+                                                                <div className="relative w-full flex flex-col items-center">
+                                                                  <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
+                                                                  
+                                                                  <div className="flex flex-wrap justify-center gap-10 pt-6">
+                                                                    {isYearLoading ? (
+                                                                      <CardSkeleton />
+                                                                    ) : (
+                                                                      sections.map((section: any) => (
+                                                                        <OrgCard
+                                                                          key={section.id}
+                                                                          item={section}
+                                                                          type="section"
+                                                                          onItemClick={onItemClick}
+                                                                          onAddClick={onAddClick}
+                                                                          hasChildren={false}
+                                                                          isExpanded={false}
+                                                                        />
+                                                                      ))
+                                                                    )}
+                                                                  </div>
+                                                                </div>
+                                                              )}
+                                                            </>
+                                                          )}
+                                                        </div>
+                                                      );
+                                                    })
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
                             </div>
                           )}
-
-                          {/* Branches for this school */}
-                          {isLoading ? (
-                            <div className="flex gap-10 mt-6">
-                              <CardSkeleton />
-                              <CardSkeleton />
-                            </div>
-                          ) : branches.length > 0 ? (
-                            <div className="flex flex-wrap justify-center gap-10 mt-6">
-                              {branches.map((branch: any) => (
-                                <OrgCard
-                                  key={branch.id}
-                                  item={branch}
-                                  type="branch"
-                                  onItemClick={onItemClick}
-                                  onAddClick={onAddClick}
-                                  hasChildren={branch.year_count > 0}
-                                  isExpanded={expandedNodes.has(`branch-${branch.id}`)}
-                                  onToggleExpand={() => toggleNode(branch.id, 'branch')}
-                                />
-                              ))}
-                            </div>
-                          ) : null}
                         </>
                       )}
                     </div>
@@ -708,7 +804,7 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* LEVEL 4 & 5: Years and Sections placeholders */}
+        {/* Helper messages for better UX */}
         {visibleLevels.has('years') && !visibleLevels.has('branches') && (
           <div className="mt-8">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
@@ -800,7 +896,7 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Chart Container - FULL WIDTH */}
+      {/* Chart Container */}
       <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'min-h-[700px]'} w-full`}>
         <div 
           className="p-8 w-full min-w-full"
