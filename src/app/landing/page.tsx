@@ -300,35 +300,35 @@ export default function LandingPage() {
               <div className="flex items-center">
                 <span className="text-xl font-bold text-[#8CC63F]">GGK</span>
               </div>
-              <p className="mt-4 text-sm text-gray-400">
+              <p className="mt-4 text-sm text-gray-300 dark:text-gray-400">
                 Empowering IGCSE students and teachers with comprehensive learning tools.
               </p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Legal</h3>
+              <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-400 tracking-wider uppercase">Legal</h3>
               <ul className="mt-4 space-y-4">
                 <li>
-                  <a href="#" className="text-base text-gray-400 hover:text-white transition-colors">
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
                     Terms of Service
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-base text-gray-400 hover:text-white transition-colors">
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
                     Privacy Policy
                   </a>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase">Support</h3>
+              <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-400 tracking-wider uppercase">Support</h3>
               <ul className="mt-4 space-y-4">
                 <li>
-                  <a href="#" className="text-base text-gray-400 hover:text-white transition-colors">
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
                     Contact Us
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-base text-gray-400 hover:text-white transition-colors">
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
                     Help Center
                   </a>
                 </li>
@@ -336,7 +336,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-8 border-t border-gray-800 pt-8">
-            <p className="text-base text-gray-400 text-center">
+            <p className="text-base text-gray-300 dark:text-gray-400 text-center">
               © 2025 Go Green Knowledge. All rights reserved.
             </p>
           </div>
