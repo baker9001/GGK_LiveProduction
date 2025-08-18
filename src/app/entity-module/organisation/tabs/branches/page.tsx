@@ -222,8 +222,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes,
-        logo: data.logo
+        notes: data.notes
       };
       
       // Create main record
