@@ -333,16 +333,17 @@ export function buildTreeFromData(
 export function generateConnectionPath(
   parentPos: NodePosition,
   childPos: NodePosition,
-  parentHeight: number, // Not used anymore, kept for compatibility
-  childHeight: number,  // Not used anymore, kept for compatibility
-  midY: number
+  parentHeight: number,
+  childHeight: number,
+  gapY: number
 ): string {
-  // Use the provided positions directly (they already include proper offsets)
-  const parentX = parentPos.x;
-  const parentY = parentPos.y;
-  const childX = childPos.x;
-  const childY = childPos.y;
+  const parentBottom = parentPos.y + parentHeight;
+  const childTop = childPos.y;
+  const midY = parentBottom + gapY / 2;
+
+  // Center the connection points on the cards
+  const parentCenterX = parentPos.x;
+  const childCenterX = childPos.x;
   
-  // Create orthogonal path: down from parent, across, then down to child
-  return `M ${parentX} ${parentY} L ${parentX} ${midY} L ${childX} ${midY} L ${childX} ${childY}`;
+  return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
 }
