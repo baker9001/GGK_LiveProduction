@@ -1,18 +1,16 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * ENHANCED Organization Structure with Old Design Colors & Better Performance
+ * FIXED Organization Structure with Proper Layout & Hierarchy
  * 
  * Features:
- * ✅ Color-coded cards based on level (matching old design)
+ * ✅ Proper hierarchical tree layout
+ * ✅ Connection lines between levels
+ * ✅ Color-coded cards based on level
  * ✅ Dynamic card sizing with alignment
  * ✅ Active/Inactive filter toggle
  * ✅ Real data integration with Supabase
  * ✅ Progressive loading with skeleton states
- * ✅ Proper branch fetching and display
- * ✅ Entity tab always visible when clicked
- * ✅ Fullscreen functionality
- * ✅ Hierarchical data display in cards
  */
 
 'use client';
@@ -40,7 +38,7 @@ export interface OrgStructureProps {
 // ===== SKELETON LOADER COMPONENT =====
 const CardSkeleton = () => (
   <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 
-                  min-w-[260px] p-4 animate-pulse">
+                  w-[260px] p-4 animate-pulse">
     <div className="flex items-start justify-between mb-3">
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
@@ -162,17 +160,13 @@ const OrgCard = memo(({
   const Icon = config.icon;
   const managerName = item.additional?.[config.nameField] || item[config.nameField];
 
-  // Dynamic sizing based on content
-  const hasLongName = (item.name || item.year_name || item.section_name || '').length > 20;
-  const cardWidth = hasLongName ? 'min-w-[280px]' : 'min-w-[260px]';
-
   return (
-    <div className="relative flex flex-col">
+    <div className="relative inline-block">
       <div 
         onClick={() => onItemClick(item, type)}
         className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
                    hover:shadow-lg transition-all duration-200 cursor-pointer
-                   ${cardWidth} p-4 relative flex-1`}
+                   w-[260px] p-4 relative`}
       >
         {/* Header with Icon */}
         <div className="flex items-start justify-between mb-3">
@@ -553,10 +547,10 @@ export default function OrganizationStructureTab({
   // Render the chart
   const renderChart = () => {
     return (
-      <div className="org-chart-content">
+      <div className="w-full">
         {/* LEVEL 1: Company/Entity */}
         {visibleLevels.has('entity') && (
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-12">
             {initialLoading ? (
               <CardSkeleton />
             ) : (
@@ -574,7 +568,7 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* Connection Line */}
+        {/* Connection Line from Entity to Schools */}
         {visibleLevels.has('entity') && visibleLevels.has('schools') && 
          expandedNodes.has('company') && filteredSchools?.length > 0 && !initialLoading && (
           <div className="flex justify-center">
@@ -584,22 +578,35 @@ export default function OrganizationStructureTab({
 
         {/* LEVEL 2: Schools */}
         {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && (
-          <div className="relative mb-8">
-            {/* Horizontal Connection Line */}
+          <div className="relative mb-12">
+            {/* Horizontal Connection Line for multiple schools */}
             {filteredSchools.length > 1 && !initialLoading && (
               <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
-                            h-12 flex items-end justify-center"
-                   style={{ width: `${(filteredSchools.length - 1) * 300 + 280}px` }}>
-                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                {filteredSchools.map((_: any, index: number) => (
-                  <div key={index} 
-                       className="absolute top-6 h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
-                       style={{ left: `${index * 300 + 140}px` }}></div>
-                ))}
+                            flex items-end justify-center"
+                   style={{ 
+                     width: `${Math.max(280 * filteredSchools.length + 40 * (filteredSchools.length - 1), 280)}px`,
+                     height: '48px'
+                   }}>
+                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
+                {/* Vertical connectors for each school */}
+                <div className="w-full flex justify-center relative">
+                  {filteredSchools.map((_: any, index: number) => (
+                    <div 
+                      key={index} 
+                      className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
+                      style={{ 
+                        left: `${(100 / filteredSchools.length) * index + (50 / filteredSchools.length)}%`,
+                        bottom: '-24px',
+                        transform: 'translateX(-50%)'
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             )}
             
-            <div className="flex flex-wrap justify-center items-stretch gap-8">
+            {/* Schools Grid */}
+            <div className="flex flex-wrap justify-center gap-10">
               {initialLoading ? (
                 <>
                   <CardSkeleton />
@@ -626,7 +633,7 @@ export default function OrganizationStructureTab({
 
         {/* LEVEL 3: Branches */}
         {visibleLevels.has('branches') && (
-          <div className="space-y-12">
+          <div className="space-y-16">
             {filteredSchools?.map((school: any) => {
               const schoolKey = `school-${school.id}`;
               const branches = lazyLoadedData.get(schoolKey) || [];
@@ -646,12 +653,14 @@ export default function OrganizationStructureTab({
               return (
                 <div key={school.id}>
                   {/* Connection from school to branches */}
-                  <div className="flex justify-center mb-4">
-                    <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
-                  </div>
+                  {branches.length > 0 && (
+                    <div className="flex justify-center mb-4">
+                      <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
+                    </div>
+                  )}
 
                   {isLoading ? (
-                    <div className="flex justify-center gap-8">
+                    <div className="flex justify-center gap-10">
                       <CardSkeleton />
                       <CardSkeleton />
                     </div>
@@ -660,18 +669,31 @@ export default function OrganizationStructureTab({
                       {/* Horizontal line for multiple branches */}
                       {branches.length > 1 && (
                         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
-                                      h-12 flex items-end justify-center"
-                             style={{ width: `${(branches.length - 1) * 300 + 280}px` }}>
-                          <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                          {branches.map((_: any, index: number) => (
-                            <div key={index} 
-                                 className="absolute top-6 h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
-                                 style={{ left: `${index * 300 + 140}px` }}></div>
-                          ))}
+                                      flex items-end justify-center"
+                             style={{ 
+                               width: `${Math.max(280 * branches.length + 40 * (branches.length - 1), 280)}px`,
+                               height: '48px'
+                             }}>
+                          <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
+                          {/* Vertical connectors for each branch */}
+                          <div className="w-full flex justify-center relative">
+                            {branches.map((_: any, index: number) => (
+                              <div 
+                                key={index} 
+                                className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
+                                style={{ 
+                                  left: `${(100 / branches.length) * index + (50 / branches.length)}%`,
+                                  bottom: '-24px',
+                                  transform: 'translateX(-50%)'
+                                }}
+                              />
+                            ))}
+                          </div>
                         </div>
                       )}
                       
-                      <div className="flex flex-wrap justify-center items-stretch gap-8">
+                      {/* Branches Grid */}
+                      <div className="flex flex-wrap justify-center gap-10">
                         {branches.map((branch: any) => (
                           <OrgCard
                             key={branch.id}
@@ -788,7 +810,7 @@ export default function OrganizationStructureTab({
       {/* Chart Container */}
       <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[700px]'}`}>
         <div 
-          className="p-8 min-w-max"
+          className="p-8 min-w-[1024px]"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
