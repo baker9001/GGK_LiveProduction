@@ -335,7 +335,7 @@ export default function OrganizationStructureTab({
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
+  const [showInactive, setShowInactive] = useState(false); // Default to false = show active only
   const [initialLoading, setInitialLoading] = useState(true);
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
   const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
@@ -349,9 +349,9 @@ export default function OrganizationStructureTab({
   const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
     ['all-branches', companyId, showInactive],
     async () => {
-      if (!companyData?.schools) return [];
+      if (!filteredSchools || filteredSchools.length === 0) return [];
       
-      const schoolIds = companyData.schools.map((s: any) => s.id);
+      const schoolIds = filteredSchools.map((s: any) => s.id);
       
       if (schoolIds.length === 0) return [];
       
@@ -364,6 +364,7 @@ export default function OrganizationStructureTab({
         .in('school_id', schoolIds)
         .order('name');
       
+      // Always filter branches by active status unless showInactive is true
       if (!showInactive) {
         query = query.eq('status', 'active');
       }
@@ -386,16 +387,22 @@ export default function OrganizationStructureTab({
       }));
     },
     {
-      enabled: !!companyData?.schools && visibleLevels.has('branches'),
+      enabled: !!filteredSchools && filteredSchools.length > 0 && visibleLevels.has('branches'),
       staleTime: 60 * 1000,
       cacheTime: 5 * 60 * 1000
     }
   );
 
   // Filter schools based on active/inactive toggle - MOVED AFTER allBranches query
-  const filteredSchools = showInactive 
-    ? companyData.schools 
-    : companyData.schools?.filter((s: any) => s.status === 'active') || [];
+  const filteredSchools = useMemo(() => {
+    if (!companyData?.schools) return [];
+    
+    // Default behavior: show only active schools
+    // When showInactive is true: show all schools (active + inactive)
+    return showInactive 
+      ? companyData.schools 
+      : companyData.schools.filter((s: any) => s.status === 'active');
+  }, [companyData?.schools, showInactive]);
 
   // Helper to get or create card ref
   const getCardRef = useCallback((id: string) => {
@@ -453,28 +460,26 @@ export default function OrganizationStructureTab({
   }, [treeNodes, nodeDimensions, layoutConfig]);
   // Calculate hierarchical data from actual data
   const hierarchicalData = useMemo(() => {
-    if (!companyData?.schools) return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
+    if (!filteredSchools || filteredSchools.length === 0) {
+      return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
+    }
     
-    const activeSchools = showInactive 
-      ? companyData.schools 
-      : companyData.schools.filter((s: any) => s.status === 'active');
-    
-    const totalSchools = activeSchools.length;
-    const totalBranches = activeSchools.reduce((sum: number, school: any) => 
+    const totalSchools = filteredSchools.length;
+    const totalBranches = filteredSchools.reduce((sum: number, school: any) => 
       sum + (school.branch_count || 0), 0
     );
-    const totalStudents = activeSchools.reduce((sum: number, school: any) => 
+    const totalStudents = filteredSchools.reduce((sum: number, school: any) => 
       sum + (school.student_count || school.additional?.student_count || 0), 0
     );
-    const totalTeachers = activeSchools.reduce((sum: number, school: any) => 
+    const totalTeachers = filteredSchools.reduce((sum: number, school: any) => 
       sum + (school.additional?.teachers_count || 0), 0
     );
-    const totalUsers = activeSchools.reduce((sum: number, school: any) => 
+    const totalUsers = filteredSchools.reduce((sum: number, school: any) => 
       sum + (school.additional?.admin_users_count || 0), 0
     ) + (companyData.additional?.admin_users_count || 0);
     
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
-  }, [companyData, showInactive]);
+  }, [filteredSchools, companyData]);
 
   // Group branches by school when data is available
   useEffect(() => {
@@ -985,7 +990,7 @@ export default function OrganizationStructureTab({
             
             <LevelTabs visibleLevels={visibleLevels} onToggleLevel={toggleLevel} />
             
-            {/* Active/Inactive Toggle */}
+            {/* Show Inactive Toggle */}
             <button
               onClick={() => setShowInactive(!showInactive)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
@@ -993,11 +998,11 @@ export default function OrganizationStructureTab({
                          hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               {showInactive ? (
-                <ToggleRight className="w-4 h-4 text-green-500" />
+                <ToggleRight className="w-4 h-4 text-orange-500" />
               ) : (
                 <ToggleLeft className="w-4 h-4" />
               )}
-              <span>{showInactive ? 'Showing All' : 'Active Only'}</span>
+              <span>Show Inactive</span>
             </button>
           </div>
 
