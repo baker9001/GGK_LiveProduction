@@ -31,8 +31,8 @@ import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '../../../../../lib/auth';
 import { useUser } from '../../../../../contexts/UserContext';
 import { SlideInForm } from '../../../../../components/shared/SlideInForm';
-import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
+import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolData {
@@ -84,6 +84,11 @@ export interface SchoolsTabProps {
   refreshData?: () => void;
 }
 
+// ===== REF INTERFACE =====
+export interface SchoolsTabRef {
+  openEditSchoolModal: (school: SchoolData) => void;
+}
+
 // ===== STATUS BADGE COMPONENT =====
 const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
   const getStatusConfig = () => {
@@ -124,7 +129,7 @@ const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs'
 StatusBadge.displayName = 'StatusBadge';
 
 // ===== MAIN COMPONENT =====
-export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) {
+const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -138,6 +143,13 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
   const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // ===== EXPOSE METHODS VIA REF =====
+  React.useImperativeHandle(ref, () => ({
+    openEditSchoolModal: (school: SchoolData) => {
+      handleEdit(school);
+    }
+  }), []);
 
   // ===== FETCH SCHOOLS =====
   const { data: schools = [], isLoading, refetch } = useQuery(
@@ -394,297 +406,6 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
   const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
   const totalTeachers = schools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
 
-  // ===== RENDER FORM =====
-  const renderSchoolForm = () => (
-    <>
-      {activeTab === 'basic' && (
-        <div className="space-y-4">
-          <FormField id="name" label="School Name" required error={formErrors.name}>
-            <Input
-              id="name"
-              value={formData.name || ''}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="Enter school name"
-            />
-          </FormField>
-
-          <FormField id="code" label="School Code" required error={formErrors.code}>
-            <Input
-              id="code"
-              value={formData.code || ''}
-              onChange={(e) => setFormData({...formData, code: e.target.value})}
-              placeholder="e.g., SCH-001"
-            />
-          </FormField>
-
-          <FormField id="status" label="Status" required error={formErrors.status}>
-            <Select
-              id="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              value={formData.status || 'active'}
-              onChange={(value) => setFormData({...formData, status: value})}
-            />
-          </FormField>
-
-          <FormField id="school_type" label="School Type">
-            <Select
-              id="school_type"
-              options={[
-                { value: 'primary', label: 'Primary School' },
-                { value: 'secondary', label: 'Secondary School' },
-                { value: 'k12', label: 'K-12' },
-                { value: 'other', label: 'Other' }
-              ]}
-              value={formData.school_type || ''}
-              onChange={(value) => setFormData({...formData, school_type: value})}
-              placeholder="Select school type"
-            />
-          </FormField>
-
-          <FormField id="description" label="Description">
-            <Textarea
-              id="description"
-              value={formData.description || ''}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              placeholder="Enter school description"
-              rows={3}
-            />
-          </FormField>
-
-          <FormField id="curriculum_type" label="Curriculum Types">
-            <div className="space-y-2">
-              {['national', 'cambridge', 'ib', 'american', 'other'].map(type => (
-                <label key={type} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={(formData.curriculum_type || []).includes(type)}
-                    onChange={(e) => {
-                      const current = formData.curriculum_type || [];
-                      if (e.target.checked) {
-                        setFormData({...formData, curriculum_type: [...current, type]});
-                      } else {
-                        setFormData({...formData, curriculum_type: current.filter((t: string) => t !== type)});
-                      }
-                    }}
-                    className="rounded border-gray-300 dark:border-gray-600"
-                  />
-                  <span className="text-sm capitalize">{type}</span>
-                </label>
-              ))}
-            </div>
-          </FormField>
-
-          <FormField id="total_capacity" label="Total Capacity">
-            <Input
-              id="total_capacity"
-              type="number"
-              value={formData.total_capacity || ''}
-              onChange={(e) => setFormData({...formData, total_capacity: parseInt(e.target.value)})}
-              placeholder="Maximum student capacity"
-            />
-          </FormField>
-
-          <FormField id="student_count" label="Current Students">
-            <Input
-              id="student_count"
-              type="number"
-              value={formData.student_count || ''}
-              onChange={(e) => setFormData({...formData, student_count: parseInt(e.target.value)})}
-              placeholder="Current number of students"
-            />
-          </FormField>
-        </div>
-      )}
-
-      {activeTab === 'additional' && (
-        <div className="space-y-4">
-          <FormField id="campus_address" label="Campus Address">
-            <Input
-              id="campus_address"
-              value={formData.campus_address || ''}
-              onChange={(e) => setFormData({...formData, campus_address: e.target.value})}
-              placeholder="Enter campus address"
-            />
-          </FormField>
-
-          <FormField id="campus_city" label="Campus City">
-            <Input
-              id="campus_city"
-              value={formData.campus_city || ''}
-              onChange={(e) => setFormData({...formData, campus_city: e.target.value})}
-              placeholder="Enter city"
-            />
-          </FormField>
-
-          <FormField id="campus_state" label="Campus State">
-            <Input
-              id="campus_state"
-              value={formData.campus_state || ''}
-              onChange={(e) => setFormData({...formData, campus_state: e.target.value})}
-              placeholder="Enter state/province"
-            />
-          </FormField>
-
-          <FormField id="campus_postal_code" label="Postal Code">
-            <Input
-              id="campus_postal_code"
-              value={formData.campus_postal_code || ''}
-              onChange={(e) => setFormData({...formData, campus_postal_code: e.target.value})}
-              placeholder="Enter postal code"
-            />
-          </FormField>
-
-          <FormField id="established_date" label="Established Date">
-            <Input
-              id="established_date"
-              type="date"
-              value={formData.established_date || ''}
-              onChange={(e) => setFormData({...formData, established_date: e.target.value})}
-            />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField id="academic_year_start" label="Academic Year Start">
-              <Input
-                id="academic_year_start"
-                type="number"
-                min="1"
-                max="12"
-                value={formData.academic_year_start || ''}
-                onChange={(e) => setFormData({...formData, academic_year_start: parseInt(e.target.value)})}
-                placeholder="Month (1-12)"
-              />
-            </FormField>
-
-            <FormField id="academic_year_end" label="Academic Year End">
-              <Input
-                id="academic_year_end"
-                type="number"
-                min="1"
-                max="12"
-                value={formData.academic_year_end || ''}
-                onChange={(e) => setFormData({...formData, academic_year_end: parseInt(e.target.value)})}
-                placeholder="Month (1-12)"
-              />
-            </FormField>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.has_library || false}
-                  onChange={(e) => setFormData({...formData, has_library: e.target.checked})}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                <BookOpen className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">Has Library</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.has_laboratory || false}
-                  onChange={(e) => setFormData({...formData, has_laboratory: e.target.checked})}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                <FlaskConical className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">Has Laboratory</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.has_sports_facilities || false}
-                  onChange={(e) => setFormData({...formData, has_sports_facilities: e.target.checked})}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                <Dumbbell className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">Has Sports Facilities</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.has_cafeteria || false}
-                  onChange={(e) => setFormData({...formData, has_cafeteria: e.target.checked})}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                <Coffee className="w-4 h-4 text-gray-500" />
-                <span className="text-sm">Has Cafeteria</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'contact' && (
-        <div className="space-y-4">
-          <FormField id="principal_name" label="Principal Name">
-            <Input
-              id="principal_name"
-              value={formData.principal_name || ''}
-              onChange={(e) => setFormData({...formData, principal_name: e.target.value})}
-              placeholder="Enter principal name"
-            />
-          </FormField>
-
-          <FormField id="principal_email" label="Principal Email" error={formErrors.principal_email}>
-            <Input
-              id="principal_email"
-              type="email"
-              value={formData.principal_email || ''}
-              onChange={(e) => setFormData({...formData, principal_email: e.target.value})}
-              placeholder="principal@school.com"
-            />
-          </FormField>
-
-          <FormField id="principal_phone" label="Principal Phone">
-            <Input
-              id="principal_phone"
-              type="tel"
-              value={formData.principal_phone || ''}
-              onChange={(e) => setFormData({...formData, principal_phone: e.target.value})}
-              placeholder="+1 (555) 123-4567"
-            />
-          </FormField>
-
-          <FormField id="teachers_count" label="Total Teachers">
-            <Input
-              id="teachers_count"
-              type="number"
-              value={formData.teachers_count || ''}
-              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
-              placeholder="Number of teachers"
-            />
-          </FormField>
-
-          <FormField id="active_teachers_count" label="Active Teachers">
-            <Input
-              id="active_teachers_count"
-              type="number"
-              value={formData.active_teachers_count || ''}
-              onChange={(e) => setFormData({...formData, active_teachers_count: parseInt(e.target.value)})}
-              placeholder="Number of active teachers"
-            />
-          </FormField>
-
-          <FormField id="notes" label="Notes">
-            <Textarea
-              id="notes"
-              value={formData.notes || ''}
-              onChange={(e) => setFormData({...formData, notes: e.target.value})}
-              placeholder="Additional notes"
-              rows={3}
-            />
-          </FormField>
-        </div>
-      )}
-    </>
-  );
-
   // ===== MAIN RENDER =====
   return (
     <div className="space-y-4">
@@ -868,40 +589,16 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
         }}
         onSave={() => handleSubmit('create')}
       >
-        <div className="space-y-4">
-          {/* Tab Navigation */}
-          <div className="flex space-x-4 border-b dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`pb-2 px-1 ${activeTab === 'basic' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Basic Info
-            </button>
-            <button
-              onClick={() => setActiveTab('additional')}
-              className={`pb-2 px-1 ${activeTab === 'additional' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Additional
-            </button>
-            <button
-              onClick={() => setActiveTab('contact')}
-              className={`pb-2 px-1 ${activeTab === 'contact' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Contact
-            </button>
-          </div>
-
-          {/* Form Content */}
-          <div className="mt-4">
-            {renderSchoolForm()}
-          </div>
-        </div>
+        <SchoolFormContent
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          setFormErrors={setFormErrors}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          companyId={companyId}
+          isEditing={false}
+        />
       </SlideInForm>
 
       {/* Edit Modal */}
@@ -916,41 +613,21 @@ export default function SchoolsTab({ companyId, refreshData }: SchoolsTabProps) 
         }}
         onSave={() => handleSubmit('edit')}
       >
-        <div className="space-y-4">
-          {/* Tab Navigation */}
-          <div className="flex space-x-4 border-b dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`pb-2 px-1 ${activeTab === 'basic' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Basic Info
-            </button>
-            <button
-              onClick={() => setActiveTab('additional')}
-              className={`pb-2 px-1 ${activeTab === 'additional' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Additional
-            </button>
-            <button
-              onClick={() => setActiveTab('contact')}
-              className={`pb-2 px-1 ${activeTab === 'contact' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Contact
-            </button>
-          </div>
-
-          {/* Form Content */}
-          <div className="mt-4">
-            {renderSchoolForm()}
-          </div>
-        </div>
+        <SchoolFormContent
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={formErrors}
+          setFormErrors={setFormErrors}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          companyId={companyId}
+          isEditing={true}
+        />
       </SlideInForm>
     </div>
   );
-}
+});
+
+SchoolsTab.displayName = 'SchoolsTab';
+
+export default SchoolsTab;

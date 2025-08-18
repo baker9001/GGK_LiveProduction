@@ -26,6 +26,7 @@ import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
+import type { SchoolsTabRef } from './tabs/schools/page';
 
 // ===== LAZY LOAD TAB COMPONENTS =====
 const OrganizationStructureTab = lazy(() => 
@@ -157,6 +158,9 @@ export default function OrganizationManagement() {
   const [formActiveTab, setFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   const [detailsTab, setDetailsTab] = useState<'details' | 'departments' | 'academic'>('details');
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
+
+  // ===== REFS FOR TAB COMPONENTS =====
+  const schoolsTabRef = useRef<SchoolsTabRef>(null);
 
   // ===== FETCH USER COMPANY (OPTIMIZED) =====
   useEffect(() => {
@@ -595,10 +599,19 @@ export default function OrganizationManagement() {
 
   // ===== CALLBACKS =====
   const handleItemClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
-    setSelectedItem(item);
-    setSelectedType(type);
-    setShowDetailsPanel(true);
-    setDetailsTab('details');
+    if (type === 'school') {
+      // For school cards, open the unified edit form
+      setActiveTab('schools');
+      setTimeout(() => {
+        schoolsTabRef.current?.openEditSchoolModal(item);
+      }, 100);
+    } else {
+      // For other types, show the details panel as before
+      setSelectedItem(item);
+      setSelectedType(type);
+      setShowDetailsPanel(true);
+      setDetailsTab('details');
+    }
   }, []);
 
   const handleAddClick = useCallback((parentItem: any, parentType: 'company' | 'school') => {
@@ -953,6 +966,7 @@ export default function OrganizationManagement() {
               )}
               {activeTab === 'schools' && userCompanyId && (
                 <SchoolsTab
+                  ref={schoolsTabRef}
                   companyId={userCompanyId}
                   refreshData={() => {
                     refetch();
