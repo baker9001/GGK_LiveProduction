@@ -1,16 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * FIXED Organization Structure with Proper Layout & Hierarchy
+ * COMPLETELY FIXED Organization Structure
  * 
- * Features:
- * ✅ Proper hierarchical tree layout
- * ✅ Connection lines between levels
- * ✅ Color-coded cards based on level
- * ✅ Dynamic card sizing with alignment
- * ✅ Active/Inactive filter toggle
- * ✅ Real data integration with Supabase
- * ✅ Progressive loading with skeleton states
+ * Fixed Issues:
+ * ✅ Branches now properly aligned under their respective schools
+ * ✅ Full width utilization - no wasted space
+ * ✅ Pointer events fixed for clickable arrows
+ * ✅ Proper nesting structure maintained
  */
 
 'use client';
@@ -323,7 +320,7 @@ export default function OrganizationStructureTab({
   refreshData 
 }: OrgStructureProps) {
   const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
-    new Set(['entity', 'schools'])
+    new Set(['entity', 'schools', 'branches'])
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [lazyLoadedData, setLazyLoadedData] = useState<Map<string, any[]>>(new Map());
@@ -459,7 +456,7 @@ export default function OrganizationStructureTab({
     }
   }, [showInactive]);
 
-  // Toggle node expansion - Fixed to work properly
+  // Toggle node expansion
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
     
@@ -539,7 +536,7 @@ export default function OrganizationStructureTab({
     ? companyData.schools 
     : companyData.schools?.filter((s: any) => s.status === 'active') || [];
 
-  // Render the chart
+  // Render the chart - FIXED STRUCTURE WITH PROPER NESTING
   const renderChart = () => {
     return (
       <div className="w-full">
@@ -556,17 +553,7 @@ export default function OrganizationStructureTab({
                 onAddClick={onAddClick}
                 hasChildren={filteredSchools?.length > 0}
                 isExpanded={expandedNodes.has('company')}
-                onToggleExpand={() => {
-                  setExpandedNodes(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has('company')) {
-                      newSet.delete('company');
-                    } else {
-                      newSet.add('company');
-                    }
-                    return newSet;
-                  });
-                }}
+                onToggleExpand={() => toggleNode('company', 'company')}
                 hierarchicalData={hierarchicalData}
               />
             )}
@@ -581,24 +568,24 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* LEVEL 2: Schools */}
+        {/* LEVEL 2: Schools WITH NESTED BRANCHES */}
         {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && (
           <div className="relative mb-12">
             {/* Horizontal Connection Line for multiple schools */}
             {filteredSchools.length > 1 && !initialLoading && (
               <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
-                            flex items-end justify-center"
+                            flex items-end justify-center pointer-events-none"
                    style={{ 
                      width: `${Math.max(280 * filteredSchools.length + 40 * (filteredSchools.length - 1), 280)}px`,
                      height: '48px'
                    }}>
-                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
+                <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0 pointer-events-none"></div>
                 {/* Vertical connectors for each school */}
-                <div className="w-full flex justify-center relative">
+                <div className="w-full flex justify-center relative pointer-events-none">
                   {filteredSchools.map((_: any, index: number) => (
                     <div 
                       key={index} 
-                      className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
+                      className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600 pointer-events-none"
                       style={{ 
                         left: `${(100 / filteredSchools.length) * index + (50 / filteredSchools.length)}%`,
                         bottom: '-24px',
@@ -610,7 +597,7 @@ export default function OrganizationStructureTab({
               </div>
             )}
             
-            {/* Schools Grid */}
+            {/* Schools Grid with NESTED Branches */}
             <div className="flex flex-wrap justify-center gap-10">
               {initialLoading ? (
                 <>
@@ -619,126 +606,96 @@ export default function OrganizationStructureTab({
                   <CardSkeleton />
                 </>
               ) : (
-                filteredSchools.map((school: any) => (
-                  <OrgCard
-                    key={school.id}
-                    item={school}
-                    type="school"
-                    onItemClick={onItemClick}
-                    onAddClick={onAddClick}
-                    hasChildren={school.branch_count > 0}
-                    isExpanded={expandedNodes.has(`school-${school.id}`)}
-                    onToggleExpand={() => {
-                      const key = `school-${school.id}`;
-                      setExpandedNodes(prev => {
-                        const newSet = new Set(prev);
-                        if (newSet.has(key)) {
-                          newSet.delete(key);
-                        } else {
-                          newSet.add(key);
-                          // Load branches when expanding
-                          loadNodeData(school.id, 'school');
-                        }
-                        return newSet;
-                      });
-                    }}
-                  />
-                ))
+                filteredSchools.map((school: any) => {
+                  const schoolKey = `school-${school.id}`;
+                  const isExpanded = expandedNodes.has(schoolKey);
+                  const branches = lazyLoadedData.get(schoolKey) || [];
+                  const isLoading = loadingNodes.has(schoolKey);
+
+                  return (
+                    <div key={school.id} className="flex flex-col items-center">
+                      {/* School Card */}
+                      <OrgCard
+                        item={school}
+                        type="school"
+                        onItemClick={onItemClick}
+                        onAddClick={onAddClick}
+                        hasChildren={school.branch_count > 0 || isLoading || branches.length > 0}
+                        isExpanded={isExpanded}
+                        onToggleExpand={() => toggleNode(school.id, 'school')}
+                      />
+
+                      {/* NESTED BRANCHES UNDER THIS SCHOOL */}
+                      {visibleLevels.has('branches') && isExpanded && (
+                        <>
+                          {/* Vertical connector from school to branches */}
+                          {(isLoading || branches.length > 0) && (
+                            <div className="flex justify-center mt-6 mb-4 pointer-events-none">
+                              <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
+                            </div>
+                          )}
+
+                          {/* Branches for this school */}
+                          {isLoading ? (
+                            <div className="flex gap-10">
+                              <CardSkeleton />
+                              <CardSkeleton />
+                            </div>
+                          ) : branches.length > 0 ? (
+                            <div className="relative">
+                              {/* Horizontal connector for multiple branches */}
+                              {branches.length > 1 && (
+                                <div
+                                  className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-6
+                                           flex items-end justify-center pointer-events-none"
+                                  style={{
+                                    width: `${Math.max(280 * branches.length + 40 * (branches.length - 1), 280)}px`,
+                                    height: '48px'
+                                  }}
+                                >
+                                  <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0 pointer-events-none" />
+                                  <div className="w-full flex justify-center relative pointer-events-none">
+                                    {branches.map((_: any, index: number) => (
+                                      <div
+                                        key={index}
+                                        className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600 pointer-events-none"
+                                        style={{
+                                          left: `${(100 / branches.length) * index + (50 / branches.length)}%`,
+                                          bottom: '-24px',
+                                          transform: 'translateX(-50%)'
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Branch cards */}
+                              <div className="flex flex-wrap justify-center gap-10">
+                                {branches.map((branch: any) => (
+                                  <OrgCard
+                                    key={branch.id}
+                                    item={branch}
+                                    type="branch"
+                                    onItemClick={onItemClick}
+                                    onAddClick={onAddClick}
+                                    hasChildren={branch.year_count > 0}
+                                    isExpanded={expandedNodes.has(`branch-${branch.id}`)}
+                                    onToggleExpand={() => toggleNode(branch.id, 'branch')}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
         )}
-
-        {/* LEVEL 3: Branches - Group by School */}
-        {visibleLevels.has('branches') && filteredSchools?.map((school: any) => {
-          const schoolKey = `school-${school.id}`;
-          const branches = lazyLoadedData.get(schoolKey) || [];
-          const isLoading = loadingNodes.has(schoolKey);
-          const isExpanded = expandedNodes.has(schoolKey);
-
-          // Don't show anything if school is not expanded
-          if (!isExpanded) return null;
-
-          // Auto-load branches when school is expanded
-          if (!branches.length && !isLoading && isExpanded) {
-            loadNodeData(school.id, 'school');
-          }
-
-          return (
-            <div key={`branches-${school.id}`} className="mt-12">
-              {/* Connection from specific school to its branches */}
-              {(branches.length > 0 || isLoading) && (
-                <div className="flex justify-center mb-4">
-                  <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
-                </div>
-              )}
-
-              {isLoading ? (
-                <div className="flex justify-center gap-10">
-                  <CardSkeleton />
-                  <CardSkeleton />
-                </div>
-              ) : branches.length > 0 ? (
-                <div className="relative">
-                  {/* Horizontal line for multiple branches */}
-                  {branches.length > 1 && (
-                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
-                                  flex items-end justify-center"
-                         style={{ 
-                           width: `${Math.max(280 * branches.length + 40 * (branches.length - 1), 280)}px`,
-                           height: '48px'
-                         }}>
-                      <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
-                      {/* Vertical connectors for each branch */}
-                      <div className="w-full flex justify-center relative">
-                        {branches.map((_: any, index: number) => (
-                          <div 
-                            key={index} 
-                            className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
-                            style={{ 
-                              left: `${(100 / branches.length) * index + (50 / branches.length)}%`,
-                              bottom: '-24px',
-                              transform: 'translateX(-50%)'
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Branches Grid aligned under their school */}
-                  <div className="flex flex-wrap justify-center gap-10">
-                    {branches.map((branch: any) => (
-                      <OrgCard
-                        key={branch.id}
-                        item={branch}
-                        type="branch"
-                        onItemClick={onItemClick}
-                        onAddClick={onAddClick}
-                        hasChildren={branch.year_count > 0}
-                        isExpanded={expandedNodes.has(`branch-${branch.id}`)}
-                        onToggleExpand={() => {
-                          const key = `branch-${branch.id}`;
-                          setExpandedNodes(prev => {
-                            const newSet = new Set(prev);
-                            if (newSet.has(key)) {
-                              newSet.delete(key);
-                            } else {
-                              newSet.add(key);
-                              // Load years when expanding
-                              loadNodeData(branch.id, 'branch');
-                            }
-                            return newSet;
-                          });
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
 
         {/* LEVEL 4 & 5: Years and Sections placeholders */}
         {visibleLevels.has('years') && !visibleLevels.has('branches') && (
@@ -763,7 +720,7 @@ export default function OrganizationStructureTab({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -832,10 +789,10 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Chart Container */}
-      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[700px]'}`}>
+      {/* Chart Container - FULL WIDTH */}
+      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'min-h-[700px]'} w-full`}>
         <div 
-          className="p-8 min-w-[1024px]"
+          className="p-8 w-full min-w-full"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
