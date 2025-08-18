@@ -423,6 +423,8 @@ export default function OrganizationStructureTab({
 
   // Build tree structure from data
   const treeNodes = useMemo(() => {
+    if (!companyData) return new Map();
+    
     return buildTreeFromData(
       companyData,
       expandedNodes,
@@ -434,7 +436,17 @@ export default function OrganizationStructureTab({
 
   // Calculate layout positions
   useEffect(() => {
-    if (treeNodes.size === 0 || nodeDimensions.size === 0) return;
+    if (treeNodes.size === 0) return;
+    
+    // If we don't have dimensions yet, use default dimensions for initial layout
+    const defaultDimensions = new Map<string, NodeDimensions>();
+    if (nodeDimensions.size === 0) {
+      treeNodes.forEach((node, nodeId) => {
+        defaultDimensions.set(nodeId, { width: 260, height: 140 });
+      });
+    }
+    
+    const dimensionsToUse = nodeDimensions.size > 0 ? nodeDimensions : defaultDimensions;
 
     const layoutEngine = new TreeLayoutEngine(treeNodes, nodeDimensions, layoutConfig);
     const result = layoutEngine.layout('company');
@@ -746,11 +758,21 @@ export default function OrganizationStructureTab({
 
   // Render the organizational chart
   const renderChart = () => {
+    if (!companyData) {
+      return (
+        <div className="text-center py-12">
+          <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading organization data...</p>
+        </div>
+      );
+    }
+    
     if (treeNodes.size === 0) {
       return (
         <div className="text-center py-12">
           <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No organization data available</p>
+          <p className="text-gray-500 dark:text-gray-400">No organization structure to display</p>
+          <p className="text-xs text-gray-400 mt-2">Try enabling different levels or check your data</p>
         </div>
       );
     }
@@ -767,9 +789,9 @@ export default function OrganizationStructureTab({
         {/* Render all nodes with absolute positioning */}
         {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
           const position = layoutPositions.get(nodeId);
-          const dimensions = nodeDimensions.get(nodeId);
+          const dimensions = nodeDimensions.get(nodeId) || { width: 260, height: 140 };
           
-          if (!position || !dimensions) return null;
+          if (!position) return null;
 
           // Determine if this node should be rendered based on loading states
           if (initialLoading && nodeId !== 'company') return null;

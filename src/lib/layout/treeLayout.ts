@@ -252,6 +252,11 @@ export function buildTreeFromData(
 ): Map<string, TreeNode> {
   const nodes = new Map<string, TreeNode>();
 
+  // Early return if no company data
+  if (!companyData) {
+    return nodes;
+  }
+
   // Add company node
   if (visibleLevels.has('entity')) {
     nodes.set('company', {
