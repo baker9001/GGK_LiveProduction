@@ -489,7 +489,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       <img
                         src={getSchoolLogoUrl(school.logo)}
                         alt={`${school.name} logo`}
-                        className="w-full h-full object-contain p-1"
+                        className="w-full h-full object-contain"
                         onError={(e) => {
                           // If logo fails to load, hide the image and show fallback
                           e.currentTarget.style.display = 'none';

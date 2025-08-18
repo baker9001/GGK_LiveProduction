@@ -43,6 +43,7 @@ interface BranchData {
   status: 'active' | 'inactive';
   address?: string;
   notes?: string;
+  logo?: string;
   created_at: string;
   additional?: BranchAdditional;
   student_count?: number;
@@ -127,6 +128,19 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
+
+  // Helper to get branch logo URL
+  const getBranchLogoUrl = (path: string | null) => {
+    if (!path) return null;
+    
+    // If it's already a full URL, return as is
+    if (path.startsWith('http')) {
+      return path;
+    }
+    
+    // Construct Supabase storage URL
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
+  };
 
   // ===== FETCH SCHOOLS FOR DROPDOWN =====
   const { data: schools = [] } = useQuery(
@@ -717,8 +731,28 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center overflow-hidden">
+                    {branch.logo ? (
+                      <img
+                        src={getBranchLogoUrl(branch.logo)}
+                        alt={`${branch.name} logo`}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          // If logo fails to load, hide the image and show fallback
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.logo-fallback');
+                            if (fallback) {
+                              (fallback as HTMLElement).style.display = 'flex';
+                            }
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <span className={`text-sm font-bold logo-fallback ${branch.logo ? 'hidden' : 'flex'} items-center justify-center w-full h-full text-purple-600 dark:text-purple-400`}>
+                      {branch.code?.substring(0, 2).toUpperCase() || branch.name?.substring(0, 2).toUpperCase() || <MapPin className="w-5 h-5" />}
+                    </span>
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white">{branch.name}</h3>
