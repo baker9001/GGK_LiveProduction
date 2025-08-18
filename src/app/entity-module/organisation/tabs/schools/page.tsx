@@ -373,6 +373,13 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   // Helper to get school logo URL
   const getSchoolLogoUrl = (path: string | null) => {
     if (!path) return null;
+    
+    // If it's already a full URL, return as is
+    if (path.startsWith('http')) {
+      return path;
+    }
+    
+    // Construct Supabase storage URL
     return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
   };
 
