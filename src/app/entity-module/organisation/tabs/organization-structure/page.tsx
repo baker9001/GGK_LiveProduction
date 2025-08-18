@@ -950,7 +950,7 @@ export default function OrganizationStructureTab({
         {/* LEVEL 1: Company/Entity */}
         {visibleLevels.has('entity') && (
           <div className="flex justify-center mb-16">
-            {initialLoading || isLoadingFull ? (
+            {initialLoading ? (
               <CardSkeleton />
             ) : (
               <OrgCard
