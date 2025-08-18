@@ -587,6 +587,29 @@ export default function OrganizationStructureTab({
         } else if (level === 'years') {
           newSet.delete('sections');
         }
+      } else if (level === 'branches') {
+        // Turning ON branches: expand all schools that have branches
+        newSet.add(level);
+        if (!newSet.has('schools')) {
+          newSet.add('schools'); // Ensure schools are visible if branches are turned on
+        }
+        if (companyData?.schools) {
+          companyData.schools.forEach((school: any) => {
+            if (school.branch_count > 0) {
+              newSet.add(`school-${school.id}`);
+              // Also load data for these schools if not already loaded
+              loadNodeData(school.id, 'school');
+            }
+          });
+        }
+      } else if (level === 'branches' && newSet.has(level)) {
+        // Turning OFF branches: collapse all schools
+        newSet.delete(level);
+        if (companyData?.schools) {
+          companyData.schools.forEach((school: any) => {
+            newSet.delete(`school-${school.id}`);
+          });
+        }
       } else {
         // Turning ON a level
         newSet.add(level);
