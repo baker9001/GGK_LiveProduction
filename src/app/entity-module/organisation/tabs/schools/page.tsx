@@ -370,6 +370,12 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
   const totalTeachers = schools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
 
+  // Helper to get school logo URL
+  const getSchoolLogoUrl = (path: string | null) => {
+    if (!path) return null;
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
+  };
+
   // ===== MAIN RENDER =====
   return (
     <div className="space-y-4">
@@ -471,8 +477,28 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                    <School className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center overflow-hidden">
+                    {school.logo ? (
+                      <img
+                        src={getSchoolLogoUrl(school.logo)}
+                        alt={`${school.name} logo`}
+                        className="w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          // If logo fails to load, hide the image and show fallback
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.logo-fallback');
+                            if (fallback) {
+                              (fallback as HTMLElement).style.display = 'flex';
+                            }
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <span className={`text-sm font-bold logo-fallback ${school.logo ? 'hidden' : 'flex'} items-center justify-center w-full h-full text-green-600 dark:text-green-400`}>
+                      {school.code?.substring(0, 2).toUpperCase() || school.name?.substring(0, 2).toUpperCase() || <School className="w-5 h-5" />}
+                    </span>
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
