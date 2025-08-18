@@ -345,11 +345,6 @@ export default function OrganizationStructureTab({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
 
-  // Filter schools based on active/inactive toggle - MOVED UP to fix initialization order
-  const filteredSchools = showInactive 
-    ? companyData.schools 
-    : companyData.schools?.filter((s: any) => s.status === 'active') || [];
-
   // Fetch branches for all schools when branches tab is enabled - MOVED UP to fix initialization order
   const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
     ['all-branches', companyId, showInactive],
@@ -396,6 +391,11 @@ export default function OrganizationStructureTab({
       cacheTime: 5 * 60 * 1000
     }
   );
+
+  // Filter schools based on active/inactive toggle - MOVED AFTER allBranches query
+  const filteredSchools = showInactive 
+    ? companyData.schools 
+    : companyData.schools?.filter((s: any) => s.status === 'active') || [];
 
   // Helper to get or create card ref
   const getCardRef = useCallback((id: string) => {
