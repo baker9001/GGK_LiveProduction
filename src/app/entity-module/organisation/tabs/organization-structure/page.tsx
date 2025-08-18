@@ -1036,11 +1036,8 @@ export default function OrganizationStructureTab({
         <svg
           className="absolute inset-0 pointer-events-none z-1"
           style={{
-            position: 'absolute', 
-            top: '0px',
-            left: '0px',
-            width: `${canvasSize.width + 128}px`,
-            height: `${canvasSize.height + 128}px`
+            width: '100%',
+            height: '100%'
           }}
         >
           <defs>
@@ -1060,35 +1057,8 @@ export default function OrganizationStructureTab({
             </marker>
           </defs>
           {Array.from(treeNodes.entries())
-            .filter(([nodeId, node]) => {
-              // Only render connections for nodes that are actually visible
-              if (!node.parentId) return false;
-              
-              // Check if both parent and child nodes exist in our filtered tree AND are visible
-              const parentExists = treeNodes.has(node.parentId);
-              const childExists = treeNodes.has(nodeId);
-              
-              // Additional check: ensure both nodes are actually rendered (not filtered out)
-              const parentNode = treeNodes.get(node.parentId);
-              const childNode = treeNodes.get(nodeId);
-              
-              // For schools, check if they're in the filtered schools list
-              if (parentNode?.type === 'company' && childNode?.type === 'school') {
-                const schoolId = nodeId.replace('school-', '');
-                const isSchoolVisible = filteredSchools.some((s: any) => s.id === schoolId);
-                return parentExists && childExists && isSchoolVisible;
-              }
-              
-              // For branches, check if parent school is visible
-              if (parentNode?.type === 'school' && childNode?.type === 'branch') {
-                const parentSchoolId = node.parentId.replace('school-', '');
-                const isParentSchoolVisible = filteredSchools.some((s: any) => s.id === parentSchoolId);
-                return parentExists && childExists && isParentSchoolVisible;
-              }
-              
-              return parentExists && childExists;
-            })
             .map(([nodeId, node]) => {
+            // Only render connections for nodes that have parents
             if (!node.parentId) return null;
 
             const parentPos = layoutPositions.get(node.parentId);
@@ -1102,10 +1072,9 @@ export default function OrganizationStructureTab({
             
             if (!parentPos || !childPos) return null;
 
-            // Adjust positions to account for SVG offset
             const path = generateConnectionPath(
-              { x: parentPos.x + 64, y: parentPos.y + 64 },
-              { x: childPos.x + 64, y: childPos.y + 64 },
+              { x: parentPos.x, y: parentPos.y },
+              { x: childPos.x, y: childPos.y },
               parentDimensions.height,
               childDimensions.height,
               layoutConfig.gapY

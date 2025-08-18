@@ -341,5 +341,9 @@ export function generateConnectionPath(
   const childTop = childPos.y;
   const midY = parentBottom + gapY / 2;
 
-  return `M ${parentPos.x} ${parentBottom} L ${parentPos.x} ${midY} L ${childPos.x} ${midY} L ${childPos.x} ${childTop}`;
+  // Center the connection points on the cards
+  const parentCenterX = parentPos.x;
+  const childCenterX = childPos.x;
+  
+  return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
 }
