@@ -1096,15 +1096,6 @@ export default function OrganizationStructureTab({
           })}
         </svg>
 
-        {/* Helper messages for better UX */}
-        {!expandedNodes.has('company') && filteredSchools?.length > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Click the arrow on the company card to view schools</p>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
