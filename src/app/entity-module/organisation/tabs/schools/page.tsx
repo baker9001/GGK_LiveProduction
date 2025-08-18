@@ -28,8 +28,13 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { FormField, Button, SlideInForm, DataTable, StatusBadge, Input } from '../../../../components/shared';
+import { getAuthenticatedUser } from '../../../../../lib/auth';
 import { useUser } from '../../../../../contexts/UserContext';
+import { SlideInForm } from '../../../../../components/shared/SlideInForm';
+import { FormField, Input, Select } from '../../../../../components/shared/FormField';
+import { Button } from '../../../../../components/shared/Button';
+import { StatusBadge } from '../../../../../components/shared/StatusBadge';
+// Note: DataTable import removed as it wasn't used in the original file
 import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
 // ===== TYPE DEFINITIONS =====
