@@ -87,45 +87,6 @@ export interface SchoolsTabRef {
   openEditSchoolModal: (school: SchoolData) => void;
 }
 
-// ===== STATUS BADGE COMPONENT =====
-const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
-  const getStatusConfig = () => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return {
-          color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700',
-          icon: <CheckCircle2 className="w-3 h-3" />,
-        };
-      case 'inactive':
-        return {
-          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-          icon: <XCircle className="w-3 h-3" />,
-        };
-      default:
-        return {
-          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-          icon: <AlertTriangle className="w-3 h-3" />,
-        };
-    }
-  };
-
-  const config = getStatusConfig();
-  const sizeClasses = {
-    xs: 'px-1.5 py-0.5 text-xs',
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-3 py-1 text-sm'
-  };
-
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full font-medium border ${config.color} ${sizeClasses[size]}`}>
-      {config.icon}
-      {status || 'Unknown'}
-    </span>
-  );
-});
-
-StatusBadge.displayName = 'StatusBadge';
-
 // ===== MAIN COMPONENT =====
 const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
