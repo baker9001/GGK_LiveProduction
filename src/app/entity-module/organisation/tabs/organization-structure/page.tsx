@@ -504,8 +504,40 @@ export default function OrganizationStructureTab({
       
       if (newSet.has(level)) {
         newSet.delete(level);
+        
+        // If schools is turned off, also turn off branches, years, and sections
+        if (level === 'schools') {
+          newSet.delete('branches');
+          newSet.delete('years');
+          newSet.delete('sections');
+        }
+        // If branches is turned off, also turn off years and sections
+        else if (level === 'branches') {
+          newSet.delete('years');
+          newSet.delete('sections');
+        }
+        // If years is turned off, also turn off sections
+        else if (level === 'years') {
+          newSet.delete('sections');
+        }
       } else {
         newSet.add(level);
+        
+        // If branches is being turned on, ensure schools is also on
+        if (level === 'branches' && !newSet.has('schools')) {
+          newSet.add('schools');
+        }
+        // If years is being turned on, ensure schools and branches are on
+        else if (level === 'years') {
+          if (!newSet.has('schools')) newSet.add('schools');
+          if (!newSet.has('branches')) newSet.add('branches');
+        }
+        // If sections is being turned on, ensure all parent levels are on
+        else if (level === 'sections') {
+          if (!newSet.has('schools')) newSet.add('schools');
+          if (!newSet.has('branches')) newSet.add('branches');
+          if (!newSet.has('years')) newSet.add('years');
+        }
         
         // If branches level is being turned on, load branches for all expanded schools
         if (level === 'branches' && companyData?.schools) {
