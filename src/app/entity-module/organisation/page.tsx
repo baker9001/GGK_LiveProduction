@@ -11,7 +11,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { 
   Building2, School, MapPin, Plus, X, Save, Users, 
   Activity, AlertCircle, Loader2, GraduationCap, Shield,
