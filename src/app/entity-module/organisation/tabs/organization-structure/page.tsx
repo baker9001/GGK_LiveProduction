@@ -644,3 +644,4 @@ export default function OrganizationStructureTab({
       </div>
     </div>
   );
+}
