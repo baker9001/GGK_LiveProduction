@@ -242,12 +242,13 @@ export class TreeLayoutEngine {
   }
 }
 
-// Utility function to build tree from flat data
+// Utility function to build tree from flat data with visibility control
 export function buildTreeFromData(
   companyData: any,
   expandedNodes: Set<string>,
   lazyLoadedData: Map<string, any[]>,
-  branchesData: Map<string, any[]>
+  branchesData: Map<string, any[]>,
+  visibleLevels?: Set<string>
 ): Map<string, TreeNode> {
   const nodes = new Map<string, TreeNode>();
 
@@ -256,7 +257,7 @@ export function buildTreeFromData(
     return nodes;
   }
 
-  // Add company node - always include for arrow functionality
+  // Add company node - always include for tree structure
   nodes.set('company', {
     id: 'company',
     type: 'company',
@@ -264,14 +265,12 @@ export function buildTreeFromData(
     data: companyData
   });
 
-  // Add school nodes - always include if data exists for arrow functionality
-  if (companyData?.schools) {
+  // Only add school children if company is expanded
+  if (expandedNodes.has('company') && companyData?.schools) {
     const schoolChildren: string[] = [];
     
-    // Only process schools that are in the filtered data
+    // Process schools that are in the filtered data
     companyData.schools.forEach((school: any) => {
-      // Skip inactive schools if they shouldn't be shown
-      // (This filtering should already be done in the parent component)
       const schoolId = `school-${school.id}`;
       schoolChildren.push(schoolId);
       
@@ -291,21 +290,21 @@ export function buildTreeFromData(
     }
   }
 
-  // Add branch nodes - always include if data exists for arrow functionality
-  if (true) {
-    // Only process schools that exist in our filtered tree
-    companyData?.schools?.forEach((school: any) => {
+  // Add branch nodes only for expanded schools
+  if (companyData?.schools) {
+    companyData.schools.forEach((school: any) => {
       const schoolId = `school-${school.id}`;
       const schoolNode = nodes.get(schoolId);
       
-      // Only add branches if the school node exists (i.e., school is active/visible)
+      // Only add branches if:
+      // 1. The school node exists
+      // 2. The school is expanded
+      // 3. We have branch data
       if (schoolNode && expandedNodes.has(schoolId)) {
         const branches = lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
         const branchChildren: string[] = [];
 
         branches.forEach((branch: any) => {
-          // Skip inactive branches if they shouldn't be shown
-          // (This filtering should already be done in the query)
           const branchId = `branch-${branch.id}`;
           branchChildren.push(branchId);
           
@@ -322,6 +321,9 @@ export function buildTreeFromData(
       }
     });
   }
+
+  // Add year nodes only for expanded branches (if implemented)
+  // Add section nodes only for expanded years (if implemented)
 
   return nodes;
 }
@@ -342,5 +344,6 @@ export function generateConnectionPath(
   const parentCenterX = parentPos.x;
   const childCenterX = childPos.x;
   
+  // Create smooth orthogonal path
   return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
 }
