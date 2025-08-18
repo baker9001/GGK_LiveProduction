@@ -363,23 +363,6 @@ export default function OrganizationStructureTab({
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-expand schools when branches tab is toggled on
-  useEffect(() => {
-    if (visibleLevels.has('branches') && companyData?.schools) {
-      // Auto-expand all schools when branches tab is turned on
-      companyData.schools.forEach((school: any) => {
-        const schoolKey = `school-${school.id}`;
-        if (!expandedNodes.has(schoolKey)) {
-          setExpandedNodes(prev => new Set(prev).add(schoolKey));
-        }
-        // Load branches for each school
-        if (!lazyLoadedData.has(schoolKey) && !loadingNodes.has(schoolKey)) {
-          loadNodeData(school.id, 'school');
-        }
-      });
-    }
-  }, [visibleLevels]); // Only depend on visibleLevels changes
-
   // Load branches for expanded schools
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
     const key = `${nodeType}-${nodeId}`;
@@ -483,75 +466,35 @@ export default function OrganizationStructureTab({
         newSet.delete(key);
       } else {
         newSet.add(key);
-        // Load data when expanding a node, but only if the corresponding level is visible
-        if (nodeType === 'school' && nodeId && visibleLevels.has('branches')) {
+        // Always load data when expanding a node, regardless of tab visibility
+        if (nodeType === 'school' && nodeId) {
           loadNodeData(nodeId, nodeType);
-        } else if (nodeType === 'branch' && nodeId && visibleLevels.has('years')) {
+        } else if (nodeType === 'branch' && nodeId) {
+          loadNodeData(nodeId, nodeType);
+        } else if (nodeType === 'year' && nodeId) {
           loadNodeData(nodeId, nodeType);
         }
       }
       return newSet;
     });
-  }, [loadNodeData, visibleLevels]);
+  }, [loadNodeData]);
 
   // Toggle level visibility
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
       if (level === 'entity' && newSet.has('entity')) {
-        return prev;
+        return prev; // Never turn off entity tab
       }
       
       if (newSet.has(level)) {
         newSet.delete(level);
-        
-        // If schools is turned off, also turn off branches, years, and sections
-        if (level === 'schools') {
-          newSet.delete('branches');
-          newSet.delete('years');
-          newSet.delete('sections');
-        }
-        // If branches is turned off, also turn off years and sections
-        else if (level === 'branches') {
-          newSet.delete('years');
-          newSet.delete('sections');
-        }
-        // If years is turned off, also turn off sections
-        else if (level === 'years') {
-          newSet.delete('sections');
-        }
       } else {
         newSet.add(level);
-        
-        // If branches is being turned on, ensure schools is also on
-        if (level === 'branches' && !newSet.has('schools')) {
-          newSet.add('schools');
-        }
-        // If years is being turned on, ensure schools and branches are on
-        else if (level === 'years') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          if (!newSet.has('branches')) newSet.add('branches');
-        }
-        // If sections is being turned on, ensure all parent levels are on
-        else if (level === 'sections') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          if (!newSet.has('branches')) newSet.add('branches');
-          if (!newSet.has('years')) newSet.add('years');
-        }
-        
-        // If branches level is being turned on, load branches for all expanded schools
-        if (level === 'branches' && companyData?.schools) {
-          companyData.schools.forEach((school: any) => {
-            const schoolKey = `school-${school.id}`;
-            if (expandedNodes.has(schoolKey) && !lazyLoadedData.has(schoolKey) && !loadingNodes.has(schoolKey)) {
-              loadNodeData(school.id, 'school');
-            }
-          });
-        }
       }
       return newSet;
     });
-  }, [companyData, expandedNodes, lazyLoadedData, loadingNodes, loadNodeData]);
+  }, []);
 
   // Zoom controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
