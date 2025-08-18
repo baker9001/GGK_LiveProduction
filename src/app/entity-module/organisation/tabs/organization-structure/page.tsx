@@ -22,6 +22,15 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { 
+  TreeLayoutEngine, 
+  buildTreeFromData, 
+  generateConnectionPath,
+  type NodePosition,
+  type NodeDimensions,
+  type LayoutConfig
+} from '@/lib/layout/treeLayout';
+import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
 
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
@@ -309,219 +318,6 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   );
 };
 
-// ===== SVG CONNECTION LINES COMPONENT =====
-const SVGConnections = memo(({ 
-  containerRef, 
-  cardRefs, 
-  expandedNodes, 
-  filteredSchools, 
-  branchesData,
-  zoomLevel,
-  visibleLevels,
-  lazyLoadedData
-}: {
-  containerRef: React.RefObject<HTMLDivElement>;
-  cardRefs: React.MutableRefObject<Map<string, React.RefObject<HTMLDivElement>>>;
-  expandedNodes: Set<string>;
-  filteredSchools: any[];
-  branchesData: Map<string, any[]>;
-  zoomLevel: number;
-  visibleLevels: Set<string>;
-  lazyLoadedData: Map<string, any[]>;
-}) => {
-  const [connections, setConnections] = useState<string[]>([]);
-
-  const calculateConnections = useCallback(() => {
-    if (!containerRef.current) return;
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const paths: string[] = [];
-
-    // Company to Schools connections
-    if (expandedNodes.has('company') && filteredSchools.length > 0) {
-      const companyRef = cardRefs.current.get('company');
-      if (companyRef?.current) {
-        const companyRect = companyRef.current.getBoundingClientRect();
-        const companyCenter = {
-          x: companyRect.left + companyRect.width / 2 - containerRect.left,
-          y: companyRect.bottom - containerRect.top
-        };
-
-        // Get all visible school positions
-        const schoolPositions = filteredSchools.map(school => {
-          const schoolRef = cardRefs.current.get(`school-${school.id}`);
-          if (schoolRef?.current) {
-            const schoolRect = schoolRef.current.getBoundingClientRect();
-            return {
-              id: school.id,
-              x: schoolRect.left + schoolRect.width / 2 - containerRect.left,
-              y: schoolRect.top - containerRect.top
-            };
-          }
-          return null;
-        }).filter(Boolean);
-
-        if (schoolPositions.length > 0) {
-          const verticalGap = 40;
-          const horizontalY = companyCenter.y + verticalGap;
-
-          // Vertical line from company down
-          paths.push(`M ${companyCenter.x} ${companyCenter.y} L ${companyCenter.x} ${horizontalY}`);
-
-          if (schoolPositions.length > 1) {
-            // Horizontal distribution line
-            const leftmostX = Math.min(...schoolPositions.map(p => p!.x));
-            const rightmostX = Math.max(...schoolPositions.map(p => p!.x));
-            
-            // Connect to company's vertical line
-            paths.push(`M ${companyCenter.x} ${horizontalY} L ${leftmostX} ${horizontalY}`);
-            paths.push(`M ${leftmostX} ${horizontalY} L ${rightmostX} ${horizontalY}`);
-            paths.push(`M ${rightmostX} ${horizontalY} L ${companyCenter.x} ${horizontalY}`);
-          }
-
-          // Vertical lines to each school
-          schoolPositions.forEach(pos => {
-            if (pos) {
-              paths.push(`M ${pos.x} ${horizontalY} L ${pos.x} ${pos.y}`);
-            }
-          });
-        }
-      }
-    }
-
-    // School to Branches connections
-    if (visibleLevels.has('branches')) {
-      // Get all visible branches grouped by school
-      const allVisibleBranches: any[] = [];
-      filteredSchools.forEach(school => {
-        const schoolKey = `school-${school.id}`;
-        if (expandedNodes.has(schoolKey)) {
-          const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
-          branches.forEach(branch => {
-            allVisibleBranches.push({ ...branch, parentSchoolId: school.id });
-          });
-        }
-      });
-
-      if (allVisibleBranches.length > 0) {
-        // Group branches by their parent school for connection lines
-        const branchesBySchool = new Map<string, any[]>();
-        allVisibleBranches.forEach(branch => {
-          const schoolId = branch.parentSchoolId;
-          if (!branchesBySchool.has(schoolId)) {
-            branchesBySchool.set(schoolId, []);
-          }
-          branchesBySchool.get(schoolId)!.push(branch);
-        });
-
-        // Draw connections from each school to its branches
-        branchesBySchool.forEach((branches, schoolId) => {
-          const schoolRef = cardRefs.current.get(`school-${schoolId}`);
-          if (schoolRef?.current && branches.length > 0) {
-            const schoolRect = schoolRef.current.getBoundingClientRect();
-            const schoolCenter = {
-              x: schoolRect.left + schoolRect.width / 2 - containerRect.left,
-              y: schoolRect.bottom - containerRect.top
-            };
-
-            // Get positions of branches for this school
-            const branchPositions = branches.map(branch => {
-              const branchRef = cardRefs.current.get(`branch-${branch.id}`);
-              if (branchRef?.current) {
-                const branchRect = branchRef.current.getBoundingClientRect();
-                return {
-                  x: branchRect.left + branchRect.width / 2 - containerRect.left,
-                  y: branchRect.top - containerRect.top
-                };
-              }
-              return null;
-            }).filter(Boolean);
-
-            if (branchPositions.length > 0) {
-              const verticalGap = 40;
-              const horizontalY = schoolCenter.y + verticalGap;
-
-              // Vertical line from school down
-              paths.push(`M ${schoolCenter.x} ${schoolCenter.y} L ${schoolCenter.x} ${horizontalY}`);
-
-              if (branchPositions.length > 1) {
-                // Horizontal distribution line
-                const leftmostX = Math.min(...branchPositions.map(p => p!.x));
-                const rightmostX = Math.max(...branchPositions.map(p => p!.x));
-                
-                // Connect to school's vertical line
-                paths.push(`M ${schoolCenter.x} ${horizontalY} L ${leftmostX} ${horizontalY}`);
-                paths.push(`M ${leftmostX} ${horizontalY} L ${rightmostX} ${horizontalY}`);
-                paths.push(`M ${rightmostX} ${horizontalY} L ${schoolCenter.x} ${horizontalY}`);
-              }
-
-              // Vertical lines to each branch
-              branchPositions.forEach(pos => {
-                if (pos) {
-                  paths.push(`M ${pos.x} ${horizontalY} L ${pos.x} ${pos.y}`);
-                }
-              });
-            }
-          }
-        });
-      }
-    }
-
-    setConnections(paths);
-  }, [containerRef, cardRefs, expandedNodes, filteredSchools, branchesData, visibleLevels, lazyLoadedData]);
-
-  // Recalculate connections when layout changes
-  useEffect(() => {
-    const timer = setTimeout(calculateConnections, 150); // Slightly longer delay for DOM updates
-    return () => clearTimeout(timer);
-  }, [calculateConnections]);
-
-  // Recalculate on window resize and scroll
-  useEffect(() => {
-    const handleResize = () => {
-      setTimeout(calculateConnections, 150);
-    };
-
-    const handleScroll = () => {
-      setTimeout(calculateConnections, 50);
-    };
-
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleScroll, true);
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleScroll, true);
-    };
-  }, [calculateConnections]);
-
-  if (!containerRef.current) return null;
-
-  return (
-    <svg
-      className="absolute inset-0 pointer-events-none z-0"
-      style={{
-        width: '100%',
-        height: '100%'
-      }}
-    >
-      {connections.map((path, index) => (
-        <path
-          key={index}
-          d={path}
-          stroke="#9CA3AF"
-          strokeWidth="2"
-          fill="none"
-          className="dark:stroke-gray-500"
-          strokeDasharray="none"
-        />
-      ))}
-    </svg>
-  );
-});
-
-SVGConnections.displayName = 'SVGConnections';
-
 // ===== MAIN COMPONENT =====
 export default function OrganizationStructureTab({ 
   companyData,
@@ -542,11 +338,9 @@ export default function OrganizationStructureTab({
   const [showInactive, setShowInactive] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
+  const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   
-  // Constants for card dimensions and minimum gaps
-  const CARD_MIN_WIDTH = 260; // px
-  const MIN_GAP_Y = 32; // px (equivalent to Tailwind gap-8)
-
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
@@ -559,6 +353,43 @@ export default function OrganizationStructureTab({
     return cardRefs.current.get(id)!;
   }, []);
 
+  // Layout configuration
+  const layoutConfig: LayoutConfig = useMemo(() => ({
+    gapX: 48, // Minimum horizontal gap between siblings
+    gapY: 80, // Vertical gap between levels
+    centerParents: true,
+    minCardWidth: 260,
+    maxCardWidth: 300
+  }), []);
+
+  // Measure node dimensions
+  const nodeDimensions = useNodeMeasurements(
+    cardRefs,
+    zoomLevel,
+    [expandedNodes, visibleLevels, filteredSchools, allBranches, showInactive]
+  );
+
+  // Build tree structure from data
+  const treeNodes = useMemo(() => {
+    return buildTreeFromData(
+      companyData,
+      expandedNodes,
+      visibleLevels,
+      lazyLoadedData,
+      branchesData
+    );
+  }, [companyData, expandedNodes, visibleLevels, lazyLoadedData, branchesData]);
+
+  // Calculate layout positions
+  useEffect(() => {
+    if (treeNodes.size === 0 || nodeDimensions.size === 0) return;
+
+    const layoutEngine = new TreeLayoutEngine(treeNodes, nodeDimensions, layoutConfig);
+    const result = layoutEngine.layout('company');
+    
+    setLayoutPositions(result.positions);
+    setCanvasSize(result.totalSize);
+  }, [treeNodes, nodeDimensions, layoutConfig]);
   // Calculate hierarchical data from actual data
   const hierarchicalData = useMemo(() => {
     if (!companyData?.schools) return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
@@ -665,36 +496,6 @@ export default function OrganizationStructureTab({
     return () => clearTimeout(timer);
   }, []);
 
-  // Dynamic Gap Calculation
-  useEffect(() => {
-    const calculateAndSetGaps = () => {
-      if (!chartContainerRef.current) return;
-
-      const containerWidth = chartContainerRef.current.offsetWidth;
-      
-      // Calculate optimal horizontal gap
-      // Try to fit as many cards as possible with at least MIN_GAP_X (Tailwind gap-12 = 48px)
-      const MIN_GAP_X = 48;
-      const maxCardsPerRow = Math.floor((containerWidth + MIN_GAP_X) / (CARD_MIN_WIDTH + MIN_GAP_X));
-      const actualCardsPerRow = Math.max(1, maxCardsPerRow); // Ensure at least 1 card per row
-
-      let calculatedGapX = MIN_GAP_X;
-      if (actualCardsPerRow > 1) {
-        calculatedGapX = (containerWidth - (actualCardsPerRow * CARD_MIN_WIDTH)) / (actualCardsPerRow - 1);
-        calculatedGapX = Math.max(MIN_GAP_X, calculatedGapX); // Ensure it's at least the minimum
-      } else {
-        // If only one card, center it by setting half the remaining space as gap
-        calculatedGapX = (containerWidth - CARD_MIN_WIDTH) / 2;
-      }
-      
-      calculatedGapX = Math.max(0, calculatedGapX); // Ensure gap is not negative
-
-      document.documentElement.style.setProperty('--card-gap-x', `${calculatedGapX}px`);
-      document.documentElement.style.setProperty('--card-gap-y', `${MIN_GAP_Y}px`);
-    };
-
-    calculateAndSetGaps(); // Initial calculation
-  }, [zoomLevel, companyData]); // Recalculate on zoom or if companyData changes (which might affect card counts)
 
   // Load data for expanded nodes
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
@@ -945,109 +746,161 @@ export default function OrganizationStructureTab({
 
   // Render the organizational chart
   const renderChart = () => {
+    if (treeNodes.size === 0) {
+      return (
+        <div className="text-center py-12">
+          <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">No organization data available</p>
+        </div>
+      );
+    }
+
     return (
-      <div className="w-full relative">
-        {/* LEVEL 1: Company/Entity */}
-        {visibleLevels.has('entity') && (
-          <div className="flex justify-center mb-16">
-            {initialLoading ? (
-              <CardSkeleton />
-            ) : (
+      <div 
+        className="relative"
+        style={{
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
+          minHeight: '400px'
+        }}
+      >
+        {/* Render all nodes with absolute positioning */}
+        {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
+          const position = layoutPositions.get(nodeId);
+          const dimensions = nodeDimensions.get(nodeId);
+          
+          if (!position || !dimensions) return null;
+
+          // Determine if this node should be rendered based on loading states
+          if (initialLoading && nodeId !== 'company') return null;
+          
+          const isSchoolLoading = loadingNodes.has(nodeId);
+          if (isSchoolLoading) {
+            return (
+              <div
+                key={`${nodeId}-skeleton`}
+                style={{
+                  position: 'absolute',
+                  transform: `translate3d(${position.x - dimensions.width / 2}px, ${position.y}px, 0)`,
+                  zIndex: 1
+                }}
+              >
+                <CardSkeleton />
+              </div>
+            );
+          }
+
+          // Get the actual data for this node
+          let item = node.data;
+          let hasChildren = false;
+          let isExpanded = false;
+
+          if (node.type === 'company') {
+            item = companyData;
+            hasChildren = filteredSchools?.length > 0;
+            isExpanded = expandedNodes.has('company');
+          } else if (node.type === 'school') {
+            const schoolId = node.id.replace('school-', '');
+            const school = filteredSchools.find((s: any) => s.id === schoolId);
+            item = school;
+            const branches = lazyLoadedData.get(node.id) || branchesData.get(schoolId) || [];
+            hasChildren = school?.branch_count > 0 || branches.length > 0;
+            isExpanded = expandedNodes.has(node.id);
+          } else if (node.type === 'branch') {
+            const branchId = node.id.replace('branch-', '');
+            // Find branch in the data
+            for (const branches of branchesData.values()) {
+              const branch = branches.find(b => b.id === branchId);
+              if (branch) {
+                item = branch;
+                break;
+              }
+            }
+            // Also check lazy loaded data
+            for (const branches of lazyLoadedData.values()) {
+              const branch = branches.find(b => b.id === branchId);
+              if (branch) {
+                item = branch;
+                break;
+              }
+            }
+          }
+
+          if (!item) return null;
+
+          return (
+            <div
+              key={nodeId}
+              style={{
+                position: 'absolute',
+                transform: `translate3d(${position.x - dimensions.width / 2}px, ${position.y}px, 0)`,
+                zIndex: 2
+              }}
+            >
               <OrgCard
-                ref={getCardRef('company')}
-                item={companyData}
-                type="company"
+                ref={getCardRef(nodeId)}
+                item={item}
+                type={node.type}
                 onItemClick={onItemClick}
                 onAddClick={onAddClick}
-                hasChildren={filteredSchools?.length > 0}
-                isExpanded={expandedNodes.has('company')}
-                onToggleExpand={() => toggleNode('company', 'company')}
-                hierarchicalData={hierarchicalData}
+                hasChildren={hasChildren}
+                isExpanded={isExpanded}
+                onToggleExpand={() => {
+                  if (node.type === 'company') {
+                    toggleNode('company', 'company');
+                  } else if (node.type === 'school') {
+                    const schoolId = node.id.replace('school-', '');
+                    toggleNode(schoolId, 'school');
+                  }
+                }}
+                hierarchicalData={node.type === 'company' ? hierarchicalData : undefined}
               />
-            )}
-          </div>
-        )}
-
-        {/* LEVEL 2: Schools */}
-        {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && !initialLoading && (
-          <div className="mb-16 flex flex-col items-center">
-            <div className="flex flex-wrap justify-evenly" style={{ gap: 'var(--card-gap-y) var(--card-gap-x)' }}>
-              {filteredSchools.map((school: any) => {
-                const schoolKey = `school-${school.id}`;
-                const isExpanded = expandedNodes.has(schoolKey);
-                const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
-                const isSchoolLoading = loadingNodes.has(schoolKey);
-                
-                const hasChildren = school.branch_count > 0 || 
-                                  isSchoolLoading || 
-                                  branches.length > 0 ||
-                                  branchesData.has(school.id);
-
-                return (
-                  <div key={school.id} className="flex flex-col items-center">
-                    <OrgCard
-                      ref={getCardRef(schoolKey)}
-                      item={school}
-                      type="school"
-                      onItemClick={onItemClick}
-                      onAddClick={onAddClick}
-                      hasChildren={hasChildren}
-                      isExpanded={isExpanded}
-                      onToggleExpand={() => toggleNode(school.id, 'school')}
-                    />
-                  </div>
-                );
-              })}
             </div>
-          </div>
-        )}
+          );
+        })}
 
-        {/* LEVEL 3: Branches */}
-        {visibleLevels.has('branches') && (
-          <div className="mb-16 flex flex-col items-center">
-            <div className="flex flex-wrap justify-evenly" style={{ gap: 'var(--card-gap-y) var(--card-gap-x)' }}>
-              {filteredSchools.map((school: any) => {
-                const schoolKey = `school-${school.id}`;
-                const isExpanded = expandedNodes.has(schoolKey);
-                const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
-                const isSchoolLoading = loadingNodes.has(schoolKey);
+        {/* SVG Connections */}
+        <svg
+          className="absolute inset-0 pointer-events-none z-1"
+          style={{
+            width: '100%',
+            height: '100%'
+          }}
+        >
+          {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
+            if (!node.parentId) return null;
 
-                if (!isExpanded || (!isSchoolLoading && branches.length === 0)) {
-                  return null;
-                }
+            const parentPos = layoutPositions.get(node.parentId);
+            const childPos = layoutPositions.get(nodeId);
+            const parentDim = nodeDimensions.get(node.parentId);
+            const childDim = nodeDimensions.get(nodeId);
 
-                return (
-                  <React.Fragment key={`branches-${school.id}`}>
-                    {isSchoolLoading ? (
-                      <>
-                        <CardSkeleton />
-                        <CardSkeleton />
-                      </>
-                    ) : (
-                      branches.map((branch: any) => (
-                        <OrgCard
-                          key={branch.id}
-                          ref={getCardRef(`branch-${branch.id}`)}
-                          item={branch}
-                          type="branch"
-                          onItemClick={onItemClick}
-                          onAddClick={onAddClick}
-                          hasChildren={false}
-                          isExpanded={false}
-                          onToggleExpand={() => {}}
-                        />
-                      ))
-                    )}
-                  </React.Fragment>
-                );
-              }).filter(Boolean)}
-            </div>
-          </div>
-        )}
+            if (!parentPos || !childPos || !parentDim || !childDim) return null;
+
+            const path = generateConnectionPath(
+              parentPos,
+              childPos,
+              parentDim.height,
+              childDim.height,
+              layoutConfig.gapY
+            );
+
+            return (
+              <path
+                key={`${node.parentId}-${nodeId}`}
+                d={path}
+                stroke="#9CA3AF"
+                strokeWidth="2"
+                fill="none"
+                className="dark:stroke-gray-500"
+              />
+            );
+          })}
+        </svg>
 
         {/* Helper messages for better UX */}
         {!expandedNodes.has('company') && filteredSchools?.length > 0 && (
-          <div className="mt-8">
+          <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
               <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Click the arrow on the company card to view schools</p>
@@ -1143,27 +996,17 @@ export default function OrganizationStructureTab({
       <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}>
         <div 
           ref={chartContainerRef}
-          className="p-8 w-full min-w-full h-full flex flex-col items-center relative"
+          className="p-8 w-full h-full flex justify-center items-start relative"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.2s'
+            transition: 'transform 0.2s',
+            minWidth: `${canvasSize.width}px`,
+            minHeight: `${canvasSize.height}px`
           }}
         >
-          {/* SVG Connection Lines Overlay */}
-          <SVGConnections
-            containerRef={chartContainerRef}
-            cardRefs={cardRefs}
-            expandedNodes={expandedNodes}
-            filteredSchools={filteredSchools}
-            branchesData={branchesData}
-            zoomLevel={zoomLevel}
-            visibleLevels={visibleLevels}
-            lazyLoadedData={lazyLoadedData}
-          />
-          
           {/* Organization Chart Content */}
-          <div className="relative z-10">
+          <div className="relative">
             {renderChart()}
           </div>
         </div>
