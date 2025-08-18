@@ -24,7 +24,7 @@ import {
   Building2, School, MapPin, ChevronDown, ChevronUp,
   PlusCircle, Users, User, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2, Minimize2, 
-  RotateCcw, Loader2, X, GraduationCap, BookOpen,
+  RotateCcw, Loader2, X, GraduationCap, BookOpen, Expand,
   ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -612,6 +612,13 @@ export default function OrganizationStructureTab({
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => setZoomLevel(1);
+  const handleFitToPage = () => {
+    // Calculate optimal zoom level based on content
+    const containerWidth = 1200; // Approximate container width
+    const contentWidth = Math.max(800, (filteredSchools?.length || 1) * 320);
+    const optimalZoom = Math.min(1, containerWidth / contentWidth);
+    setZoomLevel(Math.max(0.5, optimalZoom));
+  };
 
   // Toggle fullscreen
   const toggleFullscreen = () => {
@@ -675,10 +682,10 @@ export default function OrganizationStructureTab({
         )}
 
         {/* LEVEL 2: Schools WITH NESTED STRUCTURE */}
-        {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && (
+        {visibleLevels.has('schools') && expandedNodes.has('company') && filteredSchools?.length > 0 && !initialLoading && (
           <div className="relative">
             {/* Connection from Company to Schools */}
-            {visibleLevels.has('entity') && !initialLoading && (
+            {visibleLevels.has('entity') && (
               <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
                    style={{ top: '-48px', height: '48px' }}>
                 <div className="w-0.5 h-full bg-gray-300 dark:bg-gray-600"></div>
@@ -686,20 +693,21 @@ export default function OrganizationStructureTab({
             )}
             
             {/* Horizontal spreader for multiple schools */}
-            {filteredSchools.length > 1 && !initialLoading && (
+            {filteredSchools.length > 1 && (
               <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none"
                    style={{ 
                      top: '0',
-                     width: `${320 * filteredSchools.length}px`,
+                     width: `${280 * (filteredSchools.length - 1)}px`,
                      height: '2px'
                    }}>
                 <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
                 
                 {/* Vertical drops to each school */}
                 {filteredSchools.map((_: any, index: number) => {
-                  const totalWidth = 320 * filteredSchools.length;
-                  const spacing = totalWidth / filteredSchools.length;
-                  const position = spacing * index + spacing / 2 - totalWidth / 2;
+                  if (index === 0 || index === filteredSchools.length - 1) return null;
+                  const totalWidth = 280 * (filteredSchools.length - 1);
+                  const spacing = totalWidth / (filteredSchools.length - 1);
+                  const position = spacing * (index - 1) + spacing / 2 - totalWidth / 2;
                   
                   return (
                     <div 
@@ -718,26 +726,19 @@ export default function OrganizationStructureTab({
             )}
             
             {/* Schools Grid */}
-            <div className="flex flex-wrap justify-center gap-16 pt-6">
-              {initialLoading ? (
-                <>
-                  <CardSkeleton />
-                  <CardSkeleton />
-                  <CardSkeleton />
-                </>
-              ) : (
-                filteredSchools.map((school: any) => {
+            <div className="flex justify-center gap-16 pt-6">
+              {filteredSchools.map((school: any) => {
                   const schoolKey = `school-${school.id}`;
                   const isExpanded = expandedNodes.has(schoolKey);
                   // Get branches from either lazy loaded data or branches data map
                   const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
-                  const isLoading = loadingNodes.has(schoolKey);
+                  const isSchoolLoading = loadingNodes.has(schoolKey);
                   
                   // Determine if school has children (branches)
                   const hasChildren = school.branch_count > 0 || 
-                                    isLoading || 
+                                    isSchoolLoading || 
                                     branches.length > 0 ||
-                                    (visibleLevels.has('branches') && branchesData.has(school.id));
+                                    branchesData.has(school.id);
 
                   return (
                     <div key={school.id} className="flex flex-col items-center relative">
@@ -752,28 +753,29 @@ export default function OrganizationStructureTab({
                         onToggleExpand={() => toggleNode(school.id, 'school')}
                       />
 
-                      {/* BRANCHES - Show only if: expanded AND branches tab is ON */}
-                      {isExpanded && visibleLevels.has('branches') && (
+                      {/* BRANCHES - Show if expanded (independent of branches tab) */}
+                      {isExpanded && (
                         <>
-                          {(isLoading || branches.length > 0 || branchesData.has(school.id)) && (
+                          {(isSchoolLoading || branches.length > 0 || branchesData.has(school.id)) && (
                             <div className="relative w-full flex flex-col items-center">
                               {/* Vertical line to branches */}
                               <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
                               
                               {/* Horizontal spreader for multiple branches */}
-                              {branches.length > 1 && !isLoading && (
+                              {branches.length > 1 && !isSchoolLoading && (
                                 <div className="relative pointer-events-none"
                                      style={{ 
-                                       width: `${320 * branches.length}px`,
+                                       width: `${280 * (branches.length - 1)}px`,
                                        height: '2px'
                                      }}>
                                   <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600"></div>
                                   
                                   {/* Vertical drops to each branch */}
                                   {branches.map((_: any, index: number) => {
-                                    const totalWidth = 320 * branches.length;
-                                    const spacing = totalWidth / branches.length;
-                                    const position = spacing * index + spacing / 2 - totalWidth / 2;
+                                    if (index === 0 || index === branches.length - 1) return null;
+                                    const totalWidth = 280 * (branches.length - 1);
+                                    const spacing = totalWidth / (branches.length - 1);
+                                    const position = spacing * (index - 1) + spacing / 2 - totalWidth / 2;
                                     
                                     return (
                                       <div 
@@ -792,13 +794,13 @@ export default function OrganizationStructureTab({
                               )}
                               
                               {/* Branch cards */}
-                              <div className="flex flex-wrap justify-center gap-10 pt-6">
-                                {isLoading ? (
+                              <div className="flex justify-center gap-10 pt-6">
+                                {isSchoolLoading ? (
                                   <div className="flex gap-4">
                                     <CardSkeleton />
                                     <CardSkeleton />
                                   </div>
-                                ) : branches.length === 0 && visibleLevels.has('branches') ? (
+                                ) : branches.length === 0 ? (
                                   <div className="text-center py-4">
                                     <MapPin className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -834,37 +836,17 @@ export default function OrganizationStructureTab({
                       )}
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           </div>
         )}
 
         {/* Helper messages for better UX */}
-        {visibleLevels.has('branches') && !expandedNodes.has('company') && (
+        {!expandedNodes.has('company') && filteredSchools?.length > 0 && (
           <div className="mt-8">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Expand the company to view branches</p>
-            </div>
-          </div>
-        )}
-
-        {visibleLevels.has('branches') && expandedNodes.has('company') && !visibleLevels.has('schools') && (
-          <div className="mt-8">
-            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <School className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Enable Schools tab to view branches</p>
-            </div>
-          </div>
-        )}
-
-        {visibleLevels.has('branches') && visibleLevels.has('schools') && expandedNodes.has('company') && 
-         filteredSchools.length > 0 && allBranches.length === 0 && !isAllBranchesLoading && (
-          <div className="mt-8">
-            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No branches found. Click the arrow on a school card to expand and view branches.</p>
+              <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Click the arrow on the company card to view schools</p>
             </div>
           </div>
         )}
@@ -925,9 +907,17 @@ export default function OrganizationStructureTab({
             <button
               onClick={handleResetZoom}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+             title="Reset zoom to 100%"
             >
               <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </button>
+           <button
+             onClick={handleFitToPage}
+             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+             title="Fit to page"
+           >
+             <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+           </button>
             <button
               onClick={toggleFullscreen}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -945,7 +935,7 @@ export default function OrganizationStructureTab({
       {/* Chart Container */}
       <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full`}>
         <div 
-          className="p-8 w-full min-w-full h-full"
+          className="p-8 w-full min-w-full h-full flex flex-col items-center"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
