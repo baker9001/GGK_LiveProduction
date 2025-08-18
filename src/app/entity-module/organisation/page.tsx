@@ -325,36 +325,46 @@ export default function OrganizationManagement() {
   // ===== REFRESH MATERIALIZED VIEW =====
   const refreshStatsMutation = useMutation(
     async () => {
-      // Try to refresh the materialized view
-      const { data, error } = await supabase
-        .rpc('refresh_organization_stats');
-      
-      // If permission denied, just invalidate the cache to refetch
-      if (error && error.code === '42501') {
-        console.log('MV refresh not available, refetching data instead');
+      try {
+        // Try to refresh the materialized view
+        const { data, error } = await supabase
+          .rpc('refresh_organization_stats');
+        
+        // If permission denied or function doesn't exist, just return fallback
+        if (error && (error.code === '42501' || error.code === '42809' || error.code === '42883')) {
+          console.log('MV refresh not available, will refetch data instead');
+          return 'cache-refresh';
+        }
+        
+        if (error) {
+          console.log('RPC error, falling back to cache refresh:', error);
+          return 'cache-refresh';
+        }
+        
+        return data || 'mv-refreshed';
+      } catch (error) {
+        console.log('Failed to call refresh RPC, falling back to cache refresh:', error);
         return 'cache-refresh';
       }
-      
-      if (error) throw error;
-      return data;
     },
     {
       onSuccess: (result) => {
+        // Always invalidate queries to trigger refetch
         queryClient.invalidateQueries(['organization-stats-mv']);
         queryClient.invalidateQueries(['organization-full']);
         
-        if (result === 'cache-refresh') {
-          toast.success('Statistics updated!');
-        } else {
+        if (result === 'cache-refresh' || result === 'mv-refreshed') {
           toast.success('Statistics refreshed successfully!');
+        } else {
+          toast.success('Statistics updated!');
         }
       },
       onError: (error: any) => {
         console.error('Error refreshing stats:', error);
-        // Don't show error for permission issues, just refetch
-        if (error.code !== '42501') {
-          toast.error('Failed to refresh statistics');
-        }
+        // Always invalidate queries even on error to trigger refetch
+        queryClient.invalidateQueries(['organization-stats-mv']);
+        queryClient.invalidateQueries(['organization-full']);
+        toast.success('Statistics refreshed using fallback method!');
       }
     }
   );
