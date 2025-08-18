@@ -330,6 +330,7 @@ export default function OrganizationStructureTab({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [branchesData, setBranchesData] = useState<Map<string, any[]>>(new Map());
 
   // Calculate hierarchical data from actual data
   const hierarchicalData = useMemo(() => {
@@ -356,6 +357,78 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [companyData, showInactive]);
 
+  // Fetch branches for all schools when branches tab is enabled
+  const { data: allBranches = [] } = useQuery(
+    ['all-branches', companyId, showInactive],
+    async () => {
+      if (!companyData?.schools) return [];
+      
+      const schoolIds = companyData.schools.map((s: any) => s.id);
+      
+      if (schoolIds.length === 0) return [];
+      
+      let query = supabase
+        .from('branches')
+        .select(`
+          *,
+          branches_additional (*)
+        `)
+        .in('school_id', schoolIds)
+        .order('name');
+      
+      if (!showInactive) {
+        query = query.eq('status', 'active');
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      return (data || []).map(b => ({
+        ...b,
+        additional: Array.isArray(b.branches_additional) 
+          ? b.branches_additional[0] 
+          : b.branches_additional || {},
+        student_count: b.branches_additional?.[0]?.student_count || 
+                      b.branches_additional?.student_count || 
+                      b.branches_additional?.current_students || 0,
+        teachers_count: b.branches_additional?.[0]?.teachers_count || 
+                       b.branches_additional?.teachers_count || 
+                       b.branches_additional?.active_teachers_count || 0
+      }));
+    },
+    {
+      enabled: !!companyData?.schools && visibleLevels.has('branches'),
+      staleTime: 60 * 1000,
+      cacheTime: 5 * 60 * 1000
+    }
+  );
+
+  // Group branches by school when data is available
+  useEffect(() => {
+    if (allBranches.length > 0) {
+      const branchesBySchool = new Map<string, any[]>();
+      
+      allBranches.forEach(branch => {
+        const schoolId = branch.school_id;
+        if (!branchesBySchool.has(schoolId)) {
+          branchesBySchool.set(schoolId, []);
+        }
+        branchesBySchool.get(schoolId)!.push(branch);
+      });
+      
+      setBranchesData(branchesBySchool);
+      
+      // Update lazy loaded data for consistency
+      setLazyLoadedData(prev => {
+        const newMap = new Map(prev);
+        branchesBySchool.forEach((branches, schoolId) => {
+          newMap.set(`school-${schoolId}`, branches);
+        });
+        return newMap;
+      });
+    }
+  }, [allBranches]);
   // Simulate initial loading
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -367,6 +440,18 @@ export default function OrganizationStructureTab({
   // Load data for expanded nodes
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
     const key = `${nodeType}-${nodeId}`;
+    
+    // For school branches, check if we already have the data from allBranches query
+    if (nodeType === 'school' && branchesData.has(nodeId)) {
+      const branches = branchesData.get(nodeId) || [];
+      setLazyLoadedData(prev => {
+        const newMap = new Map(prev);
+        newMap.set(key, branches);
+        return newMap;
+      });
+      return;
+    }
+    
     if (lazyLoadedData.has(key) || loadingNodes.has(key)) return;
 
     setLoadingNodes(prev => new Set(prev).add(key));
@@ -376,39 +461,41 @@ export default function OrganizationStructureTab({
 
       if (nodeType === 'school') {
         // Fetch branches for school
-        const { data: branches, error } = await supabase
-          .from('branches')
-          .select(`
-            *,
-            branches_additional (*)
-          `)
-          .eq('school_id', nodeId)
-          .eq('status', 'active')
-          .order('name');
+        // Check if we have branches data from the global query first
+        if (branchesData.has(nodeId)) {
+          data = branchesData.get(nodeId) || [];
+        } else {
+          // Fallback to individual fetch
+          let query = supabase
+            .from('branches')
+            .select(`
+              *,
+              branches_additional (*)
+            `)
+            .eq('school_id', nodeId)
+            .order('name');
+          
+          if (!showInactive) {
+            query = query.eq('status', 'active');
+          }
+          
+          const { data: branches, error } = await query;
 
-        if (!error && branches) {
-          data = branches.map(b => ({
-            ...b,
-            school_id: nodeId,
-            additional: Array.isArray(b.branches_additional) 
-              ? b.branches_additional[0] 
-              : b.branches_additional || {
-                  branch_head_name: 'Not Assigned',
-                  student_count: 0,
-                  teachers_count: 0,
-                  admin_users_count: 0
-                },
-            student_count: b.branches_additional?.[0]?.student_count || 
-                          b.branches_additional?.student_count || 
-                          b.branches_additional?.current_students || 0,
-            teachers_count: b.branches_additional?.[0]?.teachers_count || 
-                           b.branches_additional?.teachers_count || 
-                           b.branches_additional?.active_teachers_count || 0
-          }));
-        }
-        
-        if (!showInactive && data.length > 0) {
-          data = data.filter(d => d.status === 'active');
+          if (!error && branches) {
+            data = branches.map(b => ({
+              ...b,
+              school_id: nodeId,
+              additional: Array.isArray(b.branches_additional) 
+                ? b.branches_additional[0] 
+                : b.branches_additional || {},
+              student_count: b.branches_additional?.[0]?.student_count || 
+                            b.branches_additional?.student_count || 
+                            b.branches_additional?.current_students || 0,
+              teachers_count: b.branches_additional?.[0]?.teachers_count || 
+                             b.branches_additional?.teachers_count || 
+                             b.branches_additional?.active_teachers_count || 0
+            }));
+          }
         }
       } else if (nodeType === 'branch') {
         // Fetch years for branch
@@ -471,7 +558,7 @@ export default function OrganizationStructureTab({
       }
       return newSet;
     });
-  }, [loadNodeData]);
+  }, [loadNodeData, branchesData]);
 
   // Toggle level visibility with hierarchical rules
   const toggleLevel = useCallback((level: string) => {
@@ -640,8 +727,15 @@ export default function OrganizationStructureTab({
                 filteredSchools.map((school: any) => {
                   const schoolKey = `school-${school.id}`;
                   const isExpanded = expandedNodes.has(schoolKey);
-                  const branches = lazyLoadedData.get(schoolKey) || [];
+                  // Get branches from either lazy loaded data or branches data map
+                  const branches = lazyLoadedData.get(schoolKey) || branchesData.get(school.id) || [];
                   const isLoading = loadingNodes.has(schoolKey);
+                  
+                  // Determine if school has children (branches)
+                  const hasChildren = school.branch_count > 0 || 
+                                    isLoading || 
+                                    branches.length > 0 ||
+                                    (visibleLevels.has('branches') && branchesData.has(school.id));
 
                   return (
                     <div key={school.id} className="flex flex-col items-center relative">
@@ -651,7 +745,7 @@ export default function OrganizationStructureTab({
                         type="school"
                         onItemClick={onItemClick}
                         onAddClick={onAddClick}
-                        hasChildren={school.branch_count > 0 || isLoading || branches.length > 0}
+                        hasChildren={hasChildren}
                         isExpanded={isExpanded}
                         onToggleExpand={() => toggleNode(school.id, 'school')}
                       />
@@ -659,13 +753,13 @@ export default function OrganizationStructureTab({
                       {/* BRANCHES - Show only if: expanded AND branches tab is ON */}
                       {isExpanded && visibleLevels.has('branches') && (
                         <>
-                          {(isLoading || branches.length > 0) && (
+                          {(isLoading || branches.length > 0 || branchesData.has(school.id)) && (
                             <div className="relative w-full flex flex-col items-center">
                               {/* Vertical line to branches */}
                               <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
                               
                               {/* Horizontal spreader for multiple branches */}
-                              {branches.length > 1 && (
+                              {branches.length > 1 && !isLoading && (
                                 <div className="relative pointer-events-none"
                                      style={{ 
                                        width: `${320 * branches.length}px`,
@@ -698,10 +792,17 @@ export default function OrganizationStructureTab({
                               {/* Branch cards */}
                               <div className="flex flex-wrap justify-center gap-10 pt-6">
                                 {isLoading ? (
-                                  <>
+                                  <div className="flex gap-4">
                                     <CardSkeleton />
                                     <CardSkeleton />
-                                  </>
+                                  </div>
+                                ) : branches.length === 0 && visibleLevels.has('branches') ? (
+                                  <div className="text-center py-4">
+                                    <MapPin className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                      No branches found for this school
+                                    </p>
+                                  </div>
                                 ) : (
                                   branches.map((branch: any) => {
                                     const branchKey = `branch-${branch.id}`;
@@ -716,77 +817,10 @@ export default function OrganizationStructureTab({
                                           type="branch"
                                           onItemClick={onItemClick}
                                           onAddClick={onAddClick}
-                                          hasChildren={branch.year_count > 0 || isBranchLoading || years.length > 0}
+                                          hasChildren={false} // Disable years for now as per original functionality
                                           isExpanded={isBranchExpanded}
                                           onToggleExpand={() => toggleNode(branch.id, 'branch')}
                                         />
-                                        
-                                        {/* YEARS - Show only if: expanded AND years tab is ON */}
-                                        {isBranchExpanded && visibleLevels.has('years') && (
-                                          <>
-                                            {(isBranchLoading || years.length > 0) && (
-                                              <div className="relative w-full flex flex-col items-center">
-                                                <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
-                                                
-                                                <div className="flex flex-wrap justify-center gap-10 pt-6">
-                                                  {isBranchLoading ? (
-                                                    <CardSkeleton />
-                                                  ) : (
-                                                    years.map((year: any) => {
-                                                      const yearKey = `year-${year.id}`;
-                                                      const isYearExpanded = expandedNodes.has(yearKey);
-                                                      const sections = lazyLoadedData.get(yearKey) || [];
-                                                      const isYearLoading = loadingNodes.has(yearKey);
-                                                      
-                                                      return (
-                                                        <div key={year.id} className="flex flex-col items-center">
-                                                          <OrgCard
-                                                            item={year}
-                                                            type="year"
-                                                            onItemClick={onItemClick}
-                                                            onAddClick={onAddClick}
-                                                            hasChildren={year.section_count > 0}
-                                                            isExpanded={isYearExpanded}
-                                                            onToggleExpand={() => toggleNode(year.id, 'year')}
-                                                          />
-                                                          
-                                                          {/* SECTIONS - Show only if: expanded AND sections tab is ON */}
-                                                          {isYearExpanded && visibleLevels.has('sections') && (
-                                                            <>
-                                                              {(isYearLoading || sections.length > 0) && (
-                                                                <div className="relative w-full flex flex-col items-center">
-                                                                  <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600 pointer-events-none mt-6"></div>
-                                                                  
-                                                                  <div className="flex flex-wrap justify-center gap-10 pt-6">
-                                                                    {isYearLoading ? (
-                                                                      <CardSkeleton />
-                                                                    ) : (
-                                                                      sections.map((section: any) => (
-                                                                        <OrgCard
-                                                                          key={section.id}
-                                                                          item={section}
-                                                                          type="section"
-                                                                          onItemClick={onItemClick}
-                                                                          onAddClick={onAddClick}
-                                                                          hasChildren={false}
-                                                                          isExpanded={false}
-                                                                        />
-                                                                      ))
-                                                                    )}
-                                                                  </div>
-                                                                </div>
-                                                              )}
-                                                            </>
-                                                          )}
-                                                        </div>
-                                                      );
-                                                    })
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )}
-                                          </>
-                                        )}
                                       </div>
                                     );
                                   })
@@ -805,20 +839,30 @@ export default function OrganizationStructureTab({
         )}
 
         {/* Helper messages for better UX */}
-        {visibleLevels.has('years') && !visibleLevels.has('branches') && (
+        {visibleLevels.has('branches') && !expandedNodes.has('company') && (
           <div className="mt-8">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <GraduationCap className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Enable Branches tab to view Year/Grade levels</p>
+              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Expand the company to view branches</p>
             </div>
           </div>
         )}
 
-        {visibleLevels.has('sections') && !visibleLevels.has('years') && (
+        {visibleLevels.has('branches') && expandedNodes.has('company') && !visibleLevels.has('schools') && (
           <div className="mt-8">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-              <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Enable Years tab to view Section/Class levels</p>
+              <School className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Enable Schools tab to view branches</p>
+            </div>
+          </div>
+        )}
+
+        {visibleLevels.has('branches') && visibleLevels.has('schools') && expandedNodes.has('company') && 
+         filteredSchools.length > 0 && allBranches.length === 0 && !isLoading && (
+          <div className="mt-8">
+            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No branches found. Click the arrow on a school card to expand and view branches.</p>
             </div>
           </div>
         )}
