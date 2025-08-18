@@ -110,15 +110,15 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
     switch (type) {
       case 'company':
         logoPath = item.logo || item.additional?.logo_url;
-        bucketName = 'logos';
+        bucketName = 'company-logos';
         break;
       case 'school':
         logoPath = item.logo;
-        bucketName = 'logos';
+        bucketName = 'school-logos';
         break;
       case 'branch':
         logoPath = item.logo;
-        bucketName = 'logos';
+        bucketName = 'branch-logos';
         break;
       default:
         return null;

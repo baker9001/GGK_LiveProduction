@@ -252,7 +252,7 @@ export default function SchoolsTab() {
           const logoPath = school.logo.split('/').pop();
           if (logoPath) {
             await supabase.storage
-              .from('logos')
+              .from('school-logos')
               .remove([logoPath]);
           }
         }

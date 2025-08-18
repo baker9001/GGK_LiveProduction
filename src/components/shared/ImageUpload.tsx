@@ -27,7 +27,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const { user } = useUser(); // Get user from context
 
   // Define public buckets that don't require authentication
-  const isPublicBucket = ['logos'].includes(bucket);
+  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos'].includes(bucket);
 
   // Check authentication status on mount - Updated to use custom auth
   useEffect(() => {
@@ -100,8 +100,12 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       
       if (bucket === 'avatars' && userId !== 'anonymous') {
         uploadPath = `${userId}/${fileName}`;
-      } else if (bucket === 'logos') {
+      } else if (bucket === 'company-logos' || bucket === 'logos') {
         uploadPath = `companies/${fileName}`;
+      } else if (bucket === 'school-logos') {
+        uploadPath = `schools/${fileName}`;
+      } else if (bucket === 'subject-logos') {
+        uploadPath = `subjects/${fileName}`;
       }
       
       // Upload to Supabase Storage
@@ -124,7 +128,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         } else if (error.message?.includes('duplicate')) {
           // Try with a different filename
           const altFileName = `${Math.random().toString(36).slice(2)}_${Date.now()}_alt.${fileExt}`;
-          const altUploadPath = bucket === 'logos' ? `companies/${altFileName}` : altFileName;
+          const altUploadPath = bucket === 'company-logos' ? `companies/${altFileName}` : altFileName;
           
           const { data: retryData, error: retryError } = await supabase.storage
             .from(bucket)
