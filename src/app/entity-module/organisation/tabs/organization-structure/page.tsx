@@ -377,88 +377,77 @@ export default function OrganizationStructureTab({
       let data = [];
 
       if (nodeType === 'school') {
-        // Fetch real branches from database
+        // Fetch branches that belong to this specific school
         const { data: branches, error } = await supabase
           .from('branches')
           .select(`
             *,
             branches_additional (*)
           `)
-          .eq('school_id', nodeId)
+          .eq('school_id', nodeId)  // Important: Filter by this specific school
+          .eq('status', 'active')    // Only active branches by default
           .order('name');
 
         if (error) {
-          console.error('Error fetching branches:', error);
-          // Use mock data if database fetch fails
-          data = [
-            { 
-              id: `branch-${nodeId}-1`, 
-              name: 'Branch 2', 
-              code: 'B2',
-              school_id: nodeId,
-              status: 'active',
-              additional: { 
-                branch_head_name: 'Ms. Lisa Anderson',
-                student_count: 0,
-                teachers_count: 0
-              }
-            },
-            { 
-              id: `branch-${nodeId}-2`, 
-              name: '11', 
-              code: '11',
-              school_id: nodeId,
-              status: 'active',
-              additional: { 
-                branch_head_name: 'Not Assigned',
-                student_count: 0,
-                teachers_count: 0
-              }
-            }
-          ];
-        } else {
-          data = branches?.map(b => ({
+          console.error(`Error fetching branches for school ${nodeId}:`, error);
+        } else if (branches) {
+          // Process the branches data
+          data = branches.map(b => ({
             ...b,
-            additional: b.branches_additional?.[0] || b.branches_additional || {
-              branch_head_name: b.branches_additional?.branch_head_name || 'Not Assigned',
-              student_count: b.branches_additional?.student_count || b.branches_additional?.current_students || 0,
-              teachers_count: b.branches_additional?.teachers_count || b.branches_additional?.active_teachers_count || 0
-            },
+            school_id: nodeId,  // Ensure school_id is set
+            additional: Array.isArray(b.branches_additional) 
+              ? b.branches_additional[0] 
+              : b.branches_additional || {
+                  branch_head_name: 'Not Assigned',
+                  student_count: 0,
+                  teachers_count: 0,
+                  admin_users_count: 0
+                },
             student_count: b.branches_additional?.[0]?.student_count || 
                           b.branches_additional?.student_count || 
-                          b.branches_additional?.current_students || 0
-          })) || [];
+                          b.branches_additional?.current_students || 0,
+            teachers_count: b.branches_additional?.[0]?.teachers_count || 
+                           b.branches_additional?.teachers_count || 
+                           b.branches_additional?.active_teachers_count || 0
+          }));
         }
         
         // Filter by status if needed
-        if (!showInactive) {
+        if (!showInactive && data.length > 0) {
           data = data.filter(d => d.status === 'active');
         }
+        
+        console.log(`Loaded ${data.length} branches for school ${nodeId}`);
       } else if (nodeType === 'branch') {
-        // Fetch academic years
+        // Fetch academic years for this branch
         const { data: years, error } = await supabase
           .from('academic_years')
           .select('*')
           .eq('branch_id', nodeId)
           .order('year_name');
         
-        if (!error) {
-          data = years || [];
+        if (!error && years) {
+          data = years;
         }
       } else if (nodeType === 'year') {
-        // Fetch class sections
+        // Fetch class sections for this year
         const { data: sections, error } = await supabase
           .from('class_sections')
           .select('*')
           .eq('academic_year_id', nodeId)
           .order('section_name');
         
-        if (!error) {
-          data = sections || [];
+        if (!error && sections) {
+          data = sections;
         }
       }
 
-      setLazyLoadedData(prev => new Map(prev).set(key, data));
+      // Store the loaded data with the correct key
+      setLazyLoadedData(prev => {
+        const newMap = new Map(prev);
+        newMap.set(key, data);
+        return newMap;
+      });
     } catch (error) {
       console.error(`Error loading ${nodeType} data:`, error);
     } finally {
@@ -468,18 +457,24 @@ export default function OrganizationStructureTab({
         return newSet;
       });
     }
-  }, [lazyLoadedData, loadingNodes, showInactive]);
+  }, [showInactive]);
 
-  // Toggle node expansion
+  // Toggle node expansion - Fixed to work properly
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
-    const key = `${nodeType}-${nodeId}`;
+    const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
+    
     setExpandedNodes(prev => {
       const newSet = new Set(prev);
       if (newSet.has(key)) {
         newSet.delete(key);
       } else {
         newSet.add(key);
-        loadNodeData(nodeId, nodeType);
+        // Load data when expanding a node
+        if (nodeType === 'school' && nodeId) {
+          loadNodeData(nodeId, nodeType);
+        } else if (nodeType === 'branch' && nodeId) {
+          loadNodeData(nodeId, nodeType);
+        }
       }
       return newSet;
     });
@@ -561,7 +556,17 @@ export default function OrganizationStructureTab({
                 onAddClick={onAddClick}
                 hasChildren={filteredSchools?.length > 0}
                 isExpanded={expandedNodes.has('company')}
-                onToggleExpand={() => toggleNode(companyData.id, 'company')}
+                onToggleExpand={() => {
+                  setExpandedNodes(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has('company')) {
+                      newSet.delete('company');
+                    } else {
+                      newSet.add('company');
+                    }
+                    return newSet;
+                  });
+                }}
                 hierarchicalData={hierarchicalData}
               />
             )}
@@ -623,7 +628,20 @@ export default function OrganizationStructureTab({
                     onAddClick={onAddClick}
                     hasChildren={school.branch_count > 0}
                     isExpanded={expandedNodes.has(`school-${school.id}`)}
-                    onToggleExpand={() => toggleNode(school.id, 'school')}
+                    onToggleExpand={() => {
+                      const key = `school-${school.id}`;
+                      setExpandedNodes(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(key)) {
+                          newSet.delete(key);
+                        } else {
+                          newSet.add(key);
+                          // Load branches when expanding
+                          loadNodeData(school.id, 'school');
+                        }
+                        return newSet;
+                      });
+                    }}
                   />
                 ))
               )}
@@ -631,89 +649,96 @@ export default function OrganizationStructureTab({
           </div>
         )}
 
-        {/* LEVEL 3: Branches */}
-        {visibleLevels.has('branches') && (
-          <div className="space-y-16">
-            {filteredSchools?.map((school: any) => {
-              const schoolKey = `school-${school.id}`;
-              const branches = lazyLoadedData.get(schoolKey) || [];
-              const isLoading = loadingNodes.has(schoolKey);
-              const isExpanded = expandedNodes.has(schoolKey);
+        {/* LEVEL 3: Branches - Group by School */}
+        {visibleLevels.has('branches') && filteredSchools?.map((school: any) => {
+          const schoolKey = `school-${school.id}`;
+          const branches = lazyLoadedData.get(schoolKey) || [];
+          const isLoading = loadingNodes.has(schoolKey);
+          const isExpanded = expandedNodes.has(schoolKey);
 
-              // Don't show anything if school is not expanded
-              if (!isExpanded) return null;
+          // Don't show anything if school is not expanded
+          if (!isExpanded) return null;
 
-              // Show loading or branches
-              if (!branches.length && !isLoading) {
-                // Try to load branches when expanded
-                loadNodeData(school.id, 'school');
-                return null;
-              }
+          // Auto-load branches when school is expanded
+          if (!branches.length && !isLoading && isExpanded) {
+            loadNodeData(school.id, 'school');
+          }
 
-              return (
-                <div key={school.id}>
-                  {/* Connection from school to branches */}
-                  {branches.length > 0 && (
-                    <div className="flex justify-center mb-4">
-                      <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
-                    </div>
-                  )}
+          return (
+            <div key={`branches-${school.id}`} className="mt-12">
+              {/* Connection from specific school to its branches */}
+              {(branches.length > 0 || isLoading) && (
+                <div className="flex justify-center mb-4">
+                  <div className="w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
+                </div>
+              )}
 
-                  {isLoading ? (
-                    <div className="flex justify-center gap-10">
-                      <CardSkeleton />
-                      <CardSkeleton />
-                    </div>
-                  ) : branches.length > 0 ? (
-                    <div className="relative">
-                      {/* Horizontal line for multiple branches */}
-                      {branches.length > 1 && (
-                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
-                                      flex items-end justify-center"
-                             style={{ 
-                               width: `${Math.max(280 * branches.length + 40 * (branches.length - 1), 280)}px`,
-                               height: '48px'
-                             }}>
-                          <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
-                          {/* Vertical connectors for each branch */}
-                          <div className="w-full flex justify-center relative">
-                            {branches.map((_: any, index: number) => (
-                              <div 
-                                key={index} 
-                                className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
-                                style={{ 
-                                  left: `${(100 / branches.length) * index + (50 / branches.length)}%`,
-                                  bottom: '-24px',
-                                  transform: 'translateX(-50%)'
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Branches Grid */}
-                      <div className="flex flex-wrap justify-center gap-10">
-                        {branches.map((branch: any) => (
-                          <OrgCard
-                            key={branch.id}
-                            item={branch}
-                            type="branch"
-                            onItemClick={onItemClick}
-                            onAddClick={onAddClick}
-                            hasChildren={branch.year_count > 0}
-                            isExpanded={expandedNodes.has(`branch-${branch.id}`)}
-                            onToggleExpand={() => toggleNode(branch.id, 'branch')}
+              {isLoading ? (
+                <div className="flex justify-center gap-10">
+                  <CardSkeleton />
+                  <CardSkeleton />
+                </div>
+              ) : branches.length > 0 ? (
+                <div className="relative">
+                  {/* Horizontal line for multiple branches */}
+                  {branches.length > 1 && (
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6 
+                                  flex items-end justify-center"
+                         style={{ 
+                           width: `${Math.max(280 * branches.length + 40 * (branches.length - 1), 280)}px`,
+                           height: '48px'
+                         }}>
+                      <div className="w-full h-0.5 bg-gray-300 dark:bg-gray-600 absolute bottom-0"></div>
+                      {/* Vertical connectors for each branch */}
+                      <div className="w-full flex justify-center relative">
+                        {branches.map((_: any, index: number) => (
+                          <div 
+                            key={index} 
+                            className="absolute h-6 w-0.5 bg-gray-300 dark:bg-gray-600"
+                            style={{ 
+                              left: `${(100 / branches.length) * index + (50 / branches.length)}%`,
+                              bottom: '-24px',
+                              transform: 'translateX(-50%)'
+                            }}
                           />
                         ))}
                       </div>
                     </div>
-                  ) : null}
+                  )}
+                  
+                  {/* Branches Grid aligned under their school */}
+                  <div className="flex flex-wrap justify-center gap-10">
+                    {branches.map((branch: any) => (
+                      <OrgCard
+                        key={branch.id}
+                        item={branch}
+                        type="branch"
+                        onItemClick={onItemClick}
+                        onAddClick={onAddClick}
+                        hasChildren={branch.year_count > 0}
+                        isExpanded={expandedNodes.has(`branch-${branch.id}`)}
+                        onToggleExpand={() => {
+                          const key = `branch-${branch.id}`;
+                          setExpandedNodes(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(key)) {
+                              newSet.delete(key);
+                            } else {
+                              newSet.add(key);
+                              // Load years when expanding
+                              loadNodeData(branch.id, 'branch');
+                            }
+                            return newSet;
+                          });
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ) : null}
+            </div>
+          );
+        })}
 
         {/* LEVEL 4 & 5: Years and Sections placeholders */}
         {visibleLevels.has('years') && !visibleLevels.has('branches') && (
