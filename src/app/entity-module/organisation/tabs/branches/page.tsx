@@ -222,7 +222,8 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes
+        notes: data.notes,
+        logo: data.logo
       };
       
       // Create main record
@@ -290,7 +291,8 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes
+        notes: data.notes,
+        logo: data.logo
       };
       
       // Update main record
