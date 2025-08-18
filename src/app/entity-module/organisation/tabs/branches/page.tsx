@@ -222,8 +222,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes,
-        logo: data.logo
+        notes: data.notes
       };
       
       // Create main record
@@ -291,8 +290,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         school_id: data.school_id,
         status: data.status,
         address: data.address,
-        notes: data.notes,
-        logo: data.logo
+        notes: data.notes
       };
       
       // Update main record
@@ -487,6 +485,16 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
               onChange={(e) => setFormData({...formData, address: e.target.value})}
               placeholder="Enter branch address"
               rows={3}
+            />
+          </FormField>
+
+          <FormField id="logo" label="Branch Logo">
+            <ImageUpload
+              id="branch-logo"
+              bucket="branch-logos"
+              value={formData.logo}
+              publicUrl={formData.logo ? getBranchLogoUrl(formData.logo) : null}
+              onChange={(path) => setFormData({...formData, logo: path || ''})}
             />
           </FormField>
         </div>
