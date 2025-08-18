@@ -84,7 +84,7 @@ const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs'
         };
       case 'inactive':
         return {
-          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
+          color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-700',
           icon: <XCircle className="w-3 h-3" />,
         };
       default:
