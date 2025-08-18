@@ -246,7 +246,6 @@ export class TreeLayoutEngine {
 export function buildTreeFromData(
   companyData: any,
   expandedNodes: Set<string>,
-  visibleLevels: Set<string>,
   lazyLoadedData: Map<string, any[]>,
   branchesData: Map<string, any[]>
 ): Map<string, TreeNode> {
@@ -257,18 +256,16 @@ export function buildTreeFromData(
     return nodes;
   }
 
-  // Add company node
-  if (visibleLevels.has('entity')) {
-    nodes.set('company', {
-      id: 'company',
-      type: 'company',
-      children: [],
-      data: companyData
-    });
-  }
+  // Add company node - always include for arrow functionality
+  nodes.set('company', {
+    id: 'company',
+    type: 'company',
+    children: [],
+    data: companyData
+  });
 
-  // Add school nodes
-  if (visibleLevels.has('schools') && companyData?.schools) {
+  // Add school nodes - always include if data exists for arrow functionality
+  if (companyData?.schools) {
     const schoolChildren: string[] = [];
     
     // Only process schools that are in the filtered data
@@ -294,8 +291,8 @@ export function buildTreeFromData(
     }
   }
 
-  // Add branch nodes
-  if (visibleLevels.has('branches')) {
+  // Add branch nodes - always include if data exists for arrow functionality
+  if (true) {
     // Only process schools that exist in our filtered tree
     companyData?.schools?.forEach((school: any) => {
       const schoolId = `school-${school.id}`;

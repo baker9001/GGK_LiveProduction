@@ -443,7 +443,6 @@ export default function OrganizationStructureTab({
     return buildTreeFromData(
       filteredCompanyData,
       expandedNodes,
-      visibleLevels,
       lazyLoadedData,
       branchesData
     );
@@ -946,6 +945,20 @@ export default function OrganizationStructureTab({
 
           // Determine if this node should be rendered based on loading states
           if (initialLoading && nodeId !== 'company') return null;
+          
+          // Check if this node type should be visible based on tab state
+          const nodeTypeToLevel = {
+            'company': 'entity',
+            'school': 'schools', 
+            'branch': 'branches',
+            'year': 'years',
+            'section': 'sections'
+          };
+          
+          const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
+          if (levelKey && !visibleLevels.has(levelKey)) {
+            return null; // Don't render but keep in tree for arrow functionality
+          }
           
           const isSchoolLoading = loadingNodes.has(nodeId);
           if (isSchoolLoading) {
