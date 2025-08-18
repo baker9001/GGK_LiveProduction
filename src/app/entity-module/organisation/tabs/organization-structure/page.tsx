@@ -897,9 +897,9 @@ export default function OrganizationStructureTab({
       </div>
 
       {/* Chart Container */}
-      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'min-h-[700px]'} w-full`}>
+      <div className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full`}>
         <div 
-          className="p-8 w-full min-w-full"
+          className="p-8 w-full min-w-full h-full"
           style={{
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top center',
