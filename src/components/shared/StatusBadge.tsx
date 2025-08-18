@@ -70,7 +70,7 @@ export const StatusBadge = memo(({
       
       case 'inactive':
         return {
-          color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-600',
+          color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-200 dark:border-red-700',
           icon: <XCircle className="w-3 h-3" />,
           pulse: false
         };
