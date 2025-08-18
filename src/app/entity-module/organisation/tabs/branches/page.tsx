@@ -178,7 +178,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
       // Then get all branches for these schools
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
-        .select('id, name, code, school_id, status, address, notes, logo, created_at')
+        .select('id, name, code, school_id, status, address, notes, created_at')
         .in('school_id', schoolIds)
         .order('name');
       
