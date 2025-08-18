@@ -32,7 +32,7 @@ import { useUser } from '../../../../../contexts/UserContext';
 import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
-import { ImageUpload } from '../../../../components/shared/ImageUpload';
+import { ImageUpload } from '../../../../../components/shared/ImageUpload';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
