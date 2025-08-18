@@ -360,7 +360,7 @@ export default function OrganizationStructureTab({
   }, [companyData, showInactive]);
 
   // Fetch branches for all schools when branches tab is enabled
-  const { data: allBranches = [] } = useQuery(
+  const { data: allBranches = [], isLoading: isAllBranchesLoading } = useQuery(
     ['all-branches', companyId, showInactive],
     async () => {
       if (!companyData?.schools) return [];
@@ -860,7 +860,7 @@ export default function OrganizationStructureTab({
         )}
 
         {visibleLevels.has('branches') && visibleLevels.has('schools') && expandedNodes.has('company') && 
-         filteredSchools.length > 0 && allBranches.length === 0 && !isLoading && (
+         filteredSchools.length > 0 && allBranches.length === 0 && !isAllBranchesLoading && (
           <div className="mt-8">
             <div className="text-center text-gray-500 dark:text-gray-400 py-8">
               <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
