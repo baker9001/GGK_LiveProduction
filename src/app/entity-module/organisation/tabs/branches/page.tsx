@@ -375,6 +375,24 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
     return Object.keys(errors).length === 0;
   };
 
+  // Effect to populate form data when editing
+  useEffect(() => {
+    if (selectedBranch && showEditModal) {
+      // Get school data to get company_id
+      const schoolData = schools.find(s => s.id === selectedBranch.school_id);
+      const additionalData = selectedBranch.additional || {};
+      
+      // Set the form state with the retrieved company_id
+      const combinedData = {
+        ...selectedBranch,
+        company_id: schoolData?.company_id,
+        ...(additionalData || selectedBranch.additional || {})
+      };
+      
+      setFormData(combinedData);
+    }
+  }, [selectedBranch, showEditModal, schools]);
+
   const handleSubmit = (mode: 'create' | 'edit') => {
     if (!validateForm()) {
       toast.error('Please fix the errors before submitting');
@@ -390,10 +408,6 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
 
   const handleEdit = (branch: BranchData) => {
     setSelectedBranch(branch);
-    setFormData({
-      ...branch,
-      ...branch.additional
-    });
     setFormErrors({});
     setActiveTab('basic');
     setShowEditModal(true);
