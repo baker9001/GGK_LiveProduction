@@ -786,12 +786,6 @@ export default function OrganizationStructureTab({
     }
   }, [branchFormData, editingBranch, refreshData]);
 
-  // Handle branch click - redirect to branches tab
-  const handleBranchClick = useCallback((branch: any) => {
-    // Use the same pattern as schools - trigger onItemClick which will handle the redirect
-    onItemClick(branch, 'branch');
-  }, [onItemClick]);
-
   // RESTORED: Original auto-resize with fullscreen improvements
   const checkAndAutoResize = useCallback(() => {
     const viewport = scrollAreaRef.current;
@@ -1280,8 +1274,8 @@ export default function OrganizationStructureTab({
                 onItemClick={(clickedItem, clickedType) => {
                   // FIXED: Unified behavior - both schools and branches redirect
                   if (clickedType === 'branch') {
-                    // For branches, use the dedicated handler
-                    handleBranchClick(clickedItem);
+                    // For branches, just call onItemClick which should handle tab switching
+                    onItemClick(clickedItem, clickedType);
                   } else {
                     // For other types, use default behavior
                     onItemClick(clickedItem, clickedType);
