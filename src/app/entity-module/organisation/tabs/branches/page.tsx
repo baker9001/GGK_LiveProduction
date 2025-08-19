@@ -11,6 +11,20 @@
  *   - @/components/shared/* (SlideInForm, FormField, Button)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
+ * Preserved Features:
+ *   - All original branch management functionality
+ *   - Search, filter, and status management
+ *   - Branch creation and editing forms
+ *   - ImageUpload integration
+ *   - Statistics display
+ *   - All original event handlers
+ * 
+ * Added/Modified:
+ *   - ENHANCED: Logo display matching organization structure's improved implementation
+ *   - IMPROVED: Better logo sizing with proper aspect ratio
+ *   - ADDED: Logo fallback with better error handling
+ *   - IMPROVED: Logo container styling for better visual presentation
+ * 
  * Database Tables:
  *   - branches & branches_additional
  *   - schools (for reference)
@@ -142,16 +156,24 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     }
   }), []);
 
-  // Helper to get branch logo URL
-  const getBranchLogoUrl = (path: string | null) => {
+  // ENHANCED: Improved helper to get branch logo URL with better error handling
+  const getBranchLogoUrl = (path: string | null | undefined) => {
     if (!path) return null;
     
+    // If it's already a full URL, return as is
     if (path.startsWith('http')) {
       return path;
     }
     
-    // Construct Supabase storage URL
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
+    // Construct Supabase storage URL with proper environment variable
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
+    }
+    
+    // Use the correct bucket name for branches
+    return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
   };
 
   // ===== FETCH SCHOOLS =====
@@ -761,102 +783,122 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             <p className="text-gray-600 dark:text-gray-400">No branches found</p>
           </div>
         ) : (
-          filteredBranches.map((branch) => (
-            <div
-              key={branch.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center overflow-hidden">
-                    {branch.logo ? (
-                      <img
-                        src={getBranchLogoUrl(branch.logo)}
-                        alt={`${branch.name} logo`}
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          // If logo fails to load, hide the image and show fallback
-                          e.currentTarget.style.display = 'none';
-                          const parent = e.currentTarget.parentElement;
-                          if (parent) {
-                            const fallback = parent.querySelector('.logo-fallback');
-                            if (fallback) {
-                              (fallback as HTMLElement).style.display = 'flex';
-                            }
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <span className={`text-sm font-bold logo-fallback ${branch.logo ? 'hidden' : 'flex'} items-center justify-center w-full h-full text-purple-600 dark:text-purple-400`}>
-                      {branch.code?.substring(0, 2).toUpperCase() || branch.name?.substring(0, 2).toUpperCase() || <MapPin className="w-5 h-5" />}
-                    </span>
+          filteredBranches.map((branch) => {
+            const logoUrl = getBranchLogoUrl(branch.logo);
+            
+            return (
+              <div
+                key={branch.id}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    {/* ENHANCED: Improved logo display matching org structure implementation */}
+                    <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
+                      {logoUrl ? (
+                        <>
+                          <img
+                            src={logoUrl}
+                            alt={`${branch.name} logo`}
+                            className="w-full h-full object-contain p-0.5"
+                            style={{ maxWidth: '100%', maxHeight: '100%' }}
+                            onError={(e) => {
+                              // If logo fails to load, hide the image and show fallback
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              imgElement.style.display = 'none';
+                              const parent = imgElement.parentElement;
+                              if (parent) {
+                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
+                                if (fallback) {
+                                  fallback.style.display = 'flex';
+                                  fallback.classList.remove('bg-white');
+                                  fallback.classList.add('bg-purple-500');
+                                }
+                              }
+                            }}
+                          />
+                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-purple-500 text-white">
+                            {branch.code?.substring(0, 2).toUpperCase() || 
+                             branch.name?.substring(0, 2).toUpperCase() || 
+                             <MapPin className="w-5 h-5" />}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-purple-500 text-white">
+                          {branch.code?.substring(0, 2).toUpperCase() || 
+                           branch.name?.substring(0, 2).toUpperCase() || 
+                           <MapPin className="w-5 h-5" />}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{branch.name}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{branch.code}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{branch.name}</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{branch.code}</p>
-                  </div>
+                  <StatusBadge status={branch.status} size="xs" />
                 </div>
-                <StatusBadge status={branch.status} size="xs" />
-              </div>
 
-              <div className="space-y-2 mb-3">
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <School className="w-3 h-3" />
-                  <span>{branch.school_name}</span>
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <School className="w-3 h-3" />
+                    <span>{branch.school_name}</span>
+                  </div>
+                  {branch.additional?.branch_head_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <User className="w-3 h-3" />
+                      <span>{branch.additional.branch_head_name}</span>
+                    </div>
+                  )}
+                  {branch.additional?.building_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Building className="w-3 h-3" />
+                      <span>{branch.additional.building_name}</span>
+                      {branch.additional.floor_details && (
+                        <span className="text-gray-400">• {branch.additional.floor_details}</span>
+                      )}
+                    </div>
+                  )}
+                  {branch.address && (
+                    <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Navigation className="w-3 h-3 mt-0.5" />
+                      <span className="line-clamp-2">{branch.address}</span>
+                    </div>
+                  )}
+                  {branch.additional?.opening_time && branch.additional?.closing_time && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Clock className="w-3 h-3" />
+                      <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
+                    </div>
+                  )}
                 </div>
-                {branch.additional?.branch_head_name && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <User className="w-3 h-3" />
-                    <span>{branch.additional.branch_head_name}</span>
-                  </div>
-                )}
-                {branch.additional?.building_name && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <Building className="w-3 h-3" />
-                    <span>{branch.additional.building_name}</span>
-                    {branch.additional.floor_details && (
-                      <span className="text-gray-400">• {branch.additional.floor_details}</span>
-                    )}
-                  </div>
-                )}
-                {branch.address && (
-                  <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <Navigation className="w-3 h-3 mt-0.5" />
-                    <span className="line-clamp-2">{branch.address}</span>
-                  </div>
-                )}
-                {branch.additional?.opening_time && branch.additional?.closing_time && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <Clock className="w-3 h-3" />
-                    <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
-                  </div>
-                )}
-              </div>
 
-              <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
-                <div className="flex items-center space-x-4 text-xs">
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {branch.student_count || 0} students
-                    </span>
+                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                  <div className="flex items-center space-x-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {branch.student_count || 0} students
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {branch.additional?.teachers_count || 0} teachers
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {branch.additional?.teachers_count || 0} teachers
-                    </span>
-                  </div>
+                  <button
+                    onClick={() => handleEdit(branch)}
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleEdit(branch)}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
