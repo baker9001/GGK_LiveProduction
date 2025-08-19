@@ -175,7 +175,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const { data: branches = [], isLoading, refetch } = useQuery(
     ['branches', companyId],
     async () => {
-      // First get all schools for this company
+      // First get all
+    }
+  )
+}
+) schools for this company
       const { data: schoolsData, error: schoolsError } = await supabase
         .from('schools')
         .select('id, name')
@@ -965,8 +969,4 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       </SlideInForm>
     </div>
   );
-});
-
-BranchesTab.displayName = 'BranchesTab';
-
-export default BranchesTab;
+}
