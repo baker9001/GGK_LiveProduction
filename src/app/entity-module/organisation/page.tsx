@@ -43,6 +43,9 @@ const SchoolsTab = lazy(() =>
 const BranchesTab = lazy(() => 
   import('./tabs/branches/page').then(module => ({ default: module.default }))
 );
+const AdminsTab = lazy(() => 
+  import('./tabs/admins/page')
+);
 const StudentsTab = lazy(() => 
   import('./tabs/students/page')
 );
@@ -152,7 +155,7 @@ export default function OrganizationManagement() {
   const authenticatedUser = getAuthenticatedUser();
   
   // State management
-  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'students' | 'teachers'>('structure');
+  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students'>('structure');
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [selectedType, setSelectedType] = useState<'company' | 'school' | 'branch' | null>(null);
   const [showDetailsPanel, setShowDetailsPanel] = useState(false);
@@ -934,16 +937,16 @@ export default function OrganizationManagement() {
                 Branches
               </button>
               <button
-                onClick={() => setActiveTab('students')}
-                onMouseEnter={() => prefetchTabData('students')}
+                onClick={() => setActiveTab('admins')}
+                onMouseEnter={() => prefetchTabData('admins')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'students'
+                  activeTab === 'admins'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                <GraduationCap className="w-4 h-4 inline-block mr-2" />
-                Students
+                <Shield className="h-4 w-4 inline-block mr-2" />
+                Admins
               </button>
               <button
                 onClick={() => setActiveTab('teachers')}
@@ -956,6 +959,18 @@ export default function OrganizationManagement() {
               >
                 <Users className="w-4 h-4 inline-block mr-2" />
                 Teachers
+              </button>
+              <button
+                onClick={() => setActiveTab('students')}
+                onMouseEnter={() => prefetchTabData('students')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'students'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <GraduationCap className="h-4 w-4 inline-block mr-2" />
+                Students
               </button>
             </nav>
           </div>
@@ -993,8 +1008,8 @@ export default function OrganizationManagement() {
                   }}
                 />
               )}
-              {activeTab === 'students' && userCompanyId && (
-                <StudentsTab
+              {activeTab === 'admins' && userCompanyId && (
+                <AdminsTab
                   companyId={userCompanyId}
                   refreshData={() => {
                     refetch();
@@ -1004,6 +1019,15 @@ export default function OrganizationManagement() {
               )}
               {activeTab === 'teachers' && userCompanyId && (
                 <TeachersTab
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+              {activeTab === 'students' && userCompanyId && (
+                <StudentsTab
                   companyId={userCompanyId}
                   refreshData={() => {
                     refetch();
