@@ -132,7 +132,6 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   // Helper to get branch logo URL
   const getBranchLogoUrl = (path: string | null) => {
     if (!path) return null;
-      console.log('Opening edit modal for branch:', branch.name);
     
     // If it's already a full URL, return as is
     if (path.startsWith('http')) {
