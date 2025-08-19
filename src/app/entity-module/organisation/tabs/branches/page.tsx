@@ -389,14 +389,12 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   };
 
   const handleEdit = (branch: BranchData) => {
-    console.log('handleEdit called for branch:', branch.name);
-    const combinedData = {
-      ...branch,
-      ...(branch.additional || {})
-    };
-    setFormData(combinedData);
-    setFormErrors({});
     setSelectedBranch(branch);
+    setFormData({
+      ...branch,
+      ...branch.additional
+    });
+    setFormErrors({});
     setActiveTab('basic');
     setShowEditModal(true);
   };
