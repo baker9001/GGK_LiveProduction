@@ -268,6 +268,27 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
 
   const updateSchoolMutation = useMutation(
     async ({ id, data }: { id: string; data: any }) => {
+      // Check if trying to deactivate a school with active branches
+      if (data.status === 'inactive') {
+        const { data: activeBranches, error: branchCheckError } = await supabase
+          .from('branches')
+          .select('id, name')
+          .eq('school_id', id)
+          .eq('status', 'active');
+        
+        if (branchCheckError) {
+          throw new Error(`Failed to check branches: ${branchCheckError.message}`);
+        }
+        
+        if (activeBranches && activeBranches.length > 0) {
+          const branchNames = activeBranches.map(b => b.name).join(', ');
+          throw new Error(
+            `Cannot deactivate school. It has ${activeBranches.length} active branch${activeBranches.length > 1 ? 'es' : ''}: ${branchNames}. ` +
+            `Please deactivate or transfer the branch${activeBranches.length > 1 ? 'es' : ''} first.`
+          );
+        }
+      }
+      
       // Prepare main data
       const mainData = {
         name: data.name,
