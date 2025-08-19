@@ -493,6 +493,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         <div className="space-y-4">
           <FormField id="school_id" label="School" required error={formErrors.school_id}>
             <Select
+              key={`school-select-${formData.school_id || 'empty'}`}
               id="school_id"
               options={schools.map(s => ({ value: s.id, label: s.name }))}
               value={formData.school_id || ''}
