@@ -767,7 +767,7 @@ export default function OrganizationStructureTab({
       
       if (!hasInitialized) {
         setTimeout(() => {
-          checkAndAutoResize();
+          checkAndAutoResize(true);
           setHasInitialized(true);
         }, 100);
       }
@@ -803,32 +803,44 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
 
-  // FIXED: Enhanced auto-resize function
-  const checkAndAutoResize = useCallback(() => {
+  // FIXED: Enhanced auto-resize function with better fullscreen support
+  const checkAndAutoResize = useCallback((forceResize: boolean = false) => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
     if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
 
-    const availableWidth = viewport.clientWidth - 128;
-    const availableHeight = viewport.clientHeight - 128;
+    // Get available space - adjust padding based on fullscreen state
+    const paddingAdjustment = isFullscreen ? 64 : 128; // Less padding in fullscreen
+    const availableWidth = viewport.clientWidth - paddingAdjustment;
+    const availableHeight = viewport.clientHeight - paddingAdjustment;
     
+    // Calculate what zoom would be needed to fit
     const scaleX = availableWidth / canvasSize.width;
     const scaleY = availableHeight / canvasSize.height;
     const optimalZoom = Math.min(scaleX, scaleY);
     
-    const boundedZoom = Math.max(0.3, Math.min(1.5, optimalZoom));
+    // More aggressive zoom in fullscreen mode
+    const maxZoom = isFullscreen ? 2.0 : 1.5;
+    const minZoom = isFullscreen ? 0.2 : 0.3;
+    const boundedZoom = Math.max(minZoom, Math.min(maxZoom, optimalZoom));
+    
     setZoomLevel(boundedZoom);
     
+    // Center the content with animation
     requestAnimationFrame(() => {
-      if (viewport) {
+      if (viewport && container) {
         const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
-        const scrollTop = 0;
-        viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
+        const scrollTop = Math.max(0, (container.scrollHeight - viewport.clientHeight) / 2);
+        viewport.scrollTo({ 
+          left: scrollLeft, 
+          top: scrollTop, 
+          behavior: forceResize ? 'auto' : 'smooth' 
+        });
       }
     });
-  }, [canvasSize]);
+  }, [canvasSize, isFullscreen]);
 
-  // FIXED: Observe resize and fullscreen changes
+  // FIXED: Observe resize and fullscreen changes with better handling
   useEffect(() => {
     if (!hasInitialized) return;
     
@@ -840,14 +852,27 @@ export default function OrganizationStructureTab({
         clearTimeout(autoResizeTimeoutRef.current);
       }
       autoResizeTimeoutRef.current = setTimeout(() => {
-        checkAndAutoResize();
+        checkAndAutoResize(false);
       }, 300);
     };
 
     window.addEventListener('resize', handleWindowResize);
 
+    // Also trigger resize when viewport dimensions change
+    const resizeObserver = new ResizeObserver(() => {
+      if (autoResizeTimeoutRef.current) {
+        clearTimeout(autoResizeTimeoutRef.current);
+      }
+      autoResizeTimeoutRef.current = setTimeout(() => {
+        checkAndAutoResize(false);
+      }, 300);
+    });
+
+    resizeObserver.observe(viewport);
+
     return () => {
       window.removeEventListener('resize', handleWindowResize);
+      resizeObserver.disconnect();
       if (autoResizeTimeoutRef.current) {
         clearTimeout(autoResizeTimeoutRef.current);
       }
@@ -1072,54 +1097,101 @@ export default function OrganizationStructureTab({
     });
   }, [filteredSchools, loadNodeData]);
 
-  // Zoom controls
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
+  // Zoom controls with fullscreen awareness
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, isFullscreen ? 3 : 2));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, isFullscreen ? 0.2 : 0.5));
   const handleResetZoom = () => {
-    checkAndAutoResize();
+    checkAndAutoResize(true);
   };
   
   const handleFitToScreen = useCallback(() => {
-    checkAndAutoResize();
+    checkAndAutoResize(true);
   }, [checkAndAutoResize]);
 
-  // FIXED: Toggle fullscreen with auto-resize
-  const toggleFullscreen = () => {
+  // FIXED: Toggle fullscreen with improved auto-resize
+  const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => {
+      const element = document.documentElement;
+      
+      // Request fullscreen
+      element.requestFullscreen().then(() => {
         setIsFullscreen(true);
-        // Trigger resize after entering fullscreen
+        
+        // Multiple resize attempts for better fitting
+        // Immediate resize
         setTimeout(() => {
-          checkAndAutoResize();
+          checkAndAutoResize(true);
+        }, 50);
+        
+        // Secondary resize after transition
+        setTimeout(() => {
+          checkAndAutoResize(true);
         }, 300);
+        
+        // Final adjustment
+        setTimeout(() => {
+          checkAndAutoResize(false);
+        }, 500);
+      }).catch((err) => {
+        console.error('Error entering fullscreen:', err);
       });
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen().then(() => {
           setIsFullscreen(false);
-          // Trigger resize after exiting fullscreen
+          
+          // Resize after exiting fullscreen
           setTimeout(() => {
-            checkAndAutoResize();
+            checkAndAutoResize(true);
+          }, 50);
+          
+          setTimeout(() => {
+            checkAndAutoResize(false);
           }, 300);
+        }).catch((err) => {
+          console.error('Error exiting fullscreen:', err);
         });
       }
     }
-  };
+  }, [checkAndAutoResize]);
 
-  // Listen for fullscreen changes
+  // Listen for fullscreen changes with improved handling
   useEffect(() => {
     const handleFullscreenChange = () => {
       const isNowFullscreen = !!document.fullscreenElement;
+      const wasFullscreen = isFullscreen;
+      
       setIsFullscreen(isNowFullscreen);
-      // Always trigger resize on fullscreen change
-      setTimeout(() => {
-        checkAndAutoResize();
-      }, 300);
+      
+      // Only trigger resize if state actually changed
+      if (isNowFullscreen !== wasFullscreen) {
+        // Immediate resize
+        checkAndAutoResize(true);
+        
+        // Delayed resize for better accuracy
+        setTimeout(() => {
+          checkAndAutoResize(true);
+        }, 100);
+        
+        // Final smooth adjustment
+        setTimeout(() => {
+          checkAndAutoResize(false);
+        }, 500);
+      }
     };
     
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [checkAndAutoResize]);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, [checkAndAutoResize, isFullscreen]);
 
   if (!companyData) {
     return (
