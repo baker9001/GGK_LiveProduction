@@ -424,12 +424,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
             </div>
             <Select
               value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
+            <ImageUpload
+              id="logo"
+              bucket="school-logos"
+              value={formData.logo}
+              publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${formData.logo}` : null}
+              onChange={(path) => {
+                setFormData({...formData, logo: path || ''});
+              }}
+                setFormData({...formData, logo: path || ''});
+                // Don't close form when logo is removed
+              }}
             />
           </div>
           <Button onClick={handleCreate}>

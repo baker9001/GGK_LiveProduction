@@ -543,7 +543,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               bucket="branch-logos"
               value={formData.logo}
               publicUrl={formData.logo ? getBranchLogoUrl(formData.logo) : null}
-              onChange={(path) => setFormData({...formData, logo: path || ''})}
+              onChange={(path) => {
+                setFormData({...formData, logo: path || ''});
+              }}
             />
           </FormField>
         </div>

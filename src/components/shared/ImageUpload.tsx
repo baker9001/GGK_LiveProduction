@@ -193,7 +193,8 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     // Close the confirmation dialog
     setShowRemoveConfirmation(false);
 
-    const loadingToastId = toast.loading('Removing image...');
+    // Don't show loading toast to prevent form closure issues
+    console.log('Removing image...');
 
     try {
       const { error } = await supabase.storage
@@ -202,24 +203,24 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
       if (error) {
         console.error('Storage remove error:', error);
-        toast.dismiss(loadingToastId);
         
         // If deletion fails in storage but we want to clear the reference anyway
         onChange(null);
-        toast.success('Image reference removed');
+        // Use a non-blocking toast that doesn't interfere with form
+        setTimeout(() => toast.success('Image reference removed'), 100);
         return;
       }
       
-      toast.dismiss(loadingToastId);
-      toast.success('Image removed successfully');
+      // Use a non-blocking toast that doesn't interfere with form
+      setTimeout(() => toast.success('Image removed successfully'), 100);
       onChange(null);
     } catch (error) {
       console.error('Error removing file:', error);
-      toast.dismiss(loadingToastId);
       
       // Even if storage deletion fails, clear the reference
       onChange(null);
-      toast.info('Image reference cleared');
+      // Use a non-blocking toast that doesn't interfere with form
+      setTimeout(() => toast.info('Image reference cleared'), 100);
     }
   };
 
