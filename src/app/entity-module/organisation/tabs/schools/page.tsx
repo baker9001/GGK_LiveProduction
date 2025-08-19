@@ -291,6 +291,18 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
         queryClient.invalidateQueries(['branches-for-schools', companyId]);
         if (refreshData) refreshData();
         toast.success('School created successfully');
+        setShowCreateModal(false);
+        setFormData({});
+        setActiveTab('basic');
+      },
+      onError: (error: any) => {
+        console.error('Error creating school:', error);
+        toast.error(error.message || 'Failed to create school. Please try again.');
+      }
+    }
+  );
+
+  const updateSchoolMutation = useMutation(
     async ({ id, data, deactivateAssociatedBranches = false }: { id: string; data: any; deactivateAssociatedBranches?: boolean }) => {
       // If deactivating school and we need to deactivate branches
       if (data.status === 'inactive' && deactivateAssociatedBranches) {
