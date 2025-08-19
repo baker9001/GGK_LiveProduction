@@ -251,7 +251,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['schools']);
+        // FIXED: Use the correct query key that matches the useQuery hook
+        queryClient.invalidateQueries(['schools-tab', companyId]);
         if (refreshData) refreshData();
         toast.success('School created successfully');
         setShowCreateModal(false);
@@ -328,7 +329,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['schools']);
+        // FIXED: Use the correct query key that matches the useQuery hook
+        queryClient.invalidateQueries(['schools-tab', companyId]);
         if (refreshData) refreshData();
         toast.success('School updated successfully');
         setShowEditModal(false);
