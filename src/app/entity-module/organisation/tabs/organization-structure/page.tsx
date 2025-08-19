@@ -803,14 +803,14 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
 
-  // FIXED: Enhanced auto-resize function with better fullscreen support
+  // FIXED: Enhanced auto-resize function without continuous resizing
   const checkAndAutoResize = useCallback((forceResize: boolean = false) => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
     if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
 
     // Get available space - adjust padding based on fullscreen state
-    const paddingAdjustment = isFullscreen ? 64 : 128; // Less padding in fullscreen
+    const paddingAdjustment = isFullscreen ? 64 : 128;
     const availableWidth = viewport.clientWidth - paddingAdjustment;
     const availableHeight = viewport.clientHeight - paddingAdjustment;
     
@@ -824,7 +824,10 @@ export default function OrganizationStructureTab({
     const minZoom = isFullscreen ? 0.2 : 0.3;
     const boundedZoom = Math.max(minZoom, Math.min(maxZoom, optimalZoom));
     
-    setZoomLevel(boundedZoom);
+    // Only update if zoom changed significantly (prevent continuous updates)
+    if (Math.abs(boundedZoom - zoomLevel) > 0.01) {
+      setZoomLevel(boundedZoom);
+    }
     
     // Center the content with animation
     requestAnimationFrame(() => {
@@ -838,7 +841,7 @@ export default function OrganizationStructureTab({
         });
       }
     });
-  }, [canvasSize, isFullscreen]);
+  }, [canvasSize, isFullscreen, zoomLevel]);
 
   // FIXED: Observe resize and fullscreen changes with better handling
   useEffect(() => {
