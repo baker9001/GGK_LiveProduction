@@ -133,17 +133,13 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   const getBranchLogoUrl = (path: string | null) => {
     if (!path) return null;
     
-    // If it's already a full URL, return as is
-    if (path.startsWith('http')) {
       return path;
     }
     
     // Construct Supabase storage URL
     return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
   };
-
-  // ===== FETCH SCHOOLS FOR DROPDOWN =====
-  const { data: schools = [] } = useQuery(
+    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
     ['schools-list', companyId],
     async () => {
       const { data, error } = await supabase
@@ -245,8 +241,8 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
         'student_capacity', 'current_students', 'student_count', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
         'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
-        'closing_time', 'working_days'
-      ];
+        // Set the form state with the retrieved company_id
+        const combinedData = {
       
       additionalFields.forEach(field => {
         if (data[field] !== undefined) {
@@ -375,8 +371,11 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
-
-  const handleSubmit = (mode: 'create' | 'edit') => {
+          company_id: schoolData.company_id,
+          ...(additionalData || selectedBranch.additional || {})
+        };
+        
+        setFormData(combinedData);
     if (!validateForm()) {
       toast.error('Please fix the errors before submitting');
       return;
@@ -390,14 +389,8 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   };
 
   const handleEdit = (branch: BranchData) => {
-    console.log('handleEdit called for branch:', branch.name);
-    const combinedData = {
-      ...branch,
-      ...(branch.additional || {})
-    };
-    setFormData(combinedData);
-    setFormErrors({});
     setSelectedBranch(branch);
+    setFormErrors({});
     setActiveTab('basic');
     setShowEditModal(true);
   };
