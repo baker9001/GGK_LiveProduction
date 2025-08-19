@@ -27,6 +27,7 @@ import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import type { SchoolsTabRef } from './tabs/schools/page';
+import type { BranchesTabRef } from './tabs/branches/page';
 
 // ===== LAZY LOAD TAB COMPONENTS =====
 const OrganizationStructureTab = lazy(() => 
@@ -161,6 +162,7 @@ export default function OrganizationManagement() {
 
   // ===== REFS FOR TAB COMPONENTS =====
   const schoolsTabRef = useRef<SchoolsTabRef>(null);
+  const branchesTabRef = useRef<BranchesTabRef>(null);
 
   // ===== FETCH USER COMPANY (OPTIMIZED) =====
   useEffect(() => {
@@ -594,6 +596,12 @@ export default function OrganizationManagement() {
       setTimeout(() => {
         schoolsTabRef.current?.openEditSchoolModal(item);
       }, 100);
+    } else if (type === 'branch') {
+      // For branch cards, open the unified edit form
+      setActiveTab('branches');
+      setTimeout(() => {
+        branchesTabRef.current?.openEditBranchModal(item);
+      }, 100);
     } else {
       // For other types, show the details panel as before
       setSelectedItem(item);
@@ -965,6 +973,7 @@ export default function OrganizationManagement() {
               )}
               {activeTab === 'branches' && userCompanyId && (
                 <BranchesTab
+                  ref={branchesTabRef}
                   companyId={userCompanyId}
                   refreshData={() => {
                     refetch();

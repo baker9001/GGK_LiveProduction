@@ -67,7 +67,6 @@ export interface OrgStructureProps {
   onItemClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
   refreshData?: () => void;
 }
-
 // ===== SKELETON LOADER COMPONENT =====
 const CardSkeleton = () => (
   <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 
@@ -429,8 +428,6 @@ export default function OrganizationStructureTab({
   onEditClick, 
   onItemClick,
   refreshData
-}: OrgStructureProps) {
-  const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
     new Set(['entity', 'schools'])  // Default: Entity and Schools visible
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
