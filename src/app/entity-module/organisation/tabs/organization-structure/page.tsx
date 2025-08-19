@@ -1469,32 +1469,6 @@ export default function OrganizationStructureTab({
           </div>
         </div>
       </div>
-
-      {/* Chart Container with SVG Overlay */}
-      <div 
-        ref={scrollAreaRef}
-        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
-      >
-        <div 
-          ref={chartContainerRef}
-          className="relative"
-          style={{
-            transform: `scale(${zoomLevel})`,
-            transformOrigin: 'center top',
-            transition: 'transform 0.2s ease-out',
-            width: `${Math.max(canvasSize.width, 1200)}px`,
-            height: `${Math.max(canvasSize.height, 800)}px`,
-            padding: '64px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start'
-          }}
-        >
-          {/* Organization Chart Content */}
-          <div className="relative">
-            {renderChart()}
-          </div>
-        </div>
       </div>
     </div>
   );
