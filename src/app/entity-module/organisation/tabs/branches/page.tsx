@@ -113,7 +113,7 @@ const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs'
 StatusBadge.displayName = 'StatusBadge';
 
 // ===== MAIN COMPONENT =====
-export default function BranchesTab({ companyId, refreshData }: BranchesTabProps) {
+function BranchesTab({ companyId, refreshData }: BranchesTabProps) {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -932,3 +932,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
     </div>
   );
 }
+
+BranchesTab.displayName = 'BranchesTab';
+
+export default BranchesTab;
