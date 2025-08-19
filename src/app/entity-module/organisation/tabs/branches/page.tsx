@@ -413,20 +413,42 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // Effect to populate form data when editing
   useEffect(() => {
     if (selectedBranch && showEditModal) {
-      // Get school data to get company_id
-      const schoolData = schools.find(s => s.id === selectedBranch.school_id);
-      const additionalData = selectedBranch.additional || {};
-      
-      // Set the form state with the retrieved company_id
-      const combinedData = {
-        ...selectedBranch,
-        company_id: schoolData?.company_id,
-        ...(additionalData || selectedBranch.additional || {})
+      // Populate form data for editing
+      const populateEditForm = async () => {
+        try {
+          // Get school data to get company_id
+          const { data: schoolData, error } = await supabase
+            .from('schools')
+            .select('id, name, company_id')
+            .eq('id', selectedBranch.school_id)
+            .single();
+          
+          if (error) {
+            console.error('Error fetching school data:', error);
+            toast.error('Failed to load school information');
+            return;
+          }
+          
+          const additionalData = selectedBranch.additional || {};
+          
+          // Set the form state with all data including school_id
+          const combinedData = {
+            ...selectedBranch,
+            school_id: selectedBranch.school_id, // Ensure school_id is set
+            company_id: schoolData?.company_id,
+            ...(additionalData || {})
+          };
+          
+          setFormData(combinedData);
+        } catch (error) {
+          console.error('Error populating form:', error);
+          toast.error('Failed to load branch data');
+        }
       };
       
-      setFormData(combinedData);
+      populateEditForm();
     }
-  }, [selectedBranch, showEditModal, schools]);
+  }, [selectedBranch, showEditModal]);
 
   const handleSubmit = (mode: 'create' | 'edit') => {
     if (!validateForm()) {
