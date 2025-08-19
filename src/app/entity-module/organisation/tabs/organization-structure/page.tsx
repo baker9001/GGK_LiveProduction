@@ -56,7 +56,6 @@ import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { toast } from 'react-hot-toast';
-import { BranchFormContent } from '@/components/forms/BranchFormContent';
 
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
