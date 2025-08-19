@@ -27,7 +27,44 @@
   // Add mouse leave handler to stop panning when cursor leaves
   const handleMouseLeave = useCallback(() => {
     setIsPanning(false);
-  }, []);/**
+  }, []);
+
+  // IMPROVED: Enhanced auto-resize function with better fullscreen support
+  const checkAndAutoResize = useCallback((forceCenter = false) => {
+    const viewport = scrollAreaRef.current;
+    const container = chartContainerRef.current;
+    if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
+
+    // Get available space
+    const availableWidth = viewport.clientWidth - 100;
+    const availableHeight = viewport.clientHeight - 100;
+    
+    // Calculate optimal zoom to fit content
+    const scaleX = availableWidth / canvasSize.width;
+    const scaleY = availableHeight / canvasSize.height;
+    const optimalZoom = Math.min(scaleX, scaleY);
+    
+    // Apply more aggressive zoom for fullscreen
+    const targetZoom = isFullscreen 
+      ? Math.min(1.2, Math.max(0.5, optimalZoom))
+      : Math.max(0.3, Math.min(1.5, optimalZoom));
+    
+    setZoomLevel(targetZoom);
+    
+    // Reset pan position on fullscreen or when forced
+    if (forceCenter || isFullscreen) {
+      setPanPosition({ x: 0, y: 0 });
+    }
+    
+    // Center the content
+    requestAnimationFrame(() => {
+      if (viewport && !isPanning) {
+        const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
+        const scrollTop = Math.max(0, (container.scrollHeight - viewport.clientHeight) / 2);
+        viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
+      }
+    });
+  }, [canvasSize, isFullscreen, isPanning]);/**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * Dependencies: 
  *   - @/lib/supabase
@@ -875,6 +912,7 @@ export default function OrganizationStructureTab({
   }, [canvasSize, isFullscreen, isPanning]);
 
   // FIXED: Observe resize and fullscreen changes
+  useEffect(() => {
   useEffect(() => {
     if (!hasInitialized) return;
     
