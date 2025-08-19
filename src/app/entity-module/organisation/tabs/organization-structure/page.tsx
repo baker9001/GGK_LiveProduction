@@ -1,4 +1,33 @@
-/**
+// ADDED: Handle drag to pan
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start panning if clicking on empty space or holding space/middle mouse
+    if (e.button === 1 || (e.button === 0 && e.currentTarget === e.target)) {
+      setIsPanning(true);
+      setDragStart({
+        x: e.clientX - panPosition.x,
+        y: e.clientY - panPosition.y
+      });
+      e.preventDefault();
+    }
+  }, [panPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    
+    setPanPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  }, [isPanning, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Add mouse leave handler to stop panning when cursor leaves
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+  }, []);/**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * Dependencies: 
  *   - @/lib/supabase
@@ -41,7 +70,7 @@ import {
   PlusCircle, Users, User, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2, Minimize2, 
   RotateCcw, Loader2, X, GraduationCap, BookOpen, Expand,
-  ToggleLeft, ToggleRight
+  ToggleLeft, ToggleRight, Hand
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -456,6 +485,18 @@ export default function OrganizationStructureTab({
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [hasInitialized, setHasInitialized] = useState(false);
   
+  // Branch form state - RESTORED: Original embedded branch edit form
+  const [showBranchForm, setShowBranchForm] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<any>(null);
+  const [branchFormData, setBranchFormData] = useState<any>({});
+  const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
+  const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+  
+  // ADDED: Drag to pan state
+  const [isPanning, setIsPanning] = useState(false);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -541,22 +582,146 @@ export default function OrganizationStructureTab({
     }
   );
 
-  // FIXED: Handle branch click - redirect to branches tab
+  // FIXED: Handle branch click - redirect to branches tab OR open local form
   const handleBranchClick = useCallback((branch: any) => {
-    // First, switch to branches tab
+    // If onTabChange is provided, redirect to branches tab
     if (onTabChange) {
       onTabChange('branches');
+      
+      // Then trigger the branch selection after a small delay
+      setTimeout(() => {
+        if (onBranchSelect) {
+          onBranchSelect(branch);
+        } else if (onEditClick) {
+          onEditClick(branch, 'branch');
+        }
+      }, 100);
+    } else {
+      // Fallback: Open form locally (original behavior)
+      handleBranchEdit(branch);
+    }
+  }, [onTabChange, onBranchSelect, onEditClick]);
+
+  // RESTORED: Handle branch editing from diagram (original functionality)
+  const handleBranchEdit = useCallback(async (branch: any) => {
+    try {
+      // Fetch additional branch data
+      const { data: additionalData, error } = await supabase
+        .from('branches_additional')
+        .select('*')
+        .eq('branch_id', branch.id)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching branch additional data:', error);
+      }
+      
+      // Combine all data for the form
+      const combinedData = {
+        ...branch,
+        ...(additionalData || branch.additional || {})
+      };
+      
+      setBranchFormData(combinedData);
+      setBranchFormErrors({});
+      setEditingBranch(branch);
+      setBranchFormActiveTab('basic');
+      setShowBranchForm(true);
+    } catch (error) {
+      console.error('Error preparing branch form:', error);
+      toast.error('Failed to load branch details');
+    }
+  }, []);
+
+  // RESTORED: Handle branch form submission (original functionality)
+  const handleBranchFormSubmit = useCallback(async () => {
+    // Validate form
+    const errors: Record<string, string> = {};
+    
+    if (!branchFormData.name) errors.name = 'Name is required';
+    if (!branchFormData.code) errors.code = 'Code is required';
+    if (!branchFormData.school_id) errors.school_id = 'School is required';
+    if (!branchFormData.status) errors.status = 'Status is required';
+    
+    if (branchFormData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchFormData.branch_head_email)) {
+      errors.branch_head_email = 'Invalid email address';
     }
     
-    // Then trigger the branch selection after a small delay to ensure tab switch
-    setTimeout(() => {
-      if (onBranchSelect) {
-        onBranchSelect(branch);
-      } else if (onEditClick) {
-        onEditClick(branch, 'branch');
+    if (Object.keys(errors).length > 0) {
+      setBranchFormErrors(errors);
+      toast.error('Please fix the errors before submitting');
+      return;
+    }
+    
+    try {
+      // Prepare main data
+      const mainData = {
+        name: branchFormData.name,
+        code: branchFormData.code,
+        school_id: branchFormData.school_id,
+        status: branchFormData.status,
+        address: branchFormData.address,
+        notes: branchFormData.notes,
+        logo: branchFormData.logo
+      };
+      
+      // Update main record
+      const { error } = await supabase
+        .from('branches')
+        .update(mainData)
+        .eq('id', editingBranch.id);
+      
+      if (error) throw error;
+      
+      // Update or insert additional record
+      const additionalData: any = {
+        branch_id: editingBranch.id,
+        student_capacity: branchFormData.student_capacity,
+        current_students: branchFormData.current_students,
+        teachers_count: branchFormData.teachers_count,
+        active_teachers_count: branchFormData.active_teachers_count,
+        branch_head_name: branchFormData.branch_head_name,
+        branch_head_email: branchFormData.branch_head_email,
+        branch_head_phone: branchFormData.branch_head_phone,
+        building_name: branchFormData.building_name,
+        floor_details: branchFormData.floor_details,
+        opening_time: branchFormData.opening_time,
+        closing_time: branchFormData.closing_time,
+        working_days: branchFormData.working_days
+      };
+      
+      // Try update first
+      const { error: updateError } = await supabase
+        .from('branches_additional')
+        .update(additionalData)
+        .eq('branch_id', editingBranch.id);
+      
+      // If no rows updated, insert
+      if (updateError?.code === 'PGRST116') {
+        const { error: insertError } = await supabase
+          .from('branches_additional')
+          .insert([additionalData]);
+        
+        if (insertError && insertError.code !== '23505') {
+          console.error('Additional insert error:', insertError);
+        }
       }
-    }, 100);
-  }, [onTabChange, onBranchSelect, onEditClick]);
+      
+      toast.success('Branch updated successfully');
+      setShowBranchForm(false);
+      setEditingBranch(null);
+      setBranchFormData({});
+      setBranchFormErrors({});
+      
+      // Refresh data
+      if (refreshData) {
+        refreshData();
+      }
+    } catch (error) {
+      console.error('Error updating branch:', error);
+      toast.error('Failed to update branch');
+    }
+  }, [branchFormData, editingBranch, refreshData]);
 
   // Helper to get or create card ref
   const getCardRef = useCallback((id: string) => {
@@ -672,30 +837,42 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
 
-  // FIXED: Enhanced auto-resize function
-  const checkAndAutoResize = useCallback(() => {
+  // IMPROVED: Enhanced auto-resize function with better fullscreen support
+  const checkAndAutoResize = useCallback((forceCenter = false) => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
     if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
 
-    const availableWidth = viewport.clientWidth - 128;
-    const availableHeight = viewport.clientHeight - 128;
+    // Get available space
+    const availableWidth = viewport.clientWidth - 100;
+    const availableHeight = viewport.clientHeight - 100;
     
+    // Calculate optimal zoom to fit content
     const scaleX = availableWidth / canvasSize.width;
     const scaleY = availableHeight / canvasSize.height;
     const optimalZoom = Math.min(scaleX, scaleY);
     
-    const boundedZoom = Math.max(0.3, Math.min(1.5, optimalZoom));
-    setZoomLevel(boundedZoom);
+    // Apply more aggressive zoom for fullscreen
+    const targetZoom = isFullscreen 
+      ? Math.min(1.2, Math.max(0.5, optimalZoom))
+      : Math.max(0.3, Math.min(1.5, optimalZoom));
     
+    setZoomLevel(targetZoom);
+    
+    // Reset pan position on fullscreen or when forced
+    if (forceCenter || isFullscreen) {
+      setPanPosition({ x: 0, y: 0 });
+    }
+    
+    // Center the content
     requestAnimationFrame(() => {
-      if (viewport) {
+      if (viewport && !isPanning) {
         const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
-        const scrollTop = 0;
+        const scrollTop = Math.max(0, (container.scrollHeight - viewport.clientHeight) / 2);
         viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
       }
     });
-  }, [canvasSize]);
+  }, [canvasSize, isFullscreen, isPanning]);
 
   // FIXED: Observe resize and fullscreen changes
   useEffect(() => {
@@ -945,31 +1122,35 @@ export default function OrganizationStructureTab({
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => {
-    checkAndAutoResize();
+    setPanPosition({ x: 0, y: 0 }); // Reset pan
+    checkAndAutoResize(true);
   };
   
   const handleFitToScreen = useCallback(() => {
-    checkAndAutoResize();
+    setPanPosition({ x: 0, y: 0 }); // Reset pan
+    checkAndAutoResize(true);
   }, [checkAndAutoResize]);
 
-  // FIXED: Toggle fullscreen with auto-resize
+  // IMPROVED: Toggle fullscreen with better auto-resize
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => {
         setIsFullscreen(true);
-        // Trigger resize after entering fullscreen
+        setPanPosition({ x: 0, y: 0 }); // Reset pan
+        // Delay to ensure fullscreen is applied
         setTimeout(() => {
-          checkAndAutoResize();
-        }, 300);
+          checkAndAutoResize(true);
+        }, 500);
       });
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen().then(() => {
           setIsFullscreen(false);
-          // Trigger resize after exiting fullscreen
+          setPanPosition({ x: 0, y: 0 }); // Reset pan
+          // Delay to ensure fullscreen exit is applied
           setTimeout(() => {
-            checkAndAutoResize();
-          }, 300);
+            checkAndAutoResize(true);
+          }, 500);
         });
       }
     }
@@ -980,10 +1161,11 @@ export default function OrganizationStructureTab({
     const handleFullscreenChange = () => {
       const isNowFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isNowFullscreen);
+      setPanPosition({ x: 0, y: 0 }); // Reset pan
       // Always trigger resize on fullscreen change
       setTimeout(() => {
-        checkAndAutoResize();
-      }, 300);
+        checkAndAutoResize(true);
+      }, 500);
     };
     
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -1277,6 +1459,10 @@ export default function OrganizationStructureTab({
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs text-gray-500 dark:text-gray-400">
+              <Hand className="w-3 h-3" />
+              <span>Drag to pan</span>
+            </div>
             <button
               onClick={handleZoomOut}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -1325,24 +1511,29 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Chart Container with SVG Overlay */}
+      {/* Chart Container with SVG Overlay - ADDED: Drag to pan functionality */}
       <div 
         ref={scrollAreaRef}
-        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
+        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       >
         <div 
           ref={chartContainerRef}
           className="relative"
           style={{
-            transform: `scale(${zoomLevel})`,
-            transformOrigin: 'center top',
-            transition: 'transform 0.2s ease-out',
+            transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
+            transformOrigin: 'center center',
+            transition: isPanning ? 'none' : 'transform 0.2s ease-out',
             width: `${Math.max(canvasSize.width, 1200)}px`,
             height: `${Math.max(canvasSize.height, 800)}px`,
             padding: '64px',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'flex-start'
+            alignItems: 'flex-start',
+            userSelect: isPanning ? 'none' : 'auto'
           }}
         >
           {/* Organization Chart Content */}
@@ -1351,6 +1542,30 @@ export default function OrganizationStructureTab({
           </div>
         </div>
       </div>
+
+      {/* RESTORED: Branch Edit Form - Original embedded form functionality */}
+      <SlideInForm
+        title="Edit Branch"
+        isOpen={showBranchForm}
+        onClose={() => {
+          setShowBranchForm(false);
+          setEditingBranch(null);
+          setBranchFormData({});
+          setBranchFormErrors({});
+        }}
+        onSave={handleBranchFormSubmit}
+      >
+        <BranchFormContent
+          formData={branchFormData}
+          setFormData={setBranchFormData}
+          formErrors={branchFormErrors}
+          setFormErrors={setBranchFormErrors}
+          activeTab={branchFormActiveTab}
+          setActiveTab={setBranchFormActiveTab}
+          schools={schoolsForForm}
+          isEditing={true}
+        />
+      </SlideInForm>
     </div>
   );
 }
