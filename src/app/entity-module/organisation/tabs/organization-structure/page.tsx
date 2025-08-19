@@ -139,8 +139,13 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
       return logoPath;
     }
     
-    // Construct Supabase storage URL with proper bucket
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+    // Construct Supabase storage URL - Fixed for Vite environment
+    // Use import.meta.env for Vite, which is always available
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
+    }
     return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${logoPath}`;
   };
 
