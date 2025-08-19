@@ -428,6 +428,9 @@ export default function OrganizationStructureTab({
   onEditClick, 
   onItemClick,
   refreshData
+}: OrgStructureProps) {
+  // State management
+  const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
     new Set(['entity', 'schools'])  // Default: Entity and Schools visible
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
