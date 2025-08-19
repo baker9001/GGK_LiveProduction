@@ -193,34 +193,35 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     // Close the confirmation dialog
     setShowRemoveConfirmation(false);
 
-    // Don't show loading toast to prevent form closure issues
-    console.log('Removing image...');
+    // Immediately update the UI to show removal in progress
+    onChange(null);
 
     try {
-      const { error } = await supabase.storage
-        .from(bucket)
-        .remove([value!]);
+      if (value) {
+        const { error } = await supabase.storage
+          .from(bucket)
+          .remove([value]);
 
-      if (error) {
-        console.error('Storage remove error:', error);
-        
-        // If deletion fails in storage but we want to clear the reference anyway
-        onChange(null);
-        // Use a non-blocking toast that doesn't interfere with form
-        setTimeout(() => toast.success('Image reference removed'), 100);
-        return;
+        if (error) {
+          console.error('Storage remove error:', error);
+          // Even if storage deletion fails, we've already cleared the UI
+          // Use a non-blocking toast that doesn't interfere with form
+          setTimeout(() => {
+            toast.info('Image removed from form (storage cleanup may have failed)');
+          }, 200);
+        } else {
+          // Success - show confirmation after delay
+          setTimeout(() => {
+            toast.success('Image removed successfully');
+          }, 200);
+        }
       }
-      
-      // Use a non-blocking toast that doesn't interfere with form
-      setTimeout(() => toast.success('Image removed successfully'), 100);
-      onChange(null);
     } catch (error) {
       console.error('Error removing file:', error);
-      
-      // Even if storage deletion fails, clear the reference
-      onChange(null);
       // Use a non-blocking toast that doesn't interfere with form
-      setTimeout(() => toast.info('Image reference cleared'), 100);
+      setTimeout(() => {
+        toast.info('Image removed from form (storage cleanup failed)');
+      }, 200);
     }
   };
 
