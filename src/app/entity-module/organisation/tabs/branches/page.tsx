@@ -132,6 +132,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   // Helper to get branch logo URL
   const getBranchLogoUrl = (path: string | null) => {
     if (!path) return null;
+      console.log('Opening edit modal for branch:', branch.name);
     
     // If it's already a full URL, return as is
     if (path.startsWith('http')) {
@@ -390,6 +391,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   };
 
   const handleEdit = (branch: BranchData) => {
+    console.log('handleEdit called for branch:', branch.name);
     const combinedData = {
       ...branch,
       ...(branch.additional || {})
@@ -884,6 +886,7 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
 
       {/* Edit Modal */}
       <SlideInForm
+        key={`edit-${selectedBranch?.id || 'none'}`}
         title="Edit Branch"
         isOpen={showEditModal}
         onClose={() => {
@@ -891,9 +894,17 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
           setSelectedBranch(null);
           setFormData({});
           setFormErrors({});
+          setActiveTab('basic');
         }}
         onSave={() => handleSubmit('edit')}
+        loading={updateBranchMutation.isLoading}
       >
+        {formErrors.form && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md mb-4">
+            {formErrors.form}
+          </div>
+        )}
+        
         <div className="space-y-4">
           {/* Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">

@@ -599,9 +599,17 @@ export default function OrganizationManagement() {
     } else if (type === 'branch') {
       // For branch cards, open the unified edit form
       setActiveTab('branches');
+      // Use a longer timeout and ensure the tab is fully loaded
       setTimeout(() => {
-        branchesTabRef.current?.openEditBranchModal(item);
-      }, 100);
+        if (branchesTabRef.current?.openEditBranchModal) {
+          branchesTabRef.current.openEditBranchModal(item);
+        } else {
+          // Retry after another delay if ref is not ready
+          setTimeout(() => {
+            branchesTabRef.current?.openEditBranchModal(item);
+          }, 200);
+        }
+      }, 300);
     } else {
       // For other types, show the details panel as before
       setSelectedItem(item);
