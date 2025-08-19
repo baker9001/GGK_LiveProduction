@@ -41,7 +41,7 @@ import {
   PlusCircle, Users, User, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2, Minimize2, 
   RotateCcw, Loader2, X, GraduationCap, BookOpen, Expand,
-  ToggleLeft, ToggleRight, Hand
+  ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -463,11 +463,6 @@ export default function OrganizationStructureTab({
   const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
   const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   
-  // ADDED: Drag to pan state
-  const [isPanning, setIsPanning] = useState(false);
-  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -552,48 +547,6 @@ export default function OrganizationStructureTab({
       cacheTime: 5 * 60 * 1000
     }
   );
-
-  // Helper to get or create card ref
-  const getCardRef = useCallback((id: string) => {
-    if (!cardRefs.current.has(id)) {
-      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
-    }
-    return cardRefs.current.get(id)!;
-  }, []);
-
-  // Layout configuration
-  const layoutConfig: LayoutConfig = useMemo(() => ({
-    gapX: 48,
-    gapY: 80,
-    centerParents: true,
-    minCardWidth: 260,
-    maxCardWidth: 300
-  }), []);
-
-  // Measure node dimensions
-  const nodeDimensions = useNodeMeasurements(
-    cardRefs,
-    zoomLevel,
-    [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, showInactive]
-  );
-
-  // Build tree structure from data
-  const treeNodes = useMemo(() => {
-    if (!companyData) return new Map();
-    
-    const filteredCompanyData = {
-      ...companyData,
-      schools: filteredSchools
-    };
-    
-    return buildTreeFromData(
-      filteredCompanyData,
-      expandedNodes,
-      lazyLoadedData,
-      branchesData,
-      undefined
-    );
-  }, [companyData, filteredSchools, expandedNodes, lazyLoadedData, branchesData]);
 
   // FIXED: Handle branch click - redirect to branches tab OR open local form
   const handleBranchClick = useCallback((branch: any) => {
@@ -736,73 +689,47 @@ export default function OrganizationStructureTab({
     }
   }, [branchFormData, editingBranch, refreshData]);
 
-  // ADDED: Handle drag to pan
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start panning if clicking on empty space or holding space/middle mouse
-    if (e.button === 1 || (e.button === 0 && e.currentTarget === e.target)) {
-      setIsPanning(true);
-      setDragStart({
-        x: e.clientX - panPosition.x,
-        y: e.clientY - panPosition.y
-      });
-      e.preventDefault();
+  // Helper to get or create card ref
+  const getCardRef = useCallback((id: string) => {
+    if (!cardRefs.current.has(id)) {
+      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
     }
-  }, [panPosition]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isPanning) return;
-    
-    setPanPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    });
-  }, [isPanning, dragStart]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
+    return cardRefs.current.get(id)!;
   }, []);
 
-  // Add mouse leave handler to stop panning when cursor leaves
-  const handleMouseLeave = useCallback(() => {
-    setIsPanning(false);
-  }, []);
+  // Layout configuration
+  const layoutConfig: LayoutConfig = useMemo(() => ({
+    gapX: 48,
+    gapY: 80,
+    centerParents: true,
+    minCardWidth: 260,
+    maxCardWidth: 300
+  }), []);
 
-  // IMPROVED: Enhanced auto-resize function with better fullscreen support
-  const checkAndAutoResize = useCallback((forceCenter = false) => {
-    const viewport = scrollAreaRef.current;
-    const container = chartContainerRef.current;
-    if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
+  // Measure node dimensions
+  const nodeDimensions = useNodeMeasurements(
+    cardRefs,
+    zoomLevel,
+    [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, showInactive]
+  );
 
-    // Get available space
-    const availableWidth = viewport.clientWidth - 100;
-    const availableHeight = viewport.clientHeight - 100;
+  // Build tree structure from data
+  const treeNodes = useMemo(() => {
+    if (!companyData) return new Map();
     
-    // Calculate optimal zoom to fit content
-    const scaleX = availableWidth / canvasSize.width;
-    const scaleY = availableHeight / canvasSize.height;
-    const optimalZoom = Math.min(scaleX, scaleY);
+    const filteredCompanyData = {
+      ...companyData,
+      schools: filteredSchools
+    };
     
-    // Apply more aggressive zoom for fullscreen
-    const targetZoom = isFullscreen 
-      ? Math.min(1.2, Math.max(0.5, optimalZoom))
-      : Math.max(0.3, Math.min(1.5, optimalZoom));
-    
-    setZoomLevel(targetZoom);
-    
-    // Reset pan position on fullscreen or when forced
-    if (forceCenter || isFullscreen) {
-      setPanPosition({ x: 0, y: 0 });
-    }
-    
-    // Center the content
-    requestAnimationFrame(() => {
-      if (viewport && !isPanning) {
-        const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
-        const scrollTop = Math.max(0, (container.scrollHeight - viewport.clientHeight) / 2);
-        viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
-      }
-    });
-  }, [canvasSize, isFullscreen, isPanning]);
+    return buildTreeFromData(
+      filteredCompanyData,
+      expandedNodes,
+      lazyLoadedData,
+      branchesData,
+      undefined
+    );
+  }, [companyData, filteredSchools, expandedNodes, lazyLoadedData, branchesData]);
 
   // Calculate layout positions
   useEffect(() => {
@@ -851,7 +778,7 @@ export default function OrganizationStructureTab({
         clearTimeout(layoutUpdateTimeoutRef.current);
       }
     };
-  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, checkAndAutoResize]);
+  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized]);
 
   // Calculate hierarchical data
   const hierarchicalData = useMemo(() => {
@@ -875,6 +802,31 @@ export default function OrganizationStructureTab({
     
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
+
+  // FIXED: Enhanced auto-resize function
+  const checkAndAutoResize = useCallback(() => {
+    const viewport = scrollAreaRef.current;
+    const container = chartContainerRef.current;
+    if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
+
+    const availableWidth = viewport.clientWidth - 128;
+    const availableHeight = viewport.clientHeight - 128;
+    
+    const scaleX = availableWidth / canvasSize.width;
+    const scaleY = availableHeight / canvasSize.height;
+    const optimalZoom = Math.min(scaleX, scaleY);
+    
+    const boundedZoom = Math.max(0.3, Math.min(1.5, optimalZoom));
+    setZoomLevel(boundedZoom);
+    
+    requestAnimationFrame(() => {
+      if (viewport) {
+        const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
+        const scrollTop = 0;
+        viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
+      }
+    });
+  }, [canvasSize]);
 
   // FIXED: Observe resize and fullscreen changes
   useEffect(() => {
@@ -1124,35 +1076,31 @@ export default function OrganizationStructureTab({
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => {
-    setPanPosition({ x: 0, y: 0 }); // Reset pan
-    checkAndAutoResize(true);
+    checkAndAutoResize();
   };
   
   const handleFitToScreen = useCallback(() => {
-    setPanPosition({ x: 0, y: 0 }); // Reset pan
-    checkAndAutoResize(true);
+    checkAndAutoResize();
   }, [checkAndAutoResize]);
 
-  // IMPROVED: Toggle fullscreen with better auto-resize
+  // FIXED: Toggle fullscreen with auto-resize
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => {
         setIsFullscreen(true);
-        setPanPosition({ x: 0, y: 0 }); // Reset pan
-        // Delay to ensure fullscreen is applied
+        // Trigger resize after entering fullscreen
         setTimeout(() => {
-          checkAndAutoResize(true);
-        }, 500);
+          checkAndAutoResize();
+        }, 300);
       });
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen().then(() => {
           setIsFullscreen(false);
-          setPanPosition({ x: 0, y: 0 }); // Reset pan
-          // Delay to ensure fullscreen exit is applied
+          // Trigger resize after exiting fullscreen
           setTimeout(() => {
-            checkAndAutoResize(true);
-          }, 500);
+            checkAndAutoResize();
+          }, 300);
         });
       }
     }
@@ -1163,11 +1111,10 @@ export default function OrganizationStructureTab({
     const handleFullscreenChange = () => {
       const isNowFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isNowFullscreen);
-      setPanPosition({ x: 0, y: 0 }); // Reset pan
       // Always trigger resize on fullscreen change
       setTimeout(() => {
-        checkAndAutoResize(true);
-      }, 500);
+        checkAndAutoResize();
+      }, 300);
     };
     
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -1461,10 +1408,6 @@ export default function OrganizationStructureTab({
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs text-gray-500 dark:text-gray-400">
-              <Hand className="w-3 h-3" />
-              <span>Drag to pan</span>
-            </div>
             <button
               onClick={handleZoomOut}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -1513,29 +1456,24 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Chart Container with SVG Overlay - ADDED: Drag to pan functionality */}
+      {/* Chart Container with SVG Overlay */}
       <div 
         ref={scrollAreaRef}
-        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
       >
         <div 
           ref={chartContainerRef}
           className="relative"
           style={{
-            transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomLevel})`,
-            transformOrigin: 'center center',
-            transition: isPanning ? 'none' : 'transform 0.2s ease-out',
+            transform: `scale(${zoomLevel})`,
+            transformOrigin: 'center top',
+            transition: 'transform 0.2s ease-out',
             width: `${Math.max(canvasSize.width, 1200)}px`,
             height: `${Math.max(canvasSize.height, 800)}px`,
             padding: '64px',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'flex-start',
-            userSelect: isPanning ? 'none' : 'auto'
+            alignItems: 'flex-start'
           }}
         >
           {/* Organization Chart Content */}
