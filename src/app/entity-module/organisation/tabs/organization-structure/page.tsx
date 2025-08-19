@@ -1007,6 +1007,37 @@ export default function OrganizationStructureTab({
     }
   }, [showInactive, branchesData, lazyLoadedData, loadingNodes]);
 
+  // ADDED: Handle drag to pan - MOVED BEFORE checkAndAutoResize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start panning if clicking on empty space or holding space/middle mouse
+    if (e.button === 1 || (e.button === 0 && e.currentTarget === e.target)) {
+      setIsPanning(true);
+      setDragStart({
+        x: e.clientX - panPosition.x,
+        y: e.clientY - panPosition.y
+      });
+      e.preventDefault();
+    }
+  }, [panPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    
+    setPanPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  }, [isPanning, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Add mouse leave handler to stop panning when cursor leaves
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
   // Toggle node expansion
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
