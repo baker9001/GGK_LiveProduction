@@ -48,6 +48,7 @@ import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
+import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 // Note: DataTable import removed as it wasn't used in the original file
 import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
@@ -117,10 +118,13 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
   const [formData, setFormData] = useState<any>({});
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  
+  // Confirmation dialog state for branch deactivation
+  const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
+  const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
 
   // ===== EXPOSE METHODS VIA REF =====
   React.useImperativeHandle(ref, () => ({
@@ -192,9 +196,40 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
   );
 
+  // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
+  const { data: branches = [] } = useQuery(
+    ['branches-for-schools', companyId],
+    async () => {
+      // Get all schools for this company first
+      const { data: schoolsData, error: schoolsError } = await supabase
+        .from('schools')
+        .select('id')
+        .eq('company_id', companyId);
+      
+      if (schoolsError) throw schoolsError;
+      
+      const schoolIds = schoolsData?.map(s => s.id) || [];
+      
+      if (schoolIds.length === 0) return [];
+      
+      // Then get all branches for these schools
+      const { data: branchesData, error: branchesError } = await supabase
+        .from('branches')
+        .select('id, name, school_id, status')
+        .in('school_id', schoolIds);
+      
+      if (branchesError) throw branchesError;
+      
+      return branchesData || [];
+    },
+    {
+      enabled: !!companyId,
+      staleTime: 60 * 1000
+    }
+  );
   // ===== MUTATIONS =====
   const createSchoolMutation = useMutation(
-    async (data: any) => {
+    async ({ data }: { data: any }) => {
       // Prepare main data
       const mainData = {
         name: data.name,
@@ -253,39 +288,21 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       onSuccess: () => {
         // FIXED: Use the correct query key that matches the useQuery hook
         queryClient.invalidateQueries(['schools-tab', companyId]);
+        queryClient.invalidateQueries(['branches-for-schools', companyId]);
         if (refreshData) refreshData();
         toast.success('School created successfully');
-        setShowCreateModal(false);
-        setFormData({});
-        setFormErrors({});
-        setActiveTab('basic');
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to create school');
-      }
-    }
-  );
-
-  const updateSchoolMutation = useMutation(
-    async ({ id, data }: { id: string; data: any }) => {
-      // Check if trying to deactivate a school with active branches
-      if (data.status === 'inactive') {
-        const { data: activeBranches, error: branchCheckError } = await supabase
+    async ({ id, data, deactivateAssociatedBranches = false }: { id: string; data: any; deactivateAssociatedBranches?: boolean }) => {
+      // If deactivating school and we need to deactivate branches
+      if (data.status === 'inactive' && deactivateAssociatedBranches) {
+        // First deactivate all active branches for this school
+        const { error: branchUpdateError } = await supabase
           .from('branches')
-          .select('id, name')
+          .update({ status: 'inactive' })
           .eq('school_id', id)
           .eq('status', 'active');
         
-        if (branchCheckError) {
-          throw new Error(`Failed to check branches: ${branchCheckError.message}`);
-        }
-        
-        if (activeBranches && activeBranches.length > 0) {
-          const branchNames = activeBranches.map(b => b.name).join(', ');
-          throw new Error(
-            `Cannot deactivate school. It has ${activeBranches.length} active branch${activeBranches.length > 1 ? 'es' : ''}: ${branchNames}. ` +
-            `Please deactivate or transfer the branch${activeBranches.length > 1 ? 'es' : ''} first.`
-          );
+        if (branchUpdateError) {
+          throw new Error(`Failed to deactivate branches: ${branchUpdateError.message}`);
         }
       }
       
@@ -352,57 +369,95 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       onSuccess: () => {
         // FIXED: Use the correct query key that matches the useQuery hook
         queryClient.invalidateQueries(['schools-tab', companyId]);
+        queryClient.invalidateQueries(['branches-for-schools', companyId]);
         if (refreshData) refreshData();
         toast.success('School updated successfully');
         setShowEditModal(false);
         setSelectedSchool(null);
         setFormData({});
-        setFormErrors({});
         setActiveTab('basic');
       },
       onError: (error: any) => {
-        toast.error(error.message || 'Failed to update school');
+        console.error('Error updating school:', error);
+        toast.error(error.message || 'Failed to update school. Please try again.');
       }
     }
   );
 
   // ===== HELPER FUNCTIONS =====
   const validateForm = () => {
-    const errors: Record<string, string> = {};
-    
-    if (!formData.name) errors.name = 'Name is required';
-    if (!formData.code) errors.code = 'Code is required';
-    if (!formData.status) errors.status = 'Status is required';
-    
-    // Email validations
-    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
-      errors.principal_email = 'Invalid email address';
+    if (!formData.name) {
+      toast.error('School name is required');
+      return false;
+    }
+    if (!formData.code) {
+      toast.error('School code is required');
+      return false;
+    }
+    if (!formData.status) {
+      toast.error('Status is required');
+      return false;
     }
     
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    // Email validation
+    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
+      toast.error('Please enter a valid email address for principal');
+      return false;
+    }
+    
+    return true;
   };
 
-  const handleSubmit = (mode: 'create' | 'edit') => {
+  const handleSubmit = async (mode: 'create' | 'edit') => {
     if (!validateForm()) {
-      toast.error('Please fix the errors before submitting');
       return;
     }
     
+    // Check for branch deactivation before proceeding with edit
+    if (mode === 'edit' && formData.status === 'inactive' && selectedSchool) {
+      // Find active branches for this school
+      const activeBranches = branches.filter(branch => 
+        branch.school_id === selectedSchool.id && branch.status === 'active'
+      );
+      
+      if (activeBranches.length > 0) {
+        setBranchesToDeactivate(activeBranches);
+        setShowDeactivateConfirmation(true);
+        return; // Don't proceed with mutation yet
+      }
+    }
+    
     if (mode === 'create') {
-      createSchoolMutation.mutate(formData);
+      createSchoolMutation.mutate({ data: formData });
     } else {
-      updateSchoolMutation.mutate({ id: selectedSchool!.id, data: formData });
+      updateSchoolMutation.mutate({ id: selectedSchool!.id, data: formData, deactivateAssociatedBranches: false });
     }
   };
 
+  // Handle confirmed deactivation with branches
+  const handleConfirmDeactivation = () => {
+    if (selectedSchool) {
+      updateSchoolMutation.mutate({ 
+        id: selectedSchool.id, 
+        data: formData, 
+        deactivateAssociatedBranches: true 
+      });
+    }
+    setShowDeactivateConfirmation(false);
+    setBranchesToDeactivate([]);
+  };
+
+  // Handle cancel deactivation
+  const handleCancelDeactivation = () => {
+    setShowDeactivateConfirmation(false);
+    setBranchesToDeactivate([]);
+  };
   const handleEdit = (school: SchoolData) => {
     const combinedData = {
       ...school,
       ...(school.additional || {})
     };
     setFormData(combinedData);
-    setFormErrors({});
     setSelectedSchool(school);
     setActiveTab('basic');
     setShowEditModal(true);
@@ -410,7 +465,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
 
   const handleCreate = () => {
     setFormData({ status: 'active', company_id: companyId });
-    setFormErrors({});
     setActiveTab('basic');
     setShowCreateModal(true);
   };
@@ -646,15 +700,14 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
         onClose={() => {
           setShowCreateModal(false);
           setFormData({});
-          setFormErrors({});
         }}
         onSave={() => handleSubmit('create')}
       >
         <SchoolFormContent
           formData={formData}
           setFormData={setFormData}
-          formErrors={formErrors}
-          setFormErrors={setFormErrors}
+          formErrors={{}}
+          setFormErrors={() => {}}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           companyId={companyId}
@@ -670,21 +723,32 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           setShowEditModal(false);
           setSelectedSchool(null);
           setFormData({});
-          setFormErrors({});
         }}
         onSave={() => handleSubmit('edit')}
       >
         <SchoolFormContent
           formData={formData}
           setFormData={setFormData}
-          formErrors={formErrors}
-          setFormErrors={setFormErrors}
+          formErrors={{}}
+          setFormErrors={() => {}}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           companyId={companyId}
           isEditing={true}
         />
       </SlideInForm>
+
+      {/* Branch Deactivation Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeactivateConfirmation}
+        title="Deactivate Branches?"
+        message={`This school has ${branchesToDeactivate.length} active branch${branchesToDeactivate.length > 1 ? 'es' : ''}: ${branchesToDeactivate.map(b => b.name).join(', ')}. These branches will also be deactivated. Do you want to proceed?`}
+        confirmText="Deactivate All"
+        cancelText="Cancel"
+        confirmVariant="destructive"
+        onConfirm={handleConfirmDeactivation}
+        onCancel={handleCancelDeactivation}
+      />
     </div>
   );
 });
