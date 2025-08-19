@@ -27,7 +27,11 @@ import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import type { SchoolsTabRef } from './tabs/schools/page';
-import type { BranchesTabRef } from './tabs/branches/page';
+
+// ===== REF INTERFACE FOR BRANCHES TAB =====
+export interface BranchesTabRef {
+  openEditBranchModal: (branch: any) => void;
+}
 
 // ===== LAZY LOAD TAB COMPONENTS =====
 const OrganizationStructureTab = lazy(() => 
@@ -37,7 +41,7 @@ const SchoolsTab = lazy(() =>
   import('./tabs/schools/page')
 );
 const BranchesTab = lazy(() => 
-  import('./tabs/branches/page')
+  import('./tabs/branches/page').then(module => ({ default: module.default }))
 );
 const StudentsTab = lazy(() => 
   import('./tabs/students/page')

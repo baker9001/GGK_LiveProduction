@@ -73,6 +73,11 @@ export interface BranchesTabProps {
   refreshData?: () => void;
 }
 
+// ===== REF INTERFACE =====
+export interface BranchesTabRef {
+  openEditBranchModal: (branch: BranchData) => void;
+}
+
 // ===== STATUS BADGE COMPONENT =====
 const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
   const getStatusConfig = () => {
@@ -113,7 +118,7 @@ const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs'
 StatusBadge.displayName = 'StatusBadge';
 
 // ===== MAIN COMPONENT =====
-export default function BranchesTab({ companyId, refreshData }: BranchesTabProps) {
+const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -128,6 +133,14 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
+
+  // ===== EXPOSE METHODS VIA REF =====
+  React.useImperativeHandle(ref, () => ({
+    openEditBranchModal: (branch: BranchData) => {
+      console.log('Opening branch edit modal for:', branch.name);
+      handleEdit(branch);
+    }
+  }), []);
 
   // Helper to get branch logo URL
   const getBranchLogoUrl = (path: string | null) => {
@@ -952,4 +965,8 @@ export default function BranchesTab({ companyId, refreshData }: BranchesTabProps
       </SlideInForm>
     </div>
   );
-}
+});
+
+BranchesTab.displayName = 'BranchesTab';
+
+export default BranchesTab;
