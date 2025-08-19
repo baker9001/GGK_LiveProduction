@@ -913,6 +913,29 @@ export default function OrganizationStructureTab({
 
   // FIXED: Observe resize and fullscreen changes
   useEffect(() => {
+    if (!hasInitialized) return;
+    
+    const viewport = scrollAreaRef.current;
+    if (!viewport) return;
+
+    const handleWindowResize = () => {
+      if (autoResizeTimeoutRef.current) {
+        clearTimeout(autoResizeTimeoutRef.current);
+      }
+      autoResizeTimeoutRef.current = setTimeout(() => {
+        checkAndAutoResize();
+      }, 300);
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      if (autoResizeTimeoutRef.current) {
+        clearTimeout(autoResizeTimeoutRef.current);
+      }
+    };
+  }, [hasInitialized, checkAndAutoResize]);
   useEffect(() => {
     if (!hasInitialized) return;
     
