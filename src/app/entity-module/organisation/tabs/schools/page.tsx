@@ -11,6 +11,20 @@
  *   - @/components/shared/* (SlideInForm, FormField, Button)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
+ * Preserved Features:
+ *   - All original school management functionality
+ *   - Search and filter capabilities
+ *   - School creation and editing forms
+ *   - SchoolFormContent integration
+ *   - Statistics display
+ *   - All original event handlers
+ * 
+ * Added/Modified:
+ *   - ENHANCED: Logo display matching organization structure's improved implementation
+ *   - IMPROVED: Better logo sizing with proper aspect ratio
+ *   - ADDED: Logo fallback with better error handling
+ *   - IMPROVED: Logo container styling for better visual presentation
+ * 
  * Database Tables:
  *   - schools & schools_additional
  *   - companies (for reference)
@@ -114,6 +128,26 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       handleEdit(school);
     }
   }), []);
+
+  // ENHANCED: Improved helper to get school logo URL with better error handling
+  const getSchoolLogoUrl = (path: string | null | undefined) => {
+    if (!path) return null;
+    
+    // If it's already a full URL, return as is
+    if (path.startsWith('http')) {
+      return path;
+    }
+    
+    // Construct Supabase storage URL with proper environment variable
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
+    }
+    
+    // Use the correct bucket name for schools
+    return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
+  };
 
   // ===== FETCH SCHOOLS =====
   const { data: schools = [], isLoading, refetch } = useQuery(
@@ -370,23 +404,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
   const totalTeachers = schools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
 
-  // Helper to get school logo URL
-  const getSchoolLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    
-    console.log('School logo path:', path); // Debug log
-    
-    // If it's already a full URL, return as is
-    if (path.startsWith('http')) {
-      return path;
-    }
-    
-    // Construct Supabase storage URL
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${path}`;
-    console.log('Generated school logo URL:', url); // Debug log
-    return url;
-  };
-
   // ===== MAIN RENDER =====
   return (
     <div className="space-y-4">
@@ -481,101 +498,121 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
             <p className="text-gray-600 dark:text-gray-400">No schools found</p>
           </div>
         ) : (
-          filteredSchools.map((school) => (
-            <div
-              key={school.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center overflow-hidden">
-                    {school.logo ? (
-                      <img
-                        src={getSchoolLogoUrl(school.logo)}
-                        alt={`${school.name} logo`}
-                        className="w-full h-full object-contain p-1"
-                        onError={(e) => {
-                          // If logo fails to load, hide the image and show fallback
-                          e.currentTarget.style.display = 'none';
-                          const parent = e.currentTarget.parentElement;
-                          if (parent) {
-                            const fallback = parent.querySelector('.logo-fallback');
-                            if (fallback) {
-                              (fallback as HTMLElement).style.display = 'flex';
-                            }
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <span className={`text-sm font-bold logo-fallback ${school.logo ? 'hidden' : 'flex'} items-center justify-center w-full h-full text-green-600 dark:text-green-400`}>
-                      {school.code?.substring(0, 2).toUpperCase() || school.name?.substring(0, 2).toUpperCase() || <School className="w-5 h-5" />}
-                    </span>
+          filteredSchools.map((school) => {
+            const logoUrl = getSchoolLogoUrl(school.logo);
+            
+            return (
+              <div
+                key={school.id}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    {/* ENHANCED: Improved logo display matching org structure implementation */}
+                    <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
+                      {logoUrl ? (
+                        <>
+                          <img
+                            src={logoUrl}
+                            alt={`${school.name} logo`}
+                            className="w-full h-full object-contain p-0.5"
+                            style={{ maxWidth: '100%', maxHeight: '100%' }}
+                            onError={(e) => {
+                              // If logo fails to load, hide the image and show fallback
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              imgElement.style.display = 'none';
+                              const parent = imgElement.parentElement;
+                              if (parent) {
+                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
+                                if (fallback) {
+                                  fallback.style.display = 'flex';
+                                  fallback.classList.remove('bg-white');
+                                  fallback.classList.add('bg-green-500');
+                                }
+                              }
+                            }}
+                          />
+                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-green-500 text-white">
+                            {school.code?.substring(0, 2).toUpperCase() || 
+                             school.name?.substring(0, 2).toUpperCase() || 
+                             <School className="w-5 h-5" />}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-green-500 text-white">
+                          {school.code?.substring(0, 2).toUpperCase() || 
+                           school.name?.substring(0, 2).toUpperCase() || 
+                           <School className="w-5 h-5" />}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{school.code}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{school.code}</p>
-                  </div>
+                  <StatusBadge status={school.status} size="xs" />
                 </div>
-                <StatusBadge status={school.status} size="xs" />
-              </div>
 
-              {school.description && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                  {school.description}
-                </p>
-              )}
+                {school.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                    {school.description}
+                  </p>
+                )}
 
-              <div className="space-y-2 mb-3">
-                {school.additional?.principal_name && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <User className="w-3 h-3" />
-                    <span>{school.additional.principal_name}</span>
-                  </div>
-                )}
-                {school.additional?.campus_city && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <MapPin className="w-3 h-3" />
-                    <span>{school.additional.campus_city}</span>
-                  </div>
-                )}
-                {school.additional?.school_type && (
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <Building2 className="w-3 h-3" />
-                    <span className="capitalize">{school.additional.school_type.replace('_', ' ')}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
-                <div className="flex items-center space-x-4 text-xs">
-                  <div className="flex items-center gap-1">
-                    <GraduationCap className="w-3 h-3 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {school.student_count || 0} students
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {school.additional?.teachers_count || 0} teachers
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {school.branch_count || 0} branches
-                    </span>
-                  </div>
+                <div className="space-y-2 mb-3">
+                  {school.additional?.principal_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <User className="w-3 h-3" />
+                      <span>{school.additional.principal_name}</span>
+                    </div>
+                  )}
+                  {school.additional?.campus_city && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <MapPin className="w-3 h-3" />
+                      <span>{school.additional.campus_city}</span>
+                    </div>
+                  )}
+                  {school.additional?.school_type && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Building2 className="w-3 h-3" />
+                      <span className="capitalize">{school.additional.school_type.replace('_', ' ')}</span>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleEdit(school)}
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
+
+                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                  <div className="flex items-center space-x-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <GraduationCap className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.student_count || 0} students
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.additional?.teachers_count || 0} teachers
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.branch_count || 0} branches
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleEdit(school)}
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
