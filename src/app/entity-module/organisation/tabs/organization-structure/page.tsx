@@ -4,6 +4,7 @@
  *   - @/lib/supabase
  *   - @/lib/layout/treeLayout
  *   - @/hooks/useNodeMeasurements
+ *   - @/components/forms/BranchFormContent
  *   - External: react, @tanstack/react-query, lucide-react
  * 
  * Preserved Features:
@@ -15,13 +16,10 @@
  *   - Show inactive toggle
  * 
  * Added/Modified:
- *   - Fixed school expand arrows to work independently of branches tab visibility
- *   - Fixed continuous resizing issue with proper memoization and debouncing
- *   - Fixed branch cards visibility when expanding schools regardless of tab state
- *   - Fixed auto-centering and responsive sizing
- *   - ADDED: Proper logo support for companies, schools, and branches
- *   - ADDED: Logo URL generation with proper bucket handling
- *   - ADDED: Error handling and fallback display for failed logo loads
+ *   - FIXED: Branch logo display with proper bucket configuration
+ *   - ADDED: Unified branch edit functionality matching school pattern
+ *   - FIXED: Logo URL generation for branches with correct bucket
+ *   - ENHANCED: Click handler for branch cards to open edit form
  * 
  * Database Tables:
  *   - companies, schools, branches, years, sections
@@ -30,6 +28,7 @@
  * Connected Files:
  *   - /src/lib/layout/treeLayout.ts
  *   - /src/hooks/useNodeMeasurements.ts
+ *   - /src/components/forms/BranchFormContent.tsx
  */
 
 'use client';
@@ -56,8 +55,6 @@ import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { toast } from 'react-hot-toast';
-import { BranchFormContent } from '@/components/forms/BranchFormContent';
-import { SlideInForm } from '@/components/shared/SlideInForm';
 
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
@@ -100,6 +97,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   hierarchicalData?: any;
+  onBranchEdit?: (branch: any) => void;
 }>(({ 
   item, 
   type, 
@@ -108,7 +106,8 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   hasChildren = false,
   isExpanded = false,
   onToggleExpand,
-  hierarchicalData = {}
+  hierarchicalData = {},
+  onBranchEdit
 }, ref) => {
   // Helper function to get logo URL based on type and item data
   const getLogoUrl = () => {
@@ -125,8 +124,9 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         bucketName = 'school-logos';
         break;
       case 'branch':
+        // FIXED: Proper logo path handling for branches
         logoPath = item.logo;
-        bucketName = 'branch-logos';
+        bucketName = 'branch-logos'; // Correct bucket name
         break;
       default:
         return null;
@@ -139,8 +139,9 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
       return logoPath;
     }
     
-    // Construct Supabase storage URL
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${bucketName}/${logoPath}`;
+    // Construct Supabase storage URL with proper bucket
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${logoPath}`;
   };
 
   const getConfig = () => {
@@ -228,11 +229,21 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   const managerName = item.additional?.[config.nameField] || item[config.nameField];
   const logoUrl = getLogoUrl();
 
+  // Handle click event
+  const handleCardClick = () => {
+    // ADDED: Special handling for branch cards to open edit form
+    if (type === 'branch' && onBranchEdit) {
+      onBranchEdit(item);
+    } else {
+      onItemClick(item, type);
+    }
+  };
+
   return (
     <div className="relative inline-block">
       <div 
         ref={ref}
-        onClick={() => onItemClick(item, type)}
+        onClick={handleCardClick}
         className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
                    hover:shadow-lg transition-all duration-200 cursor-pointer
                    min-w-[260px] max-w-[300px] flex-grow p-4 relative`}
@@ -243,31 +254,39 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             {/* Logo or Icon Badge with proper logo support */}
-            <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden`}>
+            <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative`}>
               {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt={`${item.name} logo`}
-                  className="w-full h-full object-contain p-1"
-                  onError={(e) => {
-                    // If logo fails to load, hide the image and show fallback
-                    e.currentTarget.style.display = 'none';
-                    const parent = e.currentTarget.parentElement;
-                    if (parent) {
-                      const fallback = parent.querySelector('.logo-fallback');
-                      if (fallback) {
-                        (fallback as HTMLElement).style.display = 'flex';
+                <>
+                  <img
+                    src={logoUrl}
+                    alt={`${item.name} logo`}
+                    className="w-full h-full object-contain p-1 logo-image"
+                    onError={(e) => {
+                      // If logo fails to load, hide the image and show fallback
+                      const imgElement = e.currentTarget as HTMLImageElement;
+                      imgElement.style.display = 'none';
+                      const parent = imgElement.parentElement;
+                      if (parent) {
+                        const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
+                        if (fallback) {
+                          fallback.style.display = 'flex';
+                        }
                       }
-                    }
-                  }}
-                />
-              ) : null}
-              <span className={`text-sm font-bold logo-fallback ${logoUrl ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}>
-                {item.code?.substring(0, 2).toUpperCase() || 
-                 (type === 'branch' && item.code) || 
-                 (type === 'branch' && item.name?.substring(0, 2).toUpperCase()) || 
-                 <Icon className="w-6 h-6" />}
-              </span>
+                    }}
+                  />
+                  <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0">
+                    {item.code?.substring(0, 2).toUpperCase() || 
+                     item.name?.substring(0, 2).toUpperCase() || 
+                     <Icon className="w-6 h-6" />}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm font-bold flex items-center justify-center w-full h-full">
+                  {item.code?.substring(0, 2).toUpperCase() || 
+                   item.name?.substring(0, 2).toUpperCase() || 
+                   <Icon className="w-6 h-6" />}
+                </span>
+              )}
             </div>
             
             {/* Title and Code */}
@@ -319,30 +338,6 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
           </div>
         )}
       </div>
-
-      {/* Branch Edit Form */}
-      <SlideInForm
-        title="Edit Branch"
-        isOpen={showBranchForm}
-        onClose={() => {
-          setShowBranchForm(false);
-          setEditingBranch(null);
-          setBranchFormData({});
-          setBranchFormErrors({});
-        }}
-        onSave={handleBranchFormSubmit}
-      >
-        <BranchFormContent
-          formData={branchFormData}
-          setFormData={setBranchFormData}
-          formErrors={branchFormErrors}
-          setFormErrors={setBranchFormErrors}
-          activeTab={branchFormActiveTab}
-          setActiveTab={setBranchFormActiveTab}
-          schools={schoolsForForm}
-          isEditing={true}
-        />
-      </SlideInForm>
 
       {/* Expand/Collapse Button */}
       {hasChildren && onToggleExpand && (
@@ -448,7 +443,7 @@ export default function OrganizationStructureTab({
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [hasInitialized, setHasInitialized] = useState(false);
   
-  // Branch form state
+  // Branch form state - ADDED: Unified branch edit form
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [editingBranch, setEditingBranch] = useState<any>(null);
   const [branchFormData, setBranchFormData] = useState<any>({});
@@ -462,12 +457,10 @@ export default function OrganizationStructureTab({
   const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Filter schools based on active/inactive toggle - MUST BE BEFORE allBranches query
+  // Filter schools based on active/inactive toggle
   const filteredSchools = useMemo(() => {
     if (!companyData?.schools) return [];
     
-    // Default behavior: show only active schools
-    // When showInactive is true: show all schools (active + inactive)
     return showInactive 
       ? companyData.schools 
       : companyData.schools.filter((s: any) => s.status === 'active');
@@ -490,9 +483,8 @@ export default function OrganizationStructureTab({
     { enabled: !!companyId }
   );
 
-  // FIXED: Always fetch branches when schools are expanded, not just when branches tab is on
+  // Check if branches should be fetched
   const shouldFetchBranches = useMemo(() => {
-    // Check if any school is expanded
     const hasExpandedSchool = Array.from(expandedNodes).some(node => node.startsWith('school-'));
     return hasExpandedSchool && filteredSchools && filteredSchools.length > 0;
   }, [expandedNodes, filteredSchools]);
@@ -516,7 +508,6 @@ export default function OrganizationStructureTab({
         .in('school_id', schoolIds)
         .order('name');
       
-      // Always filter branches by active status unless showInactive is true
       if (!showInactive) {
         query = query.eq('status', 'active');
       }
@@ -539,7 +530,7 @@ export default function OrganizationStructureTab({
       }));
     },
     {
-      enabled: shouldFetchBranches, // FIXED: Enable when any school is expanded
+      enabled: shouldFetchBranches,
       staleTime: 60 * 1000,
       cacheTime: 5 * 60 * 1000
     }
@@ -553,55 +544,49 @@ export default function OrganizationStructureTab({
     return cardRefs.current.get(id)!;
   }, []);
 
-  // Layout configuration with extra padding for left side
+  // Layout configuration
   const layoutConfig: LayoutConfig = useMemo(() => ({
-    gapX: 48, // Minimum horizontal gap between siblings
-    gapY: 80, // Vertical gap between levels
+    gapX: 48,
+    gapY: 80,
     centerParents: true,
     minCardWidth: 260,
     maxCardWidth: 300
   }), []);
 
-  // Measure node dimensions - with less frequent updates
+  // Measure node dimensions
   const nodeDimensions = useNodeMeasurements(
     cardRefs,
     zoomLevel,
     [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, showInactive]
   );
 
-  // FIXED: Build tree structure from data - always include branches of expanded schools
+  // Build tree structure from data
   const treeNodes = useMemo(() => {
     if (!companyData) return new Map();
     
-    // Use filtered schools instead of all schools
     const filteredCompanyData = {
       ...companyData,
       schools: filteredSchools
     };
     
-    // Always pass null for visibleLevels to include all nodes in tree structure
-    // The visibility will be controlled during rendering
     return buildTreeFromData(
       filteredCompanyData,
       expandedNodes,
       lazyLoadedData,
       branchesData,
-      undefined // Don't pass visibleLevels here
+      undefined
     );
   }, [companyData, filteredSchools, expandedNodes, lazyLoadedData, branchesData]);
 
-  // FIXED: Calculate layout positions with debouncing to prevent continuous updates
+  // Calculate layout positions
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
-    // Clear any existing timeout
     if (layoutUpdateTimeoutRef.current) {
       clearTimeout(layoutUpdateTimeoutRef.current);
     }
     
-    // Debounce layout updates
     layoutUpdateTimeoutRef.current = setTimeout(() => {
-      // Always use default dimensions if measurements aren't available yet
       const dimensionsToUse = new Map<string, NodeDimensions>();
       treeNodes.forEach((node, nodeId) => {
         const measured = nodeDimensions.get(nodeId);
@@ -611,17 +596,15 @@ export default function OrganizationStructureTab({
       const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      // FIXED: Add extra padding to canvas size for left/right margins
       const paddedSize = {
-        width: result.totalSize.width + 100, // Add 50px padding on each side
+        width: result.totalSize.width + 100,
         height: result.totalSize.height
       };
       
-      // Shift all positions to the right to prevent left cutoff
       const shiftedPositions = new Map<string, NodePosition>();
       result.positions.forEach((pos, nodeId) => {
         shiftedPositions.set(nodeId, {
-          x: pos.x + 50, // Shift right by 50px
+          x: pos.x + 50,
           y: pos.y
         });
       });
@@ -629,14 +612,13 @@ export default function OrganizationStructureTab({
       setLayoutPositions(shiftedPositions);
       setCanvasSize(paddedSize);
       
-      // Only auto-resize on initial load or significant changes
       if (!hasInitialized) {
         setTimeout(() => {
           checkAndAutoResize();
           setHasInitialized(true);
         }, 100);
       }
-    }, 200); // 200ms debounce
+    }, 200);
     
     return () => {
       if (layoutUpdateTimeoutRef.current) {
@@ -645,7 +627,7 @@ export default function OrganizationStructureTab({
     };
   }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized]);
 
-  // Calculate hierarchical data from actual data
+  // Calculate hierarchical data
   const hierarchicalData = useMemo(() => {
     if (!filteredSchools || filteredSchools.length === 0) {
       return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
@@ -668,7 +650,7 @@ export default function OrganizationStructureTab({
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
 
-  // Handle branch editing from diagram
+  // ADDED: Unified branch edit handler
   const handleBranchEdit = useCallback(async (branch: any) => {
     try {
       // Fetch additional branch data
@@ -685,7 +667,7 @@ export default function OrganizationStructureTab({
       // Combine all data for the form
       const combinedData = {
         ...branch,
-        ...(additionalData || {})
+        ...(additionalData || branch.additional || {})
       };
       
       setBranchFormData(combinedData);
@@ -789,43 +771,38 @@ export default function OrganizationStructureTab({
     }
   }, [branchFormData, editingBranch, refreshData]);
 
-  // FIXED: Enhanced auto-resize function to keep diagram centered - only on demand
+  // Auto-resize function
   const checkAndAutoResize = useCallback(() => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
     if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
 
-    // Get available space (subtract padding)
-    const availableWidth = viewport.clientWidth - 128; // 64px padding on each side
+    const availableWidth = viewport.clientWidth - 128;
     const availableHeight = viewport.clientHeight - 128;
     
-    // Calculate what zoom would be needed to fit
     const scaleX = availableWidth / canvasSize.width;
     const scaleY = availableHeight / canvasSize.height;
     const optimalZoom = Math.min(scaleX, scaleY);
     
-    // Always auto-resize to fit content within viewport
     const boundedZoom = Math.max(0.3, Math.min(1.5, optimalZoom));
     setZoomLevel(boundedZoom);
     
-    // Center the content
     requestAnimationFrame(() => {
       if (viewport) {
         const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
-        const scrollTop = 0; // Keep top alignment
+        const scrollTop = 0;
         viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
       }
     });
   }, [canvasSize]);
 
-  // FIXED: Only observe resize on mount and fullscreen changes
+  // Observe resize
   useEffect(() => {
     if (!hasInitialized) return;
     
     const viewport = scrollAreaRef.current;
     if (!viewport) return;
 
-    // Only resize on window resize, not on every change
     const handleWindowResize = () => {
       if (autoResizeTimeoutRef.current) {
         clearTimeout(autoResizeTimeoutRef.current);
@@ -845,7 +822,7 @@ export default function OrganizationStructureTab({
     };
   }, [hasInitialized, checkAndAutoResize]);
 
-  // Group branches by school when data is available
+  // Group branches by school
   useEffect(() => {
     if (allBranches.length > 0) {
       const branchesBySchool = new Map<string, any[]>();
@@ -860,7 +837,6 @@ export default function OrganizationStructureTab({
       
       setBranchesData(branchesBySchool);
       
-      // Update lazy loaded data for consistency
       setLazyLoadedData(prev => {
         const newMap = new Map(prev);
         branchesBySchool.forEach((branches, schoolId) => {
@@ -871,7 +847,7 @@ export default function OrganizationStructureTab({
     }
   }, [allBranches]);
 
-  // Simulate initial loading
+  // Initial loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setInitialLoading(false);
@@ -883,7 +859,6 @@ export default function OrganizationStructureTab({
   const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
     const key = `${nodeType}-${nodeId}`;
     
-    // For school branches, check if we already have the data from allBranches query
     if (nodeType === 'school' && branchesData.has(nodeId)) {
       const branches = branchesData.get(nodeId) || [];
       setLazyLoadedData(prev => {
@@ -902,11 +877,9 @@ export default function OrganizationStructureTab({
       let data = [];
 
       if (nodeType === 'school') {
-        // Fetch branches for school
         if (branchesData.has(nodeId)) {
           data = branchesData.get(nodeId) || [];
         } else {
-          // Fallback to individual fetch
           let query = supabase
             .from('branches')
             .select(`
@@ -956,7 +929,7 @@ export default function OrganizationStructureTab({
     }
   }, [showInactive, branchesData, lazyLoadedData, loadingNodes]);
 
-  // FIXED: Toggle node expansion - Always loads data when expanding, works independently
+  // Toggle node expansion
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
     
@@ -966,7 +939,6 @@ export default function OrganizationStructureTab({
         newSet.delete(key);
       } else {
         newSet.add(key);
-        // Always load data when expanding
         if (nodeType === 'school' && nodeId) {
           loadNodeData(nodeId, nodeType);
         } else if (nodeType === 'branch' && nodeId) {
@@ -979,26 +951,22 @@ export default function OrganizationStructureTab({
     });
   }, [loadNodeData]);
 
-  // Toggle level visibility with hierarchical rules and global expansion
+  // Toggle level visibility
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
       
-      // Entity tab can never be turned off
       if (level === 'entity' && newSet.has('entity')) {
         return prev;
       }
       
       if (newSet.has(level)) {
-        // Turning OFF a level
         newSet.delete(level);
         
-        // When turning off a parent level, turn off all child levels
         if (level === 'schools') {
           newSet.delete('branches');
           newSet.delete('years');
           newSet.delete('sections');
-          // Collapse all schools when turning off schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (filteredSchools) {
@@ -1011,7 +979,6 @@ export default function OrganizationStructureTab({
         } else if (level === 'branches') {
           newSet.delete('years');
           newSet.delete('sections');
-          // When turning OFF branches tab, collapse all schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (filteredSchools) {
@@ -1025,14 +992,11 @@ export default function OrganizationStructureTab({
           newSet.delete('sections');
         }
       } else {
-        // Turning ON a level
         newSet.add(level);
         
-        // When turning on a child level, ensure parent levels are also on
         if (level === 'branches') {
           if (!newSet.has('schools')) newSet.add('schools');
           
-          // When turning ON branches tab, expand all schools that have branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             if (filteredSchools) {
@@ -1053,10 +1017,8 @@ export default function OrganizationStructureTab({
           if (!newSet.has('branches')) newSet.add('branches');
           if (!newSet.has('years')) newSet.add('years');
         } else if (level === 'schools') {
-          // Turning ON schools
           newSet.add(level);
           
-          // If branches tab is also visible, expand schools with branches
           if (newSet.has('branches')) {
             setExpandedNodes(prevExpanded => {
               const newExpanded = new Set(prevExpanded);
@@ -1082,11 +1044,11 @@ export default function OrganizationStructureTab({
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
   const handleResetZoom = () => {
-    checkAndAutoResize(); // This will auto-fit and center
+    checkAndAutoResize();
   };
   
   const handleFitToScreen = useCallback(() => {
-    checkAndAutoResize(); // Use the same logic to fit and center
+    checkAndAutoResize();
   }, [checkAndAutoResize]);
 
   // Toggle fullscreen
@@ -1106,7 +1068,6 @@ export default function OrganizationStructureTab({
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
-      // Trigger resize when entering/exiting fullscreen
       setTimeout(() => {
         checkAndAutoResize();
       }, 100);
@@ -1146,7 +1107,6 @@ export default function OrganizationStructureTab({
       );
     }
 
-    // FIXED: Only show connection arrows when schools are visible
     const shouldShowConnections = visibleLevels.has('schools') && expandedNodes.has('company');
 
     return (
@@ -1165,10 +1125,8 @@ export default function OrganizationStructureTab({
           
           if (!position) return null;
 
-          // Determine if this node should be rendered based on loading states
           if (initialLoading && nodeId !== 'company') return null;
           
-          // Check if this node type should be visible based on tab state
           const nodeTypeToLevel = {
             'company': 'entity',
             'school': 'schools', 
@@ -1179,20 +1137,14 @@ export default function OrganizationStructureTab({
           
           const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
           
-          // FIXED: Special handling for branches - show if parent school is expanded OR branches tab is on
           if (node.type === 'branch') {
             const parentSchoolId = node.parentId;
             const isSchoolExpanded = parentSchoolId && expandedNodes.has(parentSchoolId);
-            const isBranchesTabOn = visibleLevels.has('branches');
             
-            // Show branch if school is expanded, regardless of branches tab
-            // OR if branches tab is on and school is expanded
             if (!isSchoolExpanded) {
               return null;
             }
-            // If branches tab is off and school is expanded, still show the branches
           } else if (levelKey && !visibleLevels.has(levelKey)) {
-            // For non-branch nodes, respect the tab visibility
             return null;
           }
           
@@ -1212,7 +1164,6 @@ export default function OrganizationStructureTab({
             );
           }
 
-          // Get the actual data for this node
           let item = node.data;
           let hasChildren = false;
           let isExpanded = false;
@@ -1230,7 +1181,6 @@ export default function OrganizationStructureTab({
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'branch') {
             const branchId = node.id.replace('branch-', '');
-            // Find branch in the data
             for (const branches of branchesData.values()) {
               const branch = branches.find(b => b.id === branchId);
               if (branch) {
@@ -1238,7 +1188,6 @@ export default function OrganizationStructureTab({
                 break;
               }
             }
-            // Also check lazy loaded data
             for (const branches of lazyLoadedData.values()) {
               const branch = branches.find(b => b.id === branchId);
               if (branch) {
@@ -1269,7 +1218,6 @@ export default function OrganizationStructureTab({
                 isExpanded={isExpanded}
                 onToggleExpand={() => {
                   if (node.type === 'company') {
-                    // Toggle company expansion - this controls whether schools are shown
                     setExpandedNodes(prev => {
                       const newSet = new Set(prev);
                       if (newSet.has('company')) {
@@ -1282,18 +1230,16 @@ export default function OrganizationStructureTab({
                   } else if (node.type === 'school') {
                     const schoolId = node.id.replace('school-', '');
                     toggleNode(schoolId, 'school');
-                  } else if (node.type === 'branch') {
-                    // For branches, open the edit form instead of expanding
-                    handleBranchEdit(item);
                   }
                 }}
                 hierarchicalData={node.type === 'company' ? hierarchicalData : undefined}
+                onBranchEdit={handleBranchEdit}
               />
             </div>
           );
         })}
 
-        {/* SVG Connections - FIXED: Show connections appropriately */}
+        {/* SVG Connections */}
         {shouldShowConnections && (
           <svg
             className="absolute pointer-events-none z-0"
@@ -1302,7 +1248,7 @@ export default function OrganizationStructureTab({
               top: '0px',
               width: `${canvasSize.width}px`,
               height: `${canvasSize.height}px`,
-              overflow: 'visible' // Allow overflow for left-side arrows
+              overflow: 'visible'
             }}
           >
             <defs>
@@ -1323,10 +1269,8 @@ export default function OrganizationStructureTab({
             </defs>
             {Array.from(treeNodes.entries())
               .map(([nodeId, node]) => {
-              // Only render connections for visible nodes with parents
               if (!node.parentId) return null;
               
-              // Check if both parent and child are visible
               const nodeTypeToLevel = {
                 'company': 'entity',
                 'school': 'schools', 
@@ -1341,14 +1285,11 @@ export default function OrganizationStructureTab({
               const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
               const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
               
-              // FIXED: Special handling for branch connections
               if (node.type === 'branch') {
-                // Show connection if parent school is expanded
                 if (!expandedNodes.has(node.parentId)) {
                   return null;
                 }
               } else {
-                // For non-branch nodes, check if levels are visible
                 if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
                   return null;
                 }
@@ -1359,7 +1300,6 @@ export default function OrganizationStructureTab({
               const parentDim = nodeDimensions.get(node.parentId);
               const childDim = nodeDimensions.get(nodeId);
 
-              // Use default dimensions if not measured yet
               const parentDimensions = parentDim || { width: 260, height: 140 };
               const childDimensions = childDim || { width: 260, height: 140 };
               
@@ -1498,6 +1438,30 @@ export default function OrganizationStructureTab({
           </div>
         </div>
       </div>
+
+      {/* Branch Edit Form - ADDED: Unified branch edit form */}
+      <SlideInForm
+        title="Edit Branch"
+        isOpen={showBranchForm}
+        onClose={() => {
+          setShowBranchForm(false);
+          setEditingBranch(null);
+          setBranchFormData({});
+          setBranchFormErrors({});
+        }}
+        onSave={handleBranchFormSubmit}
+      >
+        <BranchFormContent
+          formData={branchFormData}
+          setFormData={setBranchFormData}
+          formErrors={branchFormErrors}
+          setFormErrors={setBranchFormErrors}
+          activeTab={branchFormActiveTab}
+          setActiveTab={setBranchFormActiveTab}
+          schools={schoolsForForm}
+          isEditing={true}
+        />
+      </SlideInForm>
     </div>
   );
 }
