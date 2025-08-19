@@ -53,6 +53,11 @@ import {
   type LayoutConfig
 } from '@/lib/layout/treeLayout';
 import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
+import { BranchFormContent } from '@/components/forms/BranchFormContent';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { toast } from 'react-hot-toast';
+import { BranchFormContent } from '@/components/forms/BranchFormContent';
+import { SlideInForm } from '@/components/shared/SlideInForm';
 
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
@@ -315,6 +320,30 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         )}
       </div>
 
+      {/* Branch Edit Form */}
+      <SlideInForm
+        title="Edit Branch"
+        isOpen={showBranchForm}
+        onClose={() => {
+          setShowBranchForm(false);
+          setEditingBranch(null);
+          setBranchFormData({});
+          setBranchFormErrors({});
+        }}
+        onSave={handleBranchFormSubmit}
+      >
+        <BranchFormContent
+          formData={branchFormData}
+          setFormData={setBranchFormData}
+          formErrors={branchFormErrors}
+          setFormErrors={setBranchFormErrors}
+          activeTab={branchFormActiveTab}
+          setActiveTab={setBranchFormActiveTab}
+          schools={schoolsForForm}
+          isEditing={true}
+        />
+      </SlideInForm>
+
       {/* Expand/Collapse Button */}
       {hasChildren && onToggleExpand && (
         <button
@@ -419,6 +448,13 @@ export default function OrganizationStructureTab({
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [hasInitialized, setHasInitialized] = useState(false);
   
+  // Branch form state
+  const [showBranchForm, setShowBranchForm] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<any>(null);
+  const [branchFormData, setBranchFormData] = useState<any>({});
+  const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
+  const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+  
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -436,6 +472,23 @@ export default function OrganizationStructureTab({
       ? companyData.schools 
       : companyData.schools.filter((s: any) => s.status === 'active');
   }, [companyData?.schools, showInactive]);
+
+  // Fetch schools for branch form dropdown
+  const { data: schoolsForForm = [] } = useQuery(
+    ['schools-for-form', companyId],
+    async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    { enabled: !!companyId }
+  );
 
   // FIXED: Always fetch branches when schools are expanded, not just when branches tab is on
   const shouldFetchBranches = useMemo(() => {
@@ -614,6 +667,127 @@ export default function OrganizationStructureTab({
     
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [filteredSchools, companyData]);
+
+  // Handle branch editing from diagram
+  const handleBranchEdit = useCallback(async (branch: any) => {
+    try {
+      // Fetch additional branch data
+      const { data: additionalData, error } = await supabase
+        .from('branches_additional')
+        .select('*')
+        .eq('branch_id', branch.id)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching branch additional data:', error);
+      }
+      
+      // Combine all data for the form
+      const combinedData = {
+        ...branch,
+        ...(additionalData || {})
+      };
+      
+      setBranchFormData(combinedData);
+      setBranchFormErrors({});
+      setEditingBranch(branch);
+      setBranchFormActiveTab('basic');
+      setShowBranchForm(true);
+    } catch (error) {
+      console.error('Error preparing branch form:', error);
+      toast.error('Failed to load branch details');
+    }
+  }, []);
+
+  // Handle branch form submission
+  const handleBranchFormSubmit = useCallback(async () => {
+    // Validate form
+    const errors: Record<string, string> = {};
+    
+    if (!branchFormData.name) errors.name = 'Name is required';
+    if (!branchFormData.code) errors.code = 'Code is required';
+    if (!branchFormData.school_id) errors.school_id = 'School is required';
+    if (!branchFormData.status) errors.status = 'Status is required';
+    
+    if (branchFormData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchFormData.branch_head_email)) {
+      errors.branch_head_email = 'Invalid email address';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setBranchFormErrors(errors);
+      toast.error('Please fix the errors before submitting');
+      return;
+    }
+    
+    try {
+      // Prepare main data
+      const mainData = {
+        name: branchFormData.name,
+        code: branchFormData.code,
+        school_id: branchFormData.school_id,
+        status: branchFormData.status,
+        address: branchFormData.address,
+        notes: branchFormData.notes,
+        logo: branchFormData.logo
+      };
+      
+      // Update main record
+      const { error } = await supabase
+        .from('branches')
+        .update(mainData)
+        .eq('id', editingBranch.id);
+      
+      if (error) throw error;
+      
+      // Update or insert additional record
+      const additionalData: any = {
+        branch_id: editingBranch.id,
+        student_capacity: branchFormData.student_capacity,
+        current_students: branchFormData.current_students,
+        teachers_count: branchFormData.teachers_count,
+        active_teachers_count: branchFormData.active_teachers_count,
+        branch_head_name: branchFormData.branch_head_name,
+        branch_head_email: branchFormData.branch_head_email,
+        branch_head_phone: branchFormData.branch_head_phone,
+        building_name: branchFormData.building_name,
+        floor_details: branchFormData.floor_details,
+        opening_time: branchFormData.opening_time,
+        closing_time: branchFormData.closing_time,
+        working_days: branchFormData.working_days
+      };
+      
+      // Try update first
+      const { error: updateError } = await supabase
+        .from('branches_additional')
+        .update(additionalData)
+        .eq('branch_id', editingBranch.id);
+      
+      // If no rows updated, insert
+      if (updateError?.code === 'PGRST116') {
+        const { error: insertError } = await supabase
+          .from('branches_additional')
+          .insert([additionalData]);
+        
+        if (insertError && insertError.code !== '23505') {
+          console.error('Additional insert error:', insertError);
+        }
+      }
+      
+      toast.success('Branch updated successfully');
+      setShowBranchForm(false);
+      setEditingBranch(null);
+      setBranchFormData({});
+      setBranchFormErrors({});
+      
+      // Refresh data
+      if (refreshData) {
+        refreshData();
+      }
+    } catch (error) {
+      console.error('Error updating branch:', error);
+      toast.error('Failed to update branch');
+    }
+  }, [branchFormData, editingBranch, refreshData]);
 
   // FIXED: Enhanced auto-resize function to keep diagram centered - only on demand
   const checkAndAutoResize = useCallback(() => {
@@ -1108,6 +1282,9 @@ export default function OrganizationStructureTab({
                   } else if (node.type === 'school') {
                     const schoolId = node.id.replace('school-', '');
                     toggleNode(schoolId, 'school');
+                  } else if (node.type === 'branch') {
+                    // For branches, open the edit form instead of expanding
+                    handleBranchEdit(item);
                   }
                 }}
                 hierarchicalData={node.type === 'company' ? hierarchicalData : undefined}
