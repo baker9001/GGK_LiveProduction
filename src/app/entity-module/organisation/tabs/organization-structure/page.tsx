@@ -19,6 +19,9 @@
  *   - Fixed continuous resizing issue with proper memoization and debouncing
  *   - Fixed branch cards visibility when expanding schools regardless of tab state
  *   - Fixed auto-centering and responsive sizing
+ *   - ADDED: Proper logo support for companies, schools, and branches
+ *   - ADDED: Logo URL generation with proper bucket handling
+ *   - ADDED: Error handling and fallback display for failed logo loads
  * 
  * Database Tables:
  *   - companies, schools, branches, years, sections
@@ -82,7 +85,7 @@ const CardSkeleton = () => (
   </div>
 );
 
-// ===== ENHANCED ORG CARD WITH REF FORWARDING =====
+// ===== ENHANCED ORG CARD WITH REF FORWARDING AND LOGO SUPPORT =====
 const OrgCard = memo(React.forwardRef<HTMLDivElement, { 
   item: any; 
   type: 'company' | 'school' | 'branch' | 'year' | 'section';
@@ -109,7 +112,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
     
     switch (type) {
       case 'company':
-        logoPath = item.logo || item.additional?.logo_url;
+        logoPath = item.logo || item.additional?.logo_url || item.additional?.logo;
         bucketName = 'company-logos';
         break;
       case 'school':
@@ -234,7 +237,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         {/* Header with Icon */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {/* Logo or Icon Badge */}
+            {/* Logo or Icon Badge with proper logo support */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden`}>
               {logoUrl ? (
                 <img
