@@ -19,7 +19,7 @@
  *   - canManageUser: Check if parent admin can manage child admin
  */
 
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { EntityAdminHierarchy, AdminLevel } from '../types/admin.types';
 
 export const hierarchyService = {
