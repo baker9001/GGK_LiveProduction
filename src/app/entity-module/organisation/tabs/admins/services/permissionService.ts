@@ -19,7 +19,7 @@
  *   - applyPermissionTemplate: Apply predefined permission set
  */
 
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '../../../../../../lib/supabase';
 import { AdminPermissions, EntityAdminScope, AdminLevel } from '../types/admin.types';
 import { scopeService } from './scopeService';
 
