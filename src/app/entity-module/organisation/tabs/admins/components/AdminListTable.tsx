@@ -20,9 +20,10 @@ import {
   AlertTriangle,
   MoreHorizontal,
   UserPlus,
-  Settings
+  Settings,
+  Users
 } from 'lucide-react';
-import { DataTable } from '../../../../../components/shared/DataTable';
+import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
