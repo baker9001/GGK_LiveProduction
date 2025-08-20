@@ -88,7 +88,6 @@ export const adminService = {
       
       const adminData = {
         email: payload.email,
-        user_type: 'entity',
         admin_level: payload.admin_level,
         company_id: payload.company_id,
         permissions: payload.permissions || {},
@@ -301,7 +300,6 @@ export const adminService = {
         .from('entity_users')
         .select('*')
         .eq('company_id', companyId)
-        .eq('user_type', 'entity')
         .order('created_at', { ascending: false });
 
       // Apply filters
@@ -365,7 +363,6 @@ export const adminService = {
         .from('entity_users')
         .select('*')
         .eq('user_id', userId)
-        .eq('user_type', 'entity')
         .maybeSingle();
 
       if (error) throw error;
