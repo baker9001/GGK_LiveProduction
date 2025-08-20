@@ -23,13 +23,13 @@ import {
   Settings
 } from 'lucide-react';
 import { DataTable } from '../../../../../components/shared/DataTable';
-import { FilterCard } from '../../../../../components/shared/FilterCard';
-import { FormField, Input, Select } from '../../../../../components/shared/FormField';
-import { Button } from '../../../../../components/shared/Button';
-import { StatusBadge } from '../../../../../components/shared/StatusBadge';
-import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
-import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
-import { cn } from '../../../../../lib/utils';
+import { FilterCard } from '@/components/shared/FilterCard';
+import { FormField, Input, Select } from '@/components/shared/FormField';
+import { Button } from '@/components/shared/Button';
+import { StatusBadge } from '@/components/shared/StatusBadge';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
+import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
+import { cn } from '@/lib/utils';
 import { adminService } from '../services/adminService';
 import { useDeleteAdmin, useRestoreAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel } from '../types/admin.types';

@@ -35,12 +35,12 @@ export function AdminPermissionMatrix({
     const isChecked = (value[section] as any)?.[permissionKey] || false; // Use optional chaining for safety
     return (
       <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
-        <label htmlFor={\`${section}-${permissionKey}`} className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+        <label htmlFor={`${section}-${permissionKey}`} className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
           {label}
         </label>
         <input
           type="checkbox"
-          id={\`${section}-${permissionKey}`}
+          id={`${section}-${permissionKey}`}
           checked={isChecked}
           onChange={(e) =>
             handlePermissionChange(section, permissionKey, e.target.checked)

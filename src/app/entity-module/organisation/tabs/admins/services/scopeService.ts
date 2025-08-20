@@ -19,7 +19,7 @@
  *   - hasAccessToScope: Check if user has access to specific scope
  */
 
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { EntityAdminScope, AdminPermissions } from '../types/admin.types';
 
 export const scopeService = {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Shield, AlertCircle } from 'lucide-react';
-import { FormField, Input, Select } from '../../../../shared/FormField';
-import { Button } from '../../../../shared/Button';
+import { FormField, Input, Select } from '@/components/shared/FormField';
+import { Button } from '@/components/shared/Button';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
 import { AdminScopeAssignment } from './AdminScopeAssignment';
