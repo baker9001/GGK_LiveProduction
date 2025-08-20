@@ -1,9 +1,7 @@
-///home/project/src/app/entity-module/organisation/tabs/admins/page.tsx
-
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
-import { Button } from '../../../../../components/shared/Button';
+import { Button } from '@/components/shared/Button';
 import { adminService } from './services';
 import AdminListTable from './components/AdminListTable';
 import AdminHierarchyTree from './components/AdminHierarchyTree';
