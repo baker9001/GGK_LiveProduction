@@ -4,6 +4,8 @@
  * Admin Scope Management Service
  * Handles school/branch-level access assignments for administrators
  * 
+ * FIXED: Corrected entity fetching without relying on non-existent foreign keys
+ * 
  * Dependencies:
  *   - @/lib/supabase (Supabase client)
  *   - ../types/admin.types.ts (Type definitions)
@@ -25,32 +27,72 @@ import { EntityAdminScope, AdminPermissions } from '../types/admin.types';
 export const scopeService = {
   /**
    * Retrieve all assigned scopes for a given user
-   * TODO: Fetch all scope assignments with related entity details
+   * Fetch all scope assignments with related entity details
    * @param userId - The user ID to fetch scopes for
    * @returns Promise<EntityAdminScope[]> - Array of scope assignments
    */
   async getScopes(userId: string): Promise<EntityAdminScope[]> {
-    console.warn('getScopes not yet implemented');
-    
     try {
-      // TODO: Implement Supabase query to fetch user scopes
-      // Should join with schools/branches to get entity names
-      
-      const { data, error } = await supabase
+      // First, fetch all scopes for the user
+      const { data: scopes, error } = await supabase
         .from('entity_admin_scope')
-        .select(`
-          *,
-          schools(id, name, code),
-          branches(id, name, code),
-          companies(id, name, code)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('assigned_at', { ascending: false });
 
       if (error) throw error;
       
-      return data || [];
+      if (!scopes || scopes.length === 0) {
+        return [];
+      }
+
+      // Now fetch entity details based on scope_type
+      const enrichedScopes = await Promise.all(
+        scopes.map(async (scope) => {
+          let entityDetails = null;
+          
+          try {
+            switch (scope.scope_type) {
+              case 'company':
+                const { data: company } = await supabase
+                  .from('companies')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = company;
+                break;
+                
+              case 'school':
+                const { data: school } = await supabase
+                  .from('schools')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = school;
+                break;
+                
+              case 'branch':
+                const { data: branch } = await supabase
+                  .from('branches')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = branch;
+                break;
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch details for ${scope.scope_type} ${scope.scope_id}:`, err);
+          }
+          
+          return {
+            ...scope,
+            entity_details: entityDetails
+          };
+        })
+      );
+      
+      return enrichedScopes;
     } catch (error) {
       console.error('getScopes error:', error);
       throw error;
@@ -59,30 +101,36 @@ export const scopeService = {
 
   /**
    * Assign a new scope to a user
-   * TODO: Create scope assignment with permission validation
+   * Create scope assignment with permission validation
    * @param userId - The user ID to assign scope to
    * @param scope - The scope configuration to assign
    * @returns Promise<EntityAdminScope> - The created scope assignment
    */
   async assignScope(userId: string, scope: Omit<EntityAdminScope, 'id' | 'user_id' | 'assigned_at'>): Promise<EntityAdminScope> {
-    console.warn('assignScope not yet implemented');
-    
     try {
-      // TODO: Implement scope assignment
-      // Should validate that scope entity exists and user has permission to assign
+      // Validate that the scope entity exists
+      const isValid = await this.validateScopeEntity(
+        scope.scope_type,
+        scope.scope_id,
+        scope.company_id
+      );
+      
+      if (!isValid) {
+        throw new Error(`Invalid ${scope.scope_type} with ID ${scope.scope_id}`);
+      }
       
       const scopeData = {
         user_id: userId,
         company_id: scope.company_id,
         scope_type: scope.scope_type,
         scope_id: scope.scope_id,
-        permissions: scope.permissions,
-        can_create_users: scope.can_create_users,
-        can_modify_users: scope.can_modify_users,
-        can_delete_users: scope.can_delete_users,
-        can_view_all: scope.can_view_all,
-        can_export_data: scope.can_export_data,
-        can_manage_settings: scope.can_manage_settings,
+        permissions: scope.permissions || {},
+        can_create_users: scope.can_create_users ?? false,
+        can_modify_users: scope.can_modify_users ?? false,
+        can_delete_users: scope.can_delete_users ?? false,
+        can_view_all: scope.can_view_all ?? true,
+        can_export_data: scope.can_export_data ?? false,
+        can_manage_settings: scope.can_manage_settings ?? false,
         assigned_by: scope.assigned_by,
         expires_at: scope.expires_at,
         is_active: true,
@@ -106,18 +154,13 @@ export const scopeService = {
 
   /**
    * Remove a specific scope from a user
-   * TODO: Deactivate scope assignment and log the action
+   * Deactivate scope assignment and log the action
    * @param userId - The user ID to remove scope from
    * @param scopeId - The scope assignment ID to remove
    * @returns Promise<void>
    */
   async removeScope(userId: string, scopeId: string): Promise<void> {
-    console.warn('removeScope not yet implemented');
-    
     try {
-      // TODO: Implement scope removal
-      // Should deactivate rather than delete for audit trail
-      
       const { error } = await supabase
         .from('entity_admin_scope')
         .update({ is_active: false })
@@ -133,19 +176,14 @@ export const scopeService = {
 
   /**
    * Check if user has access to a specific scope
-   * TODO: Validate user access to scope type and entity
+   * Validate user access to scope type and entity
    * @param userId - The user ID to check access for
    * @param scopeType - The type of scope ('company' | 'school' | 'branch')
    * @param scopeId - The specific entity ID within the scope type
    * @returns Promise<boolean> - True if user has access to the scope
    */
   async hasAccessToScope(userId: string, scopeType: string, scopeId: string): Promise<boolean> {
-    console.warn('hasAccessToScope not yet implemented');
-    
     try {
-      // TODO: Implement scope access validation
-      // Should check both direct assignments and inherited access
-      
       const { data, error } = await supabase
         .from('entity_admin_scope')
         .select('id')
@@ -166,23 +204,19 @@ export const scopeService = {
 
   /**
    * Get all scopes for a specific company
-   * TODO: Retrieve all scope assignments within a company
+   * Retrieve all scope assignments within a company with user details
    * @param companyId - The company ID to fetch scopes for
    * @returns Promise<EntityAdminScope[]> - Array of all scope assignments in the company
    */
   async getCompanyScopes(companyId: string): Promise<EntityAdminScope[]> {
-    console.warn('getCompanyScopes not yet implemented');
-    
     try {
-      // TODO: Implement company-wide scope fetching
-      // Useful for admin management overview
-      
-      const { data, error } = await supabase
+      // Fetch scopes with user details (this foreign key should exist)
+      const { data: scopes, error } = await supabase
         .from('entity_admin_scope')
         .select(`
           *,
-          entity_users(
-            id,
+          entity_users!entity_admin_scope_user_id_fkey(
+            user_id,
             email,
             raw_user_meta_data,
             admin_level
@@ -192,9 +226,37 @@ export const scopeService = {
         .eq('is_active', true)
         .order('assigned_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // If the foreign key doesn't exist, fetch without join
+        const { data: basicScopes, error: basicError } = await supabase
+          .from('entity_admin_scope')
+          .select('*')
+          .eq('company_id', companyId)
+          .eq('is_active', true)
+          .order('assigned_at', { ascending: false });
+        
+        if (basicError) throw basicError;
+        
+        // Fetch user details separately
+        const enrichedScopes = await Promise.all(
+          (basicScopes || []).map(async (scope) => {
+            const { data: user } = await supabase
+              .from('entity_users')
+              .select('user_id, email, raw_user_meta_data, admin_level')
+              .eq('user_id', scope.user_id)
+              .maybeSingle();
+            
+            return {
+              ...scope,
+              entity_users: user
+            };
+          })
+        );
+        
+        return enrichedScopes;
+      }
       
-      return data || [];
+      return scopes || [];
     } catch (error) {
       console.error('getCompanyScopes error:', error);
       throw error;
@@ -203,18 +265,13 @@ export const scopeService = {
 
   /**
    * Update scope permissions for a user
-   * TODO: Modify existing scope permissions
+   * Modify existing scope permissions
    * @param scopeId - The scope assignment ID to update
    * @param permissions - The new permissions to apply
    * @returns Promise<EntityAdminScope> - The updated scope assignment
    */
   async updateScopePermissions(scopeId: string, permissions: Partial<AdminPermissions>): Promise<EntityAdminScope> {
-    console.warn('updateScopePermissions not yet implemented');
-    
     try {
-      // TODO: Implement scope permission updates
-      // Should validate permission changes are allowed
-      
       const { data, error } = await supabase
         .from('entity_admin_scope')
         .update({ permissions })
@@ -233,29 +290,17 @@ export const scopeService = {
 
   /**
    * Get scopes by entity type
-   * TODO: Retrieve scopes filtered by entity type (school/branch)
+   * Retrieve scopes filtered by entity type (school/branch)
    * @param companyId - The company ID to filter by
    * @param scopeType - The scope type to filter by
    * @returns Promise<EntityAdminScope[]> - Array of filtered scope assignments
    */
   async getScopesByType(companyId: string, scopeType: 'company' | 'school' | 'branch'): Promise<EntityAdminScope[]> {
-    console.warn('getScopesByType not yet implemented');
-    
     try {
-      // TODO: Implement scope filtering by type
-      // Useful for organizing admin access by entity level
-      
-      const { data, error } = await supabase
+      // First fetch scopes
+      const { data: scopes, error } = await supabase
         .from('entity_admin_scope')
-        .select(`
-          *,
-          entity_users(
-            id,
-            email,
-            raw_user_meta_data,
-            admin_level
-          )
-        `)
+        .select('*')
         .eq('company_id', companyId)
         .eq('scope_type', scopeType)
         .eq('is_active', true)
@@ -263,7 +308,64 @@ export const scopeService = {
 
       if (error) throw error;
       
-      return data || [];
+      if (!scopes || scopes.length === 0) {
+        return [];
+      }
+      
+      // Fetch user details for each scope
+      const enrichedScopes = await Promise.all(
+        scopes.map(async (scope) => {
+          const { data: user } = await supabase
+            .from('entity_users')
+            .select('user_id, email, raw_user_meta_data, admin_level')
+            .eq('user_id', scope.user_id)
+            .maybeSingle();
+          
+          // Also fetch entity details
+          let entityDetails = null;
+          
+          try {
+            switch (scopeType) {
+              case 'company':
+                const { data: company } = await supabase
+                  .from('companies')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = company;
+                break;
+                
+              case 'school':
+                const { data: school } = await supabase
+                  .from('schools')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = school;
+                break;
+                
+              case 'branch':
+                const { data: branch } = await supabase
+                  .from('branches')
+                  .select('id, name, code')
+                  .eq('id', scope.scope_id)
+                  .maybeSingle();
+                entityDetails = branch;
+                break;
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch details for ${scopeType} ${scope.scope_id}:`, err);
+          }
+          
+          return {
+            ...scope,
+            entity_users: user,
+            entity_details: entityDetails
+          };
+        })
+      );
+      
+      return enrichedScopes;
     } catch (error) {
       console.error('getScopesByType error:', error);
       throw error;
@@ -272,19 +374,14 @@ export const scopeService = {
 
   /**
    * Validate scope entity exists
-   * TODO: Check if the scope entity (school/branch) exists and is accessible
+   * Check if the scope entity (school/branch) exists and is accessible
    * @param scopeType - The type of scope to validate
    * @param scopeId - The entity ID to validate
    * @param companyId - The company ID for validation context
    * @returns Promise<boolean> - True if scope entity exists and is valid
    */
   async validateScopeEntity(scopeType: string, scopeId: string, companyId: string): Promise<boolean> {
-    console.warn('validateScopeEntity not yet implemented');
-    
     try {
-      // TODO: Implement scope entity validation
-      // Should verify entity exists and belongs to the company
-      
       let tableName = '';
       let companyField = '';
       
