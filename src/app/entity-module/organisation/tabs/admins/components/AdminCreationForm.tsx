@@ -1,3 +1,14 @@
+/**
+ * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
+ * 
+ * FIXED: Corrected Select onChange handler and field naming
+ * 
+ * Fixes Applied:
+ * ✅ Fixed Select onChange to handle value directly instead of event.target.value
+ * ✅ Changed adminLevel to admin_level for consistency with backend
+ * ✅ Updated all references to use snake_case for database fields
+ */
+
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Shield, AlertCircle } from 'lucide-react';
 import { FormField, Input, Select } from '@/components/shared/FormField';
@@ -12,9 +23,9 @@ interface AdminUser {
   id: string;
   name: string;
   email: string;
-  adminLevel: AdminLevel;
-  isActive: boolean;
-  createdAt: string;
+  admin_level: AdminLevel; // Changed from adminLevel to admin_level
+  is_active: boolean; // Changed from isActive to is_active
+  created_at: string; // Changed from createdAt to created_at
   permissions?: AdminPermissions;
   scopes?: EntityAdminScope[];
 }
@@ -39,8 +50,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     name: '',
     email: '',
     password: '',
-    adminLevel: 'entity_admin' as AdminLevel,
-    isActive: true
+    admin_level: 'entity_admin' as AdminLevel, // Changed from adminLevel
+    is_active: true // Changed from isActive
   });
   const [permissions, setPermissions] = useState<AdminPermissions>(
     initialData?.permissions ?? permissionService.getDefaultPermissions()
@@ -62,8 +73,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         name: initialData.name,
         email: initialData.email,
         password: '', // Never pre-fill password
-        adminLevel: initialData.adminLevel,
-        isActive: initialData.isActive
+        admin_level: initialData.admin_level, // Changed from adminLevel
+        is_active: initialData.is_active // Changed from isActive
       });
       setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
       setAssignedScopes(initialData.scopes ?? []);
@@ -72,8 +83,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         name: '',
         email: '',
         password: '',
-        adminLevel: 'entity_admin',
-        isActive: true
+        admin_level: 'entity_admin',
+        is_active: true
       });
       setPermissions(permissionService.getDefaultPermissions());
       setAssignedScopes([]);
@@ -113,9 +124,14 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       return;
     }
 
+    // Prepare payload with correct field names
     const payload = {
-      ...formData,
-      companyId,
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      admin_level: formData.admin_level, // Make sure this is admin_level
+      is_active: formData.is_active, // Make sure this is is_active
+      company_id: companyId, // Changed from companyId to company_id
       permissions,
       scopes: assignedScopes
     };
@@ -151,6 +167,12 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  // Special handler for Select component
+  const handleSelectChange = (field: string) => (value: any) => {
+    // The Select component passes the value directly, not an event
+    handleInputChange(field, value);
   };
 
   if (!isOpen) return null;
@@ -228,18 +250,21 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
             <FormField
               label="Admin Level"
-              error={errors.adminLevel}
+              error={errors.admin_level}
               required
             >
               <Select
                 icon={Shield}
-                value={formData.adminLevel}
-                onChange={(e) => handleInputChange('adminLevel', e.target.value as AdminLevel)}
+                value={formData.admin_level}
+                onChange={handleSelectChange('admin_level')} // Fixed: Using special handler
                 disabled={isSubmitting}
                 options={[
                   { value: 'super_admin', label: 'Super Admin' },
                   { value: 'company_admin', label: 'Company Admin' },
-                  { value: 'entity_admin', label: 'Entity Admin' }
+                  { value: 'entity_admin', label: 'Entity Admin' },
+                  { value: 'sub_entity_admin', label: 'Sub Admin' },
+                  { value: 'school_admin', label: 'School Admin' },
+                  { value: 'branch_admin', label: 'Branch Admin' }
                 ]}
               />
             </FormField>
@@ -249,8 +274,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 <input
                   type="checkbox"
                   id="isActive"
-                  checked={formData.isActive}
-                  onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                  checked={formData.is_active}
+                  onChange={(e) => handleInputChange('is_active', e.target.checked)}
                   disabled={isSubmitting}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
