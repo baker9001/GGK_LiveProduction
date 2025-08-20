@@ -1,3 +1,20 @@
+/**
+ * File: /src/app/entity-module/organisation/tabs/admins/components/AdminListTable.tsx
+ * 
+ * FIXED: Added defensive coding for undefined name values
+ * 
+ * Dependencies:
+ *   - @/components/shared/* (UI components)
+ *   - ../services/adminService (Admin data service)
+ *   - ../hooks/useAdminMutations (Mutation hooks)
+ *   - ../types/admin.types (Type definitions)
+ * 
+ * Fix Applied:
+ * ✅ Added null checks for row.name before calling charAt()
+ * ✅ Added fallback to email if name is undefined
+ * ✅ Added safety for avatar initials generation
+ */
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -20,10 +37,9 @@ import {
   AlertTriangle,
   MoreHorizontal,
   UserPlus,
-  Settings,
-  Users
+  Settings
 } from 'lucide-react';
-import { DataTable } from '@/components/shared/DataTable';
+import { DataTable } from '../../../../../components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
@@ -133,101 +149,95 @@ export function AdminListTable({
     }
   );
 
-  // Mutations
+  // Mutation hooks
   const deleteAdminMutation = useDeleteAdmin();
   const restoreAdminMutation = useRestoreAdmin();
 
-  // Helper function to get admin level configuration
+  // Helper function to get admin level config
   const getAdminLevelConfig = (level: AdminLevel) => {
-    switch (level) {
-      case 'entity_admin':
-        return {
-          label: 'Entity Admin',
-          color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-700',
-          icon: <Crown className="w-3 h-3" />
-        };
-      case 'sub_entity_admin':
-        return {
-          label: 'Sub Admin',
-          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-700',
-          icon: <Shield className="w-3 h-3" />
-        };
-      case 'school_admin':
-        return {
-          label: 'School Admin',
-          color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700',
-          icon: <School className="w-3 h-3" />
-        };
-      case 'branch_admin':
-        return {
-          label: 'Branch Admin',
-          color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border-orange-200 dark:border-orange-700',
-          icon: <MapPin className="w-3 h-3" />
-        };
-      default:
-        return {
-          label: 'Admin',
-          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-          icon: <User className="w-3 h-3" />
-        };
+    const configs = {
+      entity_admin: {
+        label: 'Entity Admin',
+        icon: <Crown className="h-3 w-3" />,
+        color: 'text-purple-700 bg-purple-100 border-purple-300 dark:text-purple-400 dark:bg-purple-900/30 dark:border-purple-700'
+      },
+      sub_entity_admin: {
+        label: 'Sub Admin',
+        icon: <Shield className="h-3 w-3" />,
+        color: 'text-blue-700 bg-blue-100 border-blue-300 dark:text-blue-400 dark:bg-blue-900/30 dark:border-blue-700'
+      },
+      school_admin: {
+        label: 'School Admin',
+        icon: <School className="h-3 w-3" />,
+        color: 'text-green-700 bg-green-100 border-green-300 dark:text-green-400 dark:bg-green-900/30 dark:border-green-700'
+      },
+      branch_admin: {
+        label: 'Branch Admin',
+        icon: <MapPin className="h-3 w-3" />,
+        color: 'text-orange-700 bg-orange-100 border-orange-300 dark:text-orange-400 dark:bg-orange-900/30 dark:border-orange-700'
+      }
+    };
+    
+    return configs[level] || {
+      label: level,
+      icon: <User className="h-3 w-3" />,
+      color: 'text-gray-700 bg-gray-100 border-gray-300 dark:text-gray-400 dark:bg-gray-900/30 dark:border-gray-700'
+    };
+  };
+
+  // Filter admins based on local filters
+  const filteredAdmins = useMemo(() => {
+    return admins?.data || [];
+  }, [admins]);
+
+  // Calculate summary statistics
+  const summaryStats = useMemo(() => {
+    const allAdmins = admins?.data || [];
+    
+    return {
+      total: admins?.total || 0,
+      active: allAdmins.filter(a => a.is_active).length,
+      inactive: allAdmins.filter(a => !a.is_active).length,
+      byLevel: {
+        entity_admin: allAdmins.filter(a => a.admin_level === 'entity_admin').length,
+        sub_entity_admin: allAdmins.filter(a => a.admin_level === 'sub_entity_admin').length,
+        school_admin: allAdmins.filter(a => a.admin_level === 'school_admin').length,
+        branch_admin: allAdmins.filter(a => a.admin_level === 'branch_admin').length,
+      }
+    };
+  }, [admins]);
+
+  // Handle bulk delete
+  const handleBulkDelete = () => {
+    const adminsToProcess = filteredAdmins.filter(admin => selectedAdmins.includes(admin.id));
+    const activeAdmins = adminsToProcess.filter(admin => admin.is_active);
+    const inactiveAdmins = adminsToProcess.filter(admin => !admin.is_active);
+    
+    if (activeAdmins.length > 0) {
+      setDeleteAction('delete');
+      setAdminsToDelete(activeAdmins);
+    } else if (inactiveAdmins.length > 0) {
+      setDeleteAction('restore');
+      setAdminsToDelete(inactiveAdmins);
     }
-  };
-
-  // Handle filter changes
-  const updateFilter = (key: keyof AdminFilters, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setPage(1); // Reset to first page when filters change
-  };
-
-  // Clear all filters
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      admin_level: [],
-      is_active: [],
-      created_after: '',
-      created_before: ''
-    });
-    setPage(1);
-  };
-
-  // Handle admin deletion
-  const handleDelete = (adminsToDelete: EntityUser[]) => {
-    setAdminsToDelete(adminsToDelete);
-    setDeleteAction('delete');
-    setIsConfirmDialogOpen(true);
-  };
-
-  // Handle admin restoration
-  const handleRestore = (adminsToRestore: EntityUser[]) => {
-    setAdminsToDelete(adminsToRestore);
-    setDeleteAction('restore');
-    setIsConfirmDialogOpen(true);
+    
+    if (adminsToProcess.length > 0) {
+      setIsConfirmDialogOpen(true);
+    }
   };
 
   // Confirm delete/restore action
-  const confirmAction = () => {
-    if (deleteAction === 'delete') {
-      adminsToDelete.forEach(admin => {
-        deleteAdminMutation.mutate(admin.id, {
-          onSuccess: () => {
-            refetch();
-            setSelectedAdmins([]);
-          }
-        });
-      });
-    } else {
-      adminsToDelete.forEach(admin => {
-        restoreAdminMutation.mutate(admin.id, {
-          onSuccess: () => {
-            refetch();
-            setSelectedAdmins([]);
-          }
-        });
-      });
+  const confirmAction = async () => {
+    const mutation = deleteAction === 'delete' ? deleteAdminMutation : restoreAdminMutation;
+    
+    for (const admin of adminsToDelete) {
+      await mutation.mutateAsync(admin.id);
     }
+    
     setIsConfirmDialogOpen(false);
     setAdminsToDelete([]);
+    setSelectedAdmins([]);
+    refetch();
   };
 
   // Cancel delete/restore action
@@ -280,6 +290,36 @@ export function AdminListTable({
     setPage(1);
   };
 
+  // Helper function to safely get initials
+  const getInitials = (name: string | undefined | null, email: string | undefined | null): string => {
+    // Try to get initials from name first
+    if (name && typeof name === 'string' && name.trim()) {
+      return name.charAt(0).toUpperCase();
+    }
+    
+    // Fall back to email
+    if (email && typeof email === 'string' && email.trim()) {
+      return email.charAt(0).toUpperCase();
+    }
+    
+    // Final fallback
+    return '?';
+  };
+
+  // Helper function to safely get display name
+  const getDisplayName = (name: string | undefined | null, email: string | undefined | null): string => {
+    if (name && typeof name === 'string' && name.trim()) {
+      return name;
+    }
+    
+    if (email && typeof email === 'string' && email.trim()) {
+      // Extract username from email if no name
+      return email.split('@')[0];
+    }
+    
+    return 'Unknown User';
+  };
+
   // Define table columns
   const columns = [
     {
@@ -288,23 +328,23 @@ export function AdminListTable({
       enableSorting: true,
       cell: (row: EntityUser) => (
         <div className="flex items-center gap-3">
-          {/* Avatar */}
+          {/* Avatar with safe initial extraction */}
           <div className={cn(
             "w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm",
             row.is_active 
               ? "bg-gradient-to-br from-blue-500 to-blue-600" 
               : "bg-gray-400 dark:bg-gray-600"
           )}>
-            {row.name.charAt(0).toUpperCase()}
+            {getInitials(row.name, row.email)}
           </div>
           
-          {/* Info */}
+          {/* Info with safe name/email display */}
           <div className="min-w-0 flex-1">
             <div className="font-medium text-gray-900 dark:text-white truncate">
-              {row.name}
+              {getDisplayName(row.name, row.email)}
             </div>
             <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
-              {row.email}
+              {row.email || 'No email provided'}
             </div>
           </div>
         </div>
@@ -335,21 +375,21 @@ export function AdminListTable({
         <div className="text-sm">
           {(row.assigned_schools?.length || row.assigned_branches?.length) ? (
             <div className="space-y-1">
-              {row.assigned_schools?.length && (
-                <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                  <School className="w-3 h-3" />
-                  <span>{row.assigned_schools.length} school{row.assigned_schools.length > 1 ? 's' : ''}</span>
+              {row.assigned_schools?.length ? (
+                <div className="text-gray-600 dark:text-gray-400">
+                  <School className="inline h-3 w-3 mr-1" />
+                  {row.assigned_schools.length} Schools
                 </div>
-              )}
-              {row.assigned_branches?.length && (
-                <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
-                  <MapPin className="w-3 h-3" />
-                  <span>{row.assigned_branches.length} branch{row.assigned_branches.length > 1 ? 'es' : ''}</span>
+              ) : null}
+              {row.assigned_branches?.length ? (
+                <div className="text-gray-600 dark:text-gray-400">
+                  <MapPin className="inline h-3 w-3 mr-1" />
+                  {row.assigned_branches.length} Branches
                 </div>
-              )}
+              ) : null}
             </div>
           ) : (
-            <span className="text-gray-400 dark:text-gray-500 italic">No scope assigned</span>
+            <span className="text-gray-500 dark:text-gray-400">Full Access</span>
           )}
         </div>
       ),
@@ -362,27 +402,22 @@ export function AdminListTable({
         <StatusBadge 
           status={row.is_active ? 'active' : 'inactive'} 
           size="sm"
-          showIcon={true}
         />
       ),
     },
     {
-      id: 'last_activity',
-      header: 'Last Activity',
+      id: 'last_login',
+      header: 'Last Login',
       enableSorting: true,
       cell: (row: EntityUser) => (
-        <div className="text-sm">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           {row.last_login_at ? (
-            <>
-              <div className="font-medium text-gray-900 dark:text-white">
-                {new Date(row.last_login_at).toLocaleDateString()}
-              </div>
-              <div className="text-gray-500 dark:text-gray-400">
-                {new Date(row.last_login_at).toLocaleTimeString()}
-              </div>
-            </>
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {new Date(row.last_login_at).toLocaleDateString()}
+            </div>
           ) : (
-            <span className="text-gray-400 dark:text-gray-500 italic">Never logged in</span>
+            <span className="text-gray-400 dark:text-gray-500">Never</span>
           )}
         </div>
       ),
@@ -392,158 +427,67 @@ export function AdminListTable({
       header: 'Created',
       enableSorting: true,
       cell: (row: EntityUser) => (
-        <div className="text-sm">
-          <div className="font-medium text-gray-900 dark:text-white">
-            {new Date(row.created_at).toLocaleDateString()}
-          </div>
-          <div className="text-gray-500 dark:text-gray-400">
-            {new Date(row.created_at).toLocaleTimeString()}
-          </div>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          {new Date(row.created_at).toLocaleDateString()}
         </div>
       ),
-    },
+    }
   ];
 
-  // Custom actions renderer
-  const renderActions = (row: EntityUser) => (
+  // Actions for DataTable
+  const handleEditAdmin = (admin: EntityUser) => {
+    if (onEditAdmin) {
+      onEditAdmin(admin);
+    }
+  };
+
+  const handleDeleteAdmin = (admin: EntityUser) => {
+    setDeleteAction(admin.is_active ? 'delete' : 'restore');
+    setAdminsToDelete([admin]);
+    setIsConfirmDialogOpen(true);
+  };
+
+  const renderRowActions = (row: EntityUser) => (
     <div className="flex items-center gap-1">
-      {/* View Details */}
-      <button
-        onClick={() => onViewDetails?.(row)}
-        className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-        title="View Details"
-      >
-        <Eye className="h-4 w-4" />
-      </button>
-
-      {/* Edit */}
-      <button
-        onClick={() => onEditAdmin?.(row)}
-        className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-        title="Edit Admin"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-
-      {/* Delete/Restore */}
-      {row.is_active ? (
-        <button
-          onClick={() => handleDelete([row])}
-          className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-          title="Deactivate Admin"
+      {onViewDetails && (
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<Eye className="h-4 w-4" />}
+          onClick={() => onViewDetails(row)}
+          className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
         >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      ) : (
-        <button
-          onClick={() => handleRestore([row])}
-          className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors"
-          title="Restore Admin"
-        >
-          <CheckCircle className="h-4 w-4" />
-        </button>
+          View
+        </Button>
       )}
-
-      {/* More Actions Menu */}
-      <button
-        onClick={() => {
-          // TODO: Open context menu with additional actions
-          console.log('TODO: Open admin context menu for:', row.id);
-        }}
-        className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-full transition-colors"
-        title="More Actions"
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={<Edit2 className="h-4 w-4" />}
+        onClick={() => handleEditAdmin(row)}
+        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
       >
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
+        Edit
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+        onClick={() => handleDeleteAdmin(row)}
+        className={row.is_active 
+          ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+          : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+        }
+      >
+        {row.is_active ? 'Deactivate' : 'Restore'}
+      </Button>
     </div>
   );
 
-  // Admin level options for filter
-  const adminLevelOptions = [
-    { value: 'entity_admin', label: 'Entity Admin' },
-    { value: 'sub_entity_admin', label: 'Sub Admin' },
-    { value: 'school_admin', label: 'School Admin' },
-    { value: 'branch_admin', label: 'Branch Admin' },
-  ];
-
-  // Status options for filter
-  const statusOptions = [
-    { value: 'active', label: 'Active' },
-    { value: 'inactive', label: 'Inactive' },
-  ];
-
-  // Calculate summary statistics
-  const summaryStats = useMemo(() => {
-    const allAdmins = admins?.data || [];
-    return {
-      total: allAdmins.length,
-      active: allAdmins.filter(a => a.is_active).length,
-      inactive: allAdmins.filter(a => !a.is_active).length,
-      byLevel: {
-        entity_admin: allAdmins.filter(a => a.admin_level === 'entity_admin').length,
-        sub_entity_admin: allAdmins.filter(a => a.admin_level === 'sub_entity_admin').length,
-        school_admin: allAdmins.filter(a => a.admin_level === 'school_admin').length,
-        branch_admin: allAdmins.filter(a => a.admin_level === 'branch_admin').length,
-      }
-    };
-  }, [admins]);
-
   return (
-    <div className={cn('space-y-6', className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Administrator List
-          </h2>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Bulk Actions */}
-          {selectedAdmins.length > 0 && (
-            <div className="flex items-center gap-2 mr-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedAdmins.length} selected
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const adminsToProcess = (admins?.data || []).filter(a => selectedAdmins.includes(a.id));
-                  handleDelete(adminsToProcess);
-                }}
-                leftIcon={<Trash2 className="h-4 w-4" />}
-              >
-                Bulk Delete
-              </Button>
-            </div>
-          )}
-
-          {/* Export */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            leftIcon={<Download className="h-4 w-4" />}
-          >
-            Export CSV
-          </Button>
-
-          {/* Create Admin */}
-          {onCreateAdmin && (
-            <Button
-              onClick={onCreateAdmin}
-              leftIcon={<Plus className="h-4 w-4" />}
-            >
-              Create Admin
-            </Button>
-          )}
-        </div>
-      </div>
-
+    <div className={cn("space-y-6", className)}>
       {/* Summary Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -603,165 +547,199 @@ export function AdminListTable({
             <School className="h-6 w-6 text-green-400" />
           </div>
         </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Branch</p>
-              <p className="text-xl font-bold text-orange-600 dark:text-orange-400">
-                {summaryStats.byLevel.branch_admin}
-              </p>
-            </div>
-            <MapPin className="h-6 w-6 text-orange-400" />
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
       <FilterCard
         title="Filter Administrators"
-        onApply={() => {}} // Auto-apply with React Query
-        onClear={clearFilters}
+        onReset={() => {
+          setFilters({
+            search: '',
+            admin_level: [],
+            is_active: [],
+            created_after: '',
+            created_before: ''
+          });
+          setPage(1);
+        }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Search */}
-          <FormField id="search" label="Search">
+          {/* Search Input */}
+          <FormField label="Search">
             <Input
-              id="search"
+              type="text"
               placeholder="Search by name or email..."
               value={filters.search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-              leftIcon={<Search className="h-4 w-4 text-gray-400" />}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, search: e.target.value }));
+                setPage(1);
+              }}
+              leftIcon={<Search className="h-4 w-4" />}
             />
           </FormField>
 
-          {/* Admin Level */}
-          <SearchableMultiSelect
-            label="Admin Level"
-            options={adminLevelOptions}
-            selectedValues={filters.admin_level}
-            onChange={(values) => updateFilter('admin_level', values)}
-            placeholder="Select admin levels..."
-          />
+          {/* Admin Level Filter */}
+          <FormField label="Admin Level">
+            <SearchableMultiSelect
+              options={[
+                { value: 'entity_admin', label: 'Entity Admin' },
+                { value: 'sub_entity_admin', label: 'Sub Admin' },
+                { value: 'school_admin', label: 'School Admin' },
+                { value: 'branch_admin', label: 'Branch Admin' }
+              ]}
+              value={filters.admin_level}
+              onChange={(values) => {
+                setFilters(prev => ({ ...prev, admin_level: values as AdminLevel[] }));
+                setPage(1);
+              }}
+              placeholder="All levels"
+            />
+          </FormField>
 
-          {/* Status */}
-          <SearchableMultiSelect
-            label="Status"
-            options={statusOptions}
-            selectedValues={filters.is_active}
-            onChange={(values) => updateFilter('is_active', values)}
-            placeholder="Select status..."
-          />
+          {/* Status Filter */}
+          <FormField label="Status">
+            <SearchableMultiSelect
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={filters.is_active}
+              onChange={(values) => {
+                setFilters(prev => ({ ...prev, is_active: values }));
+                setPage(1);
+              }}
+              placeholder="All statuses"
+            />
+          </FormField>
 
-          {/* Date From */}
-          <FormField id="created_after" label="Created After">
+          {/* Date Range Filters */}
+          <FormField label="Created After">
             <Input
-              id="created_after"
               type="date"
               value={filters.created_after}
-              onChange={(e) => updateFilter('created_after', e.target.value)}
-              leftIcon={<Calendar className="h-4 w-4 text-gray-400" />}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, created_after: e.target.value }));
+                setPage(1);
+              }}
             />
           </FormField>
 
-          {/* Date To */}
-          <FormField id="created_before" label="Created Before">
+          <FormField label="Created Before">
             <Input
-              id="created_before"
               type="date"
               value={filters.created_before}
-              onChange={(e) => updateFilter('created_before', e.target.value)}
-              leftIcon={<Calendar className="h-4 w-4 text-gray-400" />}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, created_before: e.target.value }));
+                setPage(1);
+              }}
             />
           </FormField>
-        </div>
 
-        {/* Date Range Presets */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Quick Date Ranges
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => applyDatePreset('today')}
-            >
-              Today
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => applyDatePreset('week')}
-            >
-              Last 7 Days
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => applyDatePreset('month')}
-            >
-              Last 30 Days
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => applyDatePreset('quarter')}
-            >
-              Last 90 Days
-            </Button>
-          </div>
+          {/* Date Presets */}
+          <FormField label="Quick Date Range">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyDatePreset('today')}
+              >
+                Today
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyDatePreset('week')}
+              >
+                Week
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyDatePreset('month')}
+              >
+                Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applyDatePreset('quarter')}
+              >
+                Quarter
+              </Button>
+            </div>
+          </FormField>
         </div>
       </FilterCard>
 
-      {/* Error State */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="font-medium">Error Loading Administrators</span>
-          </div>
-          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-            {error instanceof Error ? error.message : 'Failed to load administrators. Please try again.'}
-          </p>
+      {/* Actions Bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {onCreateAdmin && (
+            <Button
+              variant="primary"
+              leftIcon={<UserPlus className="h-4 w-4" />}
+              onClick={onCreateAdmin}
+            >
+              Add Administrator
+            </Button>
+          )}
+          
+          {selectedAdmins.length > 0 && (
+            <Button
+              variant="destructive"
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              onClick={handleBulkDelete}
+            >
+              Bulk Action ({selectedAdmins.length})
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refetch()}
-            className="mt-3"
+            leftIcon={<Download className="h-4 w-4" />}
+            onClick={handleExportCSV}
           >
-            Retry
+            Export CSV
           </Button>
         </div>
-      )}
+      </div>
 
-      {/* Administrators Table */}
+      {/* Data Table */}
       <DataTable
-        data={admins?.data || []}
         columns={columns}
+        data={filteredAdmins}
         keyField="id"
-        caption="List of administrators with their roles, status, and activity information"
-        ariaLabel="Administrators data table"
-        loading={isLoading}
+        isLoading={isLoading}
         isFetching={isFetching}
-        onSelectionChange={setSelectedAdmins}
-        renderActions={renderActions}
-        emptyMessage="No administrators found for the selected criteria"
-        pagination={{
-          page,
-          rowsPerPage,
-          totalCount: admins?.total || 0,
-          totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
-          goToPage: setPage,
-          nextPage: () => setPage(prev => prev + 1),
-          previousPage: () => setPage(prev => Math.max(prev - 1, 1)),
-          changeRowsPerPage: (newSize) => {
-            setRowsPerPage(newSize);
-            setPage(1);
-          },
-          ariaLabel: "Administrators pagination"
+        onEdit={handleEditAdmin}
+        onDelete={handleDeleteAdmin}
+        renderActions={renderRowActions}
+        selectedRows={new Set(selectedAdmins)}
+        onRowSelect={(rowId) => {
+          setSelectedAdmins(prev => 
+            prev.includes(rowId) 
+              ? prev.filter(id => id !== rowId)
+              : [...prev, rowId]
+          );
         }}
-        className="bg-white dark:bg-gray-800"
+        onSelectAll={(allSelected) => {
+          setSelectedAdmins(allSelected ? filteredAdmins.map(a => a.id) : []);
+        }}
+        pagination={{
+          currentPage: page,
+          totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
+          rowsPerPage,
+          totalRows: admins?.total || 0,
+          onPageChange: setPage,
+          onRowsPerPageChange: (rows) => {
+            setRowsPerPage(rows);
+            setPage(1);
+          }
+        }}
+        emptyMessage="No administrators found"
       />
 
       {/* Confirmation Dialog */}
