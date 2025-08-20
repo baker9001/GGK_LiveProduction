@@ -1,3 +1,25 @@
+/**
+ * File: /src/app/entity-module/organisation/tabs/admins/components/AdminScopeAssignment.tsx
+ * 
+ * Admin Scope Assignment Component
+ * Manages school and branch scope assignments for administrators
+ * 
+ * Dependencies:
+ *   - @/components/shared/SearchableMultiSelect
+ *   - @/components/shared/Button
+ *   - @/components/shared/Toast
+ *   - @/lib/supabase
+ *   - ../types/admin.types
+ *   - ../hooks/useAdminScope
+ *   - ../hooks/useAdminPermissions
+ * 
+ * Features:
+ *   - Fetch and display assigned scopes for a user
+ *   - Allow assignment of schools and branches
+ *   - Handle scope removal
+ *   - Manage permissions for each scope
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
@@ -113,8 +135,12 @@ export function AdminScopeAssignment({
         scope_type: 'school',
         scope_id: schoolId,
         permissions: {}, // Default permissions, can be expanded later
-        can_create_users: false, can_modify_users: false, can_delete_users: false,
-        can_view_all: true, can_export_data: false, can_manage_settings: false,
+        can_create_users: false, 
+        can_modify_users: false, 
+        can_delete_users: false,
+        can_view_all: true, 
+        can_export_data: false, 
+        can_manage_settings: false,
         assigned_by: userId, // Assuming the current user is the one assigning
         expires_at: null,
         is_active: true,
@@ -128,8 +154,12 @@ export function AdminScopeAssignment({
         scope_type: 'branch',
         scope_id: branchId,
         permissions: {}, // Default permissions
-        can_create_users: false, can_modify_users: false, can_delete_users: false,
-        can_view_all: true, can_export_data: false, can_manage_settings: false,
+        can_create_users: false, 
+        can_modify_users: false, 
+        can_delete_users: false,
+        can_view_all: true, 
+        can_export_data: false, 
+        can_manage_settings: false,
         assigned_by: userId,
         expires_at: null,
         is_active: true,
