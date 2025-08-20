@@ -1,91 +1,84 @@
-/**
- * File: /src/app/entity-module/organisation/tabs/admins/page.tsx
- * 
- * Admins Management Tab Component
- * Handles admin user management for the organization
- * 
- * Dependencies:
- *   - @/lib/supabase
- *   - @/contexts/UserContext
- *   - External: react, lucide-react
- */
+import React, { useState } from 'react';
+import { Plus } from 'lucide-react';
+import { Button } from '../../../../../components/shared/Button';
 
-'use client';
+// Placeholder components (will be created in later steps)
+const AdminListTable = () => (
+  <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Admin List Table (Placeholder)</h3>
+    <p className="text-gray-600 dark:text-gray-400 mt-2">This will display a list of all administrators.</p>
+  </div>
+);
+const AdminHierarchyTree = () => (
+  <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Admin Hierarchy Tree (Placeholder)</h3>
+    <p className="text-gray-600 dark:text-gray-400 mt-2">This will visualize the admin hierarchy.</p>
+  </div>
+);
+const AdminAuditLogsPanel = () => (
+  <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Admin Audit Logs Panel (Placeholder)</h3>
+    <p className="text-gray-600 dark:text-gray-400 mt-2">This will display audit logs for admin activities.</p>
+  </div>
+);
 
-import React from 'react';
-import { Shield, Users, Key, Settings, Clock, UserCheck } from 'lucide-react';
-
-export interface AdminsTabProps {
-  companyId: string;
-  refreshData?: () => void;
+interface AdminsPageProps {
+  companyId: string; // Assuming companyId is passed from parent route
 }
 
-export default function AdminsTab({ companyId, refreshData }: AdminsTabProps) {
+export default function AdminsPage({ companyId }: AdminsPageProps) {
+  const [viewMode, setViewMode] = useState<'list' | 'hierarchy' | 'audit'>('list');
+
+  // TODO: Replace with actual useAdminPermissions() hook
+  const canCreateAdmin = true; // Mock for now
+
   return (
-    <div className="min-h-[600px] bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-indigo-200 dark:from-indigo-900/30 dark:to-indigo-800/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Admin Management
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Comprehensive admin user management system coming soon
-          </p>
+    <div className="p-6 space-y-6">
+      {/* Header and Action Button */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Management</h1>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">Manage administrators, their roles, and access within your organization.</p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <UserCheck className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-              Admin Profiles
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage administrator information
-            </p>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <Key className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-              Permissions
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Control access and permissions
-            </p>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-            <Settings className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-              Role Management
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Define and assign admin roles
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 mb-2">
-            <Clock className="w-5 h-5" />
-            <span className="font-semibold">In Development</span>
-          </div>
-          <p className="text-sm text-indigo-600 dark:text-indigo-400">
-            This feature is currently under development and will include:
-          </p>
-          <ul className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 text-left list-disc list-inside">
-            <li>Admin user creation and management</li>
-            <li>Role-based access control</li>
-            <li>Permission matrix configuration</li>
-            <li>Admin activity monitoring</li>
-            <li>Security audit logs</li>
-            <li>Multi-factor authentication setup</li>
-            <li>Session management</li>
-            <li>Admin delegation controls</li>
-          </ul>
-        </div>
+        {canCreateAdmin && (
+          <Button
+            onClick={() => console.log('Open Create Admin Modal')} // Placeholder action
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            Create Admin
+          </Button>
+        )}
       </div>
+
+      {/* View Mode Toggles */}
+      <div className="flex space-x-3 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <Button
+          variant={viewMode === 'list' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('list')}
+          className="flex-1"
+        >
+          List View
+        </Button>
+        <Button
+          variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('hierarchy')}
+          className="flex-1"
+        >
+          Hierarchy View
+        </Button>
+        <Button
+          variant={viewMode === 'audit' ? 'default' : 'ghost'}
+          onClick={() => setViewMode('audit')}
+          className="flex-1"
+        >
+          Audit Logs
+        </Button>
+      </div>
+
+      {/* Conditional Rendering of Views */}
+      {viewMode === 'list' && <AdminListTable />}
+      {viewMode === 'hierarchy' && <AdminHierarchyTree />}
+      {viewMode === 'audit' && <AdminAuditLogsPanel />}
     </div>
   );
 }
