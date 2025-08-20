@@ -1,3 +1,5 @@
+///home/project/src/app/entity-module/organisation/tabs/admins/page.tsx
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
