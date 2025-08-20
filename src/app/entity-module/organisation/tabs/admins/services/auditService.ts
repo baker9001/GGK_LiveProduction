@@ -17,7 +17,7 @@
  *   - getAdminActivityStats: Get statistical summaries
  */
 
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '../../../../../../lib/supabase';
 import { AdminAuditLog } from '../types/admin.types';
 
 interface AuditLogFilters {

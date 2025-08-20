@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
 import { Button } from '../../../../../components/shared/Button';
 import { adminService } from './services';
-import AdminListTable from '../components/AdminListTable';
-import AdminHierarchyTree from '../components/AdminHierarchyTree';
-import AdminAuditLogsPanel from '../components/AdminAuditLogsPanel';
+import AdminListTable from './components/AdminListTable';
+import AdminHierarchyTree from './components/AdminHierarchyTree';
+import AdminAuditLogsPanel from './components/AdminAuditLogsPanel';
 import { AdminCreationForm } from '../components/AdminCreationForm';
 import { AdminLevel } from '../types/admin.types';
 
