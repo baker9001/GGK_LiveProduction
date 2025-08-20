@@ -1,18 +1,21 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminListTable.tsx
  * 
- * FIXED: Added defensive coding for undefined name values
+ * COMPLETE CORRECTED VERSION - ALL FIXES APPLIED
+ * 
+ * Fixes Applied:
+ * ✅ Fixed import path for DataTable - using @/ alias
+ * ✅ Fixed all DataTable prop mismatches
+ * ✅ Added safe helper functions for name/email handling
+ * ✅ Fixed charAt() error with defensive coding
+ * ✅ Corrected pagination object structure
+ * ✅ Added missing pagination functions
  * 
  * Dependencies:
  *   - @/components/shared/* (UI components)
  *   - ../services/adminService (Admin data service)
  *   - ../hooks/useAdminMutations (Mutation hooks)
  *   - ../types/admin.types (Type definitions)
- * 
- * Fix Applied:
- * ✅ Added null checks for row.name before calling charAt()
- * ✅ Added fallback to email if name is undefined
- * ✅ Added safety for avatar initials generation
  */
 
 import React, { useState, useMemo } from 'react';
@@ -37,9 +40,10 @@ import {
   AlertTriangle,
   MoreHorizontal,
   UserPlus,
-  Settings
+  Settings,
+  Users
 } from 'lucide-react';
-import { DataTable } from '../../../../../components/shared/DataTable';
+import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
@@ -185,6 +189,36 @@ export function AdminListTable({
     };
   };
 
+  // Helper function to safely get initials
+  const getInitials = (name: string | undefined | null, email: string | undefined | null): string => {
+    // Try to get initials from name first
+    if (name && typeof name === 'string' && name.trim()) {
+      return name.charAt(0).toUpperCase();
+    }
+    
+    // Fall back to email
+    if (email && typeof email === 'string' && email.trim()) {
+      return email.charAt(0).toUpperCase();
+    }
+    
+    // Final fallback
+    return '?';
+  };
+
+  // Helper function to safely get display name
+  const getDisplayName = (name: string | undefined | null, email: string | undefined | null): string => {
+    if (name && typeof name === 'string' && name.trim()) {
+      return name;
+    }
+    
+    if (email && typeof email === 'string' && email.trim()) {
+      // Extract username from email if no name
+      return email.split('@')[0];
+    }
+    
+    return 'Unknown User';
+  };
+
   // Filter admins based on local filters
   const filteredAdmins = useMemo(() => {
     return admins?.data || [];
@@ -288,36 +322,6 @@ export function AdminListTable({
       created_before: range.to
     }));
     setPage(1);
-  };
-
-  // Helper function to safely get initials
-  const getInitials = (name: string | undefined | null, email: string | undefined | null): string => {
-    // Try to get initials from name first
-    if (name && typeof name === 'string' && name.trim()) {
-      return name.charAt(0).toUpperCase();
-    }
-    
-    // Fall back to email
-    if (email && typeof email === 'string' && email.trim()) {
-      return email.charAt(0).toUpperCase();
-    }
-    
-    // Final fallback
-    return '?';
-  };
-
-  // Helper function to safely get display name
-  const getDisplayName = (name: string | undefined | null, email: string | undefined | null): string => {
-    if (name && typeof name === 'string' && name.trim()) {
-      return name;
-    }
-    
-    if (email && typeof email === 'string' && email.trim()) {
-      // Extract username from email if no name
-      return email.split('@')[0];
-    }
-    
-    return 'Unknown User';
   };
 
   // Define table columns
@@ -441,10 +445,14 @@ export function AdminListTable({
     }
   };
 
-  const handleDeleteAdmin = (admin: EntityUser) => {
-    setDeleteAction(admin.is_active ? 'delete' : 'restore');
-    setAdminsToDelete([admin]);
-    setIsConfirmDialogOpen(true);
+  const handleDeleteAdmin = (admins: EntityUser[]) => {
+    // Handle single or bulk delete
+    const admin = admins[0];
+    if (admin) {
+      setDeleteAction(admin.is_active ? 'delete' : 'restore');
+      setAdminsToDelete(admins);
+      setIsConfirmDialogOpen(true);
+    }
   };
 
   const renderRowActions = (row: EntityUser) => (
@@ -473,7 +481,7 @@ export function AdminListTable({
         variant="ghost"
         size="sm"
         leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-        onClick={() => handleDeleteAdmin(row)}
+        onClick={() => handleDeleteAdmin([row])}
         className={row.is_active 
           ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
           : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
@@ -483,6 +491,11 @@ export function AdminListTable({
       </Button>
     </div>
   );
+
+  // Handle selection change from DataTable
+  const handleSelectionChange = (selectedIds: Array<string | number>) => {
+    setSelectedAdmins(selectedIds as string[]);
+  };
 
   return (
     <div className={cn("space-y-6", className)}>
@@ -707,39 +720,34 @@ export function AdminListTable({
         </div>
       </div>
 
-      {/* Data Table */}
+      {/* Data Table - WITH CORRECTED PROPS */}
       <DataTable
         columns={columns}
         data={filteredAdmins}
         keyField="id"
-        isLoading={isLoading}
+        loading={isLoading}  // Fixed: was isLoading
         isFetching={isFetching}
         onEdit={handleEditAdmin}
         onDelete={handleDeleteAdmin}
         renderActions={renderRowActions}
-        selectedRows={new Set(selectedAdmins)}
-        onRowSelect={(rowId) => {
-          setSelectedAdmins(prev => 
-            prev.includes(rowId) 
-              ? prev.filter(id => id !== rowId)
-              : [...prev, rowId]
-          );
-        }}
-        onSelectAll={(allSelected) => {
-          setSelectedAdmins(allSelected ? filteredAdmins.map(a => a.id) : []);
-        }}
+        onSelectionChange={handleSelectionChange}  // Fixed: was multiple wrong props
         pagination={{
-          currentPage: page,
+          page: page,  // Fixed: was currentPage
+          rowsPerPage: rowsPerPage,
+          totalCount: admins?.total || 0,  // Fixed: was totalRows
           totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
-          rowsPerPage,
-          totalRows: admins?.total || 0,
-          onPageChange: setPage,
-          onRowsPerPageChange: (rows) => {
+          goToPage: setPage,  // Fixed: was onPageChange
+          nextPage: () => setPage(prev => Math.min(prev + 1, Math.ceil((admins?.total || 0) / rowsPerPage))),  // Added
+          previousPage: () => setPage(prev => Math.max(prev - 1, 1)),  // Added
+          changeRowsPerPage: (rows: number) => {  // Fixed: was onRowsPerPageChange
             setRowsPerPage(rows);
             setPage(1);
-          }
+          },
+          ariaLabel: "Administrators pagination"  // Added for accessibility
         }}
         emptyMessage="No administrators found"
+        caption="List of administrators with their roles and permissions"
+        ariaLabel="Administrators data table"
       />
 
       {/* Confirmation Dialog */}
