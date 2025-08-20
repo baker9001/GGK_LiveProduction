@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
-import { Button } from '../../../../../components/shared/Button';
-import { toast } from '../../../../../components/shared/Toast';
-import { supabase } from '../../../../../lib/supabase';
+import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
+import { Button } from '@/components/shared/Button';
+import { toast } from '@/components/shared/Toast';
+import { supabase } from '@/lib/supabase';
 import { EntityAdminScope } from '../types/admin.types';
 import { useAdminScope, useAssignScope, useRemoveScope } from '../hooks/useAdminScope';
 import { useAdminPermissions } from '../hooks/useAdminPermissions'; // For future permission checks
