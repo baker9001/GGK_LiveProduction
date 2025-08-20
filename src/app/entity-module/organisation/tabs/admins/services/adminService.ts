@@ -23,8 +23,8 @@
  *   - listAdmins: Retrieve administrators with filters
  */
 
-import { supabase } from '../../../../../lib/supabase';
-import { User } from '../../../../../lib/auth';
+import { supabase } from '../../../../../../lib/supabase';
+import { User } from '../../../../../../lib/auth';
 import { AdminLevel, EntityAdminHierarchy, EntityAdminScope, AdminPermissions } from '../types/admin.types';
 import { auditService } from './auditService';
 

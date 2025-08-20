@@ -6,8 +6,8 @@ import { adminService } from './services';
 import AdminListTable from './components/AdminListTable';
 import AdminHierarchyTree from './components/AdminHierarchyTree';
 import AdminAuditLogsPanel from './components/AdminAuditLogsPanel';
-import { AdminCreationForm } from '../components/AdminCreationForm';
-import { AdminLevel } from '../types/admin.types';
+import { AdminCreationForm } from './components/AdminCreationForm';
+import { AdminLevel } from './types/admin.types';
 
 // Entity User interface for admin data
 interface EntityUser {

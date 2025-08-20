@@ -12,7 +12,7 @@ import {
   Settings,
   Eye
 } from 'lucide-react';
-import { cn } from '../../../../../lib/utils';
+import { cn } from '../../../../../../lib/utils';
 import { AdminLevel } from '../types/admin.types';
 
 // Entity User interface for the tree
