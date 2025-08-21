@@ -470,7 +470,7 @@ export const adminService = {
       // Fix search filter - ensure it's a string
       if (filters.search && typeof filters.search === 'string' && filters.search.trim()) {
         const searchTerm = filters.search.trim();
-        query = query.or(`users.email.ilike.%${searchTerm}%,users.raw_user_meta_data->>name.ilike.%${searchTerm}%`);
+        query = query.or(`users.email.ilike.%${searchTerm}%,(users.raw_user_meta_data->>name)::text.ilike.%${searchTerm}%`);
       }
 
       if (filters.created_after) {
