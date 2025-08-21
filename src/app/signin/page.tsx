@@ -1,484 +1,491 @@
 /**
- * File: /src/app/signin/page.tsx
- * Dependencies: 
- *   - React
- *   - react-router-dom
- *   - lucide-react
- *   - Custom components
+ * File: /src/app/login/page.tsx (or /src/app/signin/page.tsx)
  * 
- * Description: Sign-in page with unified glassmorphic design
+ * MERGED LOGIN/SIGNIN PAGE COMPONENT
+ * Unified authentication page with all features
+ * 
+ * Dependencies:
+ *   - @/lib/auth (authentication service)
+ *   - @/contexts/UserContext (user state management)
+ *   - react-hot-toast (notifications)
+ *   - zod (validation)
+ *   - lucide-react (icons)
+ * 
+ * Features:
+ * ✅ Email and password validation with Zod
+ * ✅ Remember Me functionality
+ * ✅ Password visibility toggle
+ * ✅ Forgot password flow
+ * ✅ Role-based redirects after login
+ * ✅ Demo credentials display
+ * ✅ Loading states and error handling
+ * ✅ Dark mode support
+ * ✅ Responsive design
  */
 
+'use client';
+
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { 
-  GraduationCap, 
-  AlertCircle, 
-  CheckCircle, 
-  Loader2, 
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  ShieldAlert,
-  MailWarning,
-  Home
+  Lock, Mail, Eye, EyeOff, AlertCircle, 
+  Loader2, School, CheckCircle, ArrowLeft,
+  ShieldCheck, Users, GraduationCap, BookOpen
 } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { FormField, Input } from '../../components/shared/FormField';
-import { toast } from '../../components/shared/Toast';
-import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
-import { supabase } from '../../lib/supabase';
-import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+import { toast } from 'react-hot-toast';
+import { authService, getRedirectPathForUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
 
-interface LoginResponse {
-  success: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    user_type: string;
-    requires_password_change: boolean;
-    profile: any;
-  };
-  error?: string;
-  code?: string;
-  userId?: string;
-  attemptsLeft?: number;
-  message?: string;
-}
+// Validation schemas
+const emailSchema = z.string()
+  .email('Please enter a valid email address')
+  .min(5, 'Email must be at least 5 characters')
+  .max(255, 'Email must be less than 255 characters');
 
-export default function SignInPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters');
+
+const resetEmailSchema = z.string()
+  .email('Please enter a valid email address');
+
+// Demo credentials configuration
+const DEMO_CREDENTIALS = [
+  {
+    role: 'System Admin',
+    email: 'admin@system.com',
+    password: 'Admin123!',
+    icon: ShieldCheck,
+    color: 'text-purple-600 dark:text-purple-400'
+  },
+  {
+    role: 'Entity Admin',
+    email: 'admin@company.com',
+    password: 'Admin123!',
+    icon: Users,
+    color: 'text-blue-600 dark:text-blue-400'
+  },
+  {
+    role: 'Teacher',
+    email: 'teacher@school.com',
+    password: 'Teacher123!',
+    icon: BookOpen,
+    color: 'text-green-600 dark:text-green-400'
+  },
+  {
+    role: 'Student',
+    email: 'student@school.com',
+    password: 'Student123!',
+    icon: GraduationCap,
+    color: 'text-orange-600 dark:text-orange-400'
+  }
+];
+
+export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { setUser } = useUser();
   
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
   
-  // UI state
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [verificationNeeded, setVerificationNeeded] = useState(false);
-  const [unverifiedUserId, setUnverifiedUserId] = useState<string | null>(null);
-  const [accountLocked, setAccountLocked] = useState(false);
-  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   
-  // Redirect path
-  const from = location.state?.from?.pathname || '/app/dashboard';
-  
-  // Load remembered email on mount
+  // Demo mode state
+  const [showDemoCredentials, setShowDemoCredentials] = useState(true);
+  const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
+
+  // Get redirect URL from query params
+  const redirectTo = searchParams?.get('redirect') || null;
+  const sessionExpired = searchParams?.get('session_expired') === 'true';
+
+  // Check if already authenticated
   useEffect(() => {
-    // Clear any test mode or existing sessions
-    localStorage.removeItem('test_user');
-    sessionStorage.clear();
+    const checkAuth = async () => {
+      if (authService.isAuthenticated()) {
+        const user = authService.getCurrentUser();
+        if (user) {
+          const redirectPath = redirectTo || getRedirectPathForUser(user);
+          router.push(redirectPath);
+        }
+      }
+    };
     
-    // Load remembered email if exists
-    const savedEmail = localStorage.getItem('ggk_remembered_email');
-    if (savedEmail) {
-      setEmail(savedEmail);
+    checkAuth();
+  }, [router, redirectTo]);
+
+  // Show session expired message
+  useEffect(() => {
+    if (sessionExpired) {
+      toast.error('Your session has expired. Please sign in again.');
+    }
+  }, [sessionExpired]);
+
+  // Load remembered email if exists
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('ggk_remembered_email');
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
       setRememberMe(true);
     }
   }, []);
-  
-  const handleSubmit = async (e: React.FormEvent) => {
+
+  // Validate form fields
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    try {
+      emailSchema.parse(email);
+    } catch (error: any) {
+      newErrors.email = error.errors[0]?.message || 'Invalid email';
+    }
+
+    try {
+      passwordSchema.parse(password);
+    } catch (error: any) {
+      newErrors.password = error.errors[0]?.message || 'Invalid password';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Handle login/signin
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setVerificationNeeded(false);
-    setAccountLocked(false);
-    setAttemptsLeft(null);
-    
-    // Basic validation
-    if (!email || !password) {
-      setError('Please enter both email and password');
+
+    if (!validateForm()) {
       return;
     }
-    
-    setLoading(true);
-    
+
+    setIsLoading(true);
+    setErrors({});
+
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      
-      // Get user from database
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select(`
-          id,
-          email,
-          password_hash,
-          user_type,
-          is_active,
-          email_verified,
-          locked_until,
-          failed_login_attempts,
-          requires_password_change,
-          raw_user_meta_data
-        `)
-        .eq('email', normalizedEmail)
-        .maybeSingle();
-      
-      if (userError) {
-        throw new Error('Database query failed');
-      }
-      
-      if (!user) {
-        setError('Invalid email or password');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if account is locked
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        const minutesLeft = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 60000);
-        setAccountLocked(true);
-        setError(`Account locked. Try again in ${minutesLeft} minutes.`);
-        setLoading(false);
-        return;
-      }
-      
-      // Check if account is active
-      if (!user.is_active) {
-        setError('Account is inactive. Please contact support.');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if email is verified
-      if (user.email_verified === false) {
-        setVerificationNeeded(true);
-        setUnverifiedUserId(user.id);
-        setError('Please verify your email before signing in. Check your inbox for the verification link.');
-        setLoading(false);
-        return;
-      }
-      
-      // Verify password
-      let isValidPassword = false;
-      
-      if (user.password_hash) {
-        isValidPassword = await bcrypt.compare(password, user.password_hash);
-      }
-      
-      if (!isValidPassword) {
-        // For now, skip database updates to avoid audit_logs trigger
-        // Just track attempts in memory
-        const newAttempts = (user.failed_login_attempts || 0) + 1;
-        
-        if (newAttempts >= 5) {
-          setError('Too many failed attempts. Please try again later.');
+      const response = await authService.login({
+        email: email.trim().toLowerCase(),
+        password,
+        rememberMe
+      });
+
+      if (response.success && response.user) {
+        // Save email if remember me is checked
+        if (rememberMe) {
+          localStorage.setItem('ggk_remembered_email', email.trim().toLowerCase());
         } else {
-          setAttemptsLeft(5 - newAttempts);
-          setError(`Invalid email or password. ${5 - newAttempts} attempts remaining`);
+          localStorage.removeItem('ggk_remembered_email');
         }
-        setLoading(false);
-        return;
-      }
-      
-      // Success - Skip database updates to avoid audit_logs trigger
-      // The important part is setting the authenticated user
-      
-      // Get user profile details based on user type
-      let userRole: UserRole = 'VIEWER';
-      
-      switch (user.user_type) {
-        case 'system':
-          try {
-            const { data: adminUser } = await supabase
-              .from('admin_users')
-              .select('role_id, roles!inner(name)')
-              .eq('email', normalizedEmail)
-              .maybeSingle();
-            
-            if (adminUser?.roles?.name) {
-              userRole = getUserSystemRole(adminUser.roles.name);
-            } else {
-              userRole = 'SSA'; // Default for system users
-            }
-          } catch (err) {
-            console.warn('Could not fetch admin role, using default SSA');
-            userRole = 'SSA';
-          }
-          break;
-        case 'entity':
-          userRole = 'ENTITY_ADMIN';
-          break;
-        case 'teacher':
-          userRole = 'TEACHER';
-          break;
-        case 'student':
-          userRole = 'STUDENT';
-          break;
-        default:
-          userRole = 'VIEWER';
-      }
-      
-      // Create user object
-      const authenticatedUser: User = {
-        id: user.id,
-        email: user.email,
-        name: user.raw_user_meta_data?.name || user.email.split('@')[0],
-        role: userRole,
-        userType: user.user_type
-      };
-      
-      // Handle Remember Me functionality
-      if (rememberMe) {
-        // Save email for next time
-        localStorage.setItem('ggk_remembered_email', normalizedEmail);
-        // Set a flag for extended session (30 days instead of default 24 hours)
-        localStorage.setItem('ggk_remember_session', 'true');
+
+        // Set user in context
+        setUser(response.user);
+
+        // Show success message
+        toast.success(`Welcome back, ${response.user.name || response.user.email}!`);
+
+        // Redirect to appropriate dashboard
+        const redirectPath = redirectTo || getRedirectPathForUser(response.user);
+        router.push(redirectPath);
       } else {
-        // Clear remembered email if not checked
-        localStorage.removeItem('ggk_remembered_email');
-        localStorage.removeItem('ggk_remember_session');
+        // Handle specific error cases
+        if (response.error?.includes('deactivated')) {
+          setErrors({ general: response.error });
+        } else if (response.error?.includes('password')) {
+          setErrors({ password: response.error });
+        } else if (response.error?.includes('email')) {
+          setErrors({ email: response.error });
+        } else {
+          setErrors({ general: response.error || 'Login failed. Please try again.' });
+        }
+        
+        toast.error(response.error || 'Login failed');
       }
-      
-      // Set authenticated user (uses remember me setting internally)
-      setAuthenticatedUser(authenticatedUser);
-      
-      // Check if password change required
-      if (user.requires_password_change) {
-        toast.warning('Please change your password');
-        navigate('/app/settings/change-password');
-        return;
-      }
-      
-      // Success message
-      toast.success(`Welcome back, ${authenticatedUser.name}!`);
-      
-      // Redirect based on user type
-      const redirectPath = getRedirectPath(user.user_type, userRole);
-      navigate(redirectPath, { replace: true });
-      
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('An error occurred. Please try again.');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setErrors({ general: 'An unexpected error occurred. Please try again.' });
+      toast.error('An unexpected error occurred. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
-  
-  const handleResendVerification = async () => {
-    if (!email) {
-      setError('Please enter your email address');
+
+  // Handle forgot password
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate email
+    try {
+      resetEmailSchema.parse(resetEmail);
+    } catch (error: any) {
+      toast.error(error.errors[0]?.message || 'Please enter a valid email');
       return;
     }
-    
-    setLoading(true);
-    
+
+    setResetLoading(true);
+
     try {
-      // TODO: Implement actual email sending when email service is configured
-      // For now, just show a message
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      const response = await authService.requestPasswordReset(resetEmail.trim().toLowerCase());
       
-      toast.info('If this email is registered, you will receive a verification link shortly.');
-      toast.info('Please check your spam folder if you don\'t see it.');
-      
-      // Clear the verification needed state after "sending"
-      setVerificationNeeded(false);
-      setError(null);
-    } catch (err) {
-      console.error('Resend verification error:', err);
-      toast.error('Failed to send verification email. Please try again later.');
+      if (response.success) {
+        setResetSent(true);
+        toast.success(response.message);
+      } else {
+        toast.error(response.message);
+      }
+    } catch (error) {
+      toast.error('Failed to send reset instructions. Please try again.');
     } finally {
-      setLoading(false);
+      setResetLoading(false);
     }
   };
-  
-  const handleDevLogin = () => {
-    // Simple dev login without database - bypasses all checks
-    const devUser: User = {
-      id: 'dev-001',
-      email: 'dev@ggk.com',
-      name: 'Developer',
-      role: 'SSA',
-      userType: 'system'
-    };
-    
-    // Set remember me for dev
-    localStorage.setItem('ggk_remember_session', 'true');
-    
-    // Set authenticated user
-    setAuthenticatedUser(devUser);
-    
-    toast.success('Dev login successful! (Bypassed email verification)');
-    navigate('/app/system-admin/dashboard', { replace: true });
+
+  // Fill demo credentials
+  const fillDemoCredentials = (index: number) => {
+    const demo = DEMO_CREDENTIALS[index];
+    setEmail(demo.email);
+    setPassword(demo.password);
+    setSelectedDemo(index);
+    toast.info(`Demo credentials filled for ${demo.role}`);
   };
-  
-  const getUserSystemRole = (roleName?: string): UserRole => {
-    if (!roleName) return 'VIEWER';
-    
-    const roleMapping: Record<string, UserRole> = {
-      'Super Admin': 'SSA',
-      'Support Admin': 'SUPPORT',
-      'Viewer': 'VIEWER'
-    };
-    return roleMapping[roleName] || 'VIEWER';
+
+  // Reset forgot password state
+  const resetForgotPasswordState = () => {
+    setShowForgotPassword(false);
+    setResetSent(false);
+    setResetEmail('');
   };
-  
-  const getRedirectPath = (userType?: string, role?: UserRole): string => {
-    if (!userType) return '/app/dashboard';
-    
-    switch (userType) {
-      case 'system':
-        return '/app/system-admin/dashboard';
-      case 'entity':
-        return '/app/entity-module/dashboard';
-      case 'teacher':
-        return '/app/teachers-module/dashboard';
-      case 'student':
-        return '/app/student-module/dashboard';
-      default:
-        return '/app/dashboard';
-    }
-  };
-  
-  return (
-    <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image */}
-      <div className="absolute inset-0 z-0">
-        <img
-          src="https://images.unsplash.com/photo-1523050854058-8df90110c9f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80"
-          alt="Students in classroom"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
-      </div>
-      
-      {/* Content */}
-      <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
-        {/* Logo */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center">
-            <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
-            <span className="ml-3 text-4xl font-bold text-white">
-              GGK Learning
-            </span>
-          </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-white">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-sm text-gray-300">
-            Enter your credentials to access the platform
-          </p>
-        </div>
-        
-        {/* Sign-in Form */}
-        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
-          {/* Error Messages */}
-          {error && (
-            <div className="mb-4">
-              {accountLocked ? (
-                <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
-                  <ShieldAlert className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Account Locked</p>
-                    <p className="text-sm mt-1">{error}</p>
-                  </div>
-                </div>
-              ) : verificationNeeded ? (
-                <div className="bg-amber-500/10 backdrop-blur text-amber-400 p-4 rounded-lg border border-amber-500/20">
-                  <div className="flex items-start">
-                    <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium">Email Verification Required</p>
-                      <p className="text-sm mt-1">Your email address is not verified. Please check your inbox for the verification link.</p>
-                      <p className="text-xs mt-2 text-amber-300">
-                        Can't find the email? Check your spam folder or click below to resend.
+
+  // Render forgot password view
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-8">
+            <div className="text-center">
+              <div className="mx-auto h-16 w-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                <Lock className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                Reset Password
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Enter your email address and we'll send you instructions to reset your password.
+              </p>
+            </div>
+
+            {resetSent ? (
+              <div className="mt-8">
+                <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-4">
+                  <div className="flex">
+                    <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                        Reset instructions sent!
                       </p>
-                      <button
-                        onClick={handleResendVerification}
-                        disabled={loading}
-                        className="text-sm mt-3 text-amber-100 hover:text-white font-medium underline disabled:opacity-50"
-                      >
-                        {loading ? 'Sending...' : 'Resend verification email'}
-                      </button>
+                      <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                        Check your email for password reset instructions. The link will expire in 1 hour.
+                      </p>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
-                  <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-sm">{error}</span>
-                    {attemptsLeft !== null && attemptsLeft > 0 && (
-                      <p className="text-xs mt-1 text-red-300">
-                        Your account will be locked after {attemptsLeft} more failed attempts
-                      </p>
-                    )}
+                
+                <div className="mt-6 space-y-3">
+                  <button
+                    onClick={resetForgotPasswordState}
+                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Sign In
+                  </button>
+                  
+                  <button
+                    onClick={() => setResetSent(false)}
+                    className="w-full text-sm text-gray-600 hover:text-gray-500 dark:text-gray-400"
+                  >
+                    Didn't receive the email? Send again
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className="mt-8 space-y-6" onSubmit={handleForgotPassword}>
+                <div>
+                  <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email address
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="reset-email"
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                      className="appearance-none relative block w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                      placeholder="Enter your email address"
+                      autoFocus
+                    />
                   </div>
                 </div>
-              )}
+
+                <div className="flex items-center justify-between space-x-3">
+                  <button
+                    type="button"
+                    onClick={resetForgotPasswordState}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {resetLoading ? (
+                      <>
+                        <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                        Sending...
+                      </>
+                    ) : (
+                      'Send Instructions'
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main login view
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-8">
+          <div className="text-center">
+            <div className="mx-auto h-16 w-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+              <School className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-          )}
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
-            <FormField
-              id="email"
-              label="Email address"
-              required
-              labelClassName="text-gray-200"
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-                  placeholder="Enter your email"
-                  disabled={loading}
-                  autoFocus
-                />
-              </div>
-            </FormField>
+            <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+              Welcome Back
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Sign in to your account to continue
+            </p>
             
-            {/* Password Field */}
-            <FormField
-              id="password"
-              label="Password"
-              required
-              labelClassName="text-gray-200"
-            >
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-                  placeholder="Enter your password"
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
-                  )}
-                </button>
+            {/* Session expired message */}
+            {sessionExpired && (
+              <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  Your session has expired. Please sign in again.
+                </p>
               </div>
-            </FormField>
-            
-            {/* Remember Me & Forgot Password */}
+            )}
+          </div>
+
+          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+            {/* General error message */}
+            {errors.general && (
+              <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
+                  <div className="ml-3">
+                    <p className="text-sm text-red-800 dark:text-red-200">
+                      {errors.general}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Email Field */}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Email address
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors({ ...errors, email: undefined });
+                    }}
+                    required
+                    className={`appearance-none relative block w-full pl-10 px-3 py-2 border ${
+                      errors.email ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                    } rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors`}
+                    placeholder="Enter your email"
+                  />
+                </div>
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
+                )}
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Password
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password) setErrors({ ...errors, password: undefined });
+                    }}
+                    required
+                    className={`appearance-none relative block w-full pl-10 pr-10 px-3 py-2 border ${
+                      errors.password ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
+                    } rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors`}
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password}</p>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
@@ -486,118 +493,109 @@ export default function SignInPage() {
                   name="remember-me"
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => {
-                    setRememberMe(e.target.checked);
-                    // Clear saved email if unchecked
-                    if (!e.target.checked) {
-                      localStorage.removeItem('ggk_remembered_email');
-                      localStorage.removeItem('ggk_remember_session');
-                    }
-                  }}
-                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
-                  Remember me
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  Remember me for 30 days
                 </label>
               </div>
-              
-              <div className="text-sm">
-                <Link
-                  to="/forgot-password"
-                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
+
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </div>
+
+            {/* Demo Credentials */}
+            {showDemoCredentials && (
+              <div className="mt-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">Or use demo account</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {DEMO_CREDENTIALS.map((demo, index) => {
+                    const Icon = demo.icon;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => fillDemoCredentials(index)}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-md transition-all ${
+                          selectedDemo === index
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <Icon className={`h-4 w-4 mr-2 ${demo.color}`} />
+                          <span className="text-gray-700 dark:text-gray-300">{demo.role}</span>
+                        </div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {demo.email}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDemoCredentials(false)}
+                  className="mt-2 w-full text-xs text-gray-500 hover:text-gray-400 dark:text-gray-400 dark:hover:text-gray-300"
                 >
-                  Forgot password?
-                </Link>
+                  Hide demo accounts
+                </button>
               </div>
-            </div>
-            
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
-              disabled={loading || !email || !password}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign in'
-              )}
-            </Button>
+            )}
+
+            {!showDemoCredentials && (
+              <button
+                type="button"
+                onClick={() => setShowDemoCredentials(true)}
+                className="w-full text-sm text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                Show demo accounts
+              </button>
+            )}
           </form>
-          
-          {/* Additional Links */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Need help?
-                </span>
-              </div>
-            </div>
-            
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <Link
-                to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Contact Support
+
+          {/* Links */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Don't have an account?{' '}
+              <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+                Sign up
               </Link>
-              <Link
-                to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Request Access
-              </Link>
-            </div>
-          </div>
-          
-          {/* Dev Login */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Development Access
-                </span>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleDevLogin}
-              variant="outline"
-              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              🔧 Quick Dev Login (SSA)
-            </Button>
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Temporary access for development
             </p>
           </div>
-          
-          {/* Back to Home Button - Bottom Style like Forgot Password */}
-          <div className="mt-6">
-            <Button
-              onClick={() => navigate('/')}
-              variant="outline"
-              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              Back to Home
-            </Button>
-          </div>
         </div>
-        
-        {/* Bottom text */}
-        <p className="mt-8 text-center text-sm text-gray-400">
-          Protected by industry-standard encryption
-        </p>
       </div>
     </div>
   );
