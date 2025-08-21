@@ -448,7 +448,13 @@ export const adminService = {
       // Build basic query - NO COMPLEX JOINS
       let query = supabase
         .from('entity_users')
-        .select('*')
+        .select(`
+          *,
+          users!inner(
+            email,
+            raw_user_meta_data
+          )
+        `)
         .eq('company_id', filters.company_id)
         .order('created_at', { ascending: false });
 
@@ -464,7 +470,7 @@ export const adminService = {
       // Fix search filter - ensure it's a string
       if (filters.search && typeof filters.search === 'string' && filters.search.trim()) {
         const searchTerm = filters.search.trim();
-        query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
+        query = query.or(`users.email.ilike.%${searchTerm}%,users.raw_user_meta_data->>name.ilike.%${searchTerm}%`);
       }
 
       if (filters.created_after) {
@@ -525,8 +531,8 @@ export const adminService = {
 
         return {
           id: admin.id,
-          email: admin.email || '',
-          name: admin.name || '',
+          email: admin.users?.email || '',
+          name: admin.users?.raw_user_meta_data?.name || '',
           admin_level: admin.admin_level || 'entity_admin',
           company_id: admin.company_id,
           permissions: admin.permissions || permissionService.getDefaultPermissions(),
@@ -561,7 +567,13 @@ export const adminService = {
       // Fetch basic admin data - NO COMPLEX JOINS
       const { data: admin, error } = await supabase
         .from('entity_users')
-        .select('*')
+        .select(`
+          *,
+          users!inner(
+            email,
+            raw_user_meta_data
+          )
+        `)
         .eq('id', userId)
         .single();
 
@@ -593,8 +605,8 @@ export const adminService = {
 
       const enrichedAdmin = {
         id: admin.id,
-        email: admin.email || '',
-        name: admin.name || '',
+        email: admin.users?.email || '',
+        name: admin.users?.raw_user_meta_data?.name || '',
         admin_level: admin.admin_level || 'entity_admin',
         company_id: admin.company_id,
         permissions: admin.permissions || permissionService.getDefaultPermissions(),
