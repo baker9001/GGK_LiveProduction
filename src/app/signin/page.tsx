@@ -1,601 +1,1070 @@
 /**
- * File: /src/app/signin/page.tsx (or /src/app/login/page.tsx)
+ * File: /src/lib/auth.ts
  * 
- * MERGED LOGIN/SIGNIN PAGE COMPONENT - VITE VERSION
- * Unified authentication page for Vite/React Router
+ * MERGED AUTHENTICATION SERVICE
+ * Combines database authentication with session management and test mode
  * 
  * Dependencies:
- *   - @/lib/auth (authentication service)
- *   - @/contexts/UserContext (user state management)
- *   - react-hot-toast (notifications)
- *   - zod (validation)
- *   - lucide-react (icons)
- *   - react-router-dom (routing)
+ *   - ./supabase (database queries)
+ *   - @/services/userCreationService (password verification)
  * 
  * Features:
- * ✅ Email and password validation with Zod
- * ✅ Remember Me functionality
- * ✅ Password visibility toggle
- * ✅ Forgot password flow
- * ✅ Role-based redirects after login
- * ✅ Demo credentials display
- * ✅ Loading states and error handling
- * ✅ Dark mode support
- * ✅ Responsive design
+ * ✅ Database-backed authentication with password verification
+ * ✅ Test mode/impersonation for admins
+ * ✅ Remember Me with extended sessions
+ * ✅ Session monitoring and auto-logout
+ * ✅ Password reset and change functionality
+ * ✅ Role-based access control with hierarchy
+ * ✅ Public pages support (no auth required)
+ * ✅ Token generation and validation
+ * ✅ Activity-based session extension
  */
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  Lock, Mail, Eye, EyeOff, AlertCircle, 
-  Loader2, School, CheckCircle, ArrowLeft,
-  ShieldCheck, Users, GraduationCap, BookOpen
-} from 'lucide-react';
-import { z } from 'zod';
-import { toast } from 'react-hot-toast';
-import { authService, getRedirectPathForUser } from '@/lib/auth';
-import { useUser } from '@/contexts/UserContext';
+import { supabase } from './supabase';
+import { userCreationService } from '@/services/userCreationService';
 
-// Validation schemas
-const emailSchema = z.string()
-  .email('Please enter a valid email address')
-  .min(5, 'Email must be at least 5 characters')
-  .max(255, 'Email must be less than 255 characters');
+// User role types
+export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN' | 'SUB_ENTITY_ADMIN' | 'SCHOOL_ADMIN' | 'BRANCH_ADMIN';
 
-const passwordSchema = z.string()
-  .min(8, 'Password must be at least 8 characters');
+// User interface combining both versions
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role?: UserRole; // For backward compatibility with version 2
+  user_type?: string;
+  company_id?: string;
+  entity_id?: string;
+  school_id?: string;
+  branch_id?: string;
+  is_active: boolean;
+  last_login_at?: string;
+  metadata?: Record<string, any>;
+  permissions?: Record<string, any>;
+  admin_level?: string;
+}
 
-const resetEmailSchema = z.string()
-  .email('Please enter a valid email address');
+// Login interfaces
+interface LoginCredentials {
+  email: string;
+  password: string;
+  rememberMe?: boolean;
+}
 
-// Demo credentials configuration
-const DEMO_CREDENTIALS = [
-  {
-    role: 'System Admin',
-    email: 'admin@system.com',
-    password: 'Admin123!',
-    icon: ShieldCheck,
-    color: 'text-purple-600 dark:text-purple-400'
-  },
-  {
-    role: 'Entity Admin',
-    email: 'admin@company.com',
-    password: 'Admin123!',
-    icon: Users,
-    color: 'text-blue-600 dark:text-blue-400'
-  },
-  {
-    role: 'Teacher',
-    email: 'teacher@school.com',
-    password: 'Teacher123!',
-    icon: BookOpen,
-    color: 'text-green-600 dark:text-green-400'
-  },
-  {
-    role: 'Student',
-    email: 'student@school.com',
-    password: 'Student123!',
-    icon: GraduationCap,
-    color: 'text-orange-600 dark:text-orange-400'
-  }
+interface LoginResponse {
+  success: boolean;
+  user?: User;
+  token?: string;
+  error?: string;
+}
+
+// Session data interface
+interface SessionData {
+  user: User;
+  token: string;
+  expiresAt: string;
+  rememberMe: boolean;
+}
+
+// Storage keys
+const SESSION_KEY = 'app_session';
+const TOKEN_KEY = 'app_token';
+const AUTH_STORAGE_KEY = 'ggk_authenticated_user'; // Backward compatibility
+const TEST_USER_KEY = 'test_mode_user';
+const REMEMBER_SESSION_KEY = 'ggk_remember_session';
+const SESSION_CHECK_INTERVAL_KEY = 'session_check_interval';
+
+// Session durations
+const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const REMEMBER_SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Pages that don't require authentication
+const PUBLIC_PAGES = [
+  '/',
+  '/landing',
+  '/signin',
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+  '/about',
+  '/contact',
+  '/features',
+  '/pricing',
+  '/terms',
+  '/privacy'
 ];
 
-export default function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { setUser } = useUser();
-  
-  // Form state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
-  
-  // Forgot password state
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetSent, setResetSent] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  
-  // Demo mode state
-  const [showDemoCredentials, setShowDemoCredentials] = useState(true);
-  const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
+// Role hierarchy for permission checking
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  SSA: 10,
+  SUPPORT: 8,
+  ENTITY_ADMIN: 6,
+  SUB_ENTITY_ADMIN: 5,
+  SCHOOL_ADMIN: 4,
+  BRANCH_ADMIN: 3,
+  TEACHER: 2,
+  STUDENT: 1,
+  VIEWER: 1
+};
 
-  // Parse query parameters from location
-  const searchParams = new URLSearchParams(location.search);
-  const redirectTo = searchParams.get('redirect') || location.state?.from || null;
-  const sessionExpired = searchParams.get('session_expired') === 'true';
+// Session monitoring interval
+let sessionCheckInterval: NodeJS.Timeout | null = null;
 
-  // Check if already authenticated
-  useEffect(() => {
-    const checkAuth = async () => {
-      if (authService.isAuthenticated()) {
-        const user = authService.getCurrentUser();
-        if (user) {
-          const redirectPath = redirectTo || getRedirectPathForUser(user);
-          navigate(redirectPath, { replace: true });
-        }
-      }
-    };
+/**
+ * Generate JWT-like token
+ * In production, use a proper JWT library with RSA signing
+ */
+function generateToken(userId: string, rememberMe: boolean = false): string {
+  const duration = rememberMe ? REMEMBER_SESSION_DURATION : DEFAULT_SESSION_DURATION;
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = btoa(JSON.stringify({
+    sub: userId,
+    iat: Date.now(),
+    exp: Date.now() + duration,
+    rememberMe
+  }));
+  // Simplified signature - use proper signing in production
+  const signature = btoa(userId + Date.now() + Math.random());
+  return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * Verify token validity
+ */
+function verifyToken(token: string): { valid: boolean; userId?: string; rememberMe?: boolean } {
+  try {
+    const [, payloadStr] = token.split('.');
+    const payload = JSON.parse(atob(payloadStr));
     
-    checkAuth();
-  }, [navigate, redirectTo]);
-
-  // Show session expired message
-  useEffect(() => {
-    if (sessionExpired) {
-      toast.error('Your session has expired. Please sign in again.');
+    if (payload.exp < Date.now()) {
+      return { valid: false };
     }
-  }, [sessionExpired]);
+    
+    return { 
+      valid: true, 
+      userId: payload.sub,
+      rememberMe: payload.rememberMe || false
+    };
+  } catch {
+    return { valid: false };
+  }
+}
 
-  // Load remembered email if exists
-  useEffect(() => {
-    const rememberedEmail = localStorage.getItem('ggk_remembered_email');
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRememberMe(true);
+/**
+ * Check if current page is public (doesn't require auth)
+ */
+function isPublicPage(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  const currentPath = window.location.pathname;
+  
+  return PUBLIC_PAGES.some(page => {
+    // Exact match
+    if (currentPath === page) return true;
+    // Prefix match for nested routes
+    if (page !== '/' && currentPath.startsWith(page + '/')) return true;
+    return false;
+  });
+}
+
+/**
+ * Map user type to role
+ */
+export function mapUserTypeToRole(userType: string, adminLevel?: string): UserRole {
+  // Handle admin levels first
+  if (adminLevel) {
+    switch (adminLevel) {
+      case 'entity_admin':
+        return 'ENTITY_ADMIN';
+      case 'sub_entity_admin':
+        return 'SUB_ENTITY_ADMIN';
+      case 'school_admin':
+        return 'SCHOOL_ADMIN';
+      case 'branch_admin':
+        return 'BRANCH_ADMIN';
     }
-  }, []);
+  }
+  
+  // Then handle user types
+  switch (userType) {
+    case 'system':
+    case 'system_admin':
+      return 'SSA';
+    case 'support':
+      return 'SUPPORT';
+    case 'entity':
+    case 'entity_admin':
+      return 'ENTITY_ADMIN';
+    case 'teacher':
+      return 'TEACHER';
+    case 'student':
+      return 'STUDENT';
+    default:
+      return 'VIEWER';
+  }
+}
 
-  // Validate form fields
-  const validateForm = (): boolean => {
-    const newErrors: typeof errors = {};
-
-    try {
-      emailSchema.parse(email);
-    } catch (error: any) {
-      newErrors.email = error.errors[0]?.message || 'Invalid email';
-    }
-
-    try {
-      passwordSchema.parse(password);
-    } catch (error: any) {
-      newErrors.password = error.errors[0]?.message || 'Invalid password';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+/**
+ * Get redirect path based on user role
+ */
+export function getRedirectPathForUser(user: User): string {
+  const role = user.role || mapUserTypeToRole(user.user_type || '', user.admin_level);
+  
+  const rolePathMap: Record<UserRole, string> = {
+    SSA: '/app/system-admin/dashboard',
+    SUPPORT: '/app/system-admin/dashboard',
+    VIEWER: '/app/dashboard',
+    TEACHER: '/app/teachers-module/dashboard',
+    STUDENT: '/app/student-module/dashboard',
+    ENTITY_ADMIN: '/app/entity-module/dashboard',
+    SUB_ENTITY_ADMIN: '/app/entity-module/dashboard',
+    SCHOOL_ADMIN: '/app/school-admin/dashboard',
+    BRANCH_ADMIN: '/app/branch-admin/dashboard'
   };
+  
+  return rolePathMap[role] || '/app/dashboard';
+}
 
-  // Handle login/signin
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors({});
-
+/**
+ * Main authentication service
+ */
+export const authService = {
+  /**
+   * Login with email and password
+   */
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
     try {
-      const response = await authService.login({
-        email: email.trim().toLowerCase(),
-        password,
-        rememberMe
-      });
-
-      if (response.success && response.user) {
-        // Save email if remember me is checked
-        if (rememberMe) {
-          localStorage.setItem('ggk_remembered_email', email.trim().toLowerCase());
-        } else {
-          localStorage.removeItem('ggk_remembered_email');
-        }
-
-        // Set user in context
-        setUser(response.user);
-
-        // Show success message
-        toast.success(`Welcome back, ${response.user.name || response.user.email}!`);
-
-        // Redirect to appropriate dashboard
-        const redirectPath = redirectTo || getRedirectPathForUser(response.user);
-        navigate(redirectPath, { replace: true });
+      // Store remember me preference
+      if (credentials.rememberMe) {
+        localStorage.setItem(REMEMBER_SESSION_KEY, 'true');
       } else {
-        // Handle specific error cases
-        if (response.error?.includes('deactivated')) {
-          setErrors({ general: response.error });
-        } else if (response.error?.includes('password')) {
-          setErrors({ password: response.error });
-        } else if (response.error?.includes('email')) {
-          setErrors({ email: response.error });
-        } else {
-          setErrors({ general: response.error || 'Login failed. Please try again.' });
-        }
-        
-        toast.error(response.error || 'Login failed');
+        localStorage.removeItem(REMEMBER_SESSION_KEY);
       }
+
+      // Verify password using userCreationService
+      const { isValid, userId } = await userCreationService.verifyPassword(
+        credentials.email,
+        credentials.password
+      );
+
+      if (!isValid || !userId) {
+        return { 
+          success: false, 
+          error: 'Invalid email or password' 
+        };
+      }
+
+      // Fetch complete user data with all relations
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData) {
+        console.error('User fetch error:', userError);
+        return { 
+          success: false, 
+          error: 'Failed to fetch user data' 
+        };
+      }
+
+      // Check if user is active
+      if (!userData.is_active) {
+        return { 
+          success: false, 
+          error: 'Your account has been deactivated. Please contact support.' 
+        };
+      }
+
+      // Fetch entity-specific data based on user type
+      let entityData = null;
+      let companyId = null;
+      let schoolId = null;
+      let branchId = null;
+      let adminLevel = null;
+      let permissions = null;
+      
+      // Check for system admin first
+      if (userData.user_type === 'system' || userData.user_type === 'system_admin') {
+        // System admins don't need entity data
+        adminLevel = 'system_admin';
+        permissions = {
+          users: {
+            create_entity_admin: true,
+            create_sub_admin: true,
+            create_school_admin: true,
+            create_branch_admin: true,
+            create_teacher: true,
+            create_student: true,
+            modify_entity_admin: true,
+            modify_sub_admin: true,
+            modify_school_admin: true,
+            modify_branch_admin: true,
+            modify_teacher: true,
+            modify_student: true,
+            delete_users: true,
+            view_all_users: true,
+          },
+          organization: {
+            create_school: true,
+            modify_school: true,
+            delete_school: true,
+            create_branch: true,
+            modify_branch: true,
+            delete_branch: true,
+            view_all_schools: true,
+            view_all_branches: true,
+            manage_departments: true,
+          },
+          settings: {
+            manage_company_settings: true,
+            manage_school_settings: true,
+            manage_branch_settings: true,
+            view_audit_logs: true,
+            export_data: true,
+          },
+        };
+      }
+      // Check if user is an entity user (admin)
+      else if (userData.user_type === 'entity' || userData.user_type === 'admin' || userData.user_type === 'entity_admin') {
+        const { data: entityUser } = await supabase
+          .from('entity_users')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (entityUser) {
+          entityData = entityUser;
+          companyId = entityUser.company_id;
+          adminLevel = entityUser.admin_level;
+          permissions = entityUser.permissions;
+          
+          if (!entityUser.is_active) {
+            return { 
+              success: false, 
+              error: 'Your admin account has been deactivated.' 
+            };
+          }
+        }
+      } 
+      // Check if user is a teacher
+      else if (userData.user_type === 'teacher') {
+        const { data: teacher } = await supabase
+          .from('teachers')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (teacher) {
+          entityData = teacher;
+          companyId = teacher.company_id;
+          schoolId = teacher.school_id;
+          branchId = teacher.branch_id;
+          
+          if (!teacher.is_active) {
+            return { 
+              success: false, 
+              error: 'Your teacher account has been deactivated.' 
+            };
+          }
+        }
+      } 
+      // Check if user is a student
+      else if (userData.user_type === 'student') {
+        const { data: student } = await supabase
+          .from('students')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (student) {
+          entityData = student;
+          schoolId = student.school_id;
+          branchId = student.branch_id;
+          
+          // Fetch company through school
+          if (student.school_id) {
+            const { data: school } = await supabase
+              .from('schools')
+              .select('company_id')
+              .eq('id', student.school_id)
+              .single();
+            companyId = school?.company_id;
+          }
+          
+          if (!student.is_active) {
+            return { 
+              success: false, 
+              error: 'Your student account has been deactivated.' 
+            };
+          }
+        }
+      }
+
+      // Determine role
+      const role = mapUserTypeToRole(
+        userData.user_type || userData.primary_type || 'user',
+        adminLevel
+      );
+
+      // Create user object
+      const user: User = {
+        id: userData.id,
+        email: userData.email,
+        name: userData.raw_user_meta_data?.name || userData.name || '',
+        role,
+        user_type: userData.user_type || userData.primary_type || 'user',
+        company_id: companyId || undefined,
+        entity_id: entityData?.id,
+        school_id: schoolId || undefined,
+        branch_id: branchId || undefined,
+        is_active: userData.is_active,
+        last_login_at: new Date().toISOString(),
+        admin_level: adminLevel,
+        permissions,
+        metadata: {
+          ...userData.raw_user_meta_data,
+          ...entityData
+        }
+      };
+
+      // Generate session token
+      const token = generateToken(userId, credentials.rememberMe);
+
+      // Store session
+      const session: SessionData = {
+        user,
+        token,
+        expiresAt: new Date(
+          Date.now() + (credentials.rememberMe ? REMEMBER_SESSION_DURATION : DEFAULT_SESSION_DURATION)
+        ).toISOString(),
+        rememberMe: credentials.rememberMe || false
+      };
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(TOKEN_KEY, token);
+      
+      // Also store in legacy format for backward compatibility
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+
+      // Update last login time
+      await supabase
+        .from('users')
+        .update({ 
+          last_login_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      // Start session monitoring
+      this.startSessionMonitoring();
+
+      console.log(`User logged in with ${credentials.rememberMe ? '30-day' : '24-hour'} session`);
+
+      return { 
+        success: true, 
+        user, 
+        token 
+      };
     } catch (error: any) {
       console.error('Login error:', error);
-      setErrors({ general: 'An unexpected error occurred. Please try again.' });
-      toast.error('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
+      return { 
+        success: false, 
+        error: error.message || 'An error occurred during login' 
+      };
     }
-  };
+  },
 
-  // Handle forgot password
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validate email
+  /**
+   * Logout the current user
+   */
+  async logout(): Promise<void> {
     try {
-      resetEmailSchema.parse(resetEmail);
-    } catch (error: any) {
-      toast.error(error.errors[0]?.message || 'Please enter a valid email');
-      return;
-    }
-
-    setResetLoading(true);
-
-    try {
-      const response = await authService.requestPasswordReset(resetEmail.trim().toLowerCase());
+      // Mark explicit logout (not session expiration)
+      localStorage.setItem('ggk_user_logout', 'true');
       
-      if (response.success) {
-        setResetSent(true);
-        toast.success(response.message);
-      } else {
-        toast.error(response.message);
+      // Clear all storage
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(TEST_USER_KEY);
+      localStorage.removeItem(REMEMBER_SESSION_KEY);
+      sessionStorage.clear();
+      
+      // Stop session monitoring
+      this.stopSessionMonitoring();
+      
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/signin';
       }
     } catch (error) {
-      toast.error('Failed to send reset instructions. Please try again.');
-    } finally {
-      setResetLoading(false);
+      console.error('Logout error:', error);
     }
-  };
+  },
 
-  // Fill demo credentials
-  const fillDemoCredentials = (index: number) => {
-    const demo = DEMO_CREDENTIALS[index];
-    setEmail(demo.email);
-    setPassword(demo.password);
-    setSelectedDemo(index);
-    toast.info(`Demo credentials filled for ${demo.role}`);
-  };
+  /**
+   * Get current session
+   */
+  getSession(): SessionData | null {
+    try {
+      const sessionStr = localStorage.getItem(SESSION_KEY);
+      if (!sessionStr) return null;
 
-  // Reset forgot password state
-  const resetForgotPasswordState = () => {
-    setShowForgotPassword(false);
-    setResetSent(false);
-    setResetEmail('');
-  };
+      const session: SessionData = JSON.parse(sessionStr);
+      
+      // Check if session is expired
+      if (new Date(session.expiresAt) < new Date()) {
+        this.logout();
+        return null;
+      }
 
-  // Render forgot password view
-  if (showForgotPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-8">
-            <div className="text-center">
-              <div className="mx-auto h-16 w-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                <Lock className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                Reset Password
-              </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Enter your email address and we'll send you instructions to reset your password.
-              </p>
-            </div>
+      // Verify token
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token || !verifyToken(token).valid) {
+        this.logout();
+        return null;
+      }
 
-            {resetSent ? (
-              <div className="mt-8">
-                <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-4">
-                  <div className="flex">
-                    <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                        Reset instructions sent!
-                      </p>
-                      <p className="mt-1 text-sm text-green-700 dark:text-green-300">
-                        Check your email for password reset instructions. The link will expire in 1 hour.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-6 space-y-3">
-                  <button
-                    onClick={resetForgotPasswordState}
-                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Sign In
-                  </button>
-                  
-                  <button
-                    onClick={() => setResetSent(false)}
-                    className="w-full text-sm text-gray-600 hover:text-gray-500 dark:text-gray-400"
-                  >
-                    Didn't receive the email? Send again
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form className="mt-8 space-y-6" onSubmit={handleForgotPassword}>
-                <div>
-                  <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Email address
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="reset-email"
-                      type="email"
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      required
-                      className="appearance-none relative block w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                      placeholder="Enter your email address"
-                      autoFocus
-                    />
-                  </div>
-                </div>
+      return session;
+    } catch {
+      return null;
+    }
+  },
 
-                <div className="flex items-center justify-between space-x-3">
-                  <button
-                    type="button"
-                    onClick={resetForgotPasswordState}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={resetLoading}
-                    className="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {resetLoading ? (
-                      <>
-                        <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                        Sending...
-                      </>
-                    ) : (
-                      'Send Instructions'
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  /**
+   * Get current user
+   */
+  getCurrentUser(): User | null {
+    // Check for test mode first
+    const testUser = this.getTestModeUser();
+    if (testUser) return testUser;
+    
+    const session = this.getSession();
+    return session?.user || null;
+  },
+
+  /**
+   * Get real admin user (ignoring test mode)
+   */
+  getRealAdminUser(): User | null {
+    const session = this.getSession();
+    return session?.user || null;
+  },
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated(): boolean {
+    return this.getSession() !== null;
+  },
+
+  /**
+   * Get authentication token
+   */
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+
+  /**
+   * Refresh/extend session
+   */
+  refreshSession(): void {
+    const session = this.getSession();
+    if (session) {
+      const duration = session.rememberMe ? REMEMBER_SESSION_DURATION : DEFAULT_SESSION_DURATION;
+      session.expiresAt = new Date(Date.now() + duration).toISOString();
+      
+      // Regenerate token
+      const token = generateToken(session.user.id, session.rememberMe);
+      session.token = token;
+      
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(TOKEN_KEY, token);
+      
+      console.log('Session extended');
+    }
+  },
+
+  /**
+   * Get remaining session time in minutes
+   */
+  getSessionRemainingTime(): number {
+    const session = this.getSession();
+    if (!session) return 0;
+    
+    const remaining = new Date(session.expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.floor(remaining / 60000));
+  },
+
+  /**
+   * Check if session is expiring soon (within 1 hour)
+   */
+  isSessionExpiringSoon(): boolean {
+    const remaining = this.getSessionRemainingTime();
+    return remaining > 0 && remaining <= 60;
+  },
+
+  /**
+   * Check user permissions
+   */
+  hasPermission(permission: string, category?: string): boolean {
+    const user = this.getCurrentUser();
+    if (!user) return false;
+
+    // Super admin has all permissions
+    if (user.role === 'SSA') return true;
+
+    // Check permissions object
+    if (user.permissions) {
+      if (category) {
+        return user.permissions[category]?.[permission] === true;
+      }
+      // Check all categories
+      for (const cat in user.permissions) {
+        if (user.permissions[cat][permission] === true) {
+          return true;
+        }
+      }
+    }
+
+    // Check metadata permissions
+    if (user.metadata?.permissions) {
+      if (category) {
+        return user.metadata.permissions[category]?.[permission] === true;
+      }
+      for (const cat in user.metadata.permissions) {
+        if (user.metadata.permissions[cat][permission] === true) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  },
+
+  /**
+   * Check if user has specific role
+   */
+  hasRole(role: UserRole | string): boolean {
+    const user = this.getCurrentUser();
+    if (!user) return false;
+
+    return user.role === role || 
+           user.user_type === role || 
+           user.admin_level === role ||
+           user.metadata?.admin_level === role;
+  },
+
+  /**
+   * Check if user has required role level
+   */
+  hasRequiredRole(requiredRole: UserRole): boolean {
+    const user = this.getCurrentUser();
+    if (!user) return false;
+
+    const userRole = user.role || mapUserTypeToRole(user.user_type || '', user.admin_level);
+    return (ROLE_HIERARCHY[userRole] || 0) >= (ROLE_HIERARCHY[requiredRole] || 0);
+  },
+
+  /**
+   * Password reset request
+   */
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // Check if user exists
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (!user) {
+        // Don't reveal if email exists for security
+        return { 
+          success: true, 
+          message: 'If an account exists with this email, you will receive password reset instructions.' 
+        };
+      }
+
+      // Generate reset token
+      const resetToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Store reset token
+      await supabase
+        .from('users')
+        .update({
+          verification_token: resetToken,
+          verification_sent_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      // TODO: Send email with reset link
+      // For development, log the token
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Password reset token:', resetToken);
+        console.log('Reset link:', `${window.location.origin}/reset-password?token=${resetToken}`);
+      }
+
+      return { 
+        success: true, 
+        message: 'Password reset instructions have been sent to your email.' 
+      };
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      return { 
+        success: false, 
+        message: 'Failed to process password reset request. Please try again.' 
+      };
+    }
+  },
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // Find user with valid token
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, verification_sent_at')
+        .eq('verification_token', token)
+        .single();
+
+      if (!user) {
+        return { 
+          success: false, 
+          message: 'Invalid or expired reset token' 
+        };
+      }
+
+      // Check if token is expired (1 hour)
+      const tokenAge = Date.now() - new Date(user.verification_sent_at).getTime();
+      if (tokenAge > 60 * 60 * 1000) {
+        return { 
+          success: false, 
+          message: 'Reset token has expired. Please request a new one.' 
+        };
+      }
+
+      // Update password
+      await userCreationService.updatePassword(user.id, newPassword);
+
+      // Clear reset token
+      await supabase
+        .from('users')
+        .update({
+          verification_token: null,
+          verification_sent_at: null,
+          verified_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      return { 
+        success: true, 
+        message: 'Password has been successfully reset. You can now login with your new password.' 
+      };
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      return { 
+        success: false, 
+        message: 'Failed to reset password. Please try again.' 
+      };
+    }
+  },
+
+  /**
+   * Change password for authenticated user
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = this.getCurrentUser();
+      if (!user) {
+        return { 
+          success: false, 
+          message: 'You must be logged in to change your password.' 
+        };
+      }
+
+      // Verify current password
+      const { isValid } = await userCreationService.verifyPassword(user.email, currentPassword);
+      if (!isValid) {
+        return { 
+          success: false, 
+          message: 'Current password is incorrect' 
+        };
+      }
+
+      // Update password
+      await userCreationService.updatePassword(user.id, newPassword);
+
+      return { 
+        success: true, 
+        message: 'Password changed successfully' 
+      };
+    } catch (error: any) {
+      console.error('Change password error:', error);
+      return { 
+        success: false, 
+        message: 'Failed to change password. Please try again.' 
+      };
+    }
+  },
+
+  /**
+   * TEST MODE FUNCTIONS
+   */
+  
+  /**
+   * Start test mode (impersonation)
+   */
+  startTestMode(testUser: User): void {
+    const currentUser = this.getRealAdminUser();
+    if (!currentUser || !this.hasRequiredRole('SSA')) {
+      alert('Only Super Admins can use test mode');
+      return;
+    }
+    
+    localStorage.setItem(TEST_USER_KEY, JSON.stringify(testUser));
+    console.log('Test mode started for user:', testUser);
+    
+    // Log impersonation activity
+    this.logImpersonationActivity('start', currentUser.id, testUser.id, 'Testing');
+    
+    // Redirect to appropriate module
+    const redirectPath = getRedirectPathForUser(testUser);
+    window.location.href = redirectPath;
+  },
+
+  /**
+   * Exit test mode
+   */
+  exitTestMode(): void {
+    const testUser = this.getTestModeUser();
+    const adminUser = this.getRealAdminUser();
+    
+    if (testUser && adminUser) {
+      this.logImpersonationActivity('end', adminUser.id, testUser.id);
+    }
+    
+    localStorage.removeItem(TEST_USER_KEY);
+    console.log('Test mode ended');
+    
+    // Redirect admin back to their dashboard
+    if (adminUser) {
+      window.location.href = getRedirectPathForUser(adminUser);
+    } else {
+      window.location.href = '/app/system-admin/dashboard';
+    }
+  },
+
+  /**
+   * Check if in test mode
+   */
+  isInTestMode(): boolean {
+    return !!localStorage.getItem(TEST_USER_KEY);
+  },
+
+  /**
+   * Get test mode user
+   */
+  getTestModeUser(): User | null {
+    const testUser = localStorage.getItem(TEST_USER_KEY);
+    return testUser ? JSON.parse(testUser) : null;
+  },
+
+  /**
+   * Log impersonation activity
+   */
+  async logImpersonationActivity(
+    action: 'start' | 'end',
+    adminId: string,
+    targetUserId: string,
+    reason?: string
+  ): Promise<void> {
+    try {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: adminId,
+          action: `impersonation_${action}`,
+          resource_type: 'user',
+          resource_id: targetUserId,
+          details: {
+            action,
+            target_user_id: targetUserId,
+            reason,
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (error) {
+      console.error('Failed to log impersonation activity:', error);
+    }
+  },
+
+  /**
+   * SESSION MONITORING
+   */
+  
+  /**
+   * Start session monitoring
+   */
+  startSessionMonitoring(): void {
+    // Clear existing interval if any
+    this.stopSessionMonitoring();
+    
+    sessionCheckInterval = setInterval(() => {
+      // Skip monitoring for public pages
+      if (isPublicPage()) {
+        return;
+      }
+      
+      const session = this.getSession();
+      if (!session) {
+        console.log('Session expired. Redirecting to login.');
+        window.location.href = '/signin';
+      } else if (this.isSessionExpiringSoon()) {
+        // Optional: Show warning to user
+        console.warn(`Session expiring in ${this.getSessionRemainingTime()} minutes`);
+        
+        // Could trigger a notification here
+        // notificationService.showWarning('Your session will expire soon. Please save your work.');
+      }
+    }, 60000); // Check every minute
+  },
+
+  /**
+   * Stop session monitoring
+   */
+  stopSessionMonitoring(): void {
+    if (sessionCheckInterval) {
+      clearInterval(sessionCheckInterval);
+      sessionCheckInterval = null;
+    }
   }
+};
 
-  // Main login view
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-2xl p-8">
-          <div className="text-center">
-            <div className="mx-auto h-16 w-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-              <School className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-            </div>
-            <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-              Welcome Back
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Sign in to your account to continue
-            </p>
-            
-            {/* Session expired message */}
-            {sessionExpired && (
-              <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  Your session has expired. Please sign in again.
-                </p>
-              </div>
-            )}
-          </div>
+/**
+ * HELPER FUNCTIONS FOR BACKWARD COMPATIBILITY
+ */
 
-          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-            {/* General error message */}
-            {errors.general && (
-              <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-                  <div className="ml-3">
-                    <p className="text-sm text-red-800 dark:text-red-200">
-                      {errors.general}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email address
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (errors.email) setErrors({ ...errors, email: undefined });
-                    }}
-                    required
-                    className={`appearance-none relative block w-full pl-10 px-3 py-2 border ${
-                      errors.email ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
-                    } rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors`}
-                    placeholder="Enter your email"
-                  />
-                </div>
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
-                )}
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Password
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errors.password) setErrors({ ...errors, password: undefined });
-                    }}
-                    required
-                    className={`appearance-none relative block w-full pl-10 pr-10 px-3 py-2 border ${
-                      errors.password ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600'
-                    } rounded-md placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors`}
-                    placeholder="Enter your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" />
-                    )}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                  Remember me for 30 days
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 transition-colors"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="animate-spin h-5 w-5 mr-2" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </div>
-
-            {/* Demo Credentials */}
-            {showDemoCredentials && (
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">Or use demo account</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  {DEMO_CREDENTIALS.map((demo, index) => {
-                    const Icon = demo.icon;
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => fillDemoCredentials(index)}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-md transition-all ${
-                          selectedDemo === index
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          <Icon className={`h-4 w-4 mr-2 ${demo.color}`} />
-                          <span className="text-gray-700 dark:text-gray-300">{demo.role}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {demo.email}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowDemoCredentials(false)}
-                  className="mt-2 w-full text-xs text-gray-500 hover:text-gray-400 dark:text-gray-400 dark:hover:text-gray-300"
-                >
-                  Hide demo accounts
-                </button>
-              </div>
-            )}
-
-            {!showDemoCredentials && (
-              <button
-                type="button"
-                onClick={() => setShowDemoCredentials(true)}
-                className="w-full text-sm text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
-              >
-                Show demo accounts
-              </button>
-            )}
-          </form>
-
-          {/* Links */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
-              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                Sign up
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export function getAuthenticatedUser(): User | null {
+  return authService.getCurrentUser();
 }
+
+export function setAuthenticatedUser(user: User | null): void {
+  if (!user) {
+    authService.logout();
+  } else {
+    // Update session with new user data
+    const session = authService.getSession();
+    if (session) {
+      session.user = user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+    }
+  }
+}
+
+export function getCurrentUser(): User | null {
+  return authService.getCurrentUser();
+}
+
+export function isAuthenticated(): boolean {
+  return authService.isAuthenticated();
+}
+
+export async function isAuthenticatedAsync(): Promise<boolean> {
+  return authService.isAuthenticated();
+}
+
+export function logout(): Promise<void> {
+  return authService.logout();
+}
+
+export function clearAuthenticatedUser(): void {
+  authService.logout();
+}
+
+export function clearAuthenticatedUserSync(): void {
+  authService.logout();
+}
+
+export function getAuthToken(): string | null {
+  return authService.getToken();
+}
+
+export function getUserRole(): UserRole | null {
+  const user = authService.getCurrentUser();
+  if (!user) return null;
+  return user.role || mapUserTypeToRole(user.user_type || '', user.admin_level);
+}
+
+export function hasRequiredRole(requiredRole: UserRole): boolean {
+  return authService.hasRequiredRole(requiredRole);
+}
+
+export function refreshSession(): void {
+  return authService.refreshSession();
+}
+
+export function getSessionRemainingTime(): number {
+  return authService.getSessionRemainingTime();
+}
+
+export function isSessionExpiringSoon(): boolean {
+  return authService.isSessionExpiringSoon();
+}
+
+export function extendSession(): void {
+  return authService.refreshSession();
+}
+
+export function startTestMode(testUser: User): void {
+  return authService.startTestMode(testUser);
+}
+
+export function exitTestMode(): void {
+  return authService.exitTestMode();
+}
+
+export function isInTestMode(): boolean {
+  return authService.isInTestMode();
+}
+
+export function getTestModeUser(): User | null {
+  return authService.getTestModeUser();
+}
+
+export function getRealAdminUser(): User | null {
+  return authService.getRealAdminUser();
+}
+
+export function markUserLogout(): void {
+  localStorage.setItem('ggk_user_logout', 'true');
+}
+
+/**
+ * Setup automatic session refresh
+ */
+export function setupSessionRefresh(): void {
+  setInterval(() => {
+    // Only refresh if authenticated and not expiring soon
+    if (authService.isAuthenticated() && !authService.isSessionExpiringSoon() && !isPublicPage()) {
+      authService.refreshSession();
+    }
+  }, 30 * 60 * 1000); // Every 30 minutes
+}
+
+/**
+ * Initialize authentication service on app start
+ */
+if (typeof window !== 'undefined') {
+  setupSessionRefresh();
+  authService.startSessionMonitoring();
+}
+
+// Export service as default
+export default authService;
