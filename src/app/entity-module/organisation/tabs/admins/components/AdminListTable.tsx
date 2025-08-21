@@ -600,7 +600,7 @@ export function AdminListTable({
                 { value: 'school_admin', label: 'School Admin' },
                 { value: 'branch_admin', label: 'Branch Admin' }
               ]}
-              value={filters.admin_level}
+              selectedValues={filters.admin_level}
               onChange={(values) => {
                 setFilters(prev => ({ ...prev, admin_level: values as AdminLevel[] }));
                 setPage(1);
@@ -616,7 +616,7 @@ export function AdminListTable({
                 { value: 'active', label: 'Active' },
                 { value: 'inactive', label: 'Inactive' }
               ]}
-              value={filters.is_active}
+              selectedValues={filters.is_active}
               onChange={(values) => {
                 setFilters(prev => ({ ...prev, is_active: values }));
                 setPage(1);
