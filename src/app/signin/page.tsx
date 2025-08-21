@@ -1,8 +1,8 @@
 /**
- * File: /src/app/login/page.tsx (or /src/app/signin/page.tsx)
+ * File: /src/app/signin/page.tsx (or /src/app/login/page.tsx)
  * 
- * MERGED LOGIN/SIGNIN PAGE COMPONENT
- * Unified authentication page with all features
+ * MERGED LOGIN/SIGNIN PAGE COMPONENT - VITE VERSION
+ * Unified authentication page for Vite/React Router
  * 
  * Dependencies:
  *   - @/lib/auth (authentication service)
@@ -10,6 +10,7 @@
  *   - react-hot-toast (notifications)
  *   - zod (validation)
  *   - lucide-react (icons)
+ *   - react-router-dom (routing)
  * 
  * Features:
  * ✅ Email and password validation with Zod
@@ -23,11 +24,8 @@
  * ✅ Responsive design
  */
 
-'use client';
-
 import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   Lock, Mail, Eye, EyeOff, AlertCircle, 
   Loader2, School, CheckCircle, ArrowLeft,
@@ -83,8 +81,8 @@ const DEMO_CREDENTIALS = [
 ];
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { setUser } = useUser();
   
   // Form state
@@ -105,9 +103,10 @@ export default function LoginPage() {
   const [showDemoCredentials, setShowDemoCredentials] = useState(true);
   const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
 
-  // Get redirect URL from query params
-  const redirectTo = searchParams?.get('redirect') || null;
-  const sessionExpired = searchParams?.get('session_expired') === 'true';
+  // Parse query parameters from location
+  const searchParams = new URLSearchParams(location.search);
+  const redirectTo = searchParams.get('redirect') || location.state?.from || null;
+  const sessionExpired = searchParams.get('session_expired') === 'true';
 
   // Check if already authenticated
   useEffect(() => {
@@ -116,13 +115,13 @@ export default function LoginPage() {
         const user = authService.getCurrentUser();
         if (user) {
           const redirectPath = redirectTo || getRedirectPathForUser(user);
-          router.push(redirectPath);
+          navigate(redirectPath, { replace: true });
         }
       }
     };
     
     checkAuth();
-  }, [router, redirectTo]);
+  }, [navigate, redirectTo]);
 
   // Show session expired message
   useEffect(() => {
@@ -194,7 +193,7 @@ export default function LoginPage() {
 
         // Redirect to appropriate dashboard
         const redirectPath = redirectTo || getRedirectPathForUser(response.user);
-        router.push(redirectPath);
+        navigate(redirectPath, { replace: true });
       } else {
         // Handle specific error cases
         if (response.error?.includes('deactivated')) {
@@ -590,7 +589,7 @@ export default function LoginPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Don't have an account?{' '}
-              <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
                 Sign up
               </Link>
             </p>
