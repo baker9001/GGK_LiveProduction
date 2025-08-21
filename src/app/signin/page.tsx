@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { 
   Lock, Mail, Eye, EyeOff, AlertCircle, 
   Loader2, School, CheckCircle 
@@ -25,7 +25,7 @@ const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters');
 
 export default function SignInPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { setUser } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,9 +40,9 @@ export default function SignInPage() {
   // Check if already authenticated
   useEffect(() => {
     if (authService.isAuthenticated()) {
-      router.push('/dashboard');
+      navigate('/dashboard');
     }
-  }, [router]);
+  }, [navigate]);
 
   const validateForm = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -89,13 +89,13 @@ export default function SignInPage() {
         // Redirect based on user type
         const userType = response.user.user_type;
         if (userType === 'student') {
-          router.push('/student-dashboard');
+          navigate('/student-dashboard');
         } else if (userType === 'teacher') {
-          router.push('/teacher-dashboard');
+          navigate('/teacher-dashboard');
         } else if (userType.includes('admin')) {
-          router.push('/entity-module/dashboard');
+          navigate('/entity-module/dashboard');
         } else {
-          router.push('/dashboard');
+          navigate('/dashboard');
         }
       } else {
         toast.error(response.error || 'Sign in failed');
