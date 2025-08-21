@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { 
   Lock, Mail, Eye, EyeOff, AlertCircle, 
   Loader2, School, CheckCircle 
@@ -25,8 +25,8 @@ const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters');
 
 export default function SignInPage() {
-  const navigate = useNavigate();
-  const { refreshUser } = useUser();
+  const router = useRouter();
+  const { setUser } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,9 +40,9 @@ export default function SignInPage() {
   // Check if already authenticated
   useEffect(() => {
     if (authService.isAuthenticated()) {
-      navigate('/dashboard');
+      router.push('/dashboard');
     }
-  }, [navigate]);
+  }, [router]);
 
   const validateForm = (): boolean => {
     const newErrors: { email?: string; password?: string } = {};
@@ -80,8 +80,8 @@ export default function SignInPage() {
       });
 
       if (response.success && response.user) {
-        // Refresh user in context
-        refreshUser();
+        // Set user in context
+        setUser(response.user);
 
         // Show success message
         toast.success('Sign in successful!');
@@ -89,13 +89,13 @@ export default function SignInPage() {
         // Redirect based on user type
         const userType = response.user.user_type;
         if (userType === 'student') {
-          navigate('/student-dashboard');
+          router.push('/student-dashboard');
         } else if (userType === 'teacher') {
-          navigate('/teacher-dashboard');
+          router.push('/teacher-dashboard');
         } else if (userType.includes('admin')) {
-          navigate('/entity-module/dashboard');
+          router.push('/entity-module/dashboard');
         } else {
-          navigate('/dashboard');
+          router.push('/dashboard');
         }
       } else {
         toast.error(response.error || 'Sign in failed');
