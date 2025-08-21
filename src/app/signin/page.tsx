@@ -12,7 +12,8 @@ import {
   Loader2, School, CheckCircle 
 } from 'lucide-react';
 import { z } from 'zod';
-import { getRedirectPathForUser, isAuthenticated, getCurrentUser } from '../../lib/auth';
+import { getRedirectPathForUser } from '../../lib/auth';
+import { authService } from '../../services/authService';
 import { useUser } from '../../contexts/UserContext';
 import { useToast } from '../../hooks/useToast';
 
@@ -26,7 +27,7 @@ const passwordSchema = z.string()
 
 export default function SignInPage() {
   const navigate = useNavigate();
-  const { setUser } = useUser();
+  const { refreshUser } = useUser();
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -79,9 +80,21 @@ export default function SignInPage() {
     setErrors({});
 
     try {
-      // TODO: Implement actual authentication API call
-      // For now, show error that auth service is not implemented
-      toast.error('Authentication service not implemented yet');
+      const response = await authService.signIn(email, password, rememberMe);
+      
+      if (response.success && response.user) {
+        // Refresh user context
+        refreshUser();
+
+        // Show success message
+        toast.success('Sign in successful!');
+
+        // Redirect to appropriate dashboard based on user role
+        const redirectPath = getRedirectPathForUser(response.user);
+        navigate(redirectPath);
+      } else {
+        toast.error(response.error || 'Sign in failed');
+      }
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error('An unexpected error occurred. Please try again.');
@@ -101,9 +114,14 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      // TODO: Implement password reset API call
-      // For now, show error that reset service is not implemented
-      toast.error('Password reset service not implemented yet');
+      const response = await authService.requestPasswordReset(resetEmail);
+      
+      if (response.success) {
+        setResetSent(true);
+        toast.success(response.message);
+      } else {
+        toast.error(response.message);
+      }
     } catch (error) {
       toast.error('Failed to send reset instructions');
     } finally {
