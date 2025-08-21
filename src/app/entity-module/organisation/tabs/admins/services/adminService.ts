@@ -100,7 +100,8 @@ export const adminService = {
 
       // Step 3: Create the admin user
       const adminData = {
-        user_id: null, // Will be set after creating user in auth
+        email: payload.email,
+        name: payload.name,
         admin_level: payload.admin_level,
         company_id: payload.company_id,
         permissions: finalPermissions,
@@ -109,8 +110,6 @@ export const adminService = {
         parent_admin_id: payload.parent_admin_id || null,
         metadata: {
           ...payload.metadata,
-          name: payload.name,
-          email: payload.email,
           created_via: 'entity_module',
           created_at: new Date().toISOString()
         }
@@ -118,15 +117,7 @@ export const adminService = {
 
       const { data: newAdmin, error: createError } = await supabase
         .from('entity_users')
-        .insert([{
-          ...adminData,
-          // Store name and email in metadata since they're not direct columns
-          metadata: {
-            ...adminData.metadata,
-            name: payload.name,
-            email: payload.email
-          }
-        }])
+        .insert([adminData])
         .select()
         .single();
 
@@ -540,8 +531,8 @@ export const adminService = {
 
         return {
           id: admin.id,
-          email: admin.users?.email || admin.metadata?.email || '',
-          name: admin.users?.raw_user_meta_data?.name || admin.metadata?.name || '',
+          email: admin.users?.email || '',
+          name: admin.users?.raw_user_meta_data?.name || '',
           admin_level: admin.admin_level || 'entity_admin',
           company_id: admin.company_id,
           permissions: admin.permissions || permissionService.getDefaultPermissions(),
@@ -614,8 +605,8 @@ export const adminService = {
 
       const enrichedAdmin = {
         id: admin.id,
-        email: admin.users?.email || admin.metadata?.email || '',
-        name: admin.users?.raw_user_meta_data?.name || admin.metadata?.name || '',
+        email: admin.users?.email || '',
+        name: admin.users?.raw_user_meta_data?.name || '',
         admin_level: admin.admin_level || 'entity_admin',
         company_id: admin.company_id,
         permissions: admin.permissions || permissionService.getDefaultPermissions(),

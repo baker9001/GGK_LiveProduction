@@ -74,7 +74,7 @@ export function AdminAuditLogsPanel({
 
   // Fetch audit logs with React Query
   const { 
-    data: auditLogsData,
+    data: auditLogs = [], 
     isLoading, 
     isFetching,
     error 
@@ -94,27 +94,19 @@ export function AdminAuditLogsPanel({
       if (filters.actorId) serviceFilters.actor_id = filters.actorId;
       if (filters.targetId) serviceFilters.target_id = filters.targetId;
 
-      const response = await auditService.getAuditLogs(serviceFilters);
-      
-      // Ensure we have a proper response structure
-      const logs = Array.isArray(response) ? response : (response?.logs || []);
-      const total = Array.isArray(response) ? response.length : (response?.total || 0);
+      const logs = await auditService.getAuditLogs(serviceFilters);
       
       // Filter by search term on client side (for name/email search)
-      let filteredLogs = logs;
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        filteredLogs = logs.filter(log => 
+        return logs.filter(log => 
           log.actor_id?.toLowerCase().includes(searchLower) ||
           log.target_id?.toLowerCase().includes(searchLower) ||
           log.action_type.toLowerCase().includes(searchLower)
         );
       }
       
-      return {
-        logs: filteredLogs,
-        total: filters.search ? filteredLogs.length : total
-      };
+      return logs;
     },
     {
       keepPreviousData: true,
@@ -122,10 +114,6 @@ export function AdminAuditLogsPanel({
       enabled: !!companyId
     }
   );
-
-  // Extract logs and total from the response
-  const auditLogs = auditLogsData?.logs || [];
-  const totalCount = auditLogsData?.total || 0;
 
   // Get action type icon
   const getActionIcon = (actionType: string) => {
@@ -526,8 +514,8 @@ export function AdminAuditLogsPanel({
         pagination={{
           page,
           rowsPerPage,
-          totalCount,
-          totalPages: Math.ceil(totalCount / rowsPerPage),
+          totalCount: auditLogs.length, // TODO: Get actual total count from API
+          totalPages: Math.ceil(auditLogs.length / rowsPerPage),
           goToPage: setPage,
           nextPage: () => setPage(prev => prev + 1),
           previousPage: () => setPage(prev => Math.max(prev - 1, 1)),
