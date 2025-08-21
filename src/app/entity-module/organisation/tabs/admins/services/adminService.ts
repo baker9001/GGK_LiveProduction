@@ -450,7 +450,7 @@ export const adminService = {
         .from('entity_users')
         .select(`
           *,
-          users!inner(
+          users!entity_users_user_id_fkey(
             email,
             raw_user_meta_data
           )
@@ -569,7 +569,7 @@ export const adminService = {
         .from('entity_users')
         .select(`
           *,
-          users!inner(
+          users!entity_users_user_id_fkey(
             email,
             raw_user_meta_data
           )
