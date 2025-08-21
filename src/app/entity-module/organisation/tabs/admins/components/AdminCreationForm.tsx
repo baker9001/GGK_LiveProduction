@@ -1,29 +1,36 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
  * 
- * ENHANCED VERSION - Complete form validation and improved UX
- * Uses existing shared form components with comprehensive validation
- * 
- * Features:
- * ✅ Comprehensive field validation with Zod
- * ✅ Password strength indicator
- * ✅ Proper error handling and toast messages
- * ✅ Removed "Super Admin" option (entity-level only)
- * ✅ Enhanced permission matrix functionality
- * ✅ Proper data validation and error prevention
- * ✅ Works with existing FormField components
+ * COMPLETE MERGED VERSION - All features from both implementations
+ * ✅ Modal wrapper with overlay and close functionality
+ * ✅ ValidationProvider pattern with form validation
+ * ✅ Password strength indicator with visual feedback
+ * ✅ Comprehensive Zod validation schemas
+ * ✅ Close button (X) in header
+ * ✅ Supports both prop patterns (isOpen/onClose and onSubmit/onCancel)
+ * ✅ Permission matrix integration
+ * ✅ Scope assignment for existing admins
+ * ✅ Real-time validation and error handling
+ * ✅ Password visibility toggle for both fields
+ * ✅ Responsive layout with dark mode support
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { 
+  User, Shield, AlertCircle, Eye, EyeOff, Lock, XCircle
+} from 'lucide-react';
 import { z } from 'zod';
-import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
-import { FormField, Input, Select } from '@/components/shared/FormField';
-import { Button } from '@/components/shared/Button';
-import { toast } from '@/components/shared/Toast';
-import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
-import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
-import { AdminScopeAssignment } from './AdminScopeAssignment';
+import { toast } from 'react-hot-toast';
+import { 
+  ValidationProvider, 
+  ValidatedInput, 
+  ValidatedSelect,
+  FormErrorSummary 
+} from '@/components/shared/FormValidation';
 import { AdminPermissionMatrix } from './AdminPermissionMatrix';
+import { AdminScopeAssignment } from './AdminScopeAssignment';
+import { AdminLevel, AdminPermissions } from '../types/admin.types';
+import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
 import { permissionService } from '../services/permissionService';
 
 // Validation schemas
@@ -34,6 +41,8 @@ const nameSchema = z.string()
 
 const emailSchema = z.string()
   .email('Please enter a valid email address')
+  .min(5, 'Email must be at least 5 characters')
+  .max(255, 'Email must be less than 255 characters')
   .transform(email => email.toLowerCase().trim());
 
 const passwordSchema = z.string()
@@ -41,34 +50,16 @@ const passwordSchema = z.string()
   .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
   .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Password must contain at least one number')
-  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+  .regex(/[!@#$%^&*]/, 'Password must contain at least one special character');
 
-const adminLevelSchema = z.enum(['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], {
-  errorMap: () => ({ message: 'Please select a valid admin level' })
-});
+const confirmPasswordSchema = z.string()
+  .min(1, 'Please confirm your password');
 
-interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  admin_level: AdminLevel;
-  is_active: boolean;
-  created_at: string;
-  permissions?: AdminPermissions;
-  scopes?: EntityAdminScope[];
-}
-
-interface AdminCreationFormProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-  companyId: string;
-  initialData?: AdminUser;
-}
+const adminLevelSchema = z.enum(['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin']);
 
 // Password strength calculator
 const calculatePasswordStrength = (password: string): { score: number; label: string; color: string } => {
-  if (!password) return { score: 0, label: 'No password', color: 'bg-gray-200' };
+  if (!password) return { score: 0, label: '', color: 'bg-gray-200' };
   
   let score = 0;
   if (password.length >= 8) score++;
@@ -78,7 +69,7 @@ const calculatePasswordStrength = (password: string): { score: number; label: st
   if (/[0-9]/.test(password)) score++;
   if (/[^A-Za-z0-9]/.test(password)) score++;
   
-  const strength = {
+  const strengthMap = {
     0: { label: 'Very Weak', color: 'bg-red-500' },
     1: { label: 'Very Weak', color: 'bg-red-500' },
     2: { label: 'Weak', color: 'bg-orange-500' },
@@ -88,437 +79,501 @@ const calculatePasswordStrength = (password: string): { score: number; label: st
     6: { label: 'Very Strong', color: 'bg-green-600' }
   };
   
-  return { score, ...strength[score as keyof typeof strength] || strength[6] };
+  return { score, ...strengthMap[score as keyof typeof strengthMap] || strengthMap[6] };
 };
 
-export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
+interface AdminCreationFormProps {
+  companyId: string;
+  initialData?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    admin_level?: AdminLevel;
+    permissions?: AdminPermissions;
+    is_active?: boolean;
+    parent_admin_id?: string;
+  };
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+  // Optional: For backward compatibility with different implementations
+  isEditing?: boolean;
+  onSubmit?: (data: any) => Promise<void>;
+  onCancel?: () => void;
+}
+
+export function AdminCreationForm({
+  companyId,
+  initialData,
   isOpen,
   onClose,
   onSuccess,
-  companyId,
-  initialData
-}) => {
-  const isEditing = !!initialData;
-  const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    admin_level: 'entity_admin' as AdminLevel,
-    is_active: true
-  });
+  isEditing: isEditingProp,
+  onSubmit,
+  onCancel
+}: AdminCreationFormProps) {
+  // Determine if we're editing based on initialData or prop
+  const isEditing = isEditingProp ?? !!initialData?.id;
+  
+  const formRef = useRef<HTMLFormElement>(null);
   const [permissions, setPermissions] = useState<AdminPermissions>(
-    initialData?.permissions ?? permissionService.getDefaultPermissions()
+    initialData?.permissions || permissionService.getDefaultPermissions()
   );
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isValidating, setIsValidating] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordValue, setPasswordValue] = useState('');
+  const [confirmPasswordValue, setConfirmPasswordValue] = useState('');
+  const [adminLevel, setAdminLevel] = useState<AdminLevel>(
+    initialData?.admin_level || 'entity_admin'
+  );
 
+  // Hooks for mutations
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
 
-  const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
-
-  // Password strength calculation
+  // Calculate password strength
   const passwordStrength = useMemo(() => 
-    calculatePasswordStrength(formData.password), 
-    [formData.password]
+    calculatePasswordStrength(passwordValue), 
+    [passwordValue]
   );
 
-  // Reset form when modal opens or initialData changes
+  // Reset form when modal opens/closes or initialData changes
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name,
-        email: initialData.email,
-        password: '',
-        admin_level: initialData.admin_level,
-        is_active: initialData.is_active
-      });
-      setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
-    } else {
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        admin_level: 'entity_admin',
-        is_active: true
-      });
-      setPermissions(permissionService.getDefaultPermissions());
-    }
-    setErrors({});
-  }, [initialData, isOpen]);
-
-  // Handle admin level change to update default permissions
-  const handleAdminLevelChange = useCallback((value: string) => {
-    const newLevel = value as AdminLevel;
-    setFormData(prev => ({ ...prev, admin_level: newLevel }));
-    
-    const defaultPermissions = permissionService.getPermissionsForLevel(newLevel);
-    setPermissions(defaultPermissions);
-    
-    toast.info(`Default permissions applied for ${newLevel.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
-  }, []);
-
-  // Validate individual field
-  const validateField = useCallback((field: string, value: any): string | undefined => {
-    try {
-      switch (field) {
-        case 'name':
-          nameSchema.parse(value);
-          break;
-        case 'email':
-          emailSchema.parse(value);
-          break;
-        case 'password':
-          if (!isEditing || value) {
-            passwordSchema.parse(value);
-          }
-          break;
-        case 'admin_level':
-          adminLevelSchema.parse(value);
-          break;
+    if (isOpen) {
+      if (initialData) {
+        setAdminLevel(initialData.admin_level || 'entity_admin');
+        setPermissions(initialData.permissions || permissionService.getDefaultPermissions());
+      } else {
+        setAdminLevel('entity_admin');
+        setPermissions(permissionService.getDefaultPermissions());
       }
-      return undefined;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return error.errors[0]?.message;
+      setPasswordValue('');
+      setConfirmPasswordValue('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+    }
+  }, [isOpen, initialData]);
+
+  // Update permissions when admin level changes (only for new admins)
+  useEffect(() => {
+    if (!isEditing && isOpen) {
+      const defaultPermissions = permissionService.getPermissionsForLevel(adminLevel);
+      setPermissions(defaultPermissions);
+      if (adminLevel !== (initialData?.admin_level || 'entity_admin')) {
+        toast.info(`Default permissions applied for ${adminLevel.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
       }
-      return 'Validation error';
     }
-  }, [isEditing]);
+  }, [adminLevel, isEditing, isOpen, initialData?.admin_level]);
 
-  // Validate entire form
-  const validateForm = useCallback((): boolean => {
-    setIsValidating(true);
-    const newErrors: Record<string, string> = {};
-
-    // Validate name
-    const nameError = validateField('name', formData.name);
-    if (nameError) newErrors.name = nameError;
-
-    // Validate email
-    const emailError = validateField('email', formData.email);
-    if (emailError) newErrors.email = emailError;
-
-    // Validate password (required for new users)
-    if (!isEditing && !formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password) {
-      const passwordError = validateField('password', formData.password);
-      if (passwordError) newErrors.password = passwordError;
+  const handleClose = () => {
+    // Call both callbacks if they exist
+    if (onCancel) {
+      onCancel();
     }
+    onClose();
+  };
 
-    // Validate admin level
-    const adminLevelError = validateField('admin_level', formData.admin_level);
-    if (adminLevelError) newErrors.admin_level = adminLevelError;
-
-    // Validate company ID
-    if (!companyId) {
-      newErrors.submit = 'Company ID is required';
-    }
-
-    // Check permissions
-    const hasAnyPermission = Object.values(permissions).some(category => 
-      Object.values(category).some(permission => permission === true)
-    );
-
-    if (!hasAnyPermission) {
-      toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
-    }
-
-    setErrors(newErrors);
-    setIsValidating(false);
-    return Object.keys(newErrors).length === 0;
-  }, [formData, isEditing, companyId, permissions, validateField]);
-
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      toast.error('Please fix the validation errors before submitting');
-      return;
-    }
-
-    // Prepare payload
-    const payload = {
-      name: formData.name.trim(),
-      email: formData.email.trim().toLowerCase(),
-      password: formData.password,
-      admin_level: formData.admin_level,
-      is_active: formData.is_active,
-      company_id: companyId,
-      permissions,
-      scopes: []
-    };
-
+  const handleFormSubmit = async (formData: Record<string, any>) => {
     try {
-      if (isEditing) {
+      setIsSubmitting(true);
+
+      // Validate passwords match
+      if (!isEditing || formData.password) {
+        if (formData.password !== formData.confirmPassword) {
+          toast.error('Passwords do not match');
+          return;
+        }
+      }
+
+      // Check permissions
+      const hasAnyPermission = Object.values(permissions).some(category => 
+        Object.values(category).some(permission => permission === true)
+      );
+
+      if (!hasAnyPermission) {
+        toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
+      }
+
+      // Prepare submission data
+      const submitData: any = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        admin_level: formData.admin_level,
+        permissions: permissions,
+        is_active: formData.is_active !== false,
+        company_id: companyId
+      };
+
+      // Include password for new users or if updating password
+      if (!isEditing) {
+        submitData.password = formData.password;
+      } else if (formData.password) {
+        submitData.password = formData.password;
+      }
+
+      // Include parent_admin_id if provided
+      if (initialData?.parent_admin_id) {
+        submitData.parent_admin_id = initialData.parent_admin_id;
+      }
+
+      // Use mutation hooks or prop onSubmit
+      if (onSubmit) {
+        // Use provided onSubmit function
+        await onSubmit(submitData);
+        toast.success(isEditing ? 'Administrator updated successfully' : 'Administrator created successfully');
+        onSuccess?.();
+        onClose();
+      } else if (isEditing && initialData?.id) {
+        // Use update mutation
         await updateAdminMutation.mutateAsync(
-          { userId: initialData.id, updates: payload },
+          { userId: initialData.id, updates: submitData },
           {
             onSuccess: () => {
-              toast.success('Administrator updated successfully!');
+              toast.success('Administrator updated successfully');
               onSuccess?.();
               onClose();
             }
           }
         );
       } else {
-        await createAdminMutation.mutateAsync(payload, {
+        // Use create mutation
+        await createAdminMutation.mutateAsync(submitData, {
           onSuccess: () => {
-            toast.success('Administrator created successfully!');
+            toast.success('Administrator created successfully');
             onSuccess?.();
             onClose();
           }
         });
       }
     } catch (error: any) {
-      const errorMessage = error?.message || (isEditing ? 'Failed to update administrator' : 'Failed to create administrator');
-      toast.error(errorMessage);
-      setErrors({ submit: errorMessage });
+      console.error('Form submission error:', error);
+      toast.error(error.message || 'Failed to save administrator');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Handle input change with validation
-  const handleInputChange = useCallback((field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-    
-    // Real-time validation for critical fields
-    if (field === 'email' || field === 'name') {
-      const error = validateField(field, value);
-      if (error) {
-        setErrors(prev => ({ ...prev, [field]: error }));
-      }
-    }
-  }, [errors, validateField]);
+  // Password field component
+  const PasswordField = ({ 
+    name, 
+    label, 
+    placeholder, 
+    showState, 
+    setShowState, 
+    value, 
+    setValue, 
+    isConfirm = false 
+  }: {
+    name: string;
+    label: string;
+    placeholder: string;
+    showState: boolean;
+    setShowState: (show: boolean) => void;
+    value: string;
+    setValue: (value: string) => void;
+    isConfirm?: boolean;
+  }) => {
+    return (
+      <div className="relative">
+        <ValidatedInput
+          name={name}
+          label={label}
+          type={showState ? 'text' : 'password'}
+          required={!isEditing}
+          zodSchema={
+            !isEditing 
+              ? (isConfirm ? confirmPasswordSchema : passwordSchema)
+              : (isConfirm ? confirmPasswordSchema.optional() : passwordSchema.optional())
+          }
+          placeholder={placeholder}
+          initialValue=""
+          helperText={
+            isEditing && !isConfirm
+              ? 'Leave blank to keep current password' 
+              : !isConfirm && !isEditing
+              ? 'Must contain uppercase, lowercase, number, and special character'
+              : undefined
+          }
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            setValue(e.target.value);
+          }}
+          rules={
+            isConfirm ? [
+              {
+                validator: (val: string) => val === passwordValue,
+                message: 'Passwords do not match'
+              }
+            ] : undefined
+          }
+        />
+        <button
+          type="button"
+          onClick={() => setShowState(!showState)}
+          className="absolute right-2 top-[38px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+          tabIndex={-1}
+        >
+          {showState ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    );
+  };
 
+  // Don't render if not open
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
-              <Shield className="h-6 w-6 mr-2 text-blue-500" />
-              {isEditing ? 'Edit Admin User' : 'Create New Admin User'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              disabled={isSubmitting}
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
+    <>
+      {/* Modal Overlay */}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        {/* Modal Container */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          {/* Modal Header */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
+                <Shield className="h-6 w-6 mr-2 text-blue-500" />
+                {isEditing ? 'Edit Administrator' : 'Create New Administrator'}
+              </h2>
+              <button
+                onClick={handleClose}
+                disabled={isSubmitting}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
-          {/* Error Summary */}
-          {errors.submit && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center">
-              <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
-              <span className="text-red-700 dark:text-red-300">{errors.submit}</span>
-            </div>
-          )}
+          {/* Modal Body - Scrollable */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <ValidationProvider
+              onSubmit={handleFormSubmit}
+              validateOnChange={true}
+              validateOnBlur={true}
+            >
+              {({ formState }) => (
+                <form ref={formRef} className="space-y-6">
+                  <FormErrorSummary className="mb-6" />
+                  
+                  {/* Basic Information Section */}
+                  <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                      <User className="h-5 w-5 mr-2 text-blue-500" />
+                      Basic Information
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ValidatedInput
+                        name="name"
+                        label="Full Name"
+                        required
+                        zodSchema={nameSchema}
+                        placeholder="Enter full name"
+                        initialValue={initialData?.name || ''}
+                        helperText="Enter the administrator's full name"
+                      />
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information Section */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <User className="h-5 w-5 mr-2 text-blue-500" />
-                Basic Information
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  label="Full Name"
-                  error={errors.name}
-                  required
-                >
-                  <Input
-                    icon={User}
-                    placeholder="Enter full name"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                </FormField>
+                      <ValidatedInput
+                        name="email"
+                        label="Email Address"
+                        type="email"
+                        required
+                        zodSchema={emailSchema}
+                        placeholder="Enter email address"
+                        initialValue={initialData?.email || ''}
+                        helperText="This will be used for login"
+                        disabled={isEditing}
+                      />
+                    </div>
 
-                <FormField
-                  label="Email Address"
-                  error={errors.email}
-                  required
-                >
-                  <Input
-                    icon={Mail}
-                    type="email"
-                    placeholder="Enter email address"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                </FormField>
-              </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <ValidatedSelect
+                        name="admin_level"
+                        label="Admin Level"
+                        required
+                        zodSchema={adminLevelSchema}
+                        options={[
+                          { value: 'entity_admin', label: 'Entity Admin' },
+                          { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
+                          { value: 'school_admin', label: 'School Admin' },
+                          { value: 'branch_admin', label: 'Branch Admin' }
+                        ]}
+                        initialValue={initialData?.admin_level || 'entity_admin'}
+                        helperText="Determines default permissions and access level"
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => 
+                          setAdminLevel(e.target.value as AdminLevel)
+                        }
+                      />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {/* Password Field with Strength Indicator */}
-                <FormField
-                  label={isEditing ? "New Password (optional)" : "Password"}
-                  error={errors.password}
-                  required={!isEditing}
-                >
-                  <div className="relative">
-                    <Input
-                      icon={Lock}
-                      type={showPassword ? "text" : "password"}
-                      placeholder={isEditing ? "Leave blank to keep current" : "Enter password"}
-                      value={formData.password}
-                      onChange={(e) => handleInputChange('password', e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {formData.password && (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{passwordStrength.label}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
-                          style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
-                        />
+                      <div className="flex items-end">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="is_active"
+                              name="is_active"
+                              defaultChecked={initialData?.is_active !== false}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                            />
+                            <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                              Active User
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </FormField>
+                  </div>
 
-                <FormField
-                  label="Admin Level"
-                  error={errors.admin_level}
-                  required
-                >
-                  <Select
-                    icon={Shield}
-                    value={formData.admin_level}
-                    onChange={(value) => handleAdminLevelChange(value)}
-                    disabled={isSubmitting}
-                    options={[
-                      { value: 'entity_admin', label: 'Entity Admin' },
-                      { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
-                      { value: 'school_admin', label: 'School Admin' },
-                      { value: 'branch_admin', label: 'Branch Admin' }
-                    ]}
-                  />
-                </FormField>
-              </div>
+                  {/* Password Section */}
+                  <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                      <Lock className="h-5 w-5 mr-2 text-green-500" />
+                      {isEditing ? 'Change Password (Optional)' : 'Set Password'}
+                    </h3>
 
-              <div className="mt-4">
-                <FormField label="Status">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="isActive"
-                      checked={formData.is_active}
-                      onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                    {isEditing && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
+                        <div className="flex items-center">
+                          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            Leave password fields blank to keep the current password unchanged.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <PasswordField
+                          name="password"
+                          label={isEditing ? "New Password (Optional)" : "Password"}
+                          placeholder={isEditing ? "Enter new password" : "Enter password"}
+                          showState={showPassword}
+                          setShowState={setShowPassword}
+                          value={passwordValue}
+                          setValue={setPasswordValue}
+                        />
+                        
+                        {/* Password Strength Indicator */}
+                        {passwordValue && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
+                              <span className={`text-xs font-medium ${
+                                passwordStrength.score >= 5 ? 'text-green-600 dark:text-green-400' :
+                                passwordStrength.score >= 3 ? 'text-yellow-600 dark:text-yellow-400' :
+                                'text-red-600 dark:text-red-400'
+                              }`}>
+                                {passwordStrength.label}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
+                                style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <PasswordField
+                        name="confirmPassword"
+                        label={isEditing ? "Confirm New Password" : "Confirm Password"}
+                        placeholder={isEditing ? "Confirm new password" : "Confirm password"}
+                        showState={showConfirmPassword}
+                        setShowState={setShowConfirmPassword}
+                        value={confirmPasswordValue}
+                        setValue={setConfirmPasswordValue}
+                        isConfirm={true}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Admin Permissions Section */}
+                  <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                      <Shield className="h-5 w-5 mr-2 text-purple-500" />
+                      Admin Permissions
+                    </h3>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0" />
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          Permissions control what actions this administrator can perform. 
+                          Default permissions are set based on the admin level.
+                        </p>
+                      </div>
+                    </div>
+                    <AdminPermissionMatrix
+                      value={permissions}
+                      onChange={setPermissions}
                       disabled={isSubmitting}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
                     />
-                    <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                      Active User
-                    </label>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Inactive users cannot log in or access the system
-                  </p>
-                </FormField>
-              </div>
-            </div>
 
-            {/* Admin Permissions Section */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <Shield className="h-5 w-5 mr-2 text-purple-500" />
-                Admin Permissions
-              </h3>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
-                <div className="flex items-center">
-                  <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    These permissions control what actions this administrator can perform. 
-                    Unchecked permissions will prevent access to related functions.
-                  </p>
-                </div>
-              </div>
-              <AdminPermissionMatrix
-                value={permissions}
-                onChange={setPermissions}
-                disabled={isSubmitting}
-              />
-            </div>
+                  {/* Scope Assignment Section - Only for editing */}
+                  {isEditing && initialData?.id && (
+                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                        <User className="h-5 w-5 mr-2 text-green-500" />
+                        Scope Assignment
+                      </h3>
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
+                        <div className="flex items-center">
+                          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0" />
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            Scope assignment limits this admin's access to specific schools or branches. 
+                            Leave empty for full company access.
+                          </p>
+                        </div>
+                      </div>
+                      <AdminScopeAssignment
+                        userId={initialData.id}
+                        companyId={companyId}
+                        onScopesUpdated={() => {
+                          toast.success('Scope assignments updated');
+                          onSuccess?.();
+                        }}
+                      />
+                    </div>
+                  )}
 
-            {/* Scope Assignment Section - Only for editing */}
-            {isEditing && initialData?.id && (
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <User className="h-5 w-5 mr-2 text-green-500" />
-                  Scope Assignment
-                </h3>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
-                  <div className="flex items-center">
-                    <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      Scope assignment limits this admin's access to specific schools or branches. 
-                      Leave empty for full company access.
-                    </p>
+                  {/* Form Actions - Moved inside form for proper submit handling */}
+                  <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      disabled={isSubmitting}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isSubmitting ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Saving...
+                        </span>
+                      ) : (
+                        isEditing ? 'Update Administrator' : 'Create Administrator'
+                      )}
+                    </button>
                   </div>
-                </div>
-                <AdminScopeAssignment
-                  userId={initialData.id}
-                  companyId={companyId}
-                  onScopesUpdated={() => {
-                    toast.success('Scope assignments updated');
-                    onSuccess?.();
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Form Actions */}
-            <div className="flex justify-end space-x-3 pt-6 border-t dark:border-gray-700">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                loading={isSubmitting}
-                disabled={isSubmitting || isValidating}
-              >
-                {isEditing ? 'Update Administrator' : 'Create Administrator'}
-              </Button>
-            </div>
-          </form>
+                </form>
+              )}
+            </ValidationProvider>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
-};
+}
