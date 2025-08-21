@@ -8,6 +8,7 @@ import AdminHierarchyTree from './components/AdminHierarchyTree';
 import AdminAuditLogsPanel from './components/AdminAuditLogsPanel';
 import { AdminCreationForm } from './components/AdminCreationForm';
 import { AdminLevel } from './types/admin.types';
+import { SlideInForm } from '../../../../components/shared/SlideInForm';
 
 // Entity User interface for admin data
 interface EntityUser {
@@ -155,22 +156,35 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       )}
 
       {/* Admin Creation/Edit Modal */}
-      <AdminCreationForm
+      <SlideInForm
+        title={editingAdmin ? 'Edit Admin User' : 'Create New Admin User'}
         isOpen={showCreateAdminModal}
         onClose={handleModalClose}
-        onSuccess={handleAdminSuccess}
-        companyId={companyId}
-        initialData={editingAdmin ? {
-          id: editingAdmin.id,
-          name: editingAdmin.name,
-          email: editingAdmin.email,
-          adminLevel: editingAdmin.admin_level,
-          isActive: editingAdmin.is_active,
-          createdAt: editingAdmin.created_at,
-          permissions: editingAdmin.metadata?.permissions,
-          scopes: [] // TODO: Fetch actual scopes for editing admin
-        } : undefined}
-      />
+        onSave={() => {
+          // Trigger form submission by clicking the hidden submit button
+          const submitButton = document.querySelector('form button[type="submit"]') as HTMLButtonElement;
+          if (submitButton) {
+            submitButton.click();
+          }
+        }}
+        width="xl"
+        loading={false}
+      >
+        <AdminCreationForm
+          companyId={companyId}
+          initialData={editingAdmin ? {
+            id: editingAdmin.id,
+            name: editingAdmin.name,
+            email: editingAdmin.email,
+            admin_level: editingAdmin.admin_level,
+            is_active: editingAdmin.is_active,
+            created_at: editingAdmin.created_at,
+            permissions: editingAdmin.metadata?.permissions,
+            scopes: [] // TODO: Fetch actual scopes for editing admin
+          } : undefined}
+          onSuccess={handleAdminSuccess}
+        />
+      </SlideInForm>
     </div>
   );
 }
