@@ -766,26 +766,6 @@ export function AdminListTable({
         onCancel={cancelAction}
       />
 
-      {/* Future Enhancements */}
-      {process.env.NODE_ENV === 'development' && (admins?.data?.length || 0) > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-            🚧 Future Enhancements (TODO)
-          </h4>
-          <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
-            <li>• Click on admin name/email to view detailed profile</li>
-            <li>• Inline editing of admin level and status</li>
-            <li>• Advanced filtering by assigned scopes and permissions</li>
-            <li>• Bulk operations (assign scopes, update permissions)</li>
-            <li>• Real-time status updates and activity indicators</li>
-            <li>• Integration with admin hierarchy for parent-child relationships</li>
-            <li>• Password reset and account management actions</li>
-            <li>• Export filtered results to CSV/Excel</li>
-            <li>• Column sorting and customizable column visibility</li>
-            <li>• Admin activity timeline and login history</li>
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
