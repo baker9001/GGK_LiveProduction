@@ -26,7 +26,7 @@ const passwordSchema = z.string()
 
 export default function SignInPage() {
   const navigate = useNavigate();
-  const { setUser } = useUser();
+  const { refreshUser } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -80,8 +80,8 @@ export default function SignInPage() {
       });
 
       if (response.success && response.user) {
-        // Set user in context
-        setUser(response.user);
+        // Refresh user in context
+        refreshUser();
 
         // Show success message
         toast.success('Sign in successful!');
