@@ -12,7 +12,7 @@ import {
   Loader2, School, CheckCircle 
 } from 'lucide-react';
 import { z } from 'zod';
-import { authService, getRedirectPathForUser } from '../../lib/auth';
+import { getRedirectPathForUser, isAuthenticated, getCurrentUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { useToast } from '../../hooks/useToast';
 
@@ -40,8 +40,8 @@ export default function SignInPage() {
 
   // Check if already authenticated
   useEffect(() => {
-    if (authService.isAuthenticated()) {
-      const user = authService.getCurrentUser();
+    if (isAuthenticated()) {
+      const user = getCurrentUser();
       if (user) {
         const redirectPath = getRedirectPathForUser(user);
         navigate(redirectPath);
@@ -79,24 +79,9 @@ export default function SignInPage() {
     setErrors({});
 
     try {
-      const response = await authService.login({
-        email: email.trim().toLowerCase(),
-        password
-      });
-
-      if (response.success && response.user) {
-        // Set user in context
-        setUser(response.user);
-
-        // Show success message
-        toast.success('Sign in successful!');
-
-        // Redirect to appropriate dashboard based on user role
-        const redirectPath = getRedirectPathForUser(response.user);
-        navigate(redirectPath);
-      } else {
-        toast.error(response.error || 'Sign in failed');
-      }
+      // TODO: Implement actual authentication API call
+      // For now, show error that auth service is not implemented
+      toast.error('Authentication service not implemented yet');
     } catch (error: any) {
       console.error('Sign in error:', error);
       toast.error('An unexpected error occurred. Please try again.');
@@ -116,14 +101,9 @@ export default function SignInPage() {
     setIsLoading(true);
 
     try {
-      const response = await authService.requestPasswordReset(resetEmail);
-      
-      if (response.success) {
-        setResetSent(true);
-        toast.success(response.message);
-      } else {
-        toast.error(response.message);
-      }
+      // TODO: Implement password reset API call
+      // For now, show error that reset service is not implemented
+      toast.error('Password reset service not implemented yet');
     } catch (error) {
       toast.error('Failed to send reset instructions');
     } finally {
