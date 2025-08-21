@@ -12,9 +12,9 @@ import {
   Loader2, School, CheckCircle 
 } from 'lucide-react';
 import { z } from 'zod';
-import { toast } from 'react-hot-toast';
-import { authService } from '@/lib/auth';
-import { useUser } from '@/contexts/UserContext';
+import { authService, getRedirectPathForUser } from '../lib/auth';
+import { useUser } from '../contexts/UserContext';
+import { useToast } from '../hooks/useToast';
 
 // Validation schemas
 const emailSchema = z.string()
@@ -27,6 +27,7 @@ const passwordSchema = z.string()
 export default function SignInPage() {
   const navigate = useNavigate();
   const { setUser } = useUser();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +41,11 @@ export default function SignInPage() {
   // Check if already authenticated
   useEffect(() => {
     if (authService.isAuthenticated()) {
-      navigate('/dashboard');
+      const user = authService.getCurrentUser();
+      if (user) {
+        const redirectPath = getRedirectPathForUser(user);
+        navigate(redirectPath);
+      }
     }
   }, [navigate]);
 
@@ -86,17 +91,9 @@ export default function SignInPage() {
         // Show success message
         toast.success('Sign in successful!');
 
-        // Redirect based on user type
-        const userType = response.user.user_type;
-        if (userType === 'student') {
-          navigate('/student-dashboard');
-        } else if (userType === 'teacher') {
-          navigate('/teacher-dashboard');
-        } else if (userType.includes('admin')) {
-          navigate('/entity-module/dashboard');
-        } else {
-          navigate('/dashboard');
-        }
+        // Redirect to appropriate dashboard based on user role
+        const redirectPath = getRedirectPathForUser(response.user);
+        navigate(redirectPath);
       } else {
         toast.error(response.error || 'Sign in failed');
       }
