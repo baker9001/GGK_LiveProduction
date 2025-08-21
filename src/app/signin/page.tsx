@@ -12,9 +12,9 @@ import {
   Loader2, School, CheckCircle 
 } from 'lucide-react';
 import { z } from 'zod';
-import { authService, getRedirectPathForUser } from '../lib/auth';
-import { useUser } from '../contexts/UserContext';
-import { useToast } from '../hooks/useToast';
+import { authService, getRedirectPathForUser } from '../../lib/auth';
+import { useUser } from '../../contexts/UserContext';
+import { useToast } from '../../hooks/useToast';
 
 // Validation schemas
 const emailSchema = z.string()
