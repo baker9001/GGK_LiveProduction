@@ -25,9 +25,9 @@ import {
   SubmitButton,
   PasswordStrength,
   useValidation
-} from '../../../../../components/shared/FormValidation';
-import { Button } from '../../../../../components/shared/Button';
-import { toast } from '../../../../../components/shared/Toast';
+} from '@/components/shared/FormValidation';
+import { Button } from '@/components/shared/Button';
+import { toast } from '@/components/shared/Toast';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
 import { AdminScopeAssignment } from './AdminScopeAssignment';
