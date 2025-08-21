@@ -1,8 +1,10 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/services/adminService.ts
  * 
- * ENHANCED VERSION - Complete validation and error handling
- * Ensures permissions are properly stored and applied
+ * FIXED VERSION - Complete validation and error handling
+ * - Fixed email validation regex
+ * - Added fallback for missing parent_admin_id column
+ * - Enhanced error messages
  */
 
 import { supabase } from '@/lib/supabase';
@@ -75,11 +77,68 @@ const getAdminName = (admin: any): string => {
   return 'Unknown Admin';
 };
 
-// Input sanitization
-const sanitizeEmail = (email: string): string => {
-  return email.toLowerCase().trim().replace(/[^a-z0-9@._-]/gi, '');
+// Enhanced email validation function
+const validateEmail = (email: string): { isValid: boolean; sanitized: string; error?: string } => {
+  // First trim and lowercase
+  const trimmed = email.trim().toLowerCase();
+  
+  // Remove any dangerous characters but keep valid email chars
+  const sanitized = trimmed.replace(/[^\w.@+_-]/gi, '');
+  
+  // Check basic structure
+  if (!sanitized || sanitized.length < 3) {
+    return { isValid: false, sanitized, error: 'Email address is too short' };
+  }
+  
+  // Check for @ symbol
+  if (!sanitized.includes('@')) {
+    return { isValid: false, sanitized, error: 'Email address must contain @ symbol' };
+  }
+  
+  // Split and validate parts
+  const parts = sanitized.split('@');
+  if (parts.length !== 2) {
+    return { isValid: false, sanitized, error: 'Email address must have exactly one @ symbol' };
+  }
+  
+  const [localPart, domain] = parts;
+  
+  // Validate local part
+  if (!localPart || localPart.length === 0) {
+    return { isValid: false, sanitized, error: 'Email address must have a username before @' };
+  }
+  
+  // Validate domain
+  if (!domain || domain.length < 3) {
+    return { isValid: false, sanitized, error: 'Email address must have a valid domain' };
+  }
+  
+  // Check for dot in domain
+  if (!domain.includes('.')) {
+    return { isValid: false, sanitized, error: 'Email domain must contain a dot' };
+  }
+  
+  // More comprehensive email regex
+  const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
+  
+  if (!emailRegex.test(sanitized)) {
+    // Check specific issues
+    if (sanitized.startsWith('.') || sanitized.startsWith('@')) {
+      return { isValid: false, sanitized, error: 'Email address cannot start with . or @' };
+    }
+    if (sanitized.endsWith('.') || sanitized.endsWith('@')) {
+      return { isValid: false, sanitized, error: 'Email address cannot end with . or @' };
+    }
+    if (sanitized.includes('..')) {
+      return { isValid: false, sanitized, error: 'Email address cannot contain consecutive dots' };
+    }
+    return { isValid: false, sanitized, error: `Email address "${sanitized}" is invalid` };
+  }
+  
+  return { isValid: true, sanitized };
 };
 
+// Input sanitization for name
 const sanitizeName = (name: string): string => {
   return name.trim().replace(/[^a-zA-Z\s'-]/g, '');
 };
@@ -90,6 +149,20 @@ const getCurrentUserId = (): string => {
   return 'system';
 };
 
+// Check if parent_admin_id column exists
+const checkParentAdminColumnExists = async (): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('entity_users')
+      .select('parent_admin_id')
+      .limit(0);
+    
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
 export const adminService = {
   /**
    * Create a new administrator user with complete validation
@@ -98,19 +171,24 @@ export const adminService = {
     try {
       const createdBy = payload.created_by || getCurrentUserId();
 
-      // Input sanitization
-      const sanitizedEmail = sanitizeEmail(payload.email);
+      // Input sanitization and validation
       const sanitizedName = sanitizeName(payload.name);
-
-      // Validate required fields
-      if (!sanitizedEmail || !sanitizedName || !payload.company_id) {
-        throw new Error('Email, name, and company ID are required');
+      
+      // Validate name
+      if (!sanitizedName || sanitizedName.length < 2) {
+        throw new Error('Name must be at least 2 characters long');
       }
 
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(sanitizedEmail)) {
-        throw new Error('Invalid email format');
+      // Enhanced email validation
+      const emailValidation = validateEmail(payload.email);
+      if (!emailValidation.isValid) {
+        throw new Error(emailValidation.error || 'Invalid email format');
+      }
+      const sanitizedEmail = emailValidation.sanitized;
+
+      // Validate required fields
+      if (!payload.company_id) {
+        throw new Error('Company ID is required');
       }
 
       // Step 1: Check for existing admin with same email
@@ -158,18 +236,25 @@ export const adminService = {
           });
 
           if (authError) {
+            // Check for specific error messages
+            if (authError.message.includes('email_address_invalid')) {
+              throw new Error(`Email validation failed: The email address "${sanitizedEmail}" was rejected by the authentication service`);
+            }
             throw new Error(`Failed to create auth user: ${authError.message}`);
           }
 
           authUserId = authUser.user?.id;
-        } catch (authError) {
+        } catch (authError: any) {
           console.error('Auth creation failed:', authError);
-          // Continue without auth user for now
+          throw authError;
         }
       }
 
-      // Step 4: Create admin record
-      const adminData = {
+      // Step 4: Check if parent_admin_id column exists
+      const hasParentAdminColumn = await checkParentAdminColumnExists();
+
+      // Step 5: Create admin record with dynamic column selection
+      const adminData: any = {
         user_id: authUserId,
         email: sanitizedEmail,
         name: sanitizedName,
@@ -177,7 +262,6 @@ export const adminService = {
         company_id: payload.company_id,
         permissions: finalPermissions,
         is_active: payload.is_active !== false,
-        parent_admin_id: payload.parent_admin_id || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         metadata: {
@@ -189,10 +273,24 @@ export const adminService = {
         }
       };
 
+      // Only add parent_admin_id if column exists
+      if (hasParentAdminColumn && payload.parent_admin_id) {
+        adminData.parent_admin_id = payload.parent_admin_id;
+      }
+
+      // Build column list dynamically
+      const columns = Object.keys(adminData).filter(key => {
+        // Exclude parent_admin_id if column doesn't exist
+        if (key === 'parent_admin_id' && !hasParentAdminColumn) {
+          return false;
+        }
+        return true;
+      });
+
       const { data: newAdmin, error: createError } = await supabase
         .from('entity_users')
         .insert([adminData])
-        .select()
+        .select(columns.join(', '))
         .single();
 
       if (createError) {
@@ -204,10 +302,16 @@ export const adminService = {
             console.error('Failed to rollback auth user:', rollbackError);
           }
         }
+        
+        // Check for specific errors
+        if (createError.message.includes('parent_admin_id')) {
+          throw new Error('Admin hierarchy feature is not yet enabled. Please run the database migration or contact support.');
+        }
+        
         throw new Error(`Failed to create admin: ${createError.message}`);
       }
 
-      // Step 5: Log the action
+      // Step 6: Log the action
       try {
         await auditService.logAction({
           company_id: payload.company_id,
@@ -227,7 +331,7 @@ export const adminService = {
       }
 
       return newAdmin as AdminUser;
-    } catch (error) {
+    } catch (error: any) {
       console.error('createAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to create administrator');
     }
@@ -264,6 +368,9 @@ export const adminService = {
       // Sanitize and validate fields
       if (payload.name !== undefined) {
         updateData.name = sanitizeName(payload.name);
+        if (!updateData.name || updateData.name.length < 2) {
+          throw new Error('Name must be at least 2 characters long');
+        }
         updateData.metadata = {
           ...existingAdmin.metadata,
           name: updateData.name
@@ -271,7 +378,11 @@ export const adminService = {
       }
 
       if (payload.email !== undefined) {
-        updateData.email = sanitizeEmail(payload.email);
+        const emailValidation = validateEmail(payload.email);
+        if (!emailValidation.isValid) {
+          throw new Error(emailValidation.error || 'Invalid email format');
+        }
+        updateData.email = emailValidation.sanitized;
         
         // Check if new email is already in use
         if (updateData.email !== existingAdmin.email) {
@@ -379,7 +490,7 @@ export const adminService = {
       }
 
       return updatedAdmin as AdminUser;
-    } catch (error) {
+    } catch (error: any) {
       console.error('updateAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to update administrator');
     }
@@ -394,11 +505,33 @@ export const adminService = {
         throw new Error('Company ID is required');
       }
 
+      // Check if parent_admin_id column exists
+      const hasParentAdminColumn = await checkParentAdminColumnExists();
+
+      // Build column selection dynamically
+      const baseColumns = [
+        'id',
+        'user_id',
+        'email',
+        'name',
+        'admin_level',
+        'company_id',
+        'permissions',
+        'is_active',
+        'created_at',
+        'updated_at',
+        'metadata'
+      ];
+
+      if (hasParentAdminColumn) {
+        baseColumns.push('parent_admin_id');
+      }
+
       // Build query
       let query = supabase
         .from('entity_users')
         .select(`
-          *,
+          ${baseColumns.join(', ')},
           users:user_id (
             email,
             raw_user_meta_data
@@ -429,6 +562,41 @@ export const adminService = {
       const { data: admins, error } = await query;
 
       if (error) {
+        // Check for specific column errors
+        if (error.message.includes('parent_admin_id')) {
+          console.warn('parent_admin_id column not found, fetching without it');
+          // Retry without parent_admin_id
+          const retryQuery = supabase
+            .from('entity_users')
+            .select(`
+              id, user_id, email, name, admin_level, company_id,
+              permissions, is_active, created_at, updated_at, metadata,
+              users:user_id (
+                email,
+                raw_user_meta_data
+              )
+            `)
+            .eq('company_id', companyId)
+            .order('created_at', { ascending: false });
+          
+          const { data: retriedAdmins, error: retryError } = await retryQuery;
+          if (retryError) {
+            throw new Error(`Failed to fetch admins: ${retryError.message}`);
+          }
+          return (retriedAdmins || []).map(admin => ({
+            id: admin.id,
+            email: getAdminEmail(admin),
+            name: getAdminName(admin),
+            admin_level: admin.admin_level || 'entity_admin',
+            company_id: admin.company_id,
+            permissions: admin.permissions || permissionService.getDefaultPermissions(),
+            is_active: admin.is_active ?? true,
+            created_at: admin.created_at,
+            updated_at: admin.updated_at,
+            metadata: admin.metadata || {},
+            parent_admin_id: null
+          }));
+        }
         throw new Error(`Failed to fetch admins: ${error.message}`);
       }
 
@@ -448,11 +616,11 @@ export const adminService = {
         created_at: admin.created_at,
         updated_at: admin.updated_at,
         metadata: admin.metadata || {},
-        parent_admin_id: admin.parent_admin_id
+        parent_admin_id: hasParentAdminColumn ? admin.parent_admin_id : null
       }));
 
       return enrichedAdmins;
-    } catch (error) {
+    } catch (error: any) {
       console.error('listAdmins error:', error);
       throw error instanceof Error ? error : new Error('Failed to list administrators');
     }
@@ -505,7 +673,7 @@ export const adminService = {
       } catch (auditError) {
         console.log('Audit logging failed:', auditError);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('deleteAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to delete administrator');
     }
@@ -527,7 +695,7 @@ export const adminService = {
       if (error) {
         throw new Error(`Failed to restore admin: ${error.message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('restoreAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to restore administrator');
     }
