@@ -2,6 +2,7 @@
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
  * 
  * ENHANCED VERSION - Complete form validation and improved UX
+ * Now properly integrated with SlideInForm component
  * 
  * Features:
  * ✅ Integrated with shared form validation components
@@ -11,9 +12,10 @@
  * ✅ Removed "Super Admin" option (entity-level only)
  * ✅ Enhanced permission matrix functionality
  * ✅ Proper data validation and error prevention
+ * ✅ Works with SlideInForm component
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { z } from 'zod';
 import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { 
@@ -67,19 +69,15 @@ interface AdminUser {
 }
 
 interface AdminCreationFormProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
   companyId: string;
   initialData?: AdminUser;
+  onSuccess?: () => void;
 }
 
 export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
-  isOpen,
-  onClose,
-  onSuccess,
   companyId,
-  initialData
+  initialData,
+  onSuccess
 }) => {
   const isEditing = !!initialData;
   const [showPassword, setShowPassword] = useState(false);
@@ -89,11 +87,12 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const [assignedScopes, setAssignedScopes] = useState<EntityAdminScope[]>(
     initialData?.scopes ?? []
   );
+  const formRef = useRef<HTMLFormElement>(null);
 
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
 
-  // Reset form when modal opens or initialData changes
+  // Reset form when initialData changes
   useEffect(() => {
     if (initialData) {
       setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
@@ -102,7 +101,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       setPermissions(permissionService.getDefaultPermissions());
       setAssignedScopes([]);
     }
-  }, [initialData, isOpen]);
+  }, [initialData]);
 
   // Handle admin level change to update default permissions
   const handleAdminLevelChange = (newLevel: AdminLevel) => {
@@ -169,7 +168,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             onSuccess: () => {
               toast.success('Administrator updated successfully!');
               onSuccess?.();
-              onClose();
             },
             onError: (error: any) => {
               const errorMessage = error?.message || 'Failed to update administrator';
@@ -183,7 +181,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           onSuccess: () => {
             toast.success('Administrator created successfully!');
             onSuccess?.();
-            onClose();
           },
           onError: (error: any) => {
             const errorMessage = error?.message || 'Failed to create administrator';
@@ -278,205 +275,167 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     );
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-hidden">
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              {isEditing ? 'Edit Admin User' : 'Create New Admin User'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              disabled={createAdminMutation.isLoading || updateAdminMutation.isLoading}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+    <ValidationProvider
+      onSubmit={handleFormSubmit}
+      validateOnChange={true}
+      validateOnBlur={true}
+    >
+      {({ formState }) => (
+        <form ref={formRef} className="space-y-6">
+          <FormErrorSummary className="mb-6" />
+          
+          {/* Basic Information Section */}
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <User className="h-5 w-5 mr-2 text-blue-500" />
+              Basic Information
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ValidatedInput
+                name="name"
+                label="Full Name"
+                required
+                zodSchema={nameSchema}
+                placeholder="Enter full name"
+                initialValue={initialData?.name || ''}
+                helperText="Enter the administrator's full name"
+              />
+
+              <ValidatedInput
+                name="email"
+                label="Email Address"
+                type="email"
+                required
+                zodSchema={emailSchema}
+                placeholder="Enter email address"
+                initialValue={initialData?.email || ''}
+                helperText="This will be used for login and notifications"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <PasswordField />
+
+              <ValidatedSelect
+                name="admin_level"
+                label="Admin Level"
+                required
+                zodSchema={adminLevelSchema}
+                options={[
+                  { value: 'entity_admin', label: 'Entity Admin' },
+                  { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
+                  { value: 'school_admin', label: 'School Admin' },
+                  { value: 'branch_admin', label: 'Branch Admin' }
+                ]}
+                initialValue={initialData?.admin_level || 'entity_admin'}
+                helperText="Determines default permissions and access level"
+              />
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  name="is_active"
+                  defaultChecked={initialData?.is_active ?? true}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
+                />
+                <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  Active User
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Inactive users cannot log in or access the system
+              </p>
+            </div>
           </div>
 
-          {/* Form Content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            <ValidationProvider
-              onSubmit={handleFormSubmit}
-              validateOnChange={true}
-              validateOnBlur={true}
-            >
-              {({ formState }) => (
-                <>
-                  <FormErrorSummary className="mb-6" />
-                  
-                  <div className="space-y-6">
-                    {/* Basic Information Section */}
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <User className="h-5 w-5 mr-2 text-blue-500" />
-                        Basic Information
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <ValidatedInput
-                          name="name"
-                          label="Full Name"
-                          required
-                          zodSchema={nameSchema}
-                          placeholder="Enter full name"
-                          initialValue={initialData?.name || ''}
-                          helperText="Enter the administrator's full name"
-                        />
-
-                        <ValidatedInput
-                          name="email"
-                          label="Email Address"
-                          type="email"
-                          required
-                          zodSchema={emailSchema}
-                          placeholder="Enter email address"
-                          initialValue={initialData?.email || ''}
-                          helperText="This will be used for login and notifications"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <PasswordField />
-
-                        <ValidatedSelect
-                          name="admin_level"
-                          label="Admin Level"
-                          required
-                          zodSchema={adminLevelSchema}
-                          options={[
-                            { value: 'entity_admin', label: 'Entity Admin' },
-                            { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
-                            { value: 'school_admin', label: 'School Admin' },
-                            { value: 'branch_admin', label: 'Branch Admin' }
-                          ]}
-                          initialValue={initialData?.admin_level || 'entity_admin'}
-                          helperText="Determines default permissions and access level"
-                          onChange={(value) => handleAdminLevelChange(value as AdminLevel)}
-                        />
-                      </div>
-
-                      <div className="mt-4">
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="is_active"
-                            name="is_active"
-                            defaultChecked={initialData?.is_active ?? true}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700"
-                          />
-                          <label htmlFor="is_active" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                            Active User
-                          </label>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Inactive users cannot log in or access the system
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Admin Permissions Section */}
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <Shield className="h-5 w-5 mr-2 text-purple-500" />
-                        Admin Permissions
-                      </h3>
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                          <p className="text-sm text-blue-700 dark:text-blue-300">
-                            These permissions control what actions this administrator can perform. 
-                            Unchecked permissions will prevent access to related functions.
-                          </p>
-                        </div>
-                      </div>
-                      <AdminPermissionMatrix
-                        value={permissions}
-                        onChange={setPermissions}
-                        disabled={formState.isSubmitting}
-                      />
-                    </div>
-
-                    {/* Scope Assignment Section - Only show for editing existing admins */}
-                    {isEditing && initialData?.id && (
-                      <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                          <User className="h-5 w-5 mr-2 text-green-500" />
-                          Scope Assignment
-                        </h3>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
-                          <div className="flex items-center">
-                            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
-                            <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                              Scope assignment limits this admin's access to specific schools or branches. 
-                              Leave empty for full company access.
-                            </p>
-                          </div>
-                        </div>
-                        <AdminScopeAssignment
-                          userId={initialData.id}
-                          companyId={companyId}
-                          onScopesUpdated={() => {
-                            toast.success('Scope assignments updated');
-                            onSuccess?.();
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Information for new admins */}
-                    {!isEditing && (
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
-                          <div>
-                            <p className="text-sm font-medium text-green-700 dark:text-green-300">
-                              New Administrator Setup
-                            </p>
-                            <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                              After creation, you can assign specific schools and branches to limit this admin's access. 
-                              By default, they will have access to the entire company.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Form Status */}
-                  <div className="mt-6">
-                    <FormStatus className="mb-4" />
-                  </div>
-
-                  {/* Footer Actions */}
-                  <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={onClose}
-                      disabled={formState.isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                    <SubmitButton
-                      disabled={formState.isSubmitting}
-                      loadingText={isEditing ? "Updating..." : "Creating..."}
-                    >
-                      {isEditing ? 'Update Administrator' : 'Create Administrator'}
-                    </SubmitButton>
-                  </div>
-                </>
-              )}
-            </ValidationProvider>
+          {/* Admin Permissions Section */}
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-purple-500" />
+              Admin Permissions
+            </h3>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  These permissions control what actions this administrator can perform. 
+                  Unchecked permissions will prevent access to related functions.
+                </p>
+              </div>
+            </div>
+            <AdminPermissionMatrix
+              value={permissions}
+              onChange={setPermissions}
+              disabled={formState.isSubmitting}
+            />
           </div>
-        </div>
-      </div>
-    </div>
+
+          {/* Scope Assignment Section - Only show for editing existing admins */}
+          {isEditing && initialData?.id && (
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <User className="h-5 w-5 mr-2 text-green-500" />
+                Scope Assignment
+              </h3>
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
+                <div className="flex items-center">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    Scope assignment limits this admin's access to specific schools or branches. 
+                    Leave empty for full company access.
+                  </p>
+                </div>
+              </div>
+              <AdminScopeAssignment
+                userId={initialData.id}
+                companyId={companyId}
+                onScopesUpdated={() => {
+                  toast.success('Scope assignments updated');
+                  onSuccess?.();
+                }}
+              />
+            </div>
+          )}
+
+          {/* Information for new admins */}
+          {!isEditing && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                    New Administrator Setup
+                  </p>
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                    After creation, you can assign specific schools and branches to limit this admin's access. 
+                    By default, they will have access to the entire company.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Form Status */}
+          <div className="mt-6">
+            <FormStatus className="mb-4" />
+          </div>
+
+          {/* Hidden submit button - form will be submitted via SlideInForm */}
+          <div className="hidden">
+            <SubmitButton
+              disabled={formState.isSubmitting}
+              loadingText={isEditing ? "Updating..." : "Creating..."}
+            >
+              {isEditing ? 'Update Administrator' : 'Create Administrator'}
+            </SubmitButton>
+          </div>
+        </form>
+      )}
+    </ValidationProvider>
   );
 };
