@@ -1,19 +1,20 @@
 /**
  * File: /src/contexts/PermissionContext.tsx
  * 
- * PERMISSION ENFORCEMENT SYSTEM
- * Central permission management and checking
+ * ENHANCED PERMISSION ENFORCEMENT SYSTEM
+ * Central permission management with optimizations
  * 
- * This context provides:
- * - Current user's permissions
- * - Permission checking functions
- * - UI element visibility control
- * - Action authorization
+ * Enhancements:
+ * - Added caching for permission checks
+ * - Better error handling
+ * - Scope-based permissions support
+ * - Performance optimizations with memoization
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { AdminPermissions, AdminLevel } from '@/app/entity-module/organisation/tabs/admins/types/admin.types';
 import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
+import { scopeService } from '@/app/entity-module/organisation/tabs/admins/services/scopeService';
 import { supabase } from '@/lib/supabase';
 import { useUser } from './UserContext';
 import { toast } from '@/components/shared/Toast';
@@ -23,6 +24,7 @@ interface PermissionContextType {
   permissions: AdminPermissions | null;
   adminLevel: AdminLevel | null;
   isLoading: boolean;
+  error: string | null;
   
   // Permission checking functions
   hasPermission: (category: keyof AdminPermissions, permission: string) => boolean;
@@ -35,8 +37,19 @@ interface PermissionContextType {
   canManageSettings: (level: 'company' | 'school' | 'branch') => boolean;
   canExportData: () => boolean;
   
+  // Scope-based permissions
+  hasScope: (scopeType: 'school' | 'branch', scopeId: string) => Promise<boolean>;
+  getScopes: () => Promise<Array<{ type: string; id: string; name?: string }>>;
+  
+  // Admin level checks
+  isEntityAdmin: () => boolean;
+  isSubEntityAdmin: () => boolean;
+  isSchoolAdmin: () => boolean;
+  isBranchAdmin: () => boolean;
+  
   // Refresh permissions
   refreshPermissions: () => Promise<void>;
+  clearCache: () => void;
 }
 
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
@@ -51,38 +64,60 @@ export const usePermissions = () => {
 
 interface PermissionProviderProps {
   children: React.ReactNode;
+  cacheTimeout?: number; // Cache timeout in milliseconds (default: 5 minutes)
 }
 
-export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children }) => {
+export const PermissionProvider: React.FC<PermissionProviderProps> = ({ 
+  children,
+  cacheTimeout = 5 * 60 * 1000 // 5 minutes
+}) => {
   const { user } = useUser();
   const [permissions, setPermissions] = useState<AdminPermissions | null>(null);
   const [adminLevel, setAdminLevel] = useState<AdminLevel | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Cache for permission checks
+  const permissionCache = useRef<Map<string, boolean>>(new Map());
+  const scopeCache = useRef<Map<string, boolean>>(new Map());
+  const cacheTimestamp = useRef<number>(Date.now());
+
+  // Clear cache if timeout exceeded
+  const checkCacheValidity = useCallback(() => {
+    if (Date.now() - cacheTimestamp.current > cacheTimeout) {
+      permissionCache.current.clear();
+      scopeCache.current.clear();
+      cacheTimestamp.current = Date.now();
+    }
+  }, [cacheTimeout]);
 
   // Fetch user permissions
   const fetchPermissions = useCallback(async () => {
     if (!user?.id) {
       setPermissions(null);
       setAdminLevel(null);
+      setError('No user logged in');
       setIsLoading(false);
       return;
     }
 
     try {
       setIsLoading(true);
+      setError(null);
       
       // Get user's admin record
-      const { data: adminUser, error } = await supabase
+      const { data: adminUser, error: adminError } = await supabase
         .from('entity_users')
-        .select('admin_level, permissions, is_active')
+        .select('admin_level, permissions, is_active, company_id')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .single();
 
-      if (error || !adminUser) {
-        console.error('Failed to fetch admin permissions:', error);
+      if (adminError || !adminUser) {
+        console.error('Failed to fetch admin permissions:', adminError);
         setPermissions(null);
         setAdminLevel(null);
+        setError('User is not an active administrator');
         return;
       }
 
@@ -91,10 +126,17 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       
       setPermissions(effectivePermissions);
       setAdminLevel(adminUser.admin_level);
+      
+      // Clear cache on permission update
+      permissionCache.current.clear();
+      scopeCache.current.clear();
+      cacheTimestamp.current = Date.now();
+      
     } catch (error) {
       console.error('Error fetching permissions:', error);
       setPermissions(null);
       setAdminLevel(null);
+      setError('Failed to load permissions');
     } finally {
       setIsLoading(false);
     }
@@ -117,6 +159,25 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
             filter: `user_id=eq.${user.id}`
           },
           () => {
+            console.log('Permissions updated, refreshing...');
+            fetchPermissions();
+          }
+        )
+        .subscribe();
+
+      // Also subscribe to scope changes
+      const scopeSubscription = supabase
+        .channel(`scopes_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'entity_admin_scope',
+            filter: `user_id=eq.${user.id}`
+          },
+          () => {
+            console.log('Scopes updated, refreshing permissions...');
             fetchPermissions();
           }
         )
@@ -124,15 +185,26 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
       return () => {
         subscription.unsubscribe();
+        scopeSubscription.unsubscribe();
       };
     }
   }, [user?.id, fetchPermissions]);
 
-  // Permission checking functions
+  // Cached permission checking
   const hasPermission = useCallback((category: keyof AdminPermissions, permission: string): boolean => {
     if (!permissions) return false;
-    return (permissions[category] as any)?.[permission] === true;
-  }, [permissions]);
+    
+    checkCacheValidity();
+    const cacheKey = `${category}.${permission}`;
+    
+    if (permissionCache.current.has(cacheKey)) {
+      return permissionCache.current.get(cacheKey)!;
+    }
+    
+    const result = (permissions[category] as any)?.[permission] === true;
+    permissionCache.current.set(cacheKey, result);
+    return result;
+  }, [permissions, checkCacheValidity]);
 
   const hasAnyPermission = useCallback((checks: Array<{ category: keyof AdminPermissions; permission: string }>): boolean => {
     if (!permissions) return false;
@@ -252,14 +324,62 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     return permissions.settings.export_data;
   }, [permissions]);
 
+  // Scope-based permissions
+  const hasScope = useCallback(async (scopeType: 'school' | 'branch', scopeId: string): Promise<boolean> => {
+    if (!user?.id) return false;
+    
+    const cacheKey = `${scopeType}.${scopeId}`;
+    if (scopeCache.current.has(cacheKey)) {
+      return scopeCache.current.get(cacheKey)!;
+    }
+    
+    try {
+      const result = await scopeService.hasAccessToScope(user.id, scopeType, scopeId);
+      scopeCache.current.set(cacheKey, result);
+      return result;
+    } catch (error) {
+      console.error('Error checking scope:', error);
+      return false;
+    }
+  }, [user?.id]);
+
+  const getScopes = useCallback(async (): Promise<Array<{ type: string; id: string; name?: string }>> => {
+    if (!user?.id) return [];
+    
+    try {
+      const scopes = await scopeService.getScopes(user.id);
+      return scopes.map(scope => ({
+        type: scope.scope_type,
+        id: scope.scope_id,
+        name: scope.entity_name
+      }));
+    } catch (error) {
+      console.error('Error fetching scopes:', error);
+      return [];
+    }
+  }, [user?.id]);
+
+  // Admin level checks
+  const isEntityAdmin = useCallback(() => adminLevel === 'entity_admin', [adminLevel]);
+  const isSubEntityAdmin = useCallback(() => adminLevel === 'sub_entity_admin', [adminLevel]);
+  const isSchoolAdmin = useCallback(() => adminLevel === 'school_admin', [adminLevel]);
+  const isBranchAdmin = useCallback(() => adminLevel === 'branch_admin', [adminLevel]);
+
   const refreshPermissions = useCallback(async () => {
     await fetchPermissions();
   }, [fetchPermissions]);
+
+  const clearCache = useCallback(() => {
+    permissionCache.current.clear();
+    scopeCache.current.clear();
+    cacheTimestamp.current = Date.now();
+  }, []);
 
   const contextValue = useMemo(() => ({
     permissions,
     adminLevel,
     isLoading,
+    error,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
@@ -269,11 +389,19 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     canView,
     canManageSettings,
     canExportData,
-    refreshPermissions
+    hasScope,
+    getScopes,
+    isEntityAdmin,
+    isSubEntityAdmin,
+    isSchoolAdmin,
+    isBranchAdmin,
+    refreshPermissions,
+    clearCache
   }), [
     permissions,
     adminLevel,
     isLoading,
+    error,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
@@ -283,7 +411,14 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     canView,
     canManageSettings,
     canExportData,
-    refreshPermissions
+    hasScope,
+    getScopes,
+    isEntityAdmin,
+    isSubEntityAdmin,
+    isSchoolAdmin,
+    isBranchAdmin,
+    refreshPermissions,
+    clearCache
   ]);
 
   return (
