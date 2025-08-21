@@ -20,7 +20,7 @@
  * ✅ Activity-based session extension
  */
 
-import { supabase } from './supabase';
+import { supabase } from '@/lib/supabase';
 import { userCreationService } from '@/services/userCreationService';
 
 // User role types
@@ -257,31 +257,7 @@ export const authService = {
       // Fetch complete user data with all relations
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select(`
-          *,
-          entity_users!entity_users_user_id_fkey (
-            id as entity_id,
-            company_id,
-            admin_level,
-            permissions,
-            is_active
-          ),
-          teachers!teachers_user_id_fkey (
-            id as entity_id,
-            company_id,
-            school_id,
-            branch_id,
-            is_active
-          ),
-          students!students_user_id_fkey (
-            id as entity_id,
-            school_id,
-            branch_id,
-            grade_level,
-            section,
-            is_active
-          )
-        `)
+        .select('*')
         .eq('id', userId)
         .single();
 
@@ -301,7 +277,7 @@ export const authService = {
         };
       }
 
-      // Determine user type and entity data
+      // Fetch entity-specific data based on user type
       let entityData = null;
       let companyId = null;
       let schoolId = null;
@@ -309,51 +285,120 @@ export const authService = {
       let adminLevel = null;
       let permissions = null;
       
-      if (userData.entity_users && userData.entity_users.length > 0) {
-        entityData = userData.entity_users[0];
-        companyId = entityData.company_id;
-        adminLevel = entityData.admin_level;
-        permissions = entityData.permissions;
-        
-        // Check if entity user is active
-        if (!entityData.is_active) {
-          return { 
-            success: false, 
-            error: 'Your admin account has been deactivated.' 
-          };
+      // Check for system admin first
+      if (userData.user_type === 'system' || userData.user_type === 'system_admin') {
+        // System admins don't need entity data
+        adminLevel = 'system_admin';
+        permissions = {
+          users: {
+            create_entity_admin: true,
+            create_sub_admin: true,
+            create_school_admin: true,
+            create_branch_admin: true,
+            create_teacher: true,
+            create_student: true,
+            modify_entity_admin: true,
+            modify_sub_admin: true,
+            modify_school_admin: true,
+            modify_branch_admin: true,
+            modify_teacher: true,
+            modify_student: true,
+            delete_users: true,
+            view_all_users: true,
+          },
+          organization: {
+            create_school: true,
+            modify_school: true,
+            delete_school: true,
+            create_branch: true,
+            modify_branch: true,
+            delete_branch: true,
+            view_all_schools: true,
+            view_all_branches: true,
+            manage_departments: true,
+          },
+          settings: {
+            manage_company_settings: true,
+            manage_school_settings: true,
+            manage_branch_settings: true,
+            view_audit_logs: true,
+            export_data: true,
+          },
+        };
+      }
+      // Check if user is an entity user (admin)
+      else if (userData.user_type === 'entity' || userData.user_type === 'admin' || userData.user_type === 'entity_admin') {
+        const { data: entityUser } = await supabase
+          .from('entity_users')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (entityUser) {
+          entityData = entityUser;
+          companyId = entityUser.company_id;
+          adminLevel = entityUser.admin_level;
+          permissions = entityUser.permissions;
+          
+          if (!entityUser.is_active) {
+            return { 
+              success: false, 
+              error: 'Your admin account has been deactivated.' 
+            };
+          }
         }
-      } else if (userData.teachers && userData.teachers.length > 0) {
-        entityData = userData.teachers[0];
-        companyId = entityData.company_id;
-        schoolId = entityData.school_id;
-        branchId = entityData.branch_id;
-        
-        if (!entityData.is_active) {
-          return { 
-            success: false, 
-            error: 'Your teacher account has been deactivated.' 
-          };
+      } 
+      // Check if user is a teacher
+      else if (userData.user_type === 'teacher') {
+        const { data: teacher } = await supabase
+          .from('teachers')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (teacher) {
+          entityData = teacher;
+          companyId = teacher.company_id;
+          schoolId = teacher.school_id;
+          branchId = teacher.branch_id;
+          
+          if (!teacher.is_active) {
+            return { 
+              success: false, 
+              error: 'Your teacher account has been deactivated.' 
+            };
+          }
         }
-      } else if (userData.students && userData.students.length > 0) {
-        entityData = userData.students[0];
-        schoolId = entityData.school_id;
-        branchId = entityData.branch_id;
-        
-        // Fetch company through school
-        if (entityData.school_id) {
-          const { data: school } = await supabase
-            .from('schools')
-            .select('company_id')
-            .eq('id', entityData.school_id)
-            .single();
-          companyId = school?.company_id;
-        }
-        
-        if (!entityData.is_active) {
-          return { 
-            success: false, 
-            error: 'Your student account has been deactivated.' 
-          };
+      } 
+      // Check if user is a student
+      else if (userData.user_type === 'student') {
+        const { data: student } = await supabase
+          .from('students')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (student) {
+          entityData = student;
+          schoolId = student.school_id;
+          branchId = student.branch_id;
+          
+          // Fetch company through school
+          if (student.school_id) {
+            const { data: school } = await supabase
+              .from('schools')
+              .select('company_id')
+              .eq('id', student.school_id)
+              .single();
+            companyId = school?.company_id;
+          }
+          
+          if (!student.is_active) {
+            return { 
+              success: false, 
+              error: 'Your student account has been deactivated.' 
+            };
+          }
         }
       }
 
@@ -371,7 +416,7 @@ export const authService = {
         role,
         user_type: userData.user_type || userData.primary_type || 'user',
         company_id: companyId || undefined,
-        entity_id: entityData?.id || entityData?.entity_id,
+        entity_id: entityData?.id,
         school_id: schoolId || undefined,
         branch_id: branchId || undefined,
         is_active: userData.is_active,
