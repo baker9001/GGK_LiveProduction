@@ -1,21 +1,20 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/services/adminService.ts
  * 
- * FIXED VERSION - Complete validation and error handling
- * - Fixed email validation regex
- * - Added fallback for missing parent_admin_id column
- * - Enhanced error messages
+ * UPDATED VERSION - Integrated with userCreationService
+ * Now properly creates users in both users and entity_users tables
  */
 
 import { supabase } from '@/lib/supabase';
 import { AdminLevel, EntityAdminHierarchy, EntityAdminScope, AdminPermissions } from '../types/admin.types';
 import { auditService } from './auditService';
 import { permissionService } from './permissionService';
+import { userCreationService } from '@/services/userCreationService';
 
 interface CreateAdminPayload {
   email: string;
   name: string;
-  password?: string;
+  password: string; // Now required
   admin_level: AdminLevel;
   company_id: string;
   permissions?: AdminPermissions;
@@ -48,6 +47,7 @@ interface AdminFilters {
 
 interface AdminUser {
   id: string;
+  user_id: string;
   email: string;
   name: string;
   admin_level: AdminLevel;
@@ -62,267 +62,76 @@ interface AdminUser {
   assigned_branches?: string[];
 }
 
-// Helper functions for safe data extraction
+// Helper functions
 const getAdminEmail = (admin: any): string => {
+  if (admin.email) return admin.email;
   if (admin.users?.email) return admin.users.email;
   if (admin.metadata?.email) return admin.metadata.email;
-  if (admin.email) return admin.email;
   return '';
 };
 
 const getAdminName = (admin: any): string => {
+  if (admin.name) return admin.name;
   if (admin.users?.raw_user_meta_data?.name) return admin.users.raw_user_meta_data.name;
   if (admin.metadata?.name) return admin.metadata.name;
-  if (admin.name) return admin.name;
   return 'Unknown Admin';
 };
 
-// Enhanced email validation function
-const validateEmail = (email: string): { isValid: boolean; sanitized: string; error?: string } => {
-  // First trim and lowercase
-  const trimmed = email.trim().toLowerCase();
-  
-  // Remove any dangerous characters but keep valid email chars
-  const sanitized = trimmed.replace(/[^\w.@+_-]/gi, '');
-  
-  // Check basic structure
-  if (!sanitized || sanitized.length < 3) {
-    return { isValid: false, sanitized, error: 'Email address is too short' };
-  }
-  
-  // Check for @ symbol
-  if (!sanitized.includes('@')) {
-    return { isValid: false, sanitized, error: 'Email address must contain @ symbol' };
-  }
-  
-  // Split and validate parts
-  const parts = sanitized.split('@');
-  if (parts.length !== 2) {
-    return { isValid: false, sanitized, error: 'Email address must have exactly one @ symbol' };
-  }
-  
-  const [localPart, domain] = parts;
-  
-  // Validate local part
-  if (!localPart || localPart.length === 0) {
-    return { isValid: false, sanitized, error: 'Email address must have a username before @' };
-  }
-  
-  // Validate domain
-  if (!domain || domain.length < 3) {
-    return { isValid: false, sanitized, error: 'Email address must have a valid domain' };
-  }
-  
-  // Check for dot in domain
-  if (!domain.includes('.')) {
-    return { isValid: false, sanitized, error: 'Email domain must contain a dot' };
-  }
-  
-  // More comprehensive email regex
-  const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
-  
-  if (!emailRegex.test(sanitized)) {
-    // Check specific issues
-    if (sanitized.startsWith('.') || sanitized.startsWith('@')) {
-      return { isValid: false, sanitized, error: 'Email address cannot start with . or @' };
-    }
-    if (sanitized.endsWith('.') || sanitized.endsWith('@')) {
-      return { isValid: false, sanitized, error: 'Email address cannot end with . or @' };
-    }
-    if (sanitized.includes('..')) {
-      return { isValid: false, sanitized, error: 'Email address cannot contain consecutive dots' };
-    }
-    return { isValid: false, sanitized, error: `Email address "${sanitized}" is invalid` };
-  }
-  
-  return { isValid: true, sanitized };
-};
-
-// Input sanitization for name
-const sanitizeName = (name: string): string => {
-  return name.trim().replace(/[^a-zA-Z\s'-]/g, '');
-};
-
-// Helper to get current user context
 const getCurrentUserId = (): string => {
-  // This should be replaced with actual user context
+  // Should be replaced with actual user context
   return 'system';
-};
-
-// Check if parent_admin_id column exists
-const checkParentAdminColumnExists = async (): Promise<boolean> => {
-  try {
-    const { data, error } = await supabase
-      .from('entity_users')
-      .select('parent_admin_id')
-      .limit(0);
-    
-    return !error;
-  } catch {
-    return false;
-  }
 };
 
 export const adminService = {
   /**
-   * Create a new administrator user with complete validation
+   * Create a new administrator using the userCreationService
    */
   async createAdmin(payload: CreateAdminPayload): Promise<AdminUser> {
     try {
       const createdBy = payload.created_by || getCurrentUserId();
 
-      // Input sanitization and validation
-      const sanitizedName = sanitizeName(payload.name);
-      
-      // Validate name
-      if (!sanitizedName || sanitizedName.length < 2) {
-        throw new Error('Name must be at least 2 characters long');
-      }
-
-      // Enhanced email validation
-      const emailValidation = validateEmail(payload.email);
-      if (!emailValidation.isValid) {
-        throw new Error(emailValidation.error || 'Invalid email format');
-      }
-      const sanitizedEmail = emailValidation.sanitized;
-
       // Validate required fields
-      if (!payload.company_id) {
-        throw new Error('Company ID is required');
+      if (!payload.email || !payload.name || !payload.company_id) {
+        throw new Error('Email, name, and company ID are required');
       }
 
-      // Step 1: Check for existing admin with same email
-      const { data: existingUser, error: checkError } = await supabase
-        .from('entity_users')
-        .select('id')
-        .eq('email', sanitizedEmail)
-        .eq('company_id', payload.company_id)
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw new Error(`Email validation failed: ${checkError.message}`);
+      if (!payload.password || payload.password.length < 8) {
+        throw new Error('Password is required and must be at least 8 characters long');
       }
 
-      if (existingUser) {
-        throw new Error('An administrator with this email already exists in your organization');
-      }
-
-      // Step 2: Get and validate permissions
-      let finalPermissions: AdminPermissions;
-      
-      if (payload.permissions && permissionService.isValidPermissionObject(payload.permissions)) {
-        // Merge provided permissions with defaults
-        const defaultPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
-        finalPermissions = permissionService.mergePermissions(defaultPermissions, payload.permissions);
-      } else {
-        // Use default permissions for admin level
-        finalPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
-      }
-
-      // Step 3: Create auth user if password provided
-      let authUserId = null;
-      if (payload.password) {
-        try {
-          const { data: authUser, error: authError } = await supabase.auth.signUp({
-            email: sanitizedEmail,
-            password: payload.password,
-            options: {
-              data: {
-                name: sanitizedName,
-                admin_level: payload.admin_level,
-                company_id: payload.company_id
-              }
-            }
-          });
-
-          if (authError) {
-            // Check for specific error messages
-            if (authError.message.includes('email_address_invalid')) {
-              throw new Error(`Email validation failed: The email address "${sanitizedEmail}" was rejected by the authentication service`);
-            }
-            throw new Error(`Failed to create auth user: ${authError.message}`);
-          }
-
-          authUserId = authUser.user?.id;
-        } catch (authError: any) {
-          console.error('Auth creation failed:', authError);
-          throw authError;
-        }
-      }
-
-      // Step 4: Check if parent_admin_id column exists
-      const hasParentAdminColumn = await checkParentAdminColumnExists();
-
-      // Step 5: Create admin record with dynamic column selection
-      const adminData: any = {
-        user_id: authUserId,
-        email: sanitizedEmail,
-        name: sanitizedName,
-        admin_level: payload.admin_level,
+      // Use userCreationService to create the user
+      const { userId, entityId } = await userCreationService.createUser({
+        user_type: payload.admin_level as any,
+        email: payload.email,
+        name: payload.name,
+        password: payload.password,
         company_id: payload.company_id,
-        permissions: finalPermissions,
-        is_active: payload.is_active !== false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        metadata: {
-          ...payload.metadata,
-          email: sanitizedEmail,
-          name: sanitizedName,
-          created_by: createdBy,
-          created_at: new Date().toISOString()
-        }
-      };
-
-      // Only add parent_admin_id if column exists
-      if (hasParentAdminColumn && payload.parent_admin_id) {
-        adminData.parent_admin_id = payload.parent_admin_id;
-      }
-
-      // Build column list dynamically
-      const columns = Object.keys(adminData).filter(key => {
-        // Exclude parent_admin_id if column doesn't exist
-        if (key === 'parent_admin_id' && !hasParentAdminColumn) {
-          return false;
-        }
-        return true;
+        admin_level: payload.admin_level,
+        permissions: payload.permissions,
+        is_active: payload.is_active,
+        created_by: createdBy,
+        parent_admin_id: payload.parent_admin_id,
+        metadata: payload.metadata
       });
 
-      const { data: newAdmin, error: createError } = await supabase
-        .from('entity_users')
-        .insert([adminData])
-        .select(columns.join(', '))
-        .single();
-
-      if (createError) {
-        // Rollback auth user if admin creation fails
-        if (authUserId) {
-          try {
-            await supabase.auth.admin.deleteUser(authUserId);
-          } catch (rollbackError) {
-            console.error('Failed to rollback auth user:', rollbackError);
-          }
-        }
-        
-        // Check for specific errors
-        if (createError.message.includes('parent_admin_id')) {
-          throw new Error('Admin hierarchy feature is not yet enabled. Please run the database migration or contact support.');
-        }
-        
-        throw new Error(`Failed to create admin: ${createError.message}`);
+      // Fetch the created admin with full details
+      const newAdmin = await this.getAdminById(entityId);
+      if (!newAdmin) {
+        throw new Error('Failed to retrieve created admin');
       }
 
-      // Step 6: Log the action
+      // Log the creation action
       try {
         await auditService.logAction({
           company_id: payload.company_id,
           action_type: 'admin_created',
           actor_id: createdBy,
-          target_id: newAdmin.id,
+          target_id: entityId,
           target_type: 'entity_user',
           changes: {
             admin_level: payload.admin_level,
-            email: sanitizedEmail,
-            name: sanitizedName
+            email: payload.email,
+            name: payload.name
           },
           metadata: { source: 'adminService.createAdmin' }
         });
@@ -330,7 +139,7 @@ export const adminService = {
         console.log('Audit logging failed:', auditError);
       }
 
-      return newAdmin as AdminUser;
+      return newAdmin;
     } catch (error: any) {
       console.error('createAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to create administrator');
@@ -338,7 +147,7 @@ export const adminService = {
   },
 
   /**
-   * Update an existing administrator with validation
+   * Update an existing administrator
    */
   async updateAdmin(userId: string, payload: UpdateAdminPayload): Promise<AdminUser> {
     try {
@@ -349,47 +158,32 @@ export const adminService = {
         throw new Error('User ID is required');
       }
 
-      // Step 1: Verify admin exists
-      const { data: existingAdmin, error: fetchError } = await supabase
-        .from('entity_users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (fetchError || !existingAdmin) {
+      // Fetch existing admin
+      const existingAdmin = await this.getAdminById(userId);
+      if (!existingAdmin) {
         throw new Error('Administrator not found');
       }
 
-      // Step 2: Prepare update data
+      // Prepare update data for entity_users table
       const updateData: any = {
         updated_at: new Date().toISOString()
       };
 
-      // Sanitize and validate fields
       if (payload.name !== undefined) {
-        updateData.name = sanitizeName(payload.name);
-        if (!updateData.name || updateData.name.length < 2) {
-          throw new Error('Name must be at least 2 characters long');
-        }
+        updateData.name = payload.name;
         updateData.metadata = {
           ...existingAdmin.metadata,
-          name: updateData.name
+          name: payload.name
         };
       }
 
       if (payload.email !== undefined) {
-        const emailValidation = validateEmail(payload.email);
-        if (!emailValidation.isValid) {
-          throw new Error(emailValidation.error || 'Invalid email format');
-        }
-        updateData.email = emailValidation.sanitized;
-        
-        // Check if new email is already in use
-        if (updateData.email !== existingAdmin.email) {
+        // Check if email is already in use
+        if (payload.email !== existingAdmin.email) {
           const { data: emailCheck } = await supabase
             .from('entity_users')
             .select('id')
-            .eq('email', updateData.email)
+            .eq('email', payload.email)
             .eq('company_id', existingAdmin.company_id)
             .neq('id', userId)
             .maybeSingle();
@@ -398,59 +192,29 @@ export const adminService = {
             throw new Error('This email is already in use by another administrator');
           }
         }
-
-        updateData.metadata = {
-          ...updateData.metadata,
-          email: updateData.email
-        };
+        updateData.email = payload.email;
       }
 
       if (payload.admin_level !== undefined) {
         updateData.admin_level = payload.admin_level;
-        
-        // Update permissions based on new admin level
-        if (payload.admin_level !== existingAdmin.admin_level) {
-          const newDefaultPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
-          updateData.permissions = payload.permissions 
-            ? permissionService.mergePermissions(newDefaultPermissions, payload.permissions)
-            : newDefaultPermissions;
-        }
+        const newDefaultPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
+        updateData.permissions = payload.permissions 
+          ? { ...newDefaultPermissions, ...payload.permissions }
+          : newDefaultPermissions;
       }
 
       if (payload.permissions !== undefined) {
-        // Validate and merge permissions
-        if (permissionService.isValidPermissionObject(payload.permissions)) {
-          updateData.permissions = updateData.permissions 
-            ? permissionService.mergePermissions(updateData.permissions, payload.permissions)
-            : permissionService.mergePermissions(existingAdmin.permissions || {}, payload.permissions);
-        } else {
-          throw new Error('Invalid permissions structure');
-        }
+        updateData.permissions = {
+          ...(existingAdmin.permissions || {}),
+          ...payload.permissions
+        };
       }
 
       if (payload.is_active !== undefined) {
         updateData.is_active = payload.is_active;
       }
 
-      // Step 3: Update auth user if password provided
-      if (payload.password) {
-        if (existingAdmin.user_id) {
-          try {
-            const { error: passwordError } = await supabase.auth.admin.updateUserById(
-              existingAdmin.user_id,
-              { password: payload.password }
-            );
-
-            if (passwordError) {
-              console.error('Failed to update password:', passwordError);
-            }
-          } catch (error) {
-            console.error('Password update failed:', error);
-          }
-        }
-      }
-
-      // Step 4: Update the admin record
+      // Update entity_users table
       const { data: updatedAdmin, error: updateError } = await supabase
         .from('entity_users')
         .update(updateData)
@@ -462,13 +226,38 @@ export const adminService = {
         throw new Error(`Failed to update admin: ${updateError.message}`);
       }
 
-      // Step 5: Log the update action
+      // Update password if provided
+      if (payload.password && existingAdmin.user_id) {
+        try {
+          await userCreationService.updatePassword(existingAdmin.user_id, payload.password);
+        } catch (passwordError) {
+          console.error('Failed to update password:', passwordError);
+          // Don't throw - allow other updates to succeed
+        }
+      }
+
+      // Update email in users table if changed
+      if (payload.email && payload.email !== existingAdmin.email && existingAdmin.user_id) {
+        const { error: userUpdateError } = await supabase
+          .from('users')
+          .update({ 
+            email: payload.email,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingAdmin.user_id);
+
+        if (userUpdateError) {
+          console.error('Failed to update email in users table:', userUpdateError);
+        }
+      }
+
+      // Log the update
       try {
         const changes: Record<string, any> = {};
         Object.keys(updateData).forEach(key => {
-          if (key !== 'updated_at' && key !== 'metadata' && existingAdmin[key] !== updateData[key]) {
+          if (key !== 'updated_at' && key !== 'metadata') {
             changes[key] = {
-              old: existingAdmin[key],
+              old: existingAdmin[key as keyof AdminUser],
               new: updateData[key]
             };
           }
@@ -489,10 +278,90 @@ export const adminService = {
         console.log('Audit logging failed:', auditError);
       }
 
-      return updatedAdmin as AdminUser;
+      const result = await this.getAdminById(userId);
+      if (!result) {
+        throw new Error('Failed to retrieve updated admin');
+      }
+      return result;
     } catch (error: any) {
       console.error('updateAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to update administrator');
+    }
+  },
+
+  /**
+   * Get a single admin by ID with full details
+   */
+  async getAdminById(adminId: string): Promise<AdminUser | null> {
+    try {
+      if (!adminId) {
+        return null;
+      }
+
+      // Fetch admin with user details
+      const { data: admin, error } = await supabase
+        .from('entity_users')
+        .select(`
+          *,
+          users!entity_users_user_id_fkey (
+            id,
+            email,
+            raw_user_meta_data,
+            is_active,
+            last_login_at
+          )
+        `)
+        .eq('id', adminId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null; // Not found
+        }
+        console.error('Error fetching admin:', error);
+        return null;
+      }
+
+      // Fetch scope assignments
+      let assignedSchools: string[] = [];
+      let assignedBranches: string[] = [];
+
+      try {
+        const { data: scopes } = await supabase
+          .from('entity_admin_scope')
+          .select('scope_type, scope_id')
+          .eq('user_id', adminId)
+          .eq('is_active', true);
+
+        if (scopes) {
+          assignedSchools = scopes.filter(s => s.scope_type === 'school').map(s => s.scope_id);
+          assignedBranches = scopes.filter(s => s.scope_type === 'branch').map(s => s.scope_id);
+        }
+      } catch (scopeError) {
+        console.log('Scope data not available');
+      }
+
+      const enrichedAdmin: AdminUser = {
+        id: admin.id,
+        user_id: admin.user_id || '',
+        email: getAdminEmail(admin),
+        name: getAdminName(admin),
+        admin_level: admin.admin_level || 'entity_admin',
+        company_id: admin.company_id,
+        permissions: admin.permissions || permissionService.getDefaultPermissions(),
+        is_active: admin.is_active ?? true,
+        created_at: admin.created_at || new Date().toISOString(),
+        updated_at: admin.updated_at || admin.created_at || new Date().toISOString(),
+        metadata: admin.metadata || {},
+        parent_admin_id: admin.parent_admin_id || null,
+        assigned_schools: assignedSchools,
+        assigned_branches: assignedBranches
+      };
+
+      return enrichedAdmin;
+    } catch (error) {
+      console.error('getAdminById error:', error);
+      return null;
     }
   },
 
@@ -505,36 +374,17 @@ export const adminService = {
         throw new Error('Company ID is required');
       }
 
-      // Check if parent_admin_id column exists
-      const hasParentAdminColumn = await checkParentAdminColumnExists();
-
-      // Build column selection dynamically
-      const baseColumns = [
-        'id',
-        'user_id',
-        'email',
-        'name',
-        'admin_level',
-        'company_id',
-        'permissions',
-        'is_active',
-        'created_at',
-        'updated_at',
-        'metadata'
-      ];
-
-      if (hasParentAdminColumn) {
-        baseColumns.push('parent_admin_id');
-      }
-
-      // Build query
+      // Build query with join to users table
       let query = supabase
         .from('entity_users')
         .select(`
-          ${baseColumns.join(', ')},
-          users:user_id (
+          *,
+          users!entity_users_user_id_fkey (
+            id,
             email,
-            raw_user_meta_data
+            raw_user_meta_data,
+            is_active,
+            last_login_at
           )
         `)
         .eq('company_id', companyId)
@@ -549,7 +399,14 @@ export const adminService = {
           query = query.eq('is_active', filters.is_active);
         }
         if (filters.search) {
-          query = query.or(`email.ilike.%${filters.search}%,metadata->name.ilike.%${filters.search}%`);
+          const searchTerm = filters.search.trim();
+          query = query.or(`email.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
+        }
+        if (filters.created_after) {
+          query = query.gte('created_at', filters.created_after);
+        }
+        if (filters.created_before) {
+          query = query.lte('created_at', filters.created_before);
         }
         if (filters.limit) {
           query = query.limit(filters.limit);
@@ -562,41 +419,6 @@ export const adminService = {
       const { data: admins, error } = await query;
 
       if (error) {
-        // Check for specific column errors
-        if (error.message.includes('parent_admin_id')) {
-          console.warn('parent_admin_id column not found, fetching without it');
-          // Retry without parent_admin_id
-          const retryQuery = supabase
-            .from('entity_users')
-            .select(`
-              id, user_id, email, name, admin_level, company_id,
-              permissions, is_active, created_at, updated_at, metadata,
-              users:user_id (
-                email,
-                raw_user_meta_data
-              )
-            `)
-            .eq('company_id', companyId)
-            .order('created_at', { ascending: false });
-          
-          const { data: retriedAdmins, error: retryError } = await retryQuery;
-          if (retryError) {
-            throw new Error(`Failed to fetch admins: ${retryError.message}`);
-          }
-          return (retriedAdmins || []).map(admin => ({
-            id: admin.id,
-            email: getAdminEmail(admin),
-            name: getAdminName(admin),
-            admin_level: admin.admin_level || 'entity_admin',
-            company_id: admin.company_id,
-            permissions: admin.permissions || permissionService.getDefaultPermissions(),
-            is_active: admin.is_active ?? true,
-            created_at: admin.created_at,
-            updated_at: admin.updated_at,
-            metadata: admin.metadata || {},
-            parent_admin_id: null
-          }));
-        }
         throw new Error(`Failed to fetch admins: ${error.message}`);
       }
 
@@ -604,20 +426,49 @@ export const adminService = {
         return [];
       }
 
-      // Transform and enrich data
-      const enrichedAdmins = admins.map(admin => ({
-        id: admin.id,
-        email: getAdminEmail(admin),
-        name: getAdminName(admin),
-        admin_level: admin.admin_level || 'entity_admin',
-        company_id: admin.company_id,
-        permissions: admin.permissions || permissionService.getDefaultPermissions(),
-        is_active: admin.is_active ?? true,
-        created_at: admin.created_at,
-        updated_at: admin.updated_at,
-        metadata: admin.metadata || {},
-        parent_admin_id: hasParentAdminColumn ? admin.parent_admin_id : null
-      }));
+      // Fetch scope assignments for all admins
+      const adminIds = admins.map(a => a.id);
+      const { data: allScopes } = await supabase
+        .from('entity_admin_scope')
+        .select('user_id, scope_type, scope_id')
+        .in('user_id', adminIds)
+        .eq('is_active', true);
+
+      const scopeMap = new Map<string, { schools: string[], branches: string[] }>();
+      if (allScopes) {
+        allScopes.forEach(scope => {
+          if (!scopeMap.has(scope.user_id)) {
+            scopeMap.set(scope.user_id, { schools: [], branches: [] });
+          }
+          const userScopes = scopeMap.get(scope.user_id)!;
+          if (scope.scope_type === 'school') {
+            userScopes.schools.push(scope.scope_id);
+          } else if (scope.scope_type === 'branch') {
+            userScopes.branches.push(scope.scope_id);
+          }
+        });
+      }
+
+      // Transform and enrich admin data
+      const enrichedAdmins: AdminUser[] = admins.map(admin => {
+        const scopes = scopeMap.get(admin.id) || { schools: [], branches: [] };
+        return {
+          id: admin.id,
+          user_id: admin.user_id || '',
+          email: getAdminEmail(admin),
+          name: getAdminName(admin),
+          admin_level: admin.admin_level || 'entity_admin',
+          company_id: admin.company_id,
+          permissions: admin.permissions || permissionService.getDefaultPermissions(),
+          is_active: admin.is_active ?? true,
+          created_at: admin.created_at,
+          updated_at: admin.updated_at,
+          metadata: admin.metadata || {},
+          parent_admin_id: admin.parent_admin_id || null,
+          assigned_schools: scopes.schools,
+          assigned_branches: scopes.branches
+        };
+      });
 
       return enrichedAdmins;
     } catch (error: any) {
@@ -629,31 +480,41 @@ export const adminService = {
   /**
    * Delete (deactivate) an administrator
    */
-  async deleteAdmin(userId: string): Promise<void> {
+  async deleteAdmin(adminId: string): Promise<void> {
     try {
       const actorId = getCurrentUserId();
 
-      const { data: admin, error: fetchError } = await supabase
-        .from('entity_users')
-        .select('company_id, name, email')
-        .eq('id', userId)
-        .single();
-
-      if (fetchError || !admin) {
+      const admin = await this.getAdminById(adminId);
+      if (!admin) {
         throw new Error('Administrator not found');
       }
 
-      // Deactivate instead of hard delete
-      const { error: updateError } = await supabase
+      // Deactivate in entity_users table
+      const { error: entityError } = await supabase
         .from('entity_users')
         .update({ 
           is_active: false,
           updated_at: new Date().toISOString()
         })
-        .eq('id', userId);
+        .eq('id', adminId);
 
-      if (updateError) {
-        throw new Error(`Failed to deactivate admin: ${updateError.message}`);
+      if (entityError) {
+        throw new Error(`Failed to deactivate admin: ${entityError.message}`);
+      }
+
+      // Also deactivate in users table if user_id exists
+      if (admin.user_id) {
+        const { error: userError } = await supabase
+          .from('users')
+          .update({ 
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', admin.user_id);
+
+        if (userError) {
+          console.error('Failed to deactivate user account:', userError);
+        }
       }
 
       // Log the action
@@ -662,11 +523,11 @@ export const adminService = {
           company_id: admin.company_id,
           action_type: 'admin_deleted',
           actor_id: actorId,
-          target_id: userId,
+          target_id: adminId,
           target_type: 'entity_user',
           changes: {
-            admin_name: getAdminName(admin),
-            admin_email: getAdminEmail(admin)
+            admin_name: admin.name,
+            admin_email: admin.email
           },
           metadata: { source: 'adminService.deleteAdmin' }
         });
@@ -682,22 +543,78 @@ export const adminService = {
   /**
    * Restore (reactivate) an administrator
    */
-  async restoreAdmin(userId: string): Promise<void> {
+  async restoreAdmin(adminId: string): Promise<void> {
     try {
-      const { error } = await supabase
+      const admin = await this.getAdminById(adminId);
+      if (!admin) {
+        throw new Error('Administrator not found');
+      }
+
+      // Reactivate in entity_users table
+      const { error: entityError } = await supabase
         .from('entity_users')
         .update({ 
           is_active: true,
           updated_at: new Date().toISOString()
         })
-        .eq('id', userId);
+        .eq('id', adminId);
 
-      if (error) {
-        throw new Error(`Failed to restore admin: ${error.message}`);
+      if (entityError) {
+        throw new Error(`Failed to restore admin: ${entityError.message}`);
+      }
+
+      // Also reactivate in users table if user_id exists
+      if (admin.user_id) {
+        const { error: userError } = await supabase
+          .from('users')
+          .update({ 
+            is_active: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', admin.user_id);
+
+        if (userError) {
+          console.error('Failed to reactivate user account:', userError);
+        }
       }
     } catch (error: any) {
       console.error('restoreAdmin error:', error);
       throw error instanceof Error ? error : new Error('Failed to restore administrator');
+    }
+  },
+
+  /**
+   * Check if email is available for admin creation
+   */
+  async isEmailAvailable(email: string, companyId: string, excludeUserId?: string): Promise<boolean> {
+    try {
+      // Check in entity_users table
+      let query = supabase
+        .from('entity_users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .eq('company_id', companyId);
+
+      if (excludeUserId) {
+        query = query.neq('id', excludeUserId);
+      }
+
+      const { data: entityCheck } = await query.maybeSingle();
+      if (entityCheck) {
+        return false;
+      }
+
+      // Also check in users table
+      const { data: userCheck } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .maybeSingle();
+
+      return !userCheck;
+    } catch (error) {
+      console.error('isEmailAvailable error:', error);
+      return false;
     }
   }
 };
