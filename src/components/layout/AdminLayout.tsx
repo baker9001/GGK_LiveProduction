@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
-import { setAuthenticatedUser } from '../../lib/auth';
+import { clearAuthenticatedUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
 
@@ -143,7 +143,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   }, [isProfileDropdownOpen]);
 
   const handleLogout = () => {
-    setAuthenticatedUser(null);
+    clearAuthenticatedUser();
     navigate('/signin');
   };
 
