@@ -107,7 +107,7 @@ export function AdminAuditLogsPanel({
         return { logs: filteredLogs, total: filteredLogs.length };
       }
       
-      return { logs, total: logs.length };
+      return { logs: logs, total: logs.length };
     },
     {
       keepPreviousData: true,
