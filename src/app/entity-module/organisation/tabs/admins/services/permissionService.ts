@@ -24,10 +24,15 @@ export const permissionService = {
         .from('entity_users')
         .select('permissions, admin_level')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (userError) {
         throw new Error(`Failed to fetch user permissions: ${userError.message}`);
+      }
+      
+      // If user is not an entity admin, return minimal permissions
+      if (!userData) {
+        return this.getMinimalPermissions();
       }
       
       // Step 2: Get default permissions for admin level

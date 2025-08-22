@@ -111,13 +111,21 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
         .select('admin_level, permissions, is_active, company_id')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      if (adminError || !adminUser) {
+      if (adminError) {
         console.error('Failed to fetch admin permissions:', adminError);
         setPermissions(null);
         setAdminLevel(null);
         setError('User is not an active administrator');
+        return;
+      }
+
+      // If user is not an entity admin, set minimal permissions
+      if (!adminUser) {
+        setPermissions(permissionService.getMinimalPermissions());
+        setAdminLevel(null);
+        setIsLoading(false);
         return;
       }
 
