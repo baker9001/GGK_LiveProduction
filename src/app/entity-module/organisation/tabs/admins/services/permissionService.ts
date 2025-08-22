@@ -77,7 +77,8 @@ export const permissionService = {
     userId: string,
     action: PermissionAction,
     resource: PermissionResource,
-    scopeId?: string
+    scopeId?: string,
+    scopeType?: 'company' | 'school' | 'branch'
   ): Promise<boolean> {
     try {
       const permissions = await this.getEffectivePermissions(userId);
@@ -90,14 +91,34 @@ export const permissionService = {
       const [category, permission] = permissionKey.split('.');
       const hasPermission = permissions[category]?.[permission] || false;
       
-      // If scope is specified, check scope-specific access
-      if (scopeId && hasPermission) {
-        const hasScope = await scopeService.hasAccessToScope(
-          userId,
-          this.getScopeTypeFromResource(resource),
-          scopeId
-        );
+      // If user doesn't have the base permission, deny access
+      if (!hasPermission) return false;
+      
+      // Get user's admin level to determine scope checking behavior
+      const { data: userData } = await supabase
+        .from('entity_users')
+        .select('admin_level, company_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (!userData) return false;
+      
+      // Entity admins have full access within their company
+      if (userData.admin_level === 'entity_admin') {
+        return true;
+      }
+      
+      // For other admin levels, check scope-specific access
+      if (scopeId && scopeType) {
+        const hasScope = await scopeService.hasAccessToScope(userId, scopeType, scopeId);
         return hasScope;
+      }
+      
+      // If no specific scope is provided but user is not entity admin,
+      // check if they have any scopes assigned (they need at least one to access anything)
+      const userScopes = await scopeService.getScopes(userId);
+      if (userScopes.length === 0) {
+        return false; // No scopes assigned, no access
       }
       
       return hasPermission;

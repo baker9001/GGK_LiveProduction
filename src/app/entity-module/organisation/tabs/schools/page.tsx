@@ -49,6 +49,8 @@ import { FormField, Input, Select } from '../../../../../components/shared/FormF
 import { Button } from '../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
+import { usePermissions } from '../../../../../contexts/PermissionContext';
+import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
 // Note: DataTable import removed as it wasn't used in the original file
 import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
@@ -112,6 +114,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
+  const { canCreate, canModify, canDelete } = usePermissions();
   
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -194,6 +197,12 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       staleTime: 60 * 1000,
       cacheTime: 5 * 60 * 1000
     }
+  );
+
+  // Apply scope filtering to schools
+  const { filteredData: accessibleSchools, hasAccess: hasSchoolAccess, canAccessAll } = useScopeFilter(
+    schools,
+    { entityType: 'school', companyId }
   );
 
   // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
@@ -482,7 +491,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   };
 
   // Filter schools based on search and status
-  const filteredSchools = schools.filter(school => {
+  const filteredSchools = accessibleSchools.filter(school => {
     const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          school.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
@@ -490,8 +499,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   });
 
   // Calculate stats
-  const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
-  const totalTeachers = schools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
+  const totalStudents = accessibleSchools.reduce((sum, school) => sum + (school.student_count || 0), 0);
+  const totalTeachers = accessibleSchools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
 
   // ===== MAIN RENDER =====
   return (
@@ -525,6 +534,28 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           </Button>
         </div>
 
+          {!canCreate('school') && (
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <div className="flex items-center">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  You don't have permission to create schools.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {!canAccessAll && accessibleSchools.length < schools.length && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div className="flex items-center">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope.
+                </p>
+              </div>
+            </div>
+          )}
+
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
@@ -532,7 +563,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Schools</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {schools.length}
+                  {accessibleSchools.length}
                 </p>
               </div>
               <School className="w-8 h-8 text-gray-400" />
@@ -543,7 +574,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
                 <p className="text-xl font-semibold text-green-600 dark:text-green-400">
-                  {schools.filter(s => s.status === 'active').length}
+                  {accessibleSchools.filter(s => s.status === 'active').length}
                 </p>
               </div>
               <CheckCircle2 className="w-8 h-8 text-green-400" />
@@ -692,12 +723,19 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleEdit(school)}
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                  </button>
+                  {canModify('school', school.id, 'school') ? (
+                    <button
+                      onClick={() => handleEdit(school)}
+                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Edit school"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this school">
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </div>
+                  )}
                 </div>
               </div>
             );

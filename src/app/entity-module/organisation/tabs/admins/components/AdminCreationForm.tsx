@@ -641,6 +641,20 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 </div>
               </div>
             </div>
+          ) : isSelfEdit ? (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Permission Modification Restricted
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    You cannot modify your own permissions for security reasons. Contact an Entity Administrator to change your permissions.
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
               <div className="flex items-center">
@@ -655,9 +669,9 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           <AdminPermissionMatrix
             value={formData.admin_level === 'entity_admin' ? permissionService.getEntityAdminPermissions() : permissions}
             onChange={setPermissions}
-            disabled={isSubmitting || formData.admin_level === 'entity_admin' || !canModify('admin')}
+            disabled={isSubmitting || formData.admin_level === 'entity_admin' || !canModify('admin') || isSelfEdit}
           />
-          {!canModify('admin') && (
+          {!canModify('admin') && !isSelfEdit && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mt-4">
               <div className="flex items-center">
                 <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />

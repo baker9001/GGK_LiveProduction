@@ -27,12 +27,12 @@ interface PermissionContextType {
   error: string | null;
   
   // Permission checking functions
-  hasPermission: (category: keyof AdminPermissions, permission: string) => boolean;
+  hasPermission: (category: keyof AdminPermissions, permission: string, scopeId?: string, scopeType?: 'company' | 'school' | 'branch') => boolean;
   hasAnyPermission: (checks: Array<{ category: keyof AdminPermissions; permission: string }>) => boolean;
   hasAllPermissions: (checks: Array<{ category: keyof AdminPermissions; permission: string }>) => boolean;
-  canCreate: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin') => boolean;
-  canModify: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin') => boolean;
-  canDelete: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin') => boolean;
+  canCreate: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch') => boolean;
+  canModify: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch') => boolean;
+  canDelete: (resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch') => boolean;
   canView: (resource: 'schools' | 'branches' | 'users' | 'settings' | 'audit_logs') => boolean;
   canManageSettings: (level: 'company' | 'school' | 'branch') => boolean;
   canExportData: () => boolean;
@@ -199,17 +199,40 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
   }, [user?.id, fetchPermissions]);
 
   // Cached permission checking
-  const hasPermission = useCallback((category: keyof AdminPermissions, permission: string): boolean => {
+  const hasPermission = useCallback((category: keyof AdminPermissions, permission: string, scopeId?: string, scopeType?: 'company' | 'school' | 'branch'): boolean => {
     if (!permissions) return false;
     
     checkCacheValidity();
-    const cacheKey = `${category}.${permission}`;
+    const cacheKey = `${category}.${permission}${scopeId ? `.${scopeType}.${scopeId}` : ''}`;
     
     if (permissionCache.current.has(cacheKey)) {
       return permissionCache.current.get(cacheKey)!;
     }
     
-    const result = (permissions[category] as any)?.[permission] === true;
+    // Check base permission first
+    const hasBasePermission = (permissions[category] as any)?.[permission] === true;
+    
+    if (!hasBasePermission) {
+      permissionCache.current.set(cacheKey, false);
+      return false;
+    }
+    
+    // If no scope specified, return base permission
+    if (!scopeId || !scopeType) {
+      permissionCache.current.set(cacheKey, hasBasePermission);
+      return hasBasePermission;
+    }
+    
+    // For entity admins, always allow access within their company
+    if (adminLevel === 'entity_admin') {
+      permissionCache.current.set(cacheKey, true);
+      return true;
+    }
+    
+    // For other admin levels, check if they have access to the specific scope
+    // This is a synchronous check, so we'll need to implement a different approach
+    // For now, we'll return the base permission and handle scope checking elsewhere
+    const result = hasBasePermission;
     permissionCache.current.set(cacheKey, result);
     return result;
   }, [permissions, checkCacheValidity]);
@@ -224,18 +247,18 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     return checks.every(check => hasPermission(check.category, check.permission));
   }, [permissions, hasPermission]);
 
-  const canCreate = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin'): boolean => {
+  const canCreate = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch'): boolean => {
     if (!permissions) return false;
     
     switch (resource) {
       case 'school':
-        return permissions.organization.create_school;
+        return hasPermission('organization', 'create_school', entityId, entityType);
       case 'branch':
-        return permissions.organization.create_branch;
+        return hasPermission('organization', 'create_branch', entityId, entityType);
       case 'teacher':
-        return permissions.users.create_teacher;
+        return hasPermission('users', 'create_teacher', entityId, entityType);
       case 'student':
-        return permissions.users.create_student;
+        return hasPermission('users', 'create_student', entityId, entityType);
       case 'admin':
         return hasAnyPermission([
           { category: 'users', permission: 'create_entity_admin' },
@@ -248,18 +271,18 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     }
   }, [permissions, hasAnyPermission]);
 
-  const canModify = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin'): boolean => {
+  const canModify = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch'): boolean => {
     if (!permissions) return false;
     
     switch (resource) {
       case 'school':
-        return permissions.organization.modify_school;
+        return hasPermission('organization', 'modify_school', entityId, entityType);
       case 'branch':
-        return permissions.organization.modify_branch;
+        return hasPermission('organization', 'modify_branch', entityId, entityType);
       case 'teacher':
-        return permissions.users.modify_teacher;
+        return hasPermission('users', 'modify_teacher', entityId, entityType);
       case 'student':
-        return permissions.users.modify_student;
+        return hasPermission('users', 'modify_student', entityId, entityType);
       case 'admin':
         return hasAnyPermission([
           { category: 'users', permission: 'modify_entity_admin' },
@@ -272,18 +295,18 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     }
   }, [permissions, hasAnyPermission]);
 
-  const canDelete = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin'): boolean => {
+  const canDelete = useCallback((resource: 'school' | 'branch' | 'teacher' | 'student' | 'admin', entityId?: string, entityType?: 'school' | 'branch'): boolean => {
     if (!permissions) return false;
     
     switch (resource) {
       case 'school':
-        return permissions.organization.delete_school;
+        return hasPermission('organization', 'delete_school', entityId, entityType);
       case 'branch':
-        return permissions.organization.delete_branch;
+        return hasPermission('organization', 'delete_branch', entityId, entityType);
       case 'teacher':
       case 'student':
       case 'admin':
-        return permissions.users.delete_users;
+        return hasPermission('users', 'delete_users', entityId, entityType);
       default:
         return false;
     }

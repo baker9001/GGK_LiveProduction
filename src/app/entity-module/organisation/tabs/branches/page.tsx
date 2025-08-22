@@ -47,6 +47,8 @@ import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
 import { ImageUpload } from '../../../../../components/shared/ImageUpload';
+import { usePermissions } from '../../../../../contexts/PermissionContext';
+import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -136,6 +138,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
+  const { canCreate, canModify, canDelete } = usePermissions();
   
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -244,6 +247,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       staleTime: 60 * 1000,
       cacheTime: 5 * 60 * 1000
     }
+  );
+
+  // Apply scope filtering to branches
+  const { filteredData: accessibleBranches, hasAccess: hasBranchAccess, canAccessAll } = useScopeFilter(
+    branches,
+    { entityType: 'branch', companyId }
   );
 
   // ===== MUTATIONS =====
@@ -478,7 +487,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   };
 
   // Filter branches based on search, status, and school
-  const filteredBranches = branches.filter(branch => {
+  const filteredBranches = accessibleBranches.filter(branch => {
     const matchesSearch = branch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          branch.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || branch.status === filterStatus;
@@ -751,7 +760,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Branches</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {branches.length}
+                  {accessibleBranches.length}
                 </p>
               </div>
               <MapPin className="w-8 h-8 text-gray-400" />
@@ -762,7 +771,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
                 <p className="text-xl font-semibold text-green-600 dark:text-green-400">
-                  {branches.filter(b => b.status === 'active').length}
+                  {accessibleBranches.filter(b => b.status === 'active').length}
                 </p>
               </div>
               <CheckCircle2 className="w-8 h-8 text-green-400" />
@@ -773,7 +782,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
                 <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  {branches.reduce((acc, b) => acc + (b.student_count || 0), 0)}
+                  {accessibleBranches.reduce((acc, b) => acc + (b.student_count || 0), 0)}
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-400" />
@@ -784,7 +793,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
                 <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {branches.reduce((acc, b) => acc + (b.additional?.teachers_count || 0), 0)}
+                  {accessibleBranches.reduce((acc, b) => acc + (b.additional?.teachers_count || 0), 0)}
                 </p>
               </div>
               <Users className="w-8 h-8 text-purple-400" />
@@ -792,6 +801,29 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           </div>
         </div>
       </div>
+
+      {/* Access Control Notices */}
+      {!canCreate('branch') && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+          <div className="flex items-center">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              You don't have permission to create branches.
+            </p>
+          </div>
+        </div>
+      )}
+      
+      {!canAccessAll && accessibleBranches.length < branches.length && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="flex items-center">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Showing {accessibleBranches.length} of {branches.length} branches based on your assigned scope.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Branches List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -912,12 +944,19 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleEdit(branch)}
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                  </button>
+                  {canModify('branch', branch.id, 'branch') ? (
+                    <button
+                      onClick={() => handleEdit(branch)}
+                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Edit branch"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this branch">
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </div>
+                  )}
                 </div>
               </div>
             );

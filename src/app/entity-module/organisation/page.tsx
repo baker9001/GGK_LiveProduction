@@ -21,6 +21,8 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
+import { usePermissions } from '../../../contexts/PermissionContext';
+import { useScopeFilter } from '../../../hooks/useScopeFilter';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
@@ -153,6 +155,7 @@ export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
+  const { canView } = usePermissions();
   
   // State management
   const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students'>('structure');
