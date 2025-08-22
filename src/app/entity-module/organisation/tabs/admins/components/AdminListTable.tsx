@@ -55,6 +55,7 @@ import { adminService } from '../services/adminService';
 import { useDeleteAdmin, useRestoreAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel } from '../types/admin.types';
 import { useUser } from '@/contexts/UserContext';
+import { usePermissions } from '@/contexts/PermissionContext';
 
 // Entity User interface for the table
 interface EntityUser {
@@ -96,6 +97,7 @@ export function AdminListTable({
   className
 }: AdminListTableProps) {
   const { user } = useUser();
+  const { permissions, adminLevel: currentUserAdminLevel } = usePermissions();
 
   // DEBUG: Log current user information
   console.log('=== CURRENT USER DEBUG ===');
@@ -166,6 +168,32 @@ export function AdminListTable({
   // Mutation hooks
   const deleteAdminMutation = useDeleteAdmin();
   const restoreAdminMutation = useRestoreAdmin();
+
+  // Helper function to check if current user can interact with target admin
+  const canInteractWithAdmin = (targetAdmin: EntityUser): boolean => {
+    // Entity Admins can interact with everyone
+    if (currentUserAdminLevel === 'entity_admin') {
+      return true;
+    }
+    
+    // Sub-Entity Admins cannot interact with Entity Admins
+    if (currentUserAdminLevel === 'sub_entity_admin' && targetAdmin.admin_level === 'entity_admin') {
+      return false;
+    }
+    
+    // Other admin levels can interact with same or lower levels
+    const levelHierarchy = {
+      'entity_admin': 4,
+      'sub_entity_admin': 3,
+      'school_admin': 2,
+      'branch_admin': 1
+    };
+    
+    const currentLevel = levelHierarchy[currentUserAdminLevel || 'branch_admin'];
+    const targetLevel = levelHierarchy[targetAdmin.admin_level];
+    
+    return currentLevel >= targetLevel;
+  };
 
   // Helper function to get admin level config
   const getAdminLevelConfig = (level: AdminLevel) => {
@@ -512,6 +540,66 @@ export function AdminListTable({
         buttonWillBeDisabled: row.is_active && row.user_id === user?.id
       })}
 
+      {/* Check if user can interact with this admin */}
+      {(() => {
+        const canInteract = canInteractWithAdmin(row);
+        const isSelfEdit = row.user_id === user?.id;
+        
+        return (
+          <>
+            {onViewDetails && (
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Eye className="h-4 w-4" />}
+                onClick={() => onViewDetails(row)}
+                className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+              >
+                View
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Edit2 className="h-4 w-4" />}
+              onClick={() => handleEditAdmin(row)}
+              disabled={!canInteract || isSelfEdit}
+              title={
+                !canInteract 
+                  ? "You don't have permission to edit this admin level"
+                  : isSelfEdit 
+                    ? "You cannot edit your own profile for security reasons"
+                    : undefined
+              }
+              className={cn(
+                "text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
+                (!canInteract || isSelfEdit) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+              onClick={() => handleDeleteAdmin([row])}
+              disabled={row.is_active && row.user_id === user?.id}
+              title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account for security reasons" : undefined}
+              className={row.is_active 
+                ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              }
+            >
+              {row.is_active ? 'Deactivate' : 'Restore'}
+            </Button>
+          </>
+        );
+      })()}
+    </div>
+  );
+
+  // Remove the old renderRowActions implementation
+  /*
       {onViewDetails && (
         <Button
           variant="ghost"
@@ -523,8 +611,7 @@ export function AdminListTable({
           View
         </Button>
       )}
-      <Button
-        variant="ghost"
+  */
         size="sm"
         leftIcon={<Edit2 className="h-4 w-4" />}
         onClick={() => handleEditAdmin(row)}
