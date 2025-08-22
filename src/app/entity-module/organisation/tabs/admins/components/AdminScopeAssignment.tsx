@@ -34,6 +34,7 @@ import { School, MapPin } from 'lucide-react'; // Icons
 interface AdminScopeAssignmentProps {
   userId: string;
   companyId: string; // Added companyId as a prop for fetching relevant schools/branches
+  adminLevel?: string;
   onScopesUpdated?: () => void;
 }
 
@@ -51,6 +52,7 @@ interface BranchOption {
 export function AdminScopeAssignment({
   userId,
   companyId,
+  adminLevel,
   onScopesUpdated,
 }: AdminScopeAssignmentProps) {
   // Fetch assigned scopes for the user
@@ -116,8 +118,16 @@ export function AdminScopeAssignment({
   const isLoading = isLoadingAssignedScopes || isLoadingAllSchools || isLoadingAllBranches;
   const isSaving = assignScopeMutation.isLoading || removeScopeMutation.isLoading;
 
+  // Check if user is entity admin (should have full access)
+  const isEntityAdmin = adminLevel === 'entity_admin';
+
   // Handle save changes
   const handleSaveChanges = async () => {
+    if (isEntityAdmin) {
+      toast.info('Entity Administrators have full access by default');
+      return;
+    }
+
     const currentSchoolScopeIds = assignedScopes.filter(s => s.scope_type === 'school').map(s => s.scope_id);
     const currentBranchScopeIds = assignedScopes.filter(s => s.scope_type === 'branch').map(s => s.scope_id);
 
@@ -214,43 +224,77 @@ export function AdminScopeAssignment({
 
   return (
     <div className="space-y-6">
+      {/* Entity Admin Full Access Notice */}
+      {isEntityAdmin && (
+        <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Full Company Access
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Entity Administrators automatically have access to all schools and branches within the company. 
+                No specific scope assignment is required.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Assign Schools Section */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className={cn(
+        "bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700",
+        isEntityAdmin && "opacity-50"
+      )}>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
           <School className="h-5 w-5 mr-2 text-blue-500" /> Assign Schools
         </h3>
+        {isEntityAdmin && (
+          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Entity Administrators have access to all schools automatically.
+          </div>
+        )}
         <SearchableMultiSelect
           label="Schools"
           options={allSchools}
           selectedValues={selectedSchoolIds}
           onChange={setSelectedSchoolIds}
           placeholder="Select schools to assign..."
-          disabled={isSaving /* || !canManageSchools() */}
+          disabled={isSaving || isEntityAdmin}
         />
-        {/* TODO: Add a note about permissions if disabled */}
       </div>
 
       {/* Assign Branches Section */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className={cn(
+        "bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700",
+        isEntityAdmin && "opacity-50"
+      )}>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
           <MapPin className="h-5 w-5 mr-2 text-purple-500" /> Assign Branches
         </h3>
+        {isEntityAdmin && (
+          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Entity Administrators have access to all branches automatically.
+          </div>
+        )}
         <SearchableMultiSelect
           label="Branches"
           options={allBranches}
           selectedValues={selectedBranchIds}
           onChange={setSelectedBranchIds}
           placeholder="Select branches to assign..."
-          disabled={isSaving /* || !canManageBranches() */}
+          disabled={isSaving || isEntityAdmin}
         />
-        {/* TODO: Add a note about permissions if disabled */}
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSaveChanges} disabled={isSaving}>
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </div>
+      {!isEntityAdmin && (
+        <div className="flex justify-end">
+          <Button onClick={handleSaveChanges} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

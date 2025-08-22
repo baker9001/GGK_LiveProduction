@@ -10,6 +10,9 @@ interface ToggleSwitchProps {
   label?: string;
   description?: string;
   className?: string;
+  showStateLabel?: boolean;
+  activeLabel?: string;
+  inactiveLabel?: string;
 }
 
 export function ToggleSwitch({
@@ -20,7 +23,10 @@ export function ToggleSwitch({
   color = 'green',
   label,
   description,
-  className
+  className,
+  showStateLabel = false,
+  activeLabel = 'Active',
+  inactiveLabel = 'Inactive'
 }: ToggleSwitchProps) {
   const sizeClasses = {
     sm: {
@@ -73,30 +79,65 @@ export function ToggleSwitch({
   };
 
   return (
-    <div className={cn('flex items-center', className)}>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-        className={cn(
-          'relative inline-flex flex-shrink-0 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#8CC63F]',
-          sizeClasses[size].switch,
-          checked ? colorClasses[color].on : colorClasses[color].off,
-          disabled && 'opacity-50 cursor-not-allowed'
+    <div className={cn('flex items-center justify-between', className)}>
+      <div className="flex items-center">
+        {(label || description) && (
+          <div className="mr-3">
+            {label && (
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {label}
+              </span>
+            )}
+            {description && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {description}
+              </p>
+            )}
+          </div>
         )}
-      >
-        <span
+      </div>
+      
+      <div className="flex items-center gap-3">
+        {showStateLabel && (
+          <span className={cn(
+            'text-sm font-medium transition-colors',
+            checked 
+              ? 'text-[#8CC63F] dark:text-[#8CC63F]' 
+              : 'text-gray-500 dark:text-gray-400'
+          )}>
+            {checked ? activeLabel : inactiveLabel}
+          </span>
+        )}
+        
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-label={label || `Toggle ${checked ? activeLabel : inactiveLabel}`}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
           className={cn(
-            'pointer-events-none inline-block rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200',
-            sizeClasses[size].thumb,
-            checked ? sizeClasses[size].translate : 'translate-x-0'
+            'relative inline-flex flex-shrink-0 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#8CC63F]',
+            sizeClasses[size].switch,
+            checked ? colorClasses[color].on : colorClasses[color].off,
+            disabled && 'opacity-50 cursor-not-allowed'
           )}
-        />
-      </button>
+        >
+          <span
+            className={cn(
+              'pointer-events-none inline-block rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200',
+              sizeClasses[size].thumb,
+              checked ? sizeClasses[size].translate : 'translate-x-0'
+            )}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default ToggleSwitch;
       
       {(label || description) && (
         <div className="ml-3">

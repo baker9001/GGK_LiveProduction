@@ -158,7 +158,12 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     const defaultPermissions = permissionService.getPermissionsForLevel(newLevel);
     setPermissions(defaultPermissions);
     
-    toast.info(`Default permissions applied for ${newLevel.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
+    // Show different messages based on admin level
+    if (newLevel === 'entity_admin') {
+      toast.success('Entity Admin selected - Full access permissions applied');
+    } else {
+      toast.info(`Default permissions applied for ${newLevel.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
+    }
   }, []);
 
   // Validate individual field
@@ -438,18 +443,20 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 disabled={isSubmitting}
                 color="green"
                 size="md"
-                label="Active User"
+                showStateLabel={true}
+                activeLabel="Active"
+                inactiveLabel="Inactive"
                 description="Inactive users cannot log in or access the system"
               />
             </FormField>
           </div>
         </div>
 
-        {/* Scope Assignment Section - Only for editing */}
-        {isEditing && initialData?.id && (
+        {/* Scope Assignment Section */}
+        {isEditing && initialData?.id && formData.admin_level !== 'entity_admin' && (
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-              <User className="h-5 w-5 mr-2 text-[#8CC63F]" />
+              <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
               Scope Assignment
             </h3>
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
@@ -464,11 +471,36 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             <AdminScopeAssignment
               userId={initialData.id}
               companyId={companyId}
+              adminLevel={formData.admin_level}
               onScopesUpdated={() => {
                 toast.success('Scope assignments updated');
                 onSuccess?.();
               }}
             />
+          </div>
+        )}
+
+        {/* Entity Admin Full Access Notice */}
+        {formData.admin_level === 'entity_admin' && (
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+              Entity Administrator Access
+            </h3>
+            <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Full Company Access Granted
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Entity Administrators have unrestricted access to all schools, branches, and company-wide settings. 
+                    No scope assignment is needed.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -478,19 +510,35 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
             Admin Permissions
           </h3>
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
-            <div className="flex items-center">
-              <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
-              <p className="text-sm text-green-700 dark:text-green-300">
-                These permissions control what actions this administrator can perform. 
-                Unchecked permissions will prevent access to related functions.
-              </p>
+          {formData.admin_level === 'entity_admin' ? (
+            <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Full Permissions Automatically Granted
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Entity Administrators automatically receive all permissions. The permission matrix below shows the complete access level.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  These permissions control what actions this administrator can perform. 
+                  Unchecked permissions will prevent access to related functions.
+                </p>
+              </div>
+            </div>
+          )}
           <AdminPermissionMatrix
             value={permissions}
             onChange={setPermissions}
-            disabled={isSubmitting}
+            disabled={isSubmitting || formData.admin_level === 'entity_admin'}
           />
         </div>
       </form>
