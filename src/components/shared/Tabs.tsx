@@ -131,8 +131,8 @@ export function TabsTrigger({
       className={cn(
         'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105',
         isActive
-          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400 dark:border-blue-500'
-          : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white/80 dark:hover:bg-gray-600/50 hover:shadow-md',
+          ? 'bg-[#8CC63F] text-white shadow-lg shadow-[#8CC63F]/25 border border-[#8CC63F] dark:border-[#8CC63F]'
+          : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] hover:bg-white/80 dark:hover:bg-gray-600/50 hover:shadow-md',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
