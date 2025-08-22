@@ -1,9 +1,9 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
- *
+ * 
  * ENHANCED VERSION - Complete form validation and improved UX
  * Uses existing shared form components with comprehensive validation
- *
+ * 
  * Features:
  * ✅ Comprehensive field validation with Zod
  * ✅ Password strength indicator
@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { z, ZodError } from 'zod';
+import { z } from 'zod';
 import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
@@ -23,7 +23,6 @@ import { Button } from '@/components/shared/Button';
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { toast } from '@/components/shared/Toast';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
-import { useAdminScope } from '../hooks/useAdminScope';
 import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
 import { AdminScopeAssignment } from './AdminScopeAssignment';
 import { AdminPermissionMatrix } from './AdminPermissionMatrix';
@@ -89,7 +88,7 @@ const calculatePasswordStrength = (password: string): { score: number; label: st
     4: { label: 'Good', color: 'bg-blue-500' },
     5: { label: 'Strong', color: 'bg-green-500' },
     6: { label: 'Very Strong', color: 'bg-green-600' }
-  }; 
+  };
   
   return { score, ...strength[score as keyof typeof strength] || strength[6] };
 };
@@ -116,7 +115,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
 
-  const { data: assignedScopes = [] } = useAdminScope(initialData?.id || '');
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
 
@@ -137,8 +135,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         password: '',
         admin_level: initialData.admin_level,
         is_active: initialData.is_active
-        // Scopes are managed separately in AdminScopeAssignment
-      }); 
+      });
       setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
     } else {
       setFormData({
@@ -147,7 +144,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         password: '',
         admin_level: 'entity_admin',
         is_active: true
-      }); 
+      });
       setPermissions(permissionService.getDefaultPermissions());
     }
     setErrors({});
@@ -191,7 +188,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       return undefined;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return error.errors[0]?.message; // Return only the first error message
+        return error.errors[0]?.message;
       }
       return 'Validation error';
     }
@@ -254,7 +251,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     const payload = {
       name: formData.name.trim(),
       email: formData.email.trim().toLowerCase(),
-      password: formData.password, // Only send if provided/changed
+      password: formData.password,
       admin_level: formData.admin_level,
       is_active: formData.is_active,
       company_id: companyId,
@@ -263,7 +260,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     };
 
     try {
-      if (isEditing && initialData?.id) {
+      if (isEditing) {
         await updateAdminMutation.mutateAsync(
           { userId: initialData.id, updates: payload },
           {
@@ -288,7 +285,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       toast.error(errorMessage);
       setErrors({ submit: errorMessage });
     }
-  }; 
+  };
 
   // Handle input change with validation
   const handleInputChange = useCallback((field: string, value: any) => {
@@ -312,7 +309,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
   return (
     <SlideInForm
-      title={isEditing ? `Edit Admin User: ${initialData?.name || initialData?.email}` : 'Create New Admin User'}
+      title={isEditing ? 'Edit Admin User' : 'Create New Admin User'}
       isOpen={isOpen}
       onClose={onClose}
       onSave={() => {
@@ -456,7 +453,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         </div>
 
         {/* Scope Assignment Section */}
-        {isEditing && initialData?.id && ( // Always show, but disable for entity_admin
+        {isEditing && initialData?.id && formData.admin_level !== 'entity_admin' && (
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
               <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
@@ -464,19 +461,21 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             </h3>
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
               <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
+                <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
                 <p className="text-sm text-green-700 dark:text-green-300">
                   Scope assignment limits this admin's access to specific schools or branches. 
                   Leave empty for full company access.
                 </p>
               </div>
             </div>
-            {/* AdminScopeAssignment component will handle its own rendering based on adminLevel */}
-            <AdminScopeAssignment 
-              userId={initialData.id} 
-              companyId={companyId} 
-              adminLevel={formData.admin_level} 
-              onScopesUpdated={() => toast.success('Scope assignments updated')} 
+            <AdminScopeAssignment
+              userId={initialData.id}
+              companyId={companyId}
+              adminLevel={formData.admin_level}
+              onScopesUpdated={() => {
+                toast.success('Scope assignments updated');
+                onSuccess?.();
+              }}
             />
           </div>
         )}
@@ -528,7 +527,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           ) : (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
               <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
+                <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
                 <p className="text-sm text-green-700 dark:text-green-300">
                   These permissions control what actions this administrator can perform. 
                   Unchecked permissions will prevent access to related functions.
@@ -537,9 +536,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             </div>
           )}
           <AdminPermissionMatrix
-            permissions={permissions}
+            value={permissions}
             onChange={setPermissions}
-            adminLevel={formData.admin_level}
             disabled={isSubmitting || formData.admin_level === 'entity_admin'}
           />
         </div>
