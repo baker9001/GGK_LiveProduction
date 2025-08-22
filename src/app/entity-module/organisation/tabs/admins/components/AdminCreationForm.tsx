@@ -20,6 +20,7 @@ import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircl
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
+import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { toast } from '@/components/shared/Toast';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
@@ -431,46 +432,17 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
           <div className="mt-4">
             <FormField id="status" label="Status">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={formData.is_active}
-                  onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                  disabled={isSubmitting}
-                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
-                />
-                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                  Active User
-                </label>
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Inactive users cannot log in or access the system
-              </p>
+              <ToggleSwitch
+                checked={formData.is_active}
+                onChange={(checked) => handleInputChange('is_active', checked)}
+                disabled={isSubmitting}
+                color="green"
+                size="md"
+                label="Active User"
+                description="Inactive users cannot log in or access the system"
+              />
             </FormField>
           </div>
-        </div>
-
-        {/* Admin Permissions Section */}
-        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
-            Admin Permissions
-          </h3>
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
-            <div className="flex items-center">
-              <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
-              <p className="text-sm text-green-700 dark:text-green-300">
-                These permissions control what actions this administrator can perform. 
-                Unchecked permissions will prevent access to related functions.
-              </p>
-            </div>
-          </div>
-          <AdminPermissionMatrix
-            value={permissions}
-            onChange={setPermissions}
-            disabled={isSubmitting}
-          />
         </div>
 
         {/* Scope Assignment Section - Only for editing */}
@@ -499,6 +471,28 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             />
           </div>
         )}
+
+        {/* Admin Permissions Section */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+            Admin Permissions
+          </h3>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
+              <p className="text-sm text-green-700 dark:text-green-300">
+                These permissions control what actions this administrator can perform. 
+                Unchecked permissions will prevent access to related functions.
+              </p>
+            </div>
+          </div>
+          <AdminPermissionMatrix
+            value={permissions}
+            onChange={setPermissions}
+            disabled={isSubmitting}
+          />
+        </div>
       </form>
     </SlideInForm>
   );
