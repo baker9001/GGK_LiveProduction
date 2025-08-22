@@ -467,7 +467,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               <ToggleSwitch
                 checked={formData.is_active}
                 onChange={(checked) => handleInputChange('is_active', checked)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (isEditing && user?.id === initialData?.user_id)}
                 preventSelfDeactivation={isEditing}
                 currentUserId={user?.id}
                 targetUserId={initialData?.user_id}
@@ -476,10 +476,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 showStateLabel={true}
                 activeLabel="Active"
                 inactiveLabel="Inactive"
-                description={isEditing && user?.id === initialData?.user_id 
-                  ? "You cannot deactivate your own account for security reasons"
-                  : "Inactive users cannot log in or access the system"
-                }
+                description="Inactive users cannot log in or access the system"
               />
             </FormField>
           </div>
