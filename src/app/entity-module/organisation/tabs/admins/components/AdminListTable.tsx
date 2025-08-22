@@ -139,8 +139,8 @@ export function AdminListTable({
       const serviceFilters: any = {};
 
       if (filters.search) serviceFilters.search = filters.search;
-      if (filters.admin_level.length > 0) serviceFilters.admin_level = filters.admin_level[0]; // Service expects single value
-      if (filters.is_active.length > 0) serviceFilters.is_active = filters.is_active[0] === 'active';
+      if (filters.admin_level.length > 0) serviceFilters.admin_level = filters.admin_level; // Pass array for OR condition
+      if (filters.is_active.length > 0) serviceFilters.is_active = filters.is_active; // Pass array for OR condition
       if (filters.created_after) serviceFilters.created_after = filters.created_after;
       if (filters.created_before) serviceFilters.created_before = filters.created_before;
 
@@ -753,7 +753,9 @@ export function AdminListTable({
               Add Administrator
             </Button>
           )}
-          
+        </div>
+
+        <div className="flex items-center gap-2">
           {selectedAdmins.length > 0 && (
             <Button
               variant="destructive"
@@ -763,9 +765,7 @@ export function AdminListTable({
               Bulk Action ({selectedAdmins.length})
             </Button>
           )}
-        </div>
-
-        <div className="flex items-center gap-2">
+          
           <Button
             variant="outline"
             size="sm"

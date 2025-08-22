@@ -51,8 +51,8 @@ interface UpdateAdminPayload {
 
 interface AdminFilters {
   company_id?: string;
-  admin_level?: AdminLevel;
-  is_active?: boolean;
+  admin_level?: AdminLevel | AdminLevel[];
+  is_active?: boolean | string[];
   search?: string;
   created_after?: string;
   created_before?: string;
@@ -432,10 +432,20 @@ export const adminService = {
       // Apply filters
       if (filters) {
         if (filters.admin_level) {
-          query = query.eq('admin_level', filters.admin_level);
+          if (Array.isArray(filters.admin_level)) {
+            query = query.in('admin_level', filters.admin_level);
+          } else {
+            query = query.eq('admin_level', filters.admin_level);
+          }
         }
         if (filters.is_active !== undefined) {
-          query = query.eq('is_active', filters.is_active);
+          if (Array.isArray(filters.is_active)) {
+            // Convert string array to boolean array for is_active filter
+            const booleanValues = filters.is_active.map(val => val === 'active');
+            query = query.in('is_active', booleanValues);
+          } else {
+            query = query.eq('is_active', filters.is_active);
+          }
         }
         if (filters.search) {
           const searchTerm = filters.search.trim();
