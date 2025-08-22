@@ -1,19 +1,7 @@
-/**
- * File: /src/lib/access/index.ts
- * Core access control library for the entire GGK application
- * 
- * This library provides centralized access control for:
- * - Module access based on user type
- * - Tab visibility based on admin level
- * - Action permissions based on hierarchy
- * - Scope-based data filtering
- * - Self-action prevention
- */
+```typescript
+// src/lib/access/index.ts
 
-import { supabase } from '@/lib/supabase';
-
-// ============= TYPE DEFINITIONS =============
-
+// Canonical Definitions
 export type UserType = 'system' | 'entity' | 'teacher' | 'student' | 'parent';
 export type AdminLevel = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin';
 
@@ -21,606 +9,226 @@ export type AdminLevel = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 
 export interface UserContext {
   userId: string;
   userType: UserType;
-  adminLevel?: AdminLevel;
-  companyId?: string;
-  isActive?: boolean;
+  adminLevel?: AdminLevel; // Only applicable for 'entity' userType
+  companyId?: string; // Applicable for entity, teacher, student
 }
 
-// Scope definition with arrays for multi-assignment support
+// Scope definition
 export interface UserScope {
-  companyId?: string;
-  schoolIds: string[];
-  branchIds: string[];
-}
-
-// Complete user scope combining context and assignments
-export interface CompleteUserScope extends UserContext {
-  scope: UserScope;
-}
-
-// Permission context for action checks
-export interface PermissionContext {
-  user: CompleteUserScope;
-  targetUserId?: string;
-  targetAdminLevel?: AdminLevel;
-  action: string;
-  resource?: string;
+  schools: string[];
+  branches: string[];
 }
 
 // Permission matrix structure
 export interface PermissionMatrix {
-  users: {
-    create_entity_admin: boolean;
-    create_sub_admin: boolean;
-    create_school_admin: boolean;
-    create_branch_admin: boolean;
-    create_teacher: boolean;
-    create_student: boolean;
-    modify_entity_admin: boolean;
-    modify_sub_admin: boolean;
-    modify_school_admin: boolean;
-    modify_branch_admin: boolean;
-    modify_teacher: boolean;
-    modify_student: boolean;
-    delete_users: boolean;
-    view_all_users: boolean;
-  };
-  organization: {
-    create_school: boolean;
-    modify_school: boolean;
-    delete_school: boolean;
-    create_branch: boolean;
-    modify_branch: boolean;
-    delete_branch: boolean;
-    view_all_schools: boolean;
-    view_all_branches: boolean;
-    manage_departments: boolean;
-  };
-  settings: {
-    manage_company_settings: boolean;
-    manage_school_settings: boolean;
-    manage_branch_settings: boolean;
-    view_audit_logs: boolean;
-    export_data: boolean;
+  [category: string]: {
+    [permission: string]: boolean;
   };
 }
 
-// ============= ACCESS CONTROL CLASS =============
-
+// AccessControl Class
 export class AccessControl {
-  private static instance: AccessControl | null = null;
-  private userContext?: UserContext;
-  private userScope: UserScope = { schoolIds: [], branchIds: [] };
-  private permissions?: PermissionMatrix;
+  private userContext: UserContext;
+  private userScope: UserScope = { schools: [], branches: [] }; // Default empty scope
+  private permissions: PermissionMatrix;
 
-  // Module access map based on userType
-  private static readonly MODULE_ACCESS_MAP: Record<UserType, string[]> = {
-    system: ['/system-admin', '/entity-module', '/teacher-module', '/student-module', '/parent-module'],
-    entity: ['/entity-module'],
-    teacher: ['/teacher-module'],
-    student: ['/student-module'],
-    parent: ['/parent-module'],
+  // Define module access map based on userType
+  private moduleAccessMap: Record<UserType, string[]> = {
+    system: ['/app/system-admin', '/app/entity-module', '/app/teachers-module', '/app/student-module', '/app/parent-module'], // System can access all
+    entity: ['/app/entity-module'],
+    teacher: ['/app/teachers-module'],
+    student: ['/app/student-module'],
+    parent: ['/app/parent-module'],
   };
 
-  // Tab visibility matrix based on adminLevel
-  private static readonly TAB_VISIBILITY_MATRIX: Record<AdminLevel, string[]> = {
-    entity_admin: ['organization-structure', 'schools', 'branches', 'admins', 'teachers', 'students'],
-    sub_entity_admin: ['organization-structure', 'schools', 'branches', 'admins', 'teachers', 'students'],
-    school_admin: ['schools', 'branches', 'admins', 'teachers', 'students'], // No structure tab
-    branch_admin: ['schools', 'branches', 'admins', 'teachers', 'students'], // No structure tab
+  // Define tab visibility matrix based on adminLevel
+  // This is a simplified example; a real matrix might be more complex
+  private tabVisibilityMatrix: Record<AdminLevel, string[]> = {
+    entity_admin: ['structure', 'schools', 'branches', 'admins', 'teachers', 'students'],
+    sub_entity_admin: ['structure', 'schools', 'branches', 'admins', 'teachers', 'students'], // Future differentiation
+    school_admin: ['schools', 'branches', 'teachers', 'students'], // No 'structure' or 'admins' tab
+    branch_admin: ['branches', 'teachers', 'students'], // Only 'branches', 'teachers', 'students'
   };
 
-  // Admin level hierarchy for comparison
-  private static readonly ADMIN_LEVEL_HIERARCHY: Record<AdminLevel, number> = {
-    entity_admin: 4,
-    sub_entity_admin: 3,
-    school_admin: 2,
-    branch_admin: 1
+  // Define action permission matrix (simplified for demonstration)
+  // In a real system, this would be more granular and potentially loaded from DB
+  private actionPermissionMatrix: Record<AdminLevel, PermissionMatrix> = {
+    entity_admin: {
+      school: { create: true, modify: true, delete: true, view: true },
+      branch: { create: true, modify: true, delete: true, view: true },
+      user: { create: true, modify: true, delete: true, view: true },
+      settings: { manage: true, view_audit: true, export: true },
+    },
+    sub_entity_admin: {
+      school: { create: true, modify: true, delete: true, view: true },
+      branch: { create: true, modify: true, delete: true, view: true },
+      user: { create: true, modify: true, delete: true, view: true },
+      settings: { manage: true, view_audit: true, export: true },
+    },
+    school_admin: {
+      school: { create: false, modify: true, delete: false, view: true },
+      branch: { create: true, modify: true, delete: true, view: true },
+      user: { create: true, modify: true, delete: false, view: true },
+      settings: { manage: true, view_audit: false, export: false },
+    },
+    branch_admin: {
+      school: { create: false, modify: false, delete: false, view: false },
+      branch: { create: false, modify: true, delete: false, view: true },
+      user: { create: true, modify: true, delete: false, view: true },
+      settings: { manage: true, view_audit: false, export: false },
+    },
   };
 
-  // Action permissions by admin level
-  private static readonly ACTION_PERMISSIONS: Record<string, AdminLevel[]> = {
-    // User creation
-    'create_entity_admin': [],  // No one can create entity admins (except system)
-    'create_sub_admin': ['entity_admin'],
-    'create_school_admin': ['entity_admin', 'sub_entity_admin'],
-    'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'create_teacher': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    'create_student': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    
-    // User modification
-    'modify_entity_admin': [],  // No one can modify entity admins
-    'modify_sub_admin': ['entity_admin'],
-    'modify_school_admin': ['entity_admin', 'sub_entity_admin'],
-    'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'modify_teacher': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    'modify_student': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    
-    // User deactivation
-    'deactivate_entity_admin': ['entity_admin'],  // Only other entity admins
-    'deactivate_sub_admin': ['entity_admin'],
-    'deactivate_school_admin': ['entity_admin', 'sub_entity_admin'],
-    'deactivate_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'deactivate_teacher': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    'deactivate_student': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    
-    // Organization management
-    'create_school': ['entity_admin', 'sub_entity_admin'],
-    'modify_school': ['entity_admin', 'sub_entity_admin'],
-    'delete_school': ['entity_admin'],
-    'create_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'modify_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'delete_branch': ['entity_admin', 'sub_entity_admin'],
-    
-    // View permissions
-    'view_all_users': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-    'view_audit_logs': ['entity_admin', 'sub_entity_admin', 'school_admin'],
-    'export_data': ['entity_admin', 'sub_entity_admin', 'school_admin']
-  };
+  constructor(userContext: UserContext) {
+    this.userContext = userContext;
+    // Initialize permissions based on adminLevel, or minimal if not an admin
+    this.permissions = userContext.adminLevel 
+      ? this.actionPermissionMatrix[userContext.adminLevel] 
+      : this.getMinimalPermissions();
+  }
 
-  // Singleton pattern for consistent state
-  static getInstance(): AccessControl {
-    if (!AccessControl.instance) {
-      AccessControl.instance = new AccessControl();
+  // --- Core Access Methods ---
+
+  /**
+   * Checks if the user has access to a specific module.
+   * @param modulePath The base path of the module (e.g., '/app/entity-module').
+   * @returns True if the user can access the module, false otherwise.
+   */
+  canAccessModule(modulePath: string): boolean {
+    const allowedPaths = this.moduleAccessMap[this.userContext.userType];
+    return allowedPaths.some(path => modulePath.startsWith(path));
+  }
+
+  /**
+   * Checks if the user can view a specific tab within a module.
+   * This is primarily for UI visibility.
+   * @param tabName The name of the tab (e.g., 'schools', 'admins').
+   * @returns True if the user can view the tab, false otherwise.
+   */
+  canViewTab(tabName: string): boolean {
+    if (this.userContext.userType !== 'entity' || !this.userContext.adminLevel) {
+      return false; // Only entity users with an admin level can view admin tabs
     }
-    return AccessControl.instance;
-  }
-
-  // ============= CORE ACCESS METHODS =============
-
-  /**
-   * Initialize or update user context
-   */
-  async initializeUser(userId: string): Promise<CompleteUserScope | null> {
-    try {
-      // Get user basic info
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, user_type, is_active')
-        .eq('id', userId)
-        .single();
-
-      if (!userData || !userData.is_active) {
-        return null;
-      }
-
-      this.userContext = {
-        userId: userData.id,
-        userType: userData.user_type as UserType,
-        isActive: userData.is_active
-      };
-
-      // If entity user, get admin details and scope
-      if (userData.user_type === 'entity') {
-        const { data: entityData } = await supabase
-          .from('entity_users')
-          .select('admin_level, company_id, permissions')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-          .single();
-
-        if (entityData) {
-          this.userContext.adminLevel = entityData.admin_level as AdminLevel;
-          this.userContext.companyId = entityData.company_id;
-          this.permissions = entityData.permissions as PermissionMatrix;
-
-          // Get scope using the RPC function
-          const { data: scopeData } = await supabase
-            .rpc('get_user_effective_scope', { p_user_id: userId });
-
-          if (scopeData && scopeData.length > 0) {
-            this.userScope = {
-              companyId: scopeData[0].company_ids?.[0],
-              schoolIds: scopeData[0].school_ids || [],
-              branchIds: scopeData[0].branch_ids || []
-            };
-          }
-        }
-      }
-
-      return {
-        ...this.userContext,
-        scope: this.userScope
-      };
-    } catch (error) {
-      console.error('Error initializing user context:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Check if user can access a specific module
-   */
-  canAccessModule(modulePath: string, userType?: UserType): boolean {
-    const type = userType || this.userContext?.userType;
-    if (!type) return false;
-
-    const allowedPaths = AccessControl.MODULE_ACCESS_MAP[type] || [];
-    return allowedPaths.some(path => modulePath.includes(path));
-  }
-
-  /**
-   * Check if user can view a specific tab
-   */
-  canViewTab(tabName: string, adminLevel?: AdminLevel): boolean {
-    const level = adminLevel || this.userContext?.adminLevel;
-    if (!level) return false;
-
-    const allowedTabs = AccessControl.TAB_VISIBILITY_MATRIX[level] || [];
+    const allowedTabs = this.tabVisibilityMatrix[this.userContext.adminLevel];
     return allowedTabs.includes(tabName);
   }
 
   /**
-   * Check if user can perform a specific action
+   * Checks if the user can perform a specific action on a given context.
+   * This is for granular permission checks (e.g., create a school, edit a teacher).
+   * @param action The action to check ('create', 'modify', 'delete', 'view').
+   * @param context The resource context ('school', 'branch', 'user', 'settings').
+   * @param entityId Optional: The ID of the specific entity for scoped permissions.
+   * @returns True if the user can perform the action, false otherwise.
    */
-  can(action: string, targetUserId?: string, targetAdminLevel?: AdminLevel): boolean {
-    if (!this.userContext?.adminLevel) return false;
-
-    // Self-deactivation check
-    if (action.startsWith('deactivate') && targetUserId === this.userContext.userId) {
-      return false; // Never allow self-deactivation
+  can(action: 'create' | 'modify' | 'delete' | 'view' | 'manage' | 'view_audit' | 'export', context: 'school' | 'branch' | 'user' | 'settings'): boolean {
+    if (!this.userContext.adminLevel) {
+      return false; // Non-admin users cannot perform admin actions
+    }
+    
+    const categoryPermissions = this.permissions[context];
+    if (!categoryPermissions) {
+      return false; // Category not defined in permissions
     }
 
-    // Check if action is allowed for user's admin level
-    const allowedLevels = AccessControl.ACTION_PERMISSIONS[action] || [];
-    if (!allowedLevels.includes(this.userContext.adminLevel)) {
-      return false;
-    }
-
-    // If target has admin level, check hierarchy
-    if (targetAdminLevel) {
-      return this.checkHierarchy(this.userContext.adminLevel, targetAdminLevel);
-    }
-
-    return true;
+    return categoryPermissions[action] === true;
   }
 
   /**
-   * Check hierarchy rules - can only manage lower levels
+   * Fetches the user's assigned scope (schools and branches).
+   * In a real application, this would call a Supabase RPC or query a scope table.
+   * For Phase 1, this is a mock implementation.
+   * @param userId The ID of the user.
+   * @returns A promise resolving to the user's scope.
    */
-  private checkHierarchy(actorLevel: AdminLevel, targetLevel: AdminLevel): boolean {
-    const actorHierarchy = AccessControl.ADMIN_LEVEL_HIERARCHY[actorLevel];
-    const targetHierarchy = AccessControl.ADMIN_LEVEL_HIERARCHY[targetLevel];
+  async getUserScope(userId: string): Promise<UserScope> {
+    // Mock implementation for Phase 1
+    // In Phase 5, this will be replaced by an actual Supabase RPC call
+    console.log(`[AccessControl] Fetching scope for user: ${userId}`);
     
-    // Special case: entity_admin cannot manage other entity_admins
-    if (actorLevel === 'entity_admin' && targetLevel === 'entity_admin') {
-      return false;
-    }
-    
-    return actorHierarchy > targetHierarchy;
-  }
-
-  /**
-   * Get scope filters for database queries
-   */
-  getScopeFilters(resourceType?: 'schools' | 'branches' | 'users' | 'teachers' | 'students'): Record<string, any> {
-    if (!this.userContext?.adminLevel) {
-      return { id: { in: [] } }; // No access
-    }
-
-    // Entity admin and sub-entity admin have full company access
-    if (this.userContext.adminLevel === 'entity_admin' || 
-        this.userContext.adminLevel === 'sub_entity_admin') {
-      return this.userScope.companyId 
-        ? { company_id: this.userScope.companyId }
-        : {};
-    }
-
-    // School admin filters
+    // Example mock scopes:
     if (this.userContext.adminLevel === 'school_admin') {
-      if (resourceType === 'schools' && this.userScope.schoolIds.length > 0) {
-        return { id: { in: this.userScope.schoolIds } };
-      }
-      if (resourceType === 'branches' && this.userScope.schoolIds.length > 0) {
-        return { school_id: { in: this.userScope.schoolIds } };
-      }
-      if ((resourceType === 'teachers' || resourceType === 'students') && this.userScope.schoolIds.length > 0) {
-        return { school_id: { in: this.userScope.schoolIds } };
-      }
-      if (resourceType === 'users' && this.userScope.schoolIds.length > 0) {
-        // For entity_users, need to join with entity_user_schools
-        return { 
-          _or: [
-            { school_id: { in: this.userScope.schoolIds } },
-            { id: { in: this.userScope.schoolIds } } // For filtering schools themselves
-          ]
-        };
-      }
+      return { schools: ['school-id-1', 'school-id-2'], branches: [] };
     }
-
-    // Branch admin filters
     if (this.userContext.adminLevel === 'branch_admin') {
-      if (resourceType === 'branches' && this.userScope.branchIds.length > 0) {
-        return { id: { in: this.userScope.branchIds } };
-      }
-      if ((resourceType === 'teachers' || resourceType === 'students') && this.userScope.branchIds.length > 0) {
-        return { branch_id: { in: this.userScope.branchIds } };
-      }
-      if (resourceType === 'users' && this.userScope.branchIds.length > 0) {
-        // For entity_users, need to join with entity_user_branches
-        return { 
-          _or: [
-            { branch_id: { in: this.userScope.branchIds } },
-            { id: { in: this.userScope.branchIds } } // For filtering branches themselves
-          ]
-        };
-      }
-      // Branch admins cannot see schools table
-      if (resourceType === 'schools') {
-        return { id: { in: [] } }; // No access to schools
-      }
+      return { schools: [], branches: ['branch-id-1'] };
     }
-
-    // Default: no access
-    return { id: { in: [] } };
+    return { schools: [], branches: [] }; // Default empty scope
   }
 
   /**
-   * Enforce module isolation - returns redirect path if unauthorized
+   * Generates Supabase query filters based on the user's scope and admin level.
+   * @param entityType The type of entity to filter ('school' or 'branch').
+   * @returns An object containing Supabase filters, or null for full access.
    */
-  enforceModuleIsolation(currentPath: string): string | null {
-    if (!this.userContext) {
-      return '/signin';
-    }
-
-    const isAllowed = this.canAccessModule(currentPath);
-    
-    if (!isAllowed) {
-      // Redirect to user's default module
-      const defaultRedirectMap: Record<UserType, string> = {
-        system: '/system-admin',
-        entity: '/entity-module',
-        teacher: '/teacher-module',
-        student: '/student-module',
-        parent: '/parent-module'
-      };
-      return defaultRedirectMap[this.userContext.userType] || '/signin';
-    }
-    
-    return null; // User is authorized
-  }
-
-  /**
-   * Get full permission matrix for current user
-   */
-  getPermissions(): PermissionMatrix | null {
-    if (!this.userContext?.adminLevel) {
+  getScopeFilters(entityType: 'school' | 'branch'): Record<string, any> | null {
+    // System users and Entity Admins have full access, no filters needed
+    if (this.userContext.userType === 'system' || this.userContext.adminLevel === 'entity_admin') {
       return null;
     }
 
-    // Return stored permissions or generate based on admin level
-    return this.permissions || this.generatePermissions(this.userContext.adminLevel);
-  }
-
-  /**
-   * Generate permissions based on admin level
-   */
-  private generatePermissions(adminLevel: AdminLevel): PermissionMatrix {
-    switch (adminLevel) {
-      case 'entity_admin':
-      case 'sub_entity_admin':
-        return {
-          users: {
-            create_entity_admin: adminLevel === 'entity_admin',
-            create_sub_admin: true,
-            create_school_admin: true,
-            create_branch_admin: true,
-            create_teacher: true,
-            create_student: true,
-            modify_entity_admin: false,
-            modify_sub_admin: true,
-            modify_school_admin: true,
-            modify_branch_admin: true,
-            modify_teacher: true,
-            modify_student: true,
-            delete_users: true,
-            view_all_users: true
-          },
-          organization: {
-            create_school: true,
-            modify_school: true,
-            delete_school: adminLevel === 'entity_admin',
-            create_branch: true,
-            modify_branch: true,
-            delete_branch: true,
-            view_all_schools: true,
-            view_all_branches: true,
-            manage_departments: true
-          },
-          settings: {
-            manage_company_settings: true,
-            manage_school_settings: true,
-            manage_branch_settings: true,
-            view_audit_logs: true,
-            export_data: true
-          }
-        };
-
-      case 'school_admin':
-        return {
-          users: {
-            create_entity_admin: false,
-            create_sub_admin: false,
-            create_school_admin: false,
-            create_branch_admin: true,
-            create_teacher: true,
-            create_student: true,
-            modify_entity_admin: false,
-            modify_sub_admin: false,
-            modify_school_admin: false,
-            modify_branch_admin: true,
-            modify_teacher: true,
-            modify_student: true,
-            delete_users: false,
-            view_all_users: true
-          },
-          organization: {
-            create_school: false,
-            modify_school: false,
-            delete_school: false,
-            create_branch: true,
-            modify_branch: true,
-            delete_branch: false,
-            view_all_schools: false,
-            view_all_branches: true,
-            manage_departments: true
-          },
-          settings: {
-            manage_company_settings: false,
-            manage_school_settings: true,
-            manage_branch_settings: true,
-            view_audit_logs: true,
-            export_data: true
-          }
-        };
-
-      case 'branch_admin':
-        return {
-          users: {
-            create_entity_admin: false,
-            create_sub_admin: false,
-            create_school_admin: false,
-            create_branch_admin: false,
-            create_teacher: true,
-            create_student: true,
-            modify_entity_admin: false,
-            modify_sub_admin: false,
-            modify_school_admin: false,
-            modify_branch_admin: false,
-            modify_teacher: true,
-            modify_student: true,
-            delete_users: false,
-            view_all_users: false
-          },
-          organization: {
-            create_school: false,
-            modify_school: false,
-            delete_school: false,
-            create_branch: false,
-            modify_branch: false,
-            delete_branch: false,
-            view_all_schools: false,
-            view_all_branches: false,
-            manage_departments: false
-          },
-          settings: {
-            manage_company_settings: false,
-            manage_school_settings: false,
-            manage_branch_settings: true,
-            view_audit_logs: false,
-            export_data: false
-          }
-        };
-
-      default:
-        return this.getMinimalPermissions();
+    // Apply filters based on assigned scope
+    if (entityType === 'school' && this.userScope.schools.length > 0) {
+      return { school_id: { in: this.userScope.schools } };
     }
+    if (entityType === 'branch' && this.userScope.branches.length > 0) {
+      return { branch_id: { in: this.userScope.branches } };
+    }
+    
+    // If no specific scope, but not entity admin, return filter that yields no results
+    // This prevents accidental full access for scoped admins without assigned scopes
+    if (this.userContext.adminLevel && this.userContext.adminLevel !== 'entity_admin') {
+        return { id: { in: [] } }; // Return empty array to restrict access
+    }
+
+    return null; // No specific filters needed or no scope applies
   }
 
   /**
-   * Get minimal permissions (no access)
+   * Enforces module isolation by returning a redirect path if the user is unauthorized.
+   * @param userType The user's type.
+   * @param currentPath The current path the user is trying to access.
+   * @returns The redirect path if unauthorized, otherwise null.
+   */
+  enforceModuleIsolation(userType: UserType, currentPath: string): string | null {
+    const allowedPaths = this.moduleAccessMap[userType];
+    const isAllowed = allowedPaths.some(path => currentPath.startsWith(path));
+
+    if (!isAllowed) {
+      // Redirect to their default module dashboard
+      const defaultRedirectMap: Record<UserType, string> = {
+        system: '/app/system-admin/dashboard',
+        entity: '/app/entity-module/dashboard',
+        teacher: '/app/teachers-module/dashboard',
+        student: '/app/student-module/dashboard',
+        parent: '/app/parent-module/dashboard', // Future module
+      };
+      return defaultRedirectMap[userType] || '/signin'; // Fallback to signin
+    }
+    return null; // User is allowed
+  }
+
+  // --- Helper Methods ---
+
+  /**
+   * Sets the user's scope after it has been fetched.
+   * This method should be called after \`getUserScope` has resolved.
+   * @param scope The fetched user scope.
+   */
+  setUserScope(scope: UserScope) {
+    this.userScope = scope;
+  }
+
+  /**
+   * Returns a minimal set of permissions for non-admin users or as a fallback.
    */
   private getMinimalPermissions(): PermissionMatrix {
     return {
-      users: {
-        create_entity_admin: false,
-        create_sub_admin: false,
-        create_school_admin: false,
-        create_branch_admin: false,
-        create_teacher: false,
-        create_student: false,
-        modify_entity_admin: false,
-        modify_sub_admin: false,
-        modify_school_admin: false,
-        modify_branch_admin: false,
-        modify_teacher: false,
-        modify_student: false,
-        delete_users: false,
-        view_all_users: false
-      },
-      organization: {
-        create_school: false,
-        modify_school: false,
-        delete_school: false,
-        create_branch: false,
-        modify_branch: false,
-        delete_branch: false,
-        view_all_schools: false,
-        view_all_branches: false,
-        manage_departments: false
-      },
-      settings: {
-        manage_company_settings: false,
-        manage_school_settings: false,
-        manage_branch_settings: false,
-        view_audit_logs: false,
-        export_data: false
-      }
+      school: { create: false, modify: false, delete: false, view: false },
+      branch: { create: false, modify: false, delete: false, view: false },
+      user: { create: false, modify: false, delete: false, view: false },
+      settings: { manage: false, view_audit: false, export: false },
     };
-  }
-
-  // ============= UTILITY METHODS =============
-
-  /**
-   * Clear cached user context (for logout)
-   */
-  clearContext(): void {
-    this.userContext = undefined;
-    this.userScope = { schoolIds: [], branchIds: [] };
-    this.permissions = undefined;
-  }
-
-  /**
-   * Get current user context
-   */
-  getUserContext(): CompleteUserScope | null {
-    if (!this.userContext) return null;
-    
-    return {
-      ...this.userContext,
-      scope: this.userScope
-    };
-  }
-
-  /**
-   * Check if user is authenticated and active
-   */
-  isAuthenticated(): boolean {
-    return !!(this.userContext?.userId && this.userContext?.isActive);
-  }
-
-  /**
-   * Get user's admin level
-   */
-  getAdminLevel(): AdminLevel | undefined {
-    return this.userContext?.adminLevel;
-  }
-
-  /**
-   * Get user type
-   */
-  getUserType(): UserType | undefined {
-    return this.userContext?.userType;
   }
 }
-
-// ============= EXPORT SINGLETON INSTANCE =============
-
-const accessControl = AccessControl.getInstance();
-
-// Export convenience functions
-export const initializeUser = (userId: string) => accessControl.initializeUser(userId);
-export const canAccessModule = (path: string, userType?: UserType) => accessControl.canAccessModule(path, userType);
-export const canViewTab = (tab: string, adminLevel?: AdminLevel) => accessControl.canViewTab(tab, adminLevel);
-export const can = (action: string, targetUserId?: string, targetAdminLevel?: AdminLevel) => accessControl.can(action, targetUserId, targetAdminLevel);
-export const getScopeFilters = (resourceType?: 'schools' | 'branches' | 'users' | 'teachers' | 'students') => accessControl.getScopeFilters(resourceType);
-export const enforceModuleIsolation = (path: string) => accessControl.enforceModuleIsolation(path);
-export const getPermissions = () => accessControl.getPermissions();
-export const getUserContext = () => accessControl.getUserContext();
-export const clearContext = () => accessControl.clearContext();
-export const isAuthenticated = () => accessControl.isAuthenticated();
-export const getAdminLevel = () => accessControl.getAdminLevel();
-export const getUserType = () => accessControl.getUserType();
-
-// Export the class for type checking and testing
-export default accessControl;
+```
