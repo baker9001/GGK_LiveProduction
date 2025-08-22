@@ -164,8 +164,8 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
           id: editingAdmin.id,
           name: editingAdmin.name,
           email: editingAdmin.email,
-          adminLevel: editingAdmin.admin_level,
-          isActive: editingAdmin.is_active,
+          admin_level: editingAdmin.admin_level,
+          is_active: editingAdmin.is_active,
           createdAt: editingAdmin.created_at,
           permissions: editingAdmin.metadata?.permissions,
           scopes: [] // TODO: Fetch actual scopes for editing admin
