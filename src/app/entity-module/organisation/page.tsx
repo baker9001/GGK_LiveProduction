@@ -901,9 +901,9 @@ export default function OrganizationManagement() {
 
         {/* Tab Navigation - UPDATED TO USE SHARED TABS COMPONENT */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <Tabs defaultValue="structure" value={activeTab} onValueChange={(value: string) => setActiveTab(value as any)}>
-            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-2">
-              <TabsList className="w-full justify-start bg-transparent dark:bg-transparent">
+          <Tabs defaultValue="structure" value={activeTab} onValueChange={(value: string) => setActiveTab(value as any)} className="w-full">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <TabsList>
                 <TabsTrigger 
                   value="structure"
                   onMouseEnter={() => prefetchTabData('structure')}
