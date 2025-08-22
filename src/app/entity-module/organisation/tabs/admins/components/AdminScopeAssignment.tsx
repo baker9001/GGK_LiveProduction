@@ -2,41 +2,43 @@
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminScopeAssignment.tsx
  * 
  * Admin Scope Assignment Component
- * Manages school and branch scope assignments for administrators
- * 
- * Dependencies:
- *   - @/components/shared/SearchableMultiSelect
- *   - @/components/shared/Button
- *   - @/components/shared/Toast
- *   - @/lib/supabase
- *   - ../types/admin.types
- *   - ../hooks/useAdminScope
- *   - ../hooks/useAdminPermissions
+ * Handles assignment of schools and branches to administrators
  * 
  * Features:
- *   - Fetch and display assigned scopes for a user
- *   - Allow assignment of schools and branches
- *   - Handle scope removal
- *   - Manage permissions for each scope
+ * ✅ Entity admin full access handling
+ * ✅ Dynamic school/branch loading
+ * ✅ Scope assignment and removal
+ * ✅ Permission-based field control
+ * ✅ Real-time validation and feedback
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  School, 
+  MapPin, 
+  CheckCircle, 
+  AlertCircle, 
+  Building2,
+  Shield,
+  Users,
+  Save,
+  Loader2
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/shared/Button';
+import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { toast } from '@/components/shared/Toast';
 import { supabase } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
-import { EntityAdminScope } from '../types/admin.types';
-import { useAdminScope, useAssignScope, useRemoveScope } from '../hooks/useAdminScope';
-import { useAdminPermissions } from '../hooks/useAdminPermissions'; // For future permission checks
-import { School, MapPin, CheckCircle } from 'lucide-react'; // Icons
+import { scopeService } from '../services/scopeService';
+import { AdminLevel, EntityAdminScope } from '../types/admin.types';
 
 interface AdminScopeAssignmentProps {
   userId: string;
-  companyId: string; // Added companyId as a prop for fetching relevant schools/branches
-  adminLevel?: string;
+  companyId: string;
+  adminLevel: AdminLevel;
   onScopesUpdated?: () => void;
+  className?: string;
 }
 
 interface SchoolOption {
@@ -47,7 +49,8 @@ interface SchoolOption {
 interface BranchOption {
   value: string;
   label: string;
-  schoolId: string; // To link branches to schools
+  schoolId: string;
+  schoolName: string;
 }
 
 export function AdminScopeAssignment({
@@ -55,245 +58,425 @@ export function AdminScopeAssignment({
   companyId,
   adminLevel,
   onScopesUpdated,
+  className
 }: AdminScopeAssignmentProps) {
-  // Fetch assigned scopes for the user
-  const { data: assignedScopes = [], isLoading: isLoadingAssignedScopes, isError: isErrorAssignedScopes } = useAdminScope(userId);
+  const queryClient = useQueryClient();
+  const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Fetch all available schools for the company
-  const { data: allSchools = [], isLoading: isLoadingAllSchools, isError: isErrorAllSchools } = useQuery<SchoolOption[]>(
-    ['allSchools', companyId],
+  // Check if user is entity admin (has full access)
+  const isEntityAdmin = adminLevel === 'entity_admin';
+
+  // Fetch assigned scopes
+  const { data: assignedScopes = [], isLoading: isLoadingScopes } = useQuery(
+    ['adminScopes', userId],
+    () => scopeService.getScopes(userId),
+    {
+      enabled: !!userId && !isEntityAdmin,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
+
+  // Fetch all schools for this company
+  const { data: allSchools = [], isLoading: isLoadingSchools } = useQuery(
+    ['company-schools', companyId],
     async () => {
       const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, code')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .order('name');
+
+      if (error) throw error;
+
+      return (data || []).map(school => ({
+        value: school.id,
+        label: `${school.name}${school.code ? ` (${school.code})` : ''}`
+      }));
+    },
+    {
+      enabled: !!companyId && !isEntityAdmin,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
+
+  // Fetch all branches for this company
+  const { data: allBranches = [], isLoading: isLoadingBranches } = useQuery(
+    ['company-branches', companyId],
+    async () => {
+      // First get all schools for this company
+      const { data: schools, error: schoolsError } = await supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId)
-        .eq('status', 'active'); // Only active schools
-      if (error) throw error;
-      return data.map(s => ({ value: s.id, label: s.name }));
-    },
-    { enabled: !!companyId, staleTime: 5 * 60 * 1000 }
-  );
-
-  // Fetch all available branches for the company's schools
-  const { data: allBranches = [], isLoading: isLoadingAllBranches, isError: isErrorAllBranches } = useQuery<BranchOption[]>(
-    ['allBranches', companyId],
-    async () => {
-      // First, get all school IDs for the company
-      const { data: schoolIdsData, error: schoolIdsError } = await supabase
-        .from('schools')
-        .select('id')
-        .eq('company_id', companyId)
         .eq('status', 'active');
-      if (schoolIdsError) throw schoolIdsError;
-      const schoolIds = schoolIdsData.map(s => s.id);
 
+      if (schoolsError) throw schoolsError;
+
+      const schoolIds = schools?.map(s => s.id) || [];
       if (schoolIds.length === 0) return [];
 
-      const { data, error } = await supabase
+      // Then get all branches for these schools
+      const { data: branches, error: branchesError } = await supabase
         .from('branches')
-        .select('id, name, school_id')
+        .select('id, name, code, school_id')
         .in('school_id', schoolIds)
-        .eq('status', 'active'); // Only active branches
-      if (error) throw error;
-      return data.map(b => ({ value: b.id, label: b.name, schoolId: b.school_id }));
+        .eq('status', 'active')
+        .order('name');
+
+      if (branchesError) throw branchesError;
+
+      // Create school lookup map
+      const schoolMap = new Map(schools?.map(s => [s.id, s.name]) || []);
+
+      return (branches || []).map(branch => ({
+        value: branch.id,
+        label: `${branch.name}${branch.code ? ` (${branch.code})` : ''}`,
+        schoolId: branch.school_id,
+        schoolName: schoolMap.get(branch.school_id) || 'Unknown School'
+      }));
     },
-    { enabled: !!companyId, staleTime: 5 * 60 * 1000 }
+    {
+      enabled: !!companyId && !isEntityAdmin,
+      staleTime: 5 * 60 * 1000,
+    }
   );
 
-  // Local state for selected schools and branches
-  const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
-
-  // Initialize local state from assignedScopes
+  // Initialize selected values from assigned scopes
   useEffect(() => {
-    if (assignedScopes) {
-      setSelectedSchoolIds(assignedScopes.filter(s => s.scope_type === 'school').map(s => s.scope_id));
-      setSelectedBranchIds(assignedScopes.filter(s => s.scope_type === 'branch').map(s => s.scope_id));
+    if (assignedScopes.length > 0) {
+      const schoolIds = assignedScopes
+        .filter(scope => scope.scope_type === 'school')
+        .map(scope => scope.scope_id);
+      
+      const branchIds = assignedScopes
+        .filter(scope => scope.scope_type === 'branch')
+        .map(scope => scope.scope_id);
+
+      setSelectedSchoolIds(schoolIds);
+      setSelectedBranchIds(branchIds);
     }
   }, [assignedScopes]);
 
-  // Mutation hooks
-  const assignScopeMutation = useAssignScope(userId);
-  const removeScopeMutation = useRemoveScope(userId);
+  // Track changes
+  useEffect(() => {
+    const initialSchoolIds = assignedScopes
+      .filter(scope => scope.scope_type === 'school')
+      .map(scope => scope.scope_id);
+    
+    const initialBranchIds = assignedScopes
+      .filter(scope => scope.scope_type === 'branch')
+      .map(scope => scope.scope_id);
 
-  const isLoading = isLoadingAssignedScopes || isLoadingAllSchools || isLoadingAllBranches;
-  const isSaving = assignScopeMutation.isLoading || removeScopeMutation.isLoading;
+    const schoolsChanged = 
+      selectedSchoolIds.length !== initialSchoolIds.length ||
+      selectedSchoolIds.some(id => !initialSchoolIds.includes(id)) ||
+      initialSchoolIds.some(id => !selectedSchoolIds.includes(id));
 
-  // Check if user is entity admin (should have full access)
-  const isEntityAdmin = adminLevel === 'entity_admin';
+    const branchesChanged = 
+      selectedBranchIds.length !== initialBranchIds.length ||
+      selectedBranchIds.some(id => !initialBranchIds.includes(id)) ||
+      initialBranchIds.some(id => !selectedBranchIds.includes(id));
+
+    setHasChanges(schoolsChanged || branchesChanged);
+  }, [selectedSchoolIds, selectedBranchIds, assignedScopes]);
+
+  // Assign scope mutation
+  const assignScopeMutation = useMutation(
+    (scope: Omit<EntityAdminScope, 'id' | 'user_id' | 'assigned_at'>) =>
+      scopeService.assignScope(userId, scope),
+    {
+      onError: (error: any) => {
+        console.error('Error assigning scope:', error);
+        toast.error(error.message || 'Failed to assign scope');
+      }
+    }
+  );
+
+  // Remove scope mutation
+  const removeScopeMutation = useMutation(
+    (scopeId: string) => scopeService.removeScope(userId, scopeId),
+    {
+      onError: (error: any) => {
+        console.error('Error removing scope:', error);
+        toast.error(error.message || 'Failed to remove scope');
+      }
+    }
+  );
 
   // Handle save changes
   const handleSaveChanges = async () => {
-    if (isEntityAdmin) {
-      toast.info('Entity Administrators have full access by default');
+    if (!hasChanges) {
+      toast.info('No changes to save');
       return;
     }
 
-    const currentSchoolScopeIds = assignedScopes.filter(s => s.scope_type === 'school').map(s => s.scope_id);
-    const currentBranchScopeIds = assignedScopes.filter(s => s.scope_type === 'branch').map(s => s.scope_id);
-
-    const schoolsToAdd = selectedSchoolIds.filter(id => !currentSchoolScopeIds.includes(id));
-    const schoolsToRemove = currentSchoolScopeIds.filter(id => !selectedSchoolIds.includes(id));
-    const branchesToAdd = selectedBranchIds.filter(id => !currentBranchScopeIds.includes(id));
-    const branchesToRemove = currentBranchScopeIds.filter(id => !selectedBranchIds.includes(id));
-
-    const mutations: Promise<any>[] = [];
-
-    // Assign new scopes
-    schoolsToAdd.forEach(schoolId => {
-      mutations.push(assignScopeMutation.mutateAsync({
-        company_id: companyId,
-        scope_type: 'school',
-        scope_id: schoolId,
-        permissions: {}, // Default permissions, can be expanded later
-        can_create_users: false, 
-        can_modify_users: false, 
-        can_delete_users: false,
-        can_view_all: true, 
-        can_export_data: false, 
-        can_manage_settings: false,
-        assigned_by: userId, // Assuming the current user is the one assigning
-        expires_at: null,
-        is_active: true,
-        notes: null,
-      }));
-    });
-
-    branchesToAdd.forEach(branchId => {
-      mutations.push(assignScopeMutation.mutateAsync({
-        company_id: companyId,
-        scope_type: 'branch',
-        scope_id: branchId,
-        permissions: {}, // Default permissions
-        can_create_users: false, 
-        can_modify_users: false, 
-        can_delete_users: false,
-        can_view_all: true, 
-        can_export_data: false, 
-        can_manage_settings: false,
-        assigned_by: userId,
-        expires_at: null,
-        is_active: true,
-        notes: null,
-      }));
-    });
-
-    // Remove old scopes
-    schoolsToRemove.forEach(schoolId => {
-      const scopeToRemove = assignedScopes.find(s => s.scope_type === 'school' && s.scope_id === schoolId);
-      if (scopeToRemove) {
-        mutations.push(removeScopeMutation.mutateAsync(scopeToRemove.id));
-      }
-    });
-
-    branchesToRemove.forEach(branchId => {
-      const scopeToRemove = assignedScopes.find(s => s.scope_type === 'branch' && s.scope_id === branchId);
-      if (scopeToRemove) {
-        mutations.push(removeScopeMutation.mutateAsync(scopeToRemove.id));
-      }
-    });
+    setIsSaving(true);
 
     try {
+      const mutations: Promise<any>[] = [];
+
+      // Get current scope IDs
+      const currentSchoolIds = assignedScopes
+        .filter(scope => scope.scope_type === 'school')
+        .map(scope => scope.scope_id);
+      
+      const currentBranchIds = assignedScopes
+        .filter(scope => scope.scope_type === 'branch')
+        .map(scope => scope.scope_id);
+
+      // Schools to add
+      const schoolsToAdd = selectedSchoolIds.filter(id => !currentSchoolIds.includes(id));
+      schoolsToAdd.forEach(schoolId => {
+        mutations.push(assignScopeMutation.mutateAsync({
+          company_id: companyId,
+          scope_type: 'school',
+          scope_id: schoolId,
+          permissions: {},
+          can_create_users: false,
+          can_modify_users: false,
+          can_delete_users: false,
+          can_view_all: true,
+          can_export_data: false,
+          can_manage_settings: false,
+          assigned_by: null,
+          expires_at: null,
+          is_active: true,
+          notes: null
+        }));
+      });
+
+      // Schools to remove
+      const schoolsToRemove = currentSchoolIds.filter(id => !selectedSchoolIds.includes(id));
+      schoolsToRemove.forEach(schoolId => {
+        const scopeToRemove = assignedScopes.find(s => s.scope_type === 'school' && s.scope_id === schoolId);
+        if (scopeToRemove) {
+          mutations.push(removeScopeMutation.mutateAsync(scopeToRemove.id));
+        }
+      });
+
+      // Branches to add
+      const branchesToAdd = selectedBranchIds.filter(id => !currentBranchIds.includes(id));
+      branchesToAdd.forEach(branchId => {
+        mutations.push(assignScopeMutation.mutateAsync({
+          company_id: companyId,
+          scope_type: 'branch',
+          scope_id: branchId,
+          permissions: {},
+          can_create_users: false,
+          can_modify_users: false,
+          can_delete_users: false,
+          can_view_all: true,
+          can_export_data: false,
+          can_manage_settings: false,
+          assigned_by: null,
+          expires_at: null,
+          is_active: true,
+          notes: null
+        }));
+      });
+
+      // Branches to remove
+      const branchesToRemove = currentBranchIds.filter(id => !selectedBranchIds.includes(id));
+      branchesToRemove.forEach(branchId => {
+        const scopeToRemove = assignedScopes.find(s => s.scope_type === 'branch' && s.scope_id === branchId);
+        if (scopeToRemove) {
+          mutations.push(removeScopeMutation.mutateAsync(scopeToRemove.id));
+        }
+      });
+
+      // Execute all mutations
       await Promise.all(mutations);
-      toast.success('Scope assignments updated successfully!');
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries(['adminScopes', userId]);
+      
+      toast.success('Scope assignments updated successfully');
       onScopesUpdated?.();
-    } catch (error) {
-      console.error('Failed to update scope assignments:', error);
-      toast.error('Failed to update scope assignments.');
+      setHasChanges(false);
+
+    } catch (error: any) {
+      console.error('Error saving scope changes:', error);
+      toast.error(error.message || 'Failed to save scope changes');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // TODO: Integrate useAdminPermissions to disable inputs if current user lacks permissions
-  const { canManageSchools, canManageBranches } = useAdminPermissions(userId); // Mock for now
-
-  if (isLoading) {
+  // If entity admin, show full access notice
+  if (isEntityAdmin) {
     return (
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading scopes...</p>
-      </div>
-    );
-  }
-
-  if (isErrorAssignedScopes || isErrorAllSchools || isErrorAllBranches) {
-    return (
-      <div className="text-center py-8 text-red-600 dark:text-red-400">
-        <p>Error loading scope data. Please try again.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Entity Admin Full Access Notice */}
-      {isEntityAdmin && (
+      <div className={cn("space-y-4", className)}>
         <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
           <div className="flex items-center">
             <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                Full Company Access
+                Full Company Access Granted
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Entity Administrators automatically have access to all schools and branches within the company. 
-                No specific scope assignment is required.
+                Entity Administrators have unrestricted access to all schools, branches, and company-wide settings. 
+                No scope assignment is needed.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary stats for entity admin */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Available Schools</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {allSchools.length}
+                </p>
+              </div>
+              <School className="h-6 w-6 text-blue-400" />
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Available Branches</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {allBranches.length}
+                </p>
+              </div>
+              <MapPin className="h-6 w-6 text-purple-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoadingScopes || isLoadingSchools || isLoadingBranches) {
+    return (
+      <div className={cn("flex items-center justify-center py-8", className)}>
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading scope data...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("space-y-6", className)}>
+      {/* Current Scope Summary */}
+      {assignedScopes.length > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center">
+            <Shield className="h-4 w-4 mr-2" />
+            Current Scope Assignments
+          </h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-blue-700 dark:text-blue-300">Schools: </span>
+              <span className="font-medium">
+                {assignedScopes.filter(s => s.scope_type === 'school').length}
+              </span>
+            </div>
+            <div>
+              <span className="text-blue-700 dark:text-blue-300">Branches: </span>
+              <span className="font-medium">
+                {assignedScopes.filter(s => s.scope_type === 'branch').length}
+              </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Assign Schools Section */}
-      <div className={cn(
-        "bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700",
-        isEntityAdmin && "opacity-50"
-      )}>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <School className="h-5 w-5 mr-2 text-blue-500" /> Assign Schools
-        </h3>
-        {isEntityAdmin && (
-          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Entity Administrators have access to all schools automatically.
-          </div>
-        )}
+      {/* School Assignment */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center mb-4">
+          <Building2 className="h-5 w-5 text-blue-500 mr-2" />
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Assign Schools
+          </h4>
+        </div>
+        
         <SearchableMultiSelect
           label="Schools"
           options={allSchools}
           selectedValues={selectedSchoolIds}
           onChange={setSelectedSchoolIds}
           placeholder="Select schools to assign..."
-          disabled={isSaving || isEntityAdmin}
+          disabled={isSaving}
         />
-      </div>
-
-      {/* Assign Branches Section */}
-      <div className={cn(
-        "bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700",
-        isEntityAdmin && "opacity-50"
-      )}>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <MapPin className="h-5 w-5 mr-2 text-purple-500" /> Assign Branches
-        </h3>
-        {isEntityAdmin && (
-          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Entity Administrators have access to all branches automatically.
+        
+        {selectedSchoolIds.length > 0 && (
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            {selectedSchoolIds.length} school{selectedSchoolIds.length > 1 ? 's' : ''} selected
           </div>
         )}
+      </div>
+
+      {/* Branch Assignment */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center mb-4">
+          <MapPin className="h-5 w-5 text-purple-500 mr-2" />
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Assign Branches
+          </h4>
+        </div>
+        
         <SearchableMultiSelect
           label="Branches"
-          options={allBranches}
+          options={allBranches.map(branch => ({
+            value: branch.value,
+            label: `${branch.label} (${branch.schoolName})`
+          }))}
           selectedValues={selectedBranchIds}
           onChange={setSelectedBranchIds}
           placeholder="Select branches to assign..."
-          disabled={isSaving || isEntityAdmin}
+          disabled={isSaving}
         />
+        
+        {selectedBranchIds.length > 0 && (
+          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            {selectedBranchIds.length} branch{selectedBranchIds.length > 1 ? 'es' : ''} selected
+          </div>
+        )}
       </div>
 
-      {!isEntityAdmin && (
+      {/* Save Changes Button */}
+      {hasChanges && (
         <div className="flex justify-end">
-          <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Changes'}
+          <Button
+            onClick={handleSaveChanges}
+            disabled={isSaving}
+            leftIcon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+          >
+            {isSaving ? 'Saving Changes...' : 'Save Scope Changes'}
           </Button>
+        </div>
+      )}
+
+      {/* No Changes Message */}
+      {!hasChanges && assignedScopes.length === 0 && (
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center">
+          <Users className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            No scope assignments configured. This admin has full company access.
+          </p>
+        </div>
+      )}
+
+      {/* Warning for removing all scopes */}
+      {hasChanges && selectedSchoolIds.length === 0 && selectedBranchIds.length === 0 && assignedScopes.length > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Removing all scope assignments will grant this admin full company access.
+            </p>
+          </div>
         </div>
       )}
     </div>

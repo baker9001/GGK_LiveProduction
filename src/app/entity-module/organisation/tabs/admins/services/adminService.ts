@@ -1,629 +1,548 @@
 /**
- * File: /src/app/entity-module/organisation/tabs/admins/services/adminService.ts
+ * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
+ *
+ * ENHANCED VERSION - Complete form validation and improved UX
+ * Uses existing shared form components with comprehensive validation
  * 
- * UPDATED VERSION - Integrated with userCreationService
- * Now properly creates users in both users and entity_users tables
+ * Features:
+ * ✅ Comprehensive field validation with Zod
+ * ✅ Password strength indicator
+ * ✅ Proper error handling and toast messages
+ * ✅ Removed "Super Admin" option (entity-level only)
+ * ✅ Enhanced permission matrix functionality
+ * ✅ Proper data validation and error prevention
+ * ✅ Works with existing FormField components
  */
 
-import { supabase } from '@/lib/supabase';
-import { AdminLevel, EntityAdminHierarchy, EntityAdminScope, AdminPermissions } from '../types/admin.types';
-import { auditService } from './auditService';
-import { permissionService } from './permissionService';
-import { userCreationService } from '@/services/userCreationService';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { z, ZodError } from 'zod';
+import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { FormField, Input, Select } from '@/components/shared/FormField';
+import { Button } from '@/components/shared/Button';
+import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
+import { toast } from '@/components/shared/Toast';
+import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
+import { useAdminScope } from '../hooks/useAdminScope';
+import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
+import { AdminScopeAssignment } from './AdminScopeAssignment';
+import { AdminPermissionMatrix } from './AdminPermissionMatrix';
+import { permissionService } from '../services/permissionService';
 
-interface CreateAdminPayload {
-  email: string;
-  name: string;
-  password: string; // Now required
-  admin_level: AdminLevel;
-  company_id: string;
-  permissions?: AdminPermissions;
-  is_active?: boolean;
-  created_by?: string;
-  parent_admin_id?: string;
-  metadata?: Record<string, any>;
-  actor_id: string; // Required for audit logging
-}
+// Validation schemas
+const nameSchema = z.string()
+  .min(2, 'Name must be at least 2 characters')
+  .max(100, 'Name must be less than 100 characters')
+  .regex(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes');
 
-interface UpdateAdminPayload {
-  name?: string;
-  email?: string;
-  password?: string;
-  admin_level?: AdminLevel;
-  permissions?: AdminPermissions;
-  is_active?: boolean;
-  metadata?: Record<string, any>;
-  actor_id: string; // Required for audit logging
-}
+const emailSchema = z.string()
+  .email('Please enter a valid email address')
+  .transform(email => email.toLowerCase().trim());
 
-interface AdminFilters {
-  company_id?: string;
-  admin_level?: AdminLevel;
-  is_active?: boolean;
-  search?: string;
-  created_after?: string;
-  created_before?: string;
-  limit?: number;
-  offset?: number;
-}
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+
+const adminLevelSchema = z.enum(['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], {
+  errorMap: () => ({ message: 'Please select a valid admin level' })
+});
 
 interface AdminUser {
   id: string;
-  user_id: string;
-  email: string;
   name: string;
+  email: string;
   admin_level: AdminLevel;
-  company_id: string;
-  permissions: AdminPermissions;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
-  metadata: Record<string, any>;
-  parent_admin_id?: string | null;
-  assigned_schools?: string[];
-  assigned_branches?: string[];
+  permissions?: AdminPermissions;
+  scopes?: EntityAdminScope[];
 }
 
-// Helper functions
-const getAdminEmail = (admin: any): string => {
-  if (admin.email) return admin.email;
-  if (admin.users?.email) return admin.users.email;
-  if (admin.metadata?.email) return admin.metadata.email;
-  return '';
+interface AdminCreationFormProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+  companyId: string;
+  initialData?: AdminUser;
+}
+
+// Password strength calculator
+const calculatePasswordStrength = (password: string): { score: number; label: string; color: string } => {
+  if (!password) return { score: 0, label: 'No password', color: 'bg-gray-200' };
+  
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  
+  const strength = {
+    0: { label: 'Very Weak', color: 'bg-red-500' },
+    1: { label: 'Very Weak', color: 'bg-red-500' },
+    2: { label: 'Weak', color: 'bg-orange-500' },
+    3: { label: 'Fair', color: 'bg-yellow-500' },
+    4: { label: 'Good', color: 'bg-blue-500' },
+    5: { label: 'Strong', color: 'bg-green-500' },
+    6: { label: 'Very Strong', color: 'bg-green-600' }
+  };
+  
+  return { score, ...strength[score as keyof typeof strength] || strength[6] };
 };
 
-const getAdminName = (admin: any): string => {
-  if (admin.name) return admin.name;
-  if (admin.users?.raw_user_meta_data?.name) return admin.users.raw_user_meta_data.name;
-  if (admin.metadata?.name) return admin.metadata.name;
-  return 'Unknown Admin';
-};
+export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  companyId,
+  initialData
+}) => {
+  const isEditing = !!initialData;
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    admin_level: 'entity_admin' as AdminLevel,
+    is_active: true
+  });
+  const [permissions, setPermissions] = useState<AdminPermissions>(
+    initialData?.permissions ?? permissionService.getDefaultPermissions()
+  );
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
 
-export const adminService = {
-  /**
-   * Create a new administrator using the userCreationService
-   */
-  async createAdmin(payload: CreateAdminPayload): Promise<AdminUser> {
-    try {
-      const createdBy = payload.created_by || payload.actor_id;
+  const { data: assignedScopes = [] } = useAdminScope(initialData?.id || '');
+  const createAdminMutation = useCreateAdmin();
+  const updateAdminMutation = useUpdateAdmin();
 
-      // Validate required fields
-      if (!payload.email || !payload.name || !payload.company_id) {
-        throw new Error('Email, name, and company ID are required');
-      }
+  const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
-      if (!payload.password || payload.password.length < 8) {
-        throw new Error('Password is required and must be at least 8 characters long');
-      }
+  // Password strength calculation
+  const passwordStrength = useMemo(() => 
+    calculatePasswordStrength(formData.password), 
+    [formData.password]
+  );
 
-      // Use userCreationService to create the user
-      const { userId, entityId } = await userCreationService.createUser({
-        user_type: payload.admin_level as any,
-        email: payload.email,
-        name: payload.name,
-        password: payload.password,
-        company_id: payload.company_id,
-        admin_level: payload.admin_level,
-        permissions: payload.permissions,
-        is_active: payload.is_active,
-        created_by: createdBy,
-        parent_admin_id: payload.parent_admin_id,
-        metadata: payload.metadata
+  // Reset form when modal opens or initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        name: initialData.name,
+        email: initialData.email,
+        password: '',
+        admin_level: initialData.admin_level,
+        is_active: initialData.is_active,
+        // Scopes are managed separately in AdminScopeAssignment
       });
-
-      // Fetch the created admin with full details
-      const newAdmin = await this.getAdminById(entityId);
-      if (!newAdmin) {
-        throw new Error('Failed to retrieve created admin');
-      }
-
-      // Log the creation action
-      try {
-        await auditService.logAction({
-          company_id: payload.company_id,
-          action_type: 'admin_created',
-          actor_id: payload.actor_id,
-          target_id: entityId,
-          target_type: 'entity_user',
-          changes: {
-            admin_level: payload.admin_level,
-            email: payload.email,
-            name: payload.name
-          },
-          metadata: { source: 'adminService.createAdmin' }
-        });
-      } catch (auditError) {
-        console.log('Audit logging failed:', auditError);
-      }
-
-      return newAdmin;
-    } catch (error: any) {
-      console.error('createAdmin error:', error);
-      throw error instanceof Error ? error : new Error('Failed to create administrator');
+      setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
+    } else {
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        admin_level: 'entity_admin',
+        is_active: true
+      }); 
+      setPermissions(permissionService.getDefaultPermissions());
     }
-  },
+    setErrors({});
+  }, [initialData, isOpen]);
 
-  /**
-   * Update an existing administrator
-   */
-  async updateAdmin(userId: string, payload: UpdateAdminPayload): Promise<AdminUser> {
-    try {
-      // Validate userId
-      if (!userId) {
-        throw new Error('User ID is required');
-      }
-
-      // Fetch existing admin
-      const existingAdmin = await this.getAdminById(userId);
-      if (!existingAdmin) {
-        throw new Error('Administrator not found');
-      }
-
-      // Prepare update data for entity_users table
-      const updateData: any = {
-        updated_at: new Date().toISOString()
-      };
-
-      if (payload.name !== undefined) {
-        updateData.name = payload.name;
-        updateData.metadata = {
-          ...existingAdmin.metadata,
-          name: payload.name
-        };
-      }
-
-      if (payload.email !== undefined) {
-        // Check if email is already in use
-        if (payload.email !== existingAdmin.email) {
-          const { data: emailCheck } = await supabase
-            .from('entity_users')
-            .select('id')
-            .eq('email', payload.email)
-            .eq('company_id', existingAdmin.company_id)
-            .neq('id', userId)
-            .maybeSingle();
-
-          if (emailCheck) {
-            throw new Error('This email is already in use by another administrator');
-          }
-        }
-        updateData.email = payload.email;
-      }
-
-      if (payload.admin_level !== undefined) {
-        updateData.admin_level = payload.admin_level;
-        const newDefaultPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
-        updateData.permissions = payload.permissions 
-          ? { ...newDefaultPermissions, ...payload.permissions }
-          : newDefaultPermissions;
-      }
-
-      if (payload.permissions !== undefined) {
-        updateData.permissions = {
-          ...(existingAdmin.permissions || {}),
-          ...payload.permissions
-        };
-      }
-
-      if (payload.is_active !== undefined) {
-        updateData.is_active = payload.is_active;
-      }
-
-      // Update entity_users table
-      const { data: updatedAdmin, error: updateError } = await supabase
-        .from('entity_users')
-        .update(updateData)
-        .eq('id', userId)
-        .select()
-        .single();
-
-      if (updateError) {
-        throw new Error(`Failed to update admin: ${updateError.message}`);
-      }
-
-      // Update password if provided
-      if (payload.password && existingAdmin.user_id) {
-        try {
-          await userCreationService.updatePassword(existingAdmin.user_id, payload.password);
-        } catch (passwordError) {
-          console.error('Failed to update password:', passwordError);
-          // Don't throw - allow other updates to succeed
-        }
-      }
-
-      // Update email in users table if changed
-      if (payload.email && payload.email !== existingAdmin.email && existingAdmin.user_id) {
-        const { error: userUpdateError } = await supabase
-          .from('users')
-          .update({ 
-            email: payload.email,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingAdmin.user_id);
-
-        if (userUpdateError) {
-          console.error('Failed to update email in users table:', userUpdateError);
-        }
-      }
-
-      // Log the update
-      try {
-        const changes: Record<string, any> = {};
-        Object.keys(updateData).forEach(key => {
-          if (key !== 'updated_at' && key !== 'metadata') {
-            changes[key] = {
-              old: existingAdmin[key as keyof AdminUser],
-              new: updateData[key]
-            };
-          }
-        });
-
-        if (Object.keys(changes).length > 0) {
-          await auditService.logAction({
-            company_id: existingAdmin.company_id,
-            action_type: 'admin_modified',
-            actor_id: payload.actor_id,
-            target_id: userId,
-            target_type: 'entity_user',
-            changes,
-            metadata: { source: 'adminService.updateAdmin' }
-          });
-        }
-      } catch (auditError) {
-        console.log('Audit logging failed:', auditError);
-      }
-
-      const result = await this.getAdminById(userId);
-      if (!result) {
-        throw new Error('Failed to retrieve updated admin');
-      }
-      return result;
-    } catch (error: any) {
-      console.error('updateAdmin error:', error);
-      throw error instanceof Error ? error : new Error('Failed to update administrator');
+  // Handle admin level change to update default permissions
+  const handleAdminLevelChange = useCallback((value: string) => {
+    const newLevel = value as AdminLevel;
+    setFormData(prev => ({ ...prev, admin_level: newLevel }));
+    
+    const defaultPermissions = permissionService.getPermissionsForLevel(newLevel);
+    setPermissions(defaultPermissions);
+    
+    // Show different messages based on admin level
+    if (newLevel === 'entity_admin') {
+      toast.success('Entity Admin selected - Full access permissions applied');
+    } else {
+      toast.info(`Default permissions applied for ${newLevel.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
     }
-  },
+  }, []);
 
-  /**
-   * Get a single admin by ID with full details
-   */
-  async getAdminById(adminId: string): Promise<AdminUser | null> {
+  // Validate individual field
+  const validateField = useCallback((field: string, value: any): string | undefined => {
     try {
-      if (!adminId) {
-        return null;
+      switch (field) {
+        case 'name':
+          nameSchema.parse(value);
+          break;
+        case 'email':
+          emailSchema.parse(value);
+          break;
+        case 'password':
+          if (!isEditing || value) {
+            passwordSchema.parse(value);
+          }
+          break;
+        case 'admin_level':
+          adminLevelSchema.parse(value);
+          break;
       }
-
-      // Fetch admin with user details
-      const { data: admin, error } = await supabase
-        .from('entity_users')
-        .select(`
-          *,
-          users!entity_users_user_id_fkey (
-            id,
-            email,
-            raw_user_meta_data,
-            is_active,
-            last_login_at
-          )
-        `)
-        .eq('id', adminId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          return null; // Not found
-        }
-        console.error('Error fetching admin:', error);
-        return null;
-      }
-
-      // Fetch scope assignments
-      let assignedSchools: string[] = [];
-      let assignedBranches: string[] = [];
-
-      try {
-        const { data: scopes } = await supabase
-          .from('entity_admin_scope')
-          .select('scope_type, scope_id')
-          .eq('user_id', adminId)
-          .eq('is_active', true);
-
-        if (scopes) {
-          assignedSchools = scopes.filter(s => s.scope_type === 'school').map(s => s.scope_id);
-          assignedBranches = scopes.filter(s => s.scope_type === 'branch').map(s => s.scope_id);
-        }
-      } catch (scopeError) {
-        console.log('Scope data not available');
-      }
-
-      const enrichedAdmin: AdminUser = {
-        id: admin.id,
-        user_id: admin.user_id || '',
-        email: getAdminEmail(admin),
-        name: getAdminName(admin),
-        admin_level: admin.admin_level || 'entity_admin',
-        company_id: admin.company_id,
-        permissions: admin.permissions || permissionService.getDefaultPermissions(),
-        is_active: admin.is_active ?? true,
-        created_at: admin.created_at || new Date().toISOString(),
-        updated_at: admin.updated_at || admin.created_at || new Date().toISOString(),
-        metadata: admin.metadata || {},
-        parent_admin_id: admin.parent_admin_id || null,
-        assigned_schools: assignedSchools,
-        assigned_branches: assignedBranches
-      };
-
-      return enrichedAdmin;
+      return undefined;
     } catch (error) {
-      console.error('getAdminById error:', error);
-      return null;
+      if (error instanceof z.ZodError) {
+        return error.errors[0]?.message; // Return only the first error message
+      }
+      return 'Validation error';
     }
-  },
+  }, [isEditing]);
 
-  /**
-   * List administrators with filters
-   */
-  async listAdmins(companyId: string, filters?: AdminFilters): Promise<AdminUser[]> {
+  // Validate entire form
+  const validateForm = useCallback((): boolean => {
+    setIsValidating(true);
+    const newErrors: Record<string, string> = {};
+
+    // Validate name
+    const nameError = validateField('name', formData.name);
+    if (nameError) newErrors.name = nameError;
+
+    // Validate email
+    const emailError = validateField('email', formData.email);
+    if (emailError) newErrors.email = emailError;
+
+    // Validate password (required for new users)
+    if (!isEditing && !formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password) {
+      const passwordError = validateField('password', formData.password);
+      if (passwordError) newErrors.password = passwordError;
+    }
+
+    // Validate admin level
+    const adminLevelError = validateField('admin_level', formData.admin_level);
+    if (adminLevelError) newErrors.admin_level = adminLevelError;
+
+    // Validate company ID
+    if (!companyId) {
+      newErrors.submit = 'Company ID is required';
+    }
+
+    // Check permissions
+    const hasAnyPermission = Object.values(permissions).some(category => 
+      Object.values(category).some(permission => permission === true)
+    );
+
+    if (!hasAnyPermission) {
+      toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
+    }
+
+    setErrors(newErrors);
+    setIsValidating(false);
+    return Object.keys(newErrors).length === 0;
+  }, [formData, isEditing, companyId, permissions, validateField]);
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      toast.error('Please fix the validation errors before submitting');
+      return;
+    }
+
+    // Prepare payload
+    const payload = {
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password, // Only send if provided/changed
+      admin_level: formData.admin_level,
+      is_active: formData.is_active,
+      company_id: companyId,
+      permissions,
+      scopes: []
+    };
+
     try {
-      if (!companyId) {
-        throw new Error('Company ID is required');
+      if (isEditing && initialData?.id) {
+        await updateAdminMutation.mutateAsync(
+          { userId: initialData.id, updates: payload },
+          {
+            onSuccess: () => {
+              toast.success('Administrator updated successfully!');
+              onSuccess?.();
+              onClose();
+            }
+          }
+        );
+      } else {
+        await createAdminMutation.mutateAsync(payload, {
+          onSuccess: () => {
+            toast.success('Administrator created successfully!');
+            onSuccess?.();
+            onClose();
+          }
+        });
       }
+    } catch (error: any) {
+      const errorMessage = error?.message || (isEditing ? 'Failed to update administrator' : 'Failed to create administrator');
+      toast.error(errorMessage);
+      setErrors({ submit: errorMessage });
+    }
+  }; 
 
-      // Build query with join to users table
-      let query = supabase
-        .from('entity_users')
-        .select(`
-          *,
-          users!entity_users_user_id_fkey (
-            id,
-            email,
-            raw_user_meta_data,
-            is_active,
-            last_login_at
-          )
-        `)
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      // Apply filters
-      if (filters) {
-        if (filters.admin_level) {
-          query = query.eq('admin_level', filters.admin_level);
-        }
-        if (filters.is_active !== undefined) {
-          query = query.eq('is_active', filters.is_active);
-        }
-        if (filters.search) {
-          const searchTerm = filters.search.trim();
-          query = query.or(`email.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%`);
-        }
-        if (filters.created_after) {
-          query = query.gte('created_at', filters.created_after);
-        }
-        if (filters.created_before) {
-          query = query.lte('created_at', filters.created_before);
-        }
-        if (filters.limit) {
-          query = query.limit(filters.limit);
-        }
-        if (filters.offset) {
-          query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
-        }
-      }
-
-      const { data: admins, error } = await query;
-
+  // Handle input change with validation
+  const handleInputChange = useCallback((field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+    
+    // Real-time validation for critical fields
+    if (field === 'email' || field === 'name') {
+      const error = validateField(field, value);
       if (error) {
-        throw new Error(`Failed to fetch admins: ${error.message}`);
+        setErrors(prev => ({ ...prev, [field]: error }));
       }
-
-      if (!admins || admins.length === 0) {
-        return [];
-      }
-
-      // Fetch scope assignments for all admins
-      const adminIds = admins.map(a => a.id);
-      const { data: allScopes } = await supabase
-        .from('entity_admin_scope')
-        .select('user_id, scope_type, scope_id')
-        .in('user_id', adminIds)
-        .eq('is_active', true);
-
-      const scopeMap = new Map<string, { schools: string[], branches: string[] }>();
-      if (allScopes) {
-        allScopes.forEach(scope => {
-          if (!scopeMap.has(scope.user_id)) {
-            scopeMap.set(scope.user_id, { schools: [], branches: [] });
-          }
-          const userScopes = scopeMap.get(scope.user_id)!;
-          if (scope.scope_type === 'school') {
-            userScopes.schools.push(scope.scope_id);
-          } else if (scope.scope_type === 'branch') {
-            userScopes.branches.push(scope.scope_id);
-          }
-        });
-      }
-
-      // Transform and enrich admin data
-      const enrichedAdmins: AdminUser[] = admins.map(admin => {
-        const scopes = scopeMap.get(admin.id) || { schools: [], branches: [] };
-        return {
-          id: admin.id,
-          user_id: admin.user_id || '',
-          email: getAdminEmail(admin),
-          name: getAdminName(admin),
-          admin_level: admin.admin_level || 'entity_admin',
-          company_id: admin.company_id,
-          permissions: admin.permissions || permissionService.getDefaultPermissions(),
-          is_active: admin.is_active ?? true,
-          created_at: admin.created_at,
-          updated_at: admin.updated_at,
-          metadata: admin.metadata || {},
-          parent_admin_id: admin.parent_admin_id || null,
-          assigned_schools: scopes.schools,
-          assigned_branches: scopes.branches
-        };
-      });
-
-      return enrichedAdmins;
-    } catch (error: any) {
-      console.error('listAdmins error:', error);
-      throw error instanceof Error ? error : new Error('Failed to list administrators');
     }
-  },
+  }, [errors, validateField]);
 
-  /**
-   * Delete (deactivate) an administrator
-   */
-  async deleteAdmin(adminId: string, actorId: string): Promise<void> {
-    try {
+  if (!isOpen) return null;
 
-      const admin = await this.getAdminById(adminId);
-      if (!admin) {
-        throw new Error('Administrator not found');
-      }
+  return (
+    <SlideInForm
+      title={isEditing ? `Edit Admin User: ${initialData?.name || initialData?.email}` : 'Create New Admin User'}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSave={() => {
+        const form = document.querySelector('form');
+        if (form) form.requestSubmit();
+      }}
+      loading={isSubmitting}
+      saveButtonText={isEditing ? 'Update Administrator' : 'Create Administrator'}
+      width="xl"
+    >
+      {/* Error Summary */}
+      {errors.submit && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+          <span className="text-red-700 dark:text-red-300">{errors.submit}</span>
+        </div>
+      )}
 
-      // Deactivate in entity_users table
-      const { error: entityError } = await supabase
-        .from('entity_users')
-        .update({ 
-          is_active: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', adminId);
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information Section */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <User className="h-5 w-5 mr-2 text-[#8CC63F]" />
+            Basic Information
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              id="name"
+              label="Full Name"
+              error={errors.name}
+              required
+            >
+              <Input
+                id="name"
+                placeholder="Enter full name"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                disabled={isSubmitting}
+                leftIcon={<User className="h-5 w-5 text-gray-400" />}
+              />
+            </FormField>
 
-      if (entityError) {
-        throw new Error(`Failed to deactivate admin: ${entityError.message}`);
-      }
+            <FormField
+              id="email"
+              label="Email Address"
+              error={errors.email}
+              required
+            >
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter email address"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                disabled={isSubmitting}
+                leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
+              />
+            </FormField>
+          </div>
 
-      // Also deactivate in users table if user_id exists
-      if (admin.user_id) {
-        const { error: userError } = await supabase
-          .from('users')
-          .update({ 
-            is_active: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', admin.user_id);
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {/* Password Field with Strength Indicator */}
+            <FormField
+              id="password"
+              label={isEditing ? "New Password (optional)" : "Password"}
+              error={errors.password}
+              required={!isEditing}
+            >
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder={isEditing ? "Leave blank to keep current" : "Enter password"}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  disabled={isSubmitting}
+                  leftIcon={<Lock className="h-5 w-5 text-gray-400" />}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{passwordStrength.label}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
+                      style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </FormField>
 
-        if (userError) {
-          console.error('Failed to deactivate user account:', userError);
-        }
-      }
+            <FormField
+              id="admin_level"
+              label="Admin Level"
+              error={errors.admin_level}
+              required
+            >
+              <Select
+                id="admin_level"
+                value={formData.admin_level}
+                onChange={handleAdminLevelChange}
+                disabled={isSubmitting}
+                options={[
+                  { value: 'entity_admin', label: 'Entity Admin' },
+                  { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
+                  { value: 'school_admin', label: 'School Admin' },
+                  { value: 'branch_admin', label: 'Branch Admin' }
+                ]}
+              />
+            </FormField>
+          </div>
 
-      // Log the action
-      try {
-        await auditService.logAction({
-          company_id: admin.company_id,
-          action_type: 'admin_deleted',
-          actor_id: actorId,
-          target_id: adminId,
-          target_type: 'entity_user',
-          changes: {
-            admin_name: admin.name,
-            admin_email: admin.email
-          },
-          metadata: { source: 'adminService.deleteAdmin' }
-        });
-      } catch (auditError) {
-        console.log('Audit logging failed:', auditError);
-      }
-    } catch (error: any) {
-      console.error('deleteAdmin error:', error);
-      throw error instanceof Error ? error : new Error('Failed to delete administrator');
-    }
-  },
+          <div className="mt-4">
+            <FormField id="status" label="Status">
+              <ToggleSwitch
+                checked={formData.is_active}
+                onChange={(checked) => handleInputChange('is_active', checked)}
+                disabled={isSubmitting}
+                color="green"
+                size="md"
+                showStateLabel={true}
+                activeLabel="Active"
+                inactiveLabel="Inactive"
+                description="Inactive users cannot log in or access the system"
+              />
+            </FormField>
+          </div>
+        </div>
 
-  /**
-   * Restore (reactivate) an administrator
-   */
-  async restoreAdmin(adminId: string, actorId: string): Promise<void> {
-    try {
-      const admin = await this.getAdminById(adminId);
-      if (!admin) {
-        throw new Error('Administrator not found');
-      }
+        {/* Scope Assignment Section */}
+        {isEditing && initialData?.id && ( // Always show, but disable for entity_admin
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+              Scope Assignment
+            </h3>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Scope assignment limits this admin's access to specific schools or branches. 
+                  Leave empty for full company access.
+                </p>
+              </div>
+            </div>
+            {/* AdminScopeAssignment component will handle its own rendering based on adminLevel */}
+            <AdminScopeAssignment 
+              userId={initialData.id} 
+              companyId={companyId} 
+              adminLevel={formData.admin_level} 
+              onScopesUpdated={() => toast.success('Scope assignments updated')} 
+            /> 
+          </div>
+        )}
 
-      // Reactivate in entity_users table
-      const { error: entityError } = await supabase
-        .from('entity_users')
-        .update({ 
-          is_active: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', adminId);
+        {/* Entity Admin Full Access Notice */}
+        {formData.admin_level === 'entity_admin' && (
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+              Entity Administrator Access
+            </h3>
+            <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Full Company Access Granted
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Entity Administrators have unrestricted access to all schools, branches, and company-wide settings. 
+                    No scope assignment is needed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-      if (entityError) {
-        throw new Error(`Failed to restore admin: ${entityError.message}`);
-      }
-
-      // Also reactivate in users table if user_id exists
-      if (admin.user_id) {
-        const { error: userError } = await supabase
-          .from('users')
-          .update({ 
-            is_active: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', admin.user_id);
-
-        if (userError) {
-          console.error('Failed to reactivate user account:', userError);
-        }
-      }
-
-      // Log the action
-      try {
-        await auditService.logAction({
-          company_id: admin.company_id,
-          action_type: 'admin_activated',
-          actor_id: actorId,
-          target_id: adminId,
-          target_type: 'entity_user',
-          changes: { is_active: { old: false, new: true } },
-          metadata: { source: 'adminService.restoreAdmin' }
-        });
-      } catch (auditError) {
-        console.log('Audit logging failed:', auditError);
-      }
-    } catch (error: any) {
-      console.error('restoreAdmin error:', error);
-      throw error instanceof Error ? error : new Error('Failed to restore administrator');
-    }
-  },
-
-  /**
-   * Check if email is available for admin creation
-   */
-  async isEmailAvailable(email: string, companyId: string, excludeUserId?: string): Promise<boolean> {
-    try {
-      // Check in entity_users table
-      let query = supabase
-        .from('entity_users')
-        .select('id')
-        .eq('email', email.toLowerCase())
-        .eq('company_id', companyId);
-
-      if (excludeUserId) {
-        query = query.neq('id', excludeUserId);
-      }
-
-      const { data: entityCheck } = await query.maybeSingle();
-      if (entityCheck) {
-        return false;
-      }
-
-      // Also check in users table
-      const { data: userCheck } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email.toLowerCase())
-        .maybeSingle();
-
-      return !userCheck;
-    } catch (error) {
-      console.error('isEmailAvailable error:', error);
-      return false;
-    }
-  }
+        {/* Admin Permissions Section */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+            Admin Permissions
+          </h3>
+          {formData.admin_level === 'entity_admin' ? (
+            <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-[#8CC63F] mr-2 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Full Permissions Automatically Granted
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Entity Administrators automatically receive all permissions. The permission matrix below shows the complete access level.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  These permissions control what actions this administrator can perform. 
+                  Unchecked permissions will prevent access to related functions.
+                </p>
+              </div>
+            </div>
+          )}
+          <AdminPermissionMatrix
+            value={permissions}
+            onChange={setPermissions}
+            disabled={isSubmitting || formData.admin_level === 'entity_admin'}
+          />
+        </div>
+      </form>
+    </SlideInForm>
+  );
 };
