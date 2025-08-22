@@ -51,9 +51,7 @@ import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 import { usePermissions } from '../../../../../contexts/PermissionContext';
 import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
-import { SchoolFormContent } from '../../components/forms/SchoolFormContent';
 // Note: DataTable import removed as it wasn't used in the original file
-import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolData {
