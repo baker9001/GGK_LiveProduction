@@ -303,7 +303,7 @@ export const adminService = {
             company_id: existingAdmin.company_id,
             action_type: 'admin_modified',
             actor_id: validatedPayload.actor_id,
-            target_id: userId,
+            target_id: existingAdmin.user_id,
             target_type: 'entity_user',
             changes,
             metadata: { source: 'adminService.updateAdmin' }

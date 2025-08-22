@@ -585,7 +585,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               </div>
             </div>
             <AdminScopeAssignment
-              userId={initialData.id}
+              userId={initialData.user_id}
               companyId={companyId}
               adminLevel={formData.admin_level}
               canModifyScope={canModify('admin')}
