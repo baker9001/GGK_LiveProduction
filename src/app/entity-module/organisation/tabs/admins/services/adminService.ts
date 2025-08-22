@@ -185,17 +185,37 @@ export const adminService = {
         throw new Error('You cannot deactivate your own account for security reasons');
       }
 
-      // Security check: Prevent non-entity admins from modifying entity admins
-      if (existingAdmin.admin_level === 'entity_admin' && validatedPayload.actor_id !== userId) {
-        // Check if actor is also an entity admin
-        const { data: actorAdmin } = await supabase
-          .from('entity_users')
-          .select('admin_level')
-          .eq('user_id', validatedPayload.actor_id)
-          .single();
+      // Security check: Prevent unauthorized admin level modifications
+      const { data: actorAdmin } = await supabase
+        .from('entity_users')
+        .select('admin_level, user_id')
+        .eq('user_id', validatedPayload.actor_id)
+        .single();
 
-        if (!actorAdmin || actorAdmin.admin_level !== 'entity_admin') {
-          throw new Error('Only entity administrators can modify other entity administrators');
+      if (actorAdmin) {
+        // Prevent sub-entity admins from modifying entity admins
+        if (existingAdmin.admin_level === 'entity_admin' && actorAdmin.admin_level === 'sub_entity_admin') {
+          throw new Error('Sub-Entity Administrators cannot modify Entity Administrators');
+        }
+        
+        // Prevent self-editing (additional server-side check)
+        if (actorAdmin.user_id === existingAdmin.user_id) {
+          throw new Error('You cannot edit your own profile for security reasons');
+        }
+        
+        // Check admin level hierarchy for other modifications
+        const levelHierarchy = {
+          'entity_admin': 4,
+          'sub_entity_admin': 3,
+          'school_admin': 2,
+          'branch_admin': 1
+        };
+        
+        const actorLevel = levelHierarchy[actorAdmin.admin_level];
+        const targetLevel = levelHierarchy[existingAdmin.admin_level];
+        
+        if (actorLevel < targetLevel) {
+          throw new Error('You cannot modify administrators at a higher level than your own');
         }
       }
 

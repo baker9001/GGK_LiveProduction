@@ -131,6 +131,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const isEditing = !!initialData;
   const { user } = useUser();
   const { canModify } = usePermissions();
+  const { adminLevel: currentUserAdminLevel } = usePermissions();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -524,12 +525,21 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 value={formData.admin_level}
                 onChange={handleAdminLevelChange}
                 disabled={isSubmitting}
-                options={[
-                  { value: 'entity_admin', label: 'Entity Admin' },
-                  { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
-                  { value: 'school_admin', label: 'School Admin' },
-                  { value: 'branch_admin', label: 'Branch Admin' }
-                ]}
+                options={(() => {
+                  const allOptions = [
+                    { value: 'entity_admin', label: 'Entity Admin' },
+                    { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
+                    { value: 'school_admin', label: 'School Admin' },
+                    { value: 'branch_admin', label: 'Branch Admin' }
+                  ];
+                  
+                  // Sub-Entity Admins cannot create Entity Admins
+                  if (currentUserAdminLevel === 'sub_entity_admin') {
+                    return allOptions.filter(option => option.value !== 'entity_admin');
+                  }
+                  
+                  return allOptions;
+                })()}
               />
             </FormField>
           </div>
@@ -588,7 +598,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               userId={initialData.user_id}
               companyId={companyId}
               adminLevel={formData.admin_level}
-              canModifyScope={canModify('admin')}
+              canModifyScope={canModify('admin') && canEditTargetAdmin && !isSelfEdit}
               onScopesUpdated={() => {
                 toast.success('Scope assignments updated');
                 onSuccess?.();
