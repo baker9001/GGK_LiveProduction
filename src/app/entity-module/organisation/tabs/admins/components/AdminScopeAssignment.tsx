@@ -26,10 +26,11 @@ import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect
 import { Button } from '@/components/shared/Button';
 import { toast } from '@/components/shared/Toast';
 import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 import { EntityAdminScope } from '../types/admin.types';
 import { useAdminScope, useAssignScope, useRemoveScope } from '../hooks/useAdminScope';
 import { useAdminPermissions } from '../hooks/useAdminPermissions'; // For future permission checks
-import { School, MapPin } from 'lucide-react'; // Icons
+import { School, MapPin, CheckCircle } from 'lucide-react'; // Icons
 
 interface AdminScopeAssignmentProps {
   userId: string;
