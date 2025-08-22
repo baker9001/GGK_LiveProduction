@@ -87,3 +87,46 @@ export interface AdminAuditLog {
   created_at: string;
   metadata: Record<string, any>;
 }
+
+// Additional interfaces for better type safety
+export interface CreateAdminPayload {
+  email: string;
+  name: string;
+  password: string;
+  admin_level: AdminLevel;
+  company_id: string;
+  permissions?: AdminPermissions;
+  is_active?: boolean;
+  created_by?: string;
+  parent_admin_id?: string;
+  metadata?: Record<string, any>;
+  actor_id: string;
+}
+
+export interface UpdateAdminPayload {
+  name?: string;
+  email?: string;
+  password?: string;
+  admin_level?: AdminLevel;
+  permissions?: AdminPermissions;
+  is_active?: boolean;
+  metadata?: Record<string, any>;
+  actor_id: string;
+}
+
+export interface AdminUser {
+  id: string;
+  user_id: string;
+  email: string;
+  name: string;
+  admin_level: AdminLevel;
+  company_id: string;
+  permissions: AdminPermissions;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, any>;
+  parent_admin_id?: string | null;
+  assigned_schools?: string[];
+  assigned_branches?: string[];
+}

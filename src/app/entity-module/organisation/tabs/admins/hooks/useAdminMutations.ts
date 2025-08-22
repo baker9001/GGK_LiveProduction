@@ -38,7 +38,7 @@ export function useUpdateAdmin(onSuccess?: (data: AdminUser) => void) {
   const { user } = useUser();
   
   return useMutation(
-    ({ userId, updates }: { userId: string; updates: UpdateAdminPayload }) =>
+    ({ userId, updates }: { userId: string; updates: Omit<UpdateAdminPayload, 'actor_id'> }) =>
       adminService.updateAdmin(userId, {
         ...updates,
         actor_id: user?.id || ''

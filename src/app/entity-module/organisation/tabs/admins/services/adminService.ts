@@ -10,6 +10,19 @@ import { AdminLevel, EntityAdminHierarchy, EntityAdminScope, AdminPermissions } 
 import { auditService } from './auditService';
 import { permissionService } from './permissionService';
 import { userCreationService } from '@/services/userCreationService';
+import { z } from 'zod';
+
+// Validation schemas for server-side validation
+const updateAdminPayloadSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long').regex(/^[a-zA-Z\s'-]+$/, 'Name contains invalid characters').optional(),
+  email: z.string().email('Invalid email address').transform(email => email.toLowerCase().trim()).optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase letter').regex(/[a-z]/, 'Password must contain lowercase letter').regex(/[0-9]/, 'Password must contain number').regex(/[^A-Za-z0-9]/, 'Password must contain special character').optional(),
+  admin_level: z.enum(['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], { errorMap: () => ({ message: 'Invalid admin level' }) }).optional(),
+  is_active: z.boolean().optional(),
+  permissions: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+  actor_id: z.string().uuid('Invalid actor ID')
+});
 
 interface CreateAdminPayload {
   email: string;
@@ -153,10 +166,32 @@ export const adminService = {
         throw new Error('User ID is required');
       }
 
+      // Validate payload with Zod
+      const validatedPayload = updateAdminPayloadSchema.parse(payload);
+
       // Fetch existing admin
       const existingAdmin = await this.getAdminById(userId);
       if (!existingAdmin) {
         throw new Error('Administrator not found');
+      }
+
+      // Security check: Prevent admin from deactivating their own account
+      if (validatedPayload.is_active === false && userId === validatedPayload.actor_id) {
+        throw new Error('You cannot deactivate your own account');
+      }
+
+      // Security check: Prevent non-entity admins from modifying entity admins
+      if (existingAdmin.admin_level === 'entity_admin' && validatedPayload.actor_id !== userId) {
+        // Check if actor is also an entity admin
+        const { data: actorAdmin } = await supabase
+          .from('entity_users')
+          .select('admin_level')
+          .eq('user_id', validatedPayload.actor_id)
+          .single();
+
+        if (!actorAdmin || actorAdmin.admin_level !== 'entity_admin') {
+          throw new Error('Only entity administrators can modify other entity administrators');
+        }
       }
 
       // Prepare update data for entity_users table
@@ -164,21 +199,21 @@ export const adminService = {
         updated_at: new Date().toISOString()
       };
 
-      if (payload.name !== undefined) {
-        updateData.name = payload.name;
+      if (validatedPayload.name !== undefined) {
+        updateData.name = validatedPayload.name;
         updateData.metadata = {
           ...existingAdmin.metadata,
-          name: payload.name
+          name: validatedPayload.name
         };
       }
 
-      if (payload.email !== undefined) {
+      if (validatedPayload.email !== undefined) {
         // Check if email is already in use
-        if (payload.email !== existingAdmin.email) {
+        if (validatedPayload.email !== existingAdmin.email) {
           const { data: emailCheck } = await supabase
             .from('entity_users')
             .select('id')
-            .eq('email', payload.email)
+            .eq('email', validatedPayload.email)
             .eq('company_id', existingAdmin.company_id)
             .neq('id', userId)
             .maybeSingle();
@@ -187,26 +222,26 @@ export const adminService = {
             throw new Error('This email is already in use by another administrator');
           }
         }
-        updateData.email = payload.email;
+        updateData.email = validatedPayload.email;
       }
 
-      if (payload.admin_level !== undefined) {
-        updateData.admin_level = payload.admin_level;
-        const newDefaultPermissions = permissionService.getPermissionsForLevel(payload.admin_level);
-        updateData.permissions = payload.permissions 
-          ? { ...newDefaultPermissions, ...payload.permissions }
+      if (validatedPayload.admin_level !== undefined) {
+        updateData.admin_level = validatedPayload.admin_level;
+        const newDefaultPermissions = permissionService.getPermissionsForLevel(validatedPayload.admin_level);
+        updateData.permissions = validatedPayload.permissions 
+          ? { ...newDefaultPermissions, ...validatedPayload.permissions }
           : newDefaultPermissions;
       }
 
-      if (payload.permissions !== undefined) {
+      if (validatedPayload.permissions !== undefined) {
         updateData.permissions = {
           ...(existingAdmin.permissions || {}),
-          ...payload.permissions
+          ...validatedPayload.permissions
         };
       }
 
-      if (payload.is_active !== undefined) {
-        updateData.is_active = payload.is_active;
+      if (validatedPayload.is_active !== undefined) {
+        updateData.is_active = validatedPayload.is_active;
       }
 
       // Update entity_users table
@@ -222,9 +257,9 @@ export const adminService = {
       }
 
       // Update password if provided
-      if (payload.password && existingAdmin.user_id) {
+      if (validatedPayload.password && existingAdmin.user_id) {
         try {
-          await userCreationService.updatePassword(existingAdmin.user_id, payload.password);
+          await userCreationService.updatePassword(existingAdmin.user_id, validatedPayload.password);
         } catch (passwordError) {
           console.error('Failed to update password:', passwordError);
           // Don't throw - allow other updates to succeed
@@ -232,11 +267,11 @@ export const adminService = {
       }
 
       // Update email in users table if changed
-      if (payload.email && payload.email !== existingAdmin.email && existingAdmin.user_id) {
+      if (validatedPayload.email && validatedPayload.email !== existingAdmin.email && existingAdmin.user_id) {
         const { error: userUpdateError } = await supabase
           .from('users')
           .update({ 
-            email: payload.email,
+            email: validatedPayload.email,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingAdmin.user_id);
@@ -262,7 +297,7 @@ export const adminService = {
           await auditService.logAction({
             company_id: existingAdmin.company_id,
             action_type: 'admin_modified',
-            actor_id: payload.actor_id,
+            actor_id: validatedPayload.actor_id,
             target_id: userId,
             target_type: 'entity_user',
             changes,
@@ -280,6 +315,10 @@ export const adminService = {
       return result;
     } catch (error: any) {
       console.error('updateAdmin error:', error);
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map(e => e.message).join(', ');
+        throw new Error(`Validation failed: ${errorMessages}`);
+      }
       throw error instanceof Error ? error : new Error('Failed to update administrator');
     }
   },

@@ -27,6 +27,7 @@ import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.t
 import { AdminScopeAssignment } from './AdminScopeAssignment';
 import { AdminPermissionMatrix } from './AdminPermissionMatrix';
 import { permissionService } from '../services/permissionService';
+import { usePermissions } from '@/contexts/PermissionContext';
 
 // Validation schemas
 const nameSchema = z.string()
@@ -51,13 +52,18 @@ const adminLevelSchema = z.enum(['entity_admin', 'sub_entity_admin', 'school_adm
 
 interface AdminUser {
   id: string;
+  user_id: string;
   name: string;
   email: string;
   admin_level: AdminLevel;
+  company_id: string;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
   permissions?: AdminPermissions;
-  scopes?: EntityAdminScope[];
+  assigned_schools?: string[];
+  assigned_branches?: string[];
+  metadata?: Record<string, any>;
 }
 
 interface AdminCreationFormProps {
@@ -101,6 +107,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   initialData
 }) => {
   const isEditing = !!initialData;
+  const { user } = useUser();
+  const { canModify } = usePermissions();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -129,6 +137,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   // Reset form when modal opens or initialData changes
   useEffect(() => {
     if (initialData) {
+      console.log('Setting form data from initialData:', initialData);
       setFormData({
         name: initialData.name,
         email: initialData.email,
@@ -244,6 +253,12 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     
     if (!validateForm()) {
       toast.error('Please fix the validation errors before submitting');
+      return;
+    }
+
+    // Security check: Prevent admin from deactivating their own account
+    if (isEditing && formData.is_active === false && initialData?.user_id === user?.id) {
+      toast.error('You cannot deactivate your own account');
       return;
     }
 
@@ -440,7 +455,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               <ToggleSwitch
                 checked={formData.is_active}
                 onChange={(checked) => handleInputChange('is_active', checked)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (isEditing && initialData?.user_id === user?.id)}
                 color="green"
                 size="md"
                 showStateLabel={true}
@@ -448,6 +463,11 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 inactiveLabel="Inactive"
                 description="Inactive users cannot log in or access the system"
               />
+              {isEditing && initialData?.user_id === user?.id && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  You cannot change your own account status
+                </p>
+              )}
             </FormField>
           </div>
         </div>
@@ -472,6 +492,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               userId={initialData.id}
               companyId={companyId}
               adminLevel={formData.admin_level}
+              canModifyScope={canModify('admin')}
               onScopesUpdated={() => {
                 toast.success('Scope assignments updated');
                 onSuccess?.();
@@ -538,8 +559,18 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           <AdminPermissionMatrix
             value={permissions}
             onChange={setPermissions}
-            disabled={isSubmitting || formData.admin_level === 'entity_admin'}
+            disabled={isSubmitting || formData.admin_level === 'entity_admin' || !canModify('admin')}
           />
+          {!canModify('admin') && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mt-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  You do not have permission to modify admin permissions.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </form>
     </SlideInForm>

@@ -441,6 +441,7 @@ export function AdminListTable({
   // Actions for DataTable
   const handleEditAdmin = (admin: EntityUser) => {
     if (onEditAdmin) {
+      console.log('Editing admin with data:', admin);
       onEditAdmin(admin);
     }
   };

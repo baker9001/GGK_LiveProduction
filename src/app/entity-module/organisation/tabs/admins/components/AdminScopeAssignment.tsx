@@ -36,6 +36,7 @@ interface AdminScopeAssignmentProps {
   userId: string;
   companyId: string; // Added companyId as a prop for fetching relevant schools/branches
   adminLevel?: string;
+  canModifyScope?: boolean;
   onScopesUpdated?: () => void;
 }
 
@@ -54,6 +55,7 @@ export function AdminScopeAssignment({
   userId,
   companyId,
   adminLevel,
+  canModifyScope = true,
   onScopesUpdated,
 }: AdminScopeAssignmentProps) {
   // Fetch assigned scopes for the user
@@ -122,10 +124,18 @@ export function AdminScopeAssignment({
   // Check if user is entity admin (should have full access)
   const isEntityAdmin = adminLevel === 'entity_admin';
 
+  // Disable all controls if user cannot modify scope or is entity admin
+  const isDisabled = !canModifyScope || isEntityAdmin;
+
   // Handle save changes
   const handleSaveChanges = async () => {
     if (isEntityAdmin) {
       toast.info('Entity Administrators have full access by default');
+      return;
+    }
+
+    if (!canModifyScope) {
+      toast.error('You do not have permission to modify scope assignments');
       return;
     }
 
@@ -262,8 +272,13 @@ export function AdminScopeAssignment({
           selectedValues={selectedSchoolIds}
           onChange={setSelectedSchoolIds}
           placeholder="Select schools to assign..."
-          disabled={isSaving || isEntityAdmin}
+          disabled={isSaving || isDisabled}
         />
+        {!canModifyScope && !isEntityAdmin && (
+          <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            You do not have permission to modify school assignments
+          </div>
+        )}
       </div>
 
       {/* Assign Branches Section */}
@@ -285,11 +300,16 @@ export function AdminScopeAssignment({
           selectedValues={selectedBranchIds}
           onChange={setSelectedBranchIds}
           placeholder="Select branches to assign..."
-          disabled={isSaving || isEntityAdmin}
+          disabled={isSaving || isDisabled}
         />
+        {!canModifyScope && !isEntityAdmin && (
+          <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            You do not have permission to modify branch assignments
+          </div>
+        )}
       </div>
 
-      {!isEntityAdmin && (
+      {!isEntityAdmin && canModifyScope && (
         <div className="flex justify-end">
           <Button onClick={handleSaveChanges} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save Changes'}
