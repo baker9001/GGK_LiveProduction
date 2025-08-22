@@ -222,15 +222,9 @@ CREATE POLICY "Users can view branches based on permissions" ON branches
   );
 
 -- Entity users table policies
-CREATE POLICY "Users can view admins based on permissions" ON entity_users
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM entity_users eu
-      WHERE eu.user_id = auth.uid()
-      AND eu.is_active = true
-      AND (eu.permissions->'users'->>'view_all_users')::boolean = true
-    )
-  );
+-- Note: The previous policy caused infinite recursion by querying entity_users within its own policy
+-- This policy should be implemented using a SECURITY DEFINER function instead
+-- or by using a different approach that doesn't self-reference the table
 
 -- Audit logs table policies
 CREATE POLICY "Users can view audit logs based on permissions" ON entity_admin_audit_log
