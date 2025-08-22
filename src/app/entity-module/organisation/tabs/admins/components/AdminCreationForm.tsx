@@ -346,7 +346,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           { userId: initialData.id, updates: payload },
           {
             onSuccess: () => {
-              toast.success('Administrator updated successfully!');
               onSuccess?.();
               onClose();
             }
