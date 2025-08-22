@@ -1,17 +1,38 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
+ * Dependencies: 
+ *   - @/contexts/UserContext
+ *   - @/components/shared/* (SlideInForm, FormField, Button, ToggleSwitch, Toast)
+ *   - ../hooks/useAdminMutations
+ *   - ../types/admin.types
+ *   - ../services/permissionService
+ *   - @/contexts/PermissionContext
+ *   - External: react, zod, lucide-react
  * 
- * ENHANCED VERSION - Complete form validation and improved UX
- * Uses existing shared form components with comprehensive validation
+ * Preserved Features:
+ *   - All validation schemas with Zod
+ *   - Password strength indicator
+ *   - Error handling and toast messages
+ *   - Permission matrix functionality
+ *   - Scope assignment for non-entity admins
+ *   - All form fields and layout
  * 
- * Features:
- * ✅ Comprehensive field validation with Zod
- * ✅ Password strength indicator
- * ✅ Proper error handling and toast messages
- * ✅ Removed "Super Admin" option (entity-level only)
- * ✅ Enhanced permission matrix functionality
- * ✅ Proper data validation and error prevention
- * ✅ Works with existing FormField components
+ * Fixed Issues:
+ *   - FIXED: Self-deactivation prevention now working correctly
+ *   - Added proper user_id comparison for self-deactivation check
+ *   - Enhanced debug logging for troubleshooting
+ *   - Proper disabled state for ToggleSwitch
+ * 
+ * Database Tables:
+ *   - entity_users (admin records with user_id reference)
+ *   - users (actual user accounts)
+ *   - entity_admin_scopes (scope assignments)
+ *   - entity_admin_permissions (permission settings)
+ * 
+ * Connected Files:
+ *   - AdminListTable.tsx (lists admins and calls this form)
+ *   - ../hooks/useAdminMutations.ts (mutation hooks)
+ *   - ../services/adminService.ts (API calls)
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -129,6 +150,22 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
+  // Check if this is a self-deactivation attempt
+  const isSelfEdit = isEditing && initialData?.user_id === user?.id;
+  
+  // Debug logging for self-deactivation check
+  useEffect(() => {
+    if (isEditing && initialData) {
+      console.log('=== ADMIN FORM SELF-DEACTIVATION CHECK ===');
+      console.log('Current user ID:', user?.id);
+      console.log('Editing admin user_id:', initialData.user_id);
+      console.log('Editing admin id:', initialData.id);
+      console.log('Is self edit?', isSelfEdit);
+      console.log('Admin is active?', initialData.is_active);
+      console.log('==========================================');
+    }
+  }, [isEditing, initialData, user?.id, isSelfEdit]);
+
   // Password strength calculation
   const passwordStrength = useMemo(() => 
     calculatePasswordStrength(formData.password), 
@@ -240,13 +277,13 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
     // Check permissions (skip for Entity Admins as they have full access by default)
     if (formData.admin_level !== 'entity_admin') {
-    const hasAnyPermission = Object.values(permissions).some(category => 
-      Object.values(category).some(permission => permission === true)
-    );
+      const hasAnyPermission = Object.values(permissions).some(category => 
+        Object.values(category).some(permission => permission === true)
+      );
 
-    if (!hasAnyPermission) {
-      toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
-    }
+      if (!hasAnyPermission) {
+        toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
+      }
     }
 
     setErrors(newErrors);
@@ -258,13 +295,19 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent self-deactivation through form submission
+    if (isSelfEdit && !formData.is_active && initialData?.is_active) {
+      toast.error('You cannot deactivate your own account. Please ask another administrator to deactivate your account if needed.');
+      return;
+    }
+    
     if (!validateForm()) {
       toast.error('Please fix the validation errors before submitting');
       return;
     }
 
     // Prepare payload
-    const payload = {
+    const payload: any = {
       name: formData.name.trim(),
       email: formData.email.trim().toLowerCase(),
       admin_level: formData.admin_level,
@@ -316,6 +359,12 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
   // Handle input change with validation
   const handleInputChange = useCallback((field: string, value: any) => {
+    // Special handling for is_active to prevent self-deactivation
+    if (field === 'is_active' && isSelfEdit && !value && formData.is_active) {
+      toast.error('You cannot deactivate your own account for security reasons');
+      return; // Don't update the state
+    }
+    
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear error when user starts typing
@@ -330,7 +379,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         setErrors(prev => ({ ...prev, [field]: error }));
       }
     }
-  }, [errors, validateField]);
+  }, [errors, validateField, isSelfEdit, formData.is_active]);
 
   if (!isOpen) return null;
 
@@ -467,8 +516,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               <ToggleSwitch
                 checked={formData.is_active}
                 onChange={(checked) => handleInputChange('is_active', checked)}
-                disabled={isSubmitting || (isEditing && user?.id === initialData?.user_id)}
-                preventSelfDeactivation={isEditing}
+                disabled={isSubmitting || isSelfEdit}
+                preventSelfDeactivation={true}
                 currentUserId={user?.id}
                 targetUserId={initialData?.user_id}
                 color="green"
@@ -476,7 +525,11 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 showStateLabel={true}
                 activeLabel="Active"
                 inactiveLabel="Inactive"
-                description="Inactive users cannot log in or access the system"
+                description={
+                  isSelfEdit 
+                    ? "You cannot deactivate your own account for security reasons" 
+                    : "Inactive users cannot log in or access the system"
+                }
               />
             </FormField>
           </div>
