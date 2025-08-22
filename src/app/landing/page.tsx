@@ -40,18 +40,19 @@ import {
   Clock, AlertTriangle, Building2, Info
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '../../../../../lib/auth';
-import { useUser } from '../../../../../contexts/UserContext';
-import { SlideInForm } from '../../../../../components/shared/SlideInForm';
-import { FormField, Input, Select } from '../../../../../components/shared/FormField';
-import { Button } from '../../../../../components/shared/Button';
-import { StatusBadge } from '../../../../../components/shared/StatusBadge';
-import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
-import { usePermissions } from '../../../../../contexts/PermissionContext';
-import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
+import { getAuthenticatedUser } from '../../lib/auth';
+import { useUser } from '../../contexts/UserContext';
+import { SlideInForm } from '../../components/shared/SlideInForm';
+import { FormField, Input, Select } from '../../components/shared/FormField';
+import { Button } from '../../components/shared/Button';
+import { StatusBadge } from '../../components/shared/StatusBadge';
+import { ConfirmationDialog } from '../../components/shared/ConfirmationDialog';
+import { usePermissions } from '../../contexts/PermissionContext';
+import { useScopeFilter } from '../../hooks/useScopeFilter';
 // Note: DataTable import removed as it wasn't used in the original file
+import { SchoolFormContent } from '../../components/forms/SchoolFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolData {
