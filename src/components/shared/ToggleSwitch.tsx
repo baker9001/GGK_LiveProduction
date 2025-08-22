@@ -13,6 +13,9 @@ interface ToggleSwitchProps {
   showStateLabel?: boolean;
   activeLabel?: string;
   inactiveLabel?: string;
+  preventSelfDeactivation?: boolean;
+  currentUserId?: string;
+  targetUserId?: string;
 }
 
 export function ToggleSwitch({
@@ -26,8 +29,22 @@ export function ToggleSwitch({
   className,
   showStateLabel = false,
   activeLabel = 'Active',
-  inactiveLabel = 'Inactive'
+  inactiveLabel = 'Inactive',
+  preventSelfDeactivation = false,
+  currentUserId,
+  targetUserId
 }: ToggleSwitchProps) {
+  // Check if this would be a self-deactivation attempt
+  const isSelfDeactivation = preventSelfDeactivation && 
+                            currentUserId && 
+                            targetUserId && 
+                            currentUserId === targetUserId && 
+                            checked && // Currently active
+                            !checked; // Trying to deactivate
+
+  // Determine if the toggle should be disabled
+  const isDisabled = disabled || isSelfDeactivation;
+
   const sizeClasses = {
     sm: {
       switch: 'h-5 w-9',
@@ -66,7 +83,7 @@ export function ToggleSwitch({
   };
 
   const handleClick = () => {
-    if (!disabled) {
+    if (!isDisabled) {
       onChange(!checked);
     }
   };
@@ -78,6 +95,16 @@ export function ToggleSwitch({
     }
   };
 
+  // Show warning for self-deactivation attempt
+  const showSelfDeactivationWarning = preventSelfDeactivation && 
+                                     currentUserId === targetUserId && 
+                                     checked;
+
+  // Update description to include warning
+  const effectiveDescription = showSelfDeactivationWarning 
+    ? "You cannot deactivate your own account for security reasons"
+    : description;
+
   return (
     <div className={cn('flex items-center justify-between', className)}>
       <div className="flex items-center">
@@ -88,9 +115,9 @@ export function ToggleSwitch({
                 {label}
               </span>
             )}
-            {description && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {description}
+            {effectiveDescription && (
+              <p className={cn("text-sm", showSelfDeactivationWarning ? "text-amber-600 dark:text-amber-400" : "text-gray-500 dark:text-gray-400")}>
+                {effectiveDescription}
               </p>
             )}
           </div>
@@ -114,14 +141,16 @@ export function ToggleSwitch({
           role="switch"
           aria-checked={checked}
           aria-label={label || `Toggle ${checked ? activeLabel : inactiveLabel}`}
+          aria-disabled={isDisabled}
           onClick={handleClick}
           onKeyDown={handleKeyDown}
-          disabled={disabled}
+          disabled={isDisabled}
           className={cn(
             'relative inline-flex flex-shrink-0 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#8CC63F]',
             sizeClasses[size].switch,
             checked ? colorClasses[color].on : colorClasses[color].off,
-            disabled && 'opacity-50 cursor-not-allowed'
+            isDisabled && 'opacity-50 cursor-not-allowed',
+            showSelfDeactivationWarning && 'ring-2 ring-amber-400 ring-offset-2'
           )}
         >
           <span

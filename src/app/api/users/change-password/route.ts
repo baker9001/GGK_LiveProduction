@@ -120,12 +120,19 @@ export async function PUT(request: NextRequest) {
     }
     
     const body = await request.json();
-    const { userId, newPassword, requirePasswordChange, sendNotification } = body;
+    const { userId, newPassword, requirePasswordChange, sendNotification, deactivateUser } = body;
     
     if (!userId || !newPassword) {
       return NextResponse.json({ 
         error: 'User ID and new password are required' 
       }, { status: 400 });
+    }
+    
+    // Prevent admin from deactivating their own account
+    if (deactivateUser && userId === currentAdmin.id) {
+      return NextResponse.json({ 
+        error: 'You cannot deactivate your own account for security reasons' 
+      }, { status: 403 });
     }
     
     // Validate password strength

@@ -216,6 +216,43 @@ export function hasRequiredRole(requiredRole: UserRole): boolean {
   return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
 }
 
+// Check if user can deactivate target user (prevent self-deactivation)
+export function canDeactivateUser(targetUserId: string): boolean {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return false;
+  
+  // Prevent self-deactivation
+  if (currentUser.id === targetUserId) {
+    return false;
+  }
+  
+  return true;
+}
+
+// Validate deactivation request with detailed error message
+export function validateDeactivationRequest(targetUserId: string): { 
+  canDeactivate: boolean; 
+  reason?: string; 
+} {
+  const currentUser = getCurrentUser();
+  
+  if (!currentUser) {
+    return { 
+      canDeactivate: false, 
+      reason: 'You must be logged in to perform this action' 
+    };
+  }
+  
+  if (currentUser.id === targetUserId) {
+    return { 
+      canDeactivate: false, 
+      reason: 'You cannot deactivate your own account for security reasons. Please ask another administrator to deactivate your account if needed.' 
+    };
+  }
+  
+  return { canDeactivate: true };
+}
+
 // Test mode functions
 export function startTestMode(testUser: User): void {
   const currentUser = getAuthenticatedUser();

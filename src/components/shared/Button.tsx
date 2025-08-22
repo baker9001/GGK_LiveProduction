@@ -33,6 +33,7 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  tooltip?: string;
 }
 
 export function Button({
@@ -42,17 +43,25 @@ export function Button({
   leftIcon,
   rightIcon,
   children,
+  tooltip,
+  disabled,
   ...props
 }: ButtonProps) {
-  return (
+  const buttonElement = (
     <button
       className={cn(buttonVariants({ variant, size }), className)}
+      disabled={disabled}
+      title={tooltip}
       {...props}
     >
       {leftIcon && <span className="mr-2">{leftIcon}</span>}
       {children}
       {rightIcon && <span className="ml-2">{rightIcon}</span>}
     </button>
+  );
+
+  return (
+    buttonElement
   );
 }
 

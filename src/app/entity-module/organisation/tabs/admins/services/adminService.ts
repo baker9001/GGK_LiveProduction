@@ -180,6 +180,11 @@ export const adminService = {
         throw new Error('You cannot deactivate your own account');
       }
 
+      // Additional security check: Prevent admin from deactivating their own account via user_id
+      if (validatedPayload.is_active === false && existingAdmin.user_id === validatedPayload.actor_id) {
+        throw new Error('You cannot deactivate your own account for security reasons');
+      }
+
       // Security check: Prevent non-entity admins from modifying entity admins
       if (existingAdmin.admin_level === 'entity_admin' && validatedPayload.actor_id !== userId) {
         // Check if actor is also an entity admin

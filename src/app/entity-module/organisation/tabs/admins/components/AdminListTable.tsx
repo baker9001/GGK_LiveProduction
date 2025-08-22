@@ -54,6 +54,7 @@ import { cn } from '@/lib/utils';
 import { adminService } from '../services/adminService';
 import { useDeleteAdmin, useRestoreAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel } from '../types/admin.types';
+import { useUser } from '@/contexts/UserContext';
 
 // Entity User interface for the table
 interface EntityUser {
@@ -94,6 +95,8 @@ export function AdminListTable({
   onViewDetails,
   className
 }: AdminListTableProps) {
+  const { user } = useUser();
+
   // Filter state
   const [filters, setFilters] = useState<AdminFilters>({
     search: '',
@@ -244,6 +247,17 @@ export function AdminListTable({
   // Handle bulk delete
   const handleBulkDelete = () => {
     const adminsToProcess = filteredAdmins.filter(admin => selectedAdmins.includes(admin.id));
+    
+    // Check if user is trying to deactivate their own account
+    const selfDeactivationAttempt = adminsToProcess.some(admin => 
+      admin.is_active && admin.user_id === user?.id
+    );
+    
+    if (selfDeactivationAttempt) {
+      toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
+      return;
+    }
+    
     const activeAdmins = adminsToProcess.filter(admin => admin.is_active);
     const inactiveAdmins = adminsToProcess.filter(admin => !admin.is_active);
     
@@ -450,6 +464,12 @@ export function AdminListTable({
     // Handle single or bulk delete
     const admin = admins[0];
     if (admin) {
+      // Prevent self-deactivation
+      if (admin.is_active && admin.user_id === user?.id) {
+        toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
+        return;
+      }
+      
       setDeleteAction(admin.is_active ? 'delete' : 'restore');
       setAdminsToDelete(admins);
       setIsConfirmDialogOpen(true);
@@ -483,6 +503,8 @@ export function AdminListTable({
         size="sm"
         leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
         onClick={() => handleDeleteAdmin([row])}
+        disabled={row.is_active && row.user_id === user?.id}
+        title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account" : undefined}
         className={row.is_active 
           ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
           : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"

@@ -380,6 +380,28 @@ export const userCreationService = {
   },
 
   /**
+   * Deactivate user account with self-deactivation protection
+   */
+  async deactivateUser(userId: string, actorId: string): Promise<void> {
+    // Prevent self-deactivation
+    if (userId === actorId) {
+      throw new Error('You cannot deactivate your own account for security reasons');
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) {
+      throw new Error(`Failed to deactivate user: ${error.message}`);
+    }
+  },
+
+  /**
    * Verify user password for login
    */
   async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
