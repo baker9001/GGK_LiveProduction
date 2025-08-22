@@ -97,6 +97,13 @@ export function AdminListTable({
 }: AdminListTableProps) {
   const { user } = useUser();
 
+  // DEBUG: Log current user information
+  console.log('=== CURRENT USER DEBUG ===');
+  console.log('Current user from useUser():', user);
+  console.log('Current user ID:', user?.id);
+  console.log('Current user email:', user?.email);
+  console.log('========================');
+
   // Filter state
   const [filters, setFilters] = useState<AdminFilters>({
     search: '',
@@ -464,6 +471,18 @@ export function AdminListTable({
     // Handle single or bulk delete
     const admin = admins[0];
     if (admin) {
+      // DEBUG: Log comparison values for self-deactivation check
+      console.log('=== DEACTIVATION DEBUG ===');
+      console.log('Admin to deactivate:', admin);
+      console.log('Admin user_id:', admin.user_id);
+      console.log('Admin id:', admin.id);
+      console.log('Current user id:', user?.id);
+      console.log('Is admin active?', admin.is_active);
+      console.log('Comparison admin.user_id === user?.id:', admin.user_id === user?.id);
+      console.log('Comparison admin.id === user?.id:', admin.id === user?.id);
+      console.log('Should prevent self-deactivation?', admin.is_active && admin.user_id === user?.id);
+      console.log('========================');
+
       // Prevent self-deactivation
       if (admin.is_active && admin.user_id === user?.id) {
         toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
@@ -478,6 +497,16 @@ export function AdminListTable({
 
   const renderRowActions = (row: EntityUser) => (
     <div className="flex items-center gap-1">
+      {/* DEBUG: Log row data for each rendered row */}
+      {console.log('=== ROW RENDER DEBUG ===', {
+        rowId: row.id,
+        rowUserId: row.user_id,
+        rowEmail: row.email,
+        currentUserId: user?.id,
+        isCurrentUser: row.user_id === user?.id,
+        shouldDisableDeactivate: row.is_active && row.user_id === user?.id
+      })}
+
       {onViewDetails && (
         <Button
           variant="ghost"
