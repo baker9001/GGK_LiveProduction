@@ -187,7 +187,7 @@ export const userCreationService = {
     const userData = {
       email: payload.email.toLowerCase(),
       phone: payload.phone || null,
-      user_type: payload.user_type,
+      user_type: userTypes[0],
       user_types: userTypes,
       primary_type: userTypes[0],
       is_active: payload.is_active !== false,
