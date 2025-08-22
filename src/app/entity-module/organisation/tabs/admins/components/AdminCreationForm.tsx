@@ -17,6 +17,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import { toast } from '@/components/shared/Toast';
@@ -301,224 +302,204 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
-              <Shield className="h-6 w-6 mr-2 text-blue-500" />
-              {isEditing ? 'Edit Admin User' : 'Create New Admin User'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              disabled={isSubmitting}
+    <SlideInForm
+      title={isEditing ? 'Edit Admin User' : 'Create New Admin User'}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSave={() => {
+        const form = document.querySelector('form');
+        if (form) form.requestSubmit();
+      }}
+      loading={isSubmitting}
+      saveButtonText={isEditing ? 'Update Administrator' : 'Create Administrator'}
+      width="xl"
+    >
+      {/* Error Summary */}
+      {errors.submit && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+          <span className="text-red-700 dark:text-red-300">{errors.submit}</span>
+        </div>
+      )}
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information Section */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <User className="h-5 w-5 mr-2 text-[#8CC63F]" />
+            Basic Information
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              id="name"
+              label="Full Name"
+              error={errors.name}
+              required
             >
-              <XCircle className="w-6 h-6" />
-            </button>
+              <Input
+                id="name"
+                placeholder="Enter full name"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                disabled={isSubmitting}
+                leftIcon={<User className="h-5 w-5 text-gray-400" />}
+              />
+            </FormField>
+
+            <FormField
+              id="email"
+              label="Email Address"
+              error={errors.email}
+              required
+            >
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter email address"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                disabled={isSubmitting}
+                leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
+              />
+            </FormField>
           </div>
 
-          {/* Error Summary */}
-          {errors.submit && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md flex items-center">
-              <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
-              <span className="text-red-700 dark:text-red-300">{errors.submit}</span>
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information Section */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <User className="h-5 w-5 mr-2 text-blue-500" />
-                Basic Information
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  label="Full Name"
-                  error={errors.name}
-                  required
-                >
-                  <Input
-                    icon={User}
-                    placeholder="Enter full name"
-                    value={formData.name}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Email Address"
-                  error={errors.email}
-                  required
-                >
-                  <Input
-                    icon={Mail}
-                    type="email"
-                    placeholder="Enter email address"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                </FormField>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {/* Password Field with Strength Indicator */}
-                <FormField
-                  label={isEditing ? "New Password (optional)" : "Password"}
-                  error={errors.password}
-                  required={!isEditing}
-                >
-                  <div className="relative">
-                    <Input
-                      icon={Lock}
-                      type={showPassword ? "text" : "password"}
-                      placeholder={isEditing ? "Leave blank to keep current" : "Enter password"}
-                      value={formData.password}
-                      onChange={(e) => handleInputChange('password', e.target.value)}
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                  </div>
-                  {formData.password && (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{passwordStrength.label}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
-                          style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </FormField>
-
-                <FormField
-                  label="Admin Level"
-                  error={errors.admin_level}
-                  required
-                >
-                  <Select
-                    icon={Shield}
-                    value={formData.admin_level}
-                    onChange={(value) => handleAdminLevelChange(value)}
-                    disabled={isSubmitting}
-                    options={[
-                      { value: 'entity_admin', label: 'Entity Admin' },
-                      { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
-                      { value: 'school_admin', label: 'School Admin' },
-                      { value: 'branch_admin', label: 'Branch Admin' }
-                    ]}
-                  />
-                </FormField>
-              </div>
-
-              <div className="mt-4">
-                <FormField label="Status">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="isActive"
-                      checked={formData.is_active}
-                      onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                      disabled={isSubmitting}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
-                    />
-                    <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                      Active User
-                    </label>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Inactive users cannot log in or access the system
-                  </p>
-                </FormField>
-              </div>
-            </div>
-
-            {/* Admin Permissions Section */}
-            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <Shield className="h-5 w-5 mr-2 text-purple-500" />
-                Admin Permissions
-              </h3>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
-                <div className="flex items-center">
-                  <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    These permissions control what actions this administrator can perform. 
-                    Unchecked permissions will prevent access to related functions.
-                  </p>
-                </div>
-              </div>
-              <AdminPermissionMatrix
-                value={permissions}
-                onChange={setPermissions}
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Scope Assignment Section - Only for editing */}
-            {isEditing && initialData?.id && (
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <User className="h-5 w-5 mr-2 text-green-500" />
-                  Scope Assignment
-                </h3>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
-                  <div className="flex items-center">
-                    <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mr-2" />
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      Scope assignment limits this admin's access to specific schools or branches. 
-                      Leave empty for full company access.
-                    </p>
-                  </div>
-                </div>
-                <AdminScopeAssignment
-                  userId={initialData.id}
-                  companyId={companyId}
-                  onScopesUpdated={() => {
-                    toast.success('Scope assignments updated');
-                    onSuccess?.();
-                  }}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {/* Password Field with Strength Indicator */}
+            <FormField
+              id="password"
+              label={isEditing ? "New Password (optional)" : "Password"}
+              error={errors.password}
+              required={!isEditing}
+            >
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder={isEditing ? "Leave blank to keep current" : "Enter password"}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  disabled={isSubmitting}
+                  leftIcon={<Lock className="h-5 w-5 text-gray-400" />}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
-            )}
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Password Strength:</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{passwordStrength.label}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
+                      style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </FormField>
 
-            {/* Form Actions */}
-            <div className="flex justify-end space-x-3 pt-6 border-t dark:border-gray-700">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
+            <FormField
+              id="admin_level"
+              label="Admin Level"
+              error={errors.admin_level}
+              required
+            >
+              <Select
+                id="admin_level"
+                value={formData.admin_level}
+                onChange={handleAdminLevelChange}
                 disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                loading={isSubmitting}
-                disabled={isSubmitting || isValidating}
-              >
-                {isEditing ? 'Update Administrator' : 'Create Administrator'}
-              </Button>
-            </div>
-          </form>
+                options={[
+                  { value: 'entity_admin', label: 'Entity Admin' },
+                  { value: 'sub_entity_admin', label: 'Sub-Entity Admin' },
+                  { value: 'school_admin', label: 'School Admin' },
+                  { value: 'branch_admin', label: 'Branch Admin' }
+                ]}
+              />
+            </FormField>
+          </div>
+
+          <div className="mt-4">
+            <FormField id="status" label="Status">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={formData.is_active}
+                  onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                  disabled={isSubmitting}
+                  className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  Active User
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Inactive users cannot log in or access the system
+              </p>
+            </FormField>
+          </div>
         </div>
-      </div>
-    </div>
+
+        {/* Admin Permissions Section */}
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
+            Admin Permissions
+          </h3>
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
+              <p className="text-sm text-green-700 dark:text-green-300">
+                These permissions control what actions this administrator can perform. 
+                Unchecked permissions will prevent access to related functions.
+              </p>
+            </div>
+          </div>
+          <AdminPermissionMatrix
+            value={permissions}
+            onChange={setPermissions}
+            disabled={isSubmitting}
+          />
+        </div>
+
+        {/* Scope Assignment Section - Only for editing */}
+        {isEditing && initialData?.id && (
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+              <User className="h-5 w-5 mr-2 text-[#8CC63F]" />
+              Scope Assignment
+            </h3>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-[#8CC63F] mr-2" />
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Scope assignment limits this admin's access to specific schools or branches. 
+                  Leave empty for full company access.
+                </p>
+              </div>
+            </div>
+            <AdminScopeAssignment
+              userId={initialData.id}
+              companyId={companyId}
+              onScopesUpdated={() => {
+                toast.success('Scope assignments updated');
+                onSuccess?.();
+              }}
+            />
+          </div>
+        )}
+      </form>
+    </SlideInForm>
   );
 };
