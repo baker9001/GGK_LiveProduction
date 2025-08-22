@@ -187,7 +187,11 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           emailSchema.parse(value);
           break;
         case 'password':
-          if (!isEditing || value) {
+          if (!isEditing) {
+            // Password is required for new users
+            passwordSchema.parse(value);
+          } else if (value && value.trim()) {
+            // Password is optional for editing, but if provided, must be valid
             passwordSchema.parse(value);
           }
           break;
@@ -217,10 +221,10 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     const emailError = validateField('email', formData.email);
     if (emailError) newErrors.email = emailError;
 
-    // Validate password (required for new users)
+    // Validate password (required for new users, optional for editing)
     if (!isEditing && !formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password) {
+    } else if (formData.password && formData.password.trim()) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
     }
@@ -234,13 +238,15 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       newErrors.submit = 'Company ID is required';
     }
 
-    // Check permissions
+    // Check permissions (skip for Entity Admins as they have full access by default)
+    if (formData.admin_level !== 'entity_admin') {
     const hasAnyPermission = Object.values(permissions).some(category => 
       Object.values(category).some(permission => permission === true)
     );
 
     if (!hasAnyPermission) {
       toast.warning('Warning: This admin will have no permissions. Consider granting at least view permissions.');
+    }
     }
 
     setErrors(newErrors);
@@ -261,13 +267,17 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
     const payload = {
       name: formData.name.trim(),
       email: formData.email.trim().toLowerCase(),
-      password: formData.password,
       admin_level: formData.admin_level,
       is_active: formData.is_active,
       company_id: companyId,
       permissions,
       scopes: []
     };
+
+    // Only include password if it's provided and not empty
+    if (formData.password && formData.password.trim()) {
+      payload.password = formData.password;
+    }
 
     try {
       if (isEditing) {
@@ -282,6 +292,13 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
           }
         );
       } else {
+        // For new users, password is required
+        if (!formData.password || !formData.password.trim()) {
+          toast.error('Password is required for new administrators');
+          return;
+        }
+        payload.password = formData.password;
+        
         await createAdminMutation.mutateAsync(payload, {
           onSuccess: () => {
             toast.success('Administrator created successfully!');
