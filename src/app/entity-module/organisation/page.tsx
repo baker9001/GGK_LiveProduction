@@ -1,12 +1,14 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
  * 
- * FIXED VERSION - Resolved Supabase Column Error
+ * UPDATED VERSION - Green Tabs Using Shared Component
  * 
- * Fix Applied:
- * ✅ Removed references to non-existent admin_users_count column in schools_additional table
- * ✅ Updated stats calculation to exclude this column
- * ✅ Maintained all other functionality
+ * Changes Applied:
+ * ✅ Replaced custom blue tab navigation with shared Tabs component
+ * ✅ Updated all blue colors to green (#8CC63F) throughout
+ * ✅ Maintained all existing functionality
+ * ✅ Preserved lazy loading and prefetching
+ * ✅ Fixed Supabase column error (admin_users_count)
  */
 
 'use client';
@@ -26,6 +28,7 @@ import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
 import type { SchoolsTabRef } from './tabs/schools/page';
 
 // ===== REF INTERFACE FOR BRANCHES TAB =====
@@ -776,7 +779,7 @@ export default function OrganizationManagement() {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   Organization Management
                 </h1>
-                {/* Performance Badge */}
+                {/* Performance Badge - Changed to green */}
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                   <CheckCircle className="w-3 h-3 mr-1" />
                   Optimized
@@ -896,147 +899,129 @@ export default function OrganizationManagement() {
           )}
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation - UPDATED TO USE SHARED TABS COMPONENT */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="flex space-x-8 px-6" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('structure')}
-                onMouseEnter={() => prefetchTabData('structure')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'structure'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Home className="w-4 h-4 inline-block mr-2" />
-                Organization Structure
-              </button>
-              <button
-                onClick={() => setActiveTab('schools')}
-                onMouseEnter={() => prefetchTabData('schools')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'schools'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <School className="w-4 h-4 inline-block mr-2" />
-                Schools
-              </button>
-              <button
-                onClick={() => setActiveTab('branches')}
-                onMouseEnter={() => prefetchTabData('branches')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'branches'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <MapPin className="w-4 h-4 inline-block mr-2" />
-                Branches
-              </button>
-              <button
-                onClick={() => setActiveTab('admins')}
-                onMouseEnter={() => prefetchTabData('admins')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'admins'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Shield className="h-4 w-4 inline-block mr-2" />
-                Admins
-              </button>
-              <button
-                onClick={() => setActiveTab('teachers')}
-                onMouseEnter={() => prefetchTabData('teachers')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'teachers'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Users className="w-4 h-4 inline-block mr-2" />
-                Teachers
-              </button>
-              <button
-                onClick={() => setActiveTab('students')}
-                onMouseEnter={() => prefetchTabData('students')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'students'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <GraduationCap className="h-4 w-4 inline-block mr-2" />
-                Students
-              </button>
-            </nav>
-          </div>
+          <Tabs defaultValue="structure" value={activeTab} onValueChange={(value: string) => setActiveTab(value as any)}>
+            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-2">
+              <TabsList className="w-full justify-start bg-transparent dark:bg-transparent">
+                <TabsTrigger 
+                  value="structure"
+                  onMouseEnter={() => prefetchTabData('structure')}
+                >
+                  <Home className="w-4 h-4 mr-2" />
+                  Organization Structure
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="schools"
+                  onMouseEnter={() => prefetchTabData('schools')}
+                >
+                  <School className="w-4 h-4 mr-2" />
+                  Schools
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="branches"
+                  onMouseEnter={() => prefetchTabData('branches')}
+                >
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Branches
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="admins"
+                  onMouseEnter={() => prefetchTabData('admins')}
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admins
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="teachers"
+                  onMouseEnter={() => prefetchTabData('teachers')}
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Teachers
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="students"
+                  onMouseEnter={() => prefetchTabData('students')}
+                >
+                  <GraduationCap className="h-4 w-4 mr-2" />
+                  Students
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            <Suspense fallback={<TabSkeleton />}>
-              {activeTab === 'structure' && (
-                <OrganizationStructureTab
-                  companyData={companyData}
-                  companyId={userCompanyId!}
-                  onAddClick={handleAddClick}
-                  onEditClick={handleEditClick}
-                  onItemClick={handleItemClick}
-                  refreshData={() => refetch()}
-                />
-              )}
-              {activeTab === 'schools' && userCompanyId && (
-                <SchoolsTab
-                  ref={schoolsTabRef}
-                  companyId={userCompanyId}
-                  refreshData={() => {
-                    refetch();
-                    handleRefreshStats();
-                  }}
-                />
-              )}
-              {activeTab === 'branches' && userCompanyId && (
-                <BranchesTab
-                  ref={branchesTabRef}
-                  companyId={userCompanyId}
-                  refreshData={() => {
-                    refetch();
-                    handleRefreshStats();
-                  }}
-                />
-              )}
-              {activeTab === 'admins' && userCompanyId && (
-                <AdminsTab
-                  companyId={userCompanyId}
-                  refreshData={() => {
-                    refetch();
-                    handleRefreshStats();
-                  }}
-                />
-              )}
-              {activeTab === 'teachers' && userCompanyId && (
-                <TeachersTab
-                  companyId={userCompanyId}
-                  refreshData={() => {
-                    refetch();
-                    handleRefreshStats();
-                  }}
-                />
-              )}
-              {activeTab === 'students' && userCompanyId && (
-                <StudentsTab
-                  companyId={userCompanyId}
-                  refreshData={() => {
-                    refetch();
-                    handleRefreshStats();
-                  }}
-                />
-              )}
-            </Suspense>
-          </div>
+            {/* Tab Content */}
+            <div className="p-6">
+              <Suspense fallback={<TabSkeleton />}>
+                <TabsContent value="structure">
+                  <OrganizationStructureTab
+                    companyData={companyData}
+                    companyId={userCompanyId!}
+                    onAddClick={handleAddClick}
+                    onEditClick={handleEditClick}
+                    onItemClick={handleItemClick}
+                    refreshData={() => refetch()}
+                  />
+                </TabsContent>
+                <TabsContent value="schools">
+                  {userCompanyId && (
+                    <SchoolsTab
+                      ref={schoolsTabRef}
+                      companyId={userCompanyId}
+                      refreshData={() => {
+                        refetch();
+                        handleRefreshStats();
+                      }}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="branches">
+                  {userCompanyId && (
+                    <BranchesTab
+                      ref={branchesTabRef}
+                      companyId={userCompanyId}
+                      refreshData={() => {
+                        refetch();
+                        handleRefreshStats();
+                      }}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="admins">
+                  {userCompanyId && (
+                    <AdminsTab
+                      companyId={userCompanyId}
+                      refreshData={() => {
+                        refetch();
+                        handleRefreshStats();
+                      }}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="teachers">
+                  {userCompanyId && (
+                    <TeachersTab
+                      companyId={userCompanyId}
+                      refreshData={() => {
+                        refetch();
+                        handleRefreshStats();
+                      }}
+                    />
+                  )}
+                </TabsContent>
+                <TabsContent value="students">
+                  {userCompanyId && (
+                    <StudentsTab
+                      companyId={userCompanyId}
+                      refreshData={() => {
+                        refetch();
+                        handleRefreshStats();
+                      }}
+                    />
+                  )}
+                </TabsContent>
+              </Suspense>
+            </div>
+          </Tabs>
         </div>
 
         {/* Details Panel */}
@@ -1063,7 +1048,7 @@ export default function OrganizationManagement() {
                   <button
                     onClick={() => setDetailsTab('details')}
                     className={`pb-2 px-1 ${detailsTab === 'details' 
-                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                      ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
                   >
                     Details
@@ -1071,7 +1056,7 @@ export default function OrganizationManagement() {
                   <button
                     onClick={() => setDetailsTab('departments')}
                     className={`pb-2 px-1 ${detailsTab === 'departments' 
-                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                      ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
                   >
                     Departments
@@ -1080,7 +1065,7 @@ export default function OrganizationManagement() {
                     <button
                       onClick={() => setDetailsTab('academic')}
                       className={`pb-2 px-1 ${detailsTab === 'academic' 
-                        ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                        ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
                     >
                       Academic Years
@@ -1182,7 +1167,7 @@ export default function OrganizationManagement() {
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         Departments
                       </h3>
-                      <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                      <button className="p-2 bg-[#8CC63F] hover:bg-[#7AB635] text-white rounded-lg transition-colors">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
@@ -1223,7 +1208,7 @@ export default function OrganizationManagement() {
                       <h3 className="font-semibold text-gray-900 dark:text-white">
                         Academic Years
                       </h3>
-                      <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                      <button className="p-2 bg-[#8CC63F] hover:bg-[#7AB635] text-white rounded-lg transition-colors">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
@@ -1244,7 +1229,7 @@ export default function OrganizationManagement() {
                                 </p>
                               </div>
                               {year.is_current && (
-                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+                                <span className="px-2 py-1 text-xs bg-[#8CC63F]/20 text-[#8CC63F] dark:bg-[#8CC63F]/30 dark:text-[#8CC63F] rounded-full">
                                   Current
                                 </span>
                               )}
