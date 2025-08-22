@@ -1,3 +1,35 @@
+/**
+ * File: /src/app/entity-module/organisation/tabs/admins/page.tsx
+ * Dependencies:
+ *   - @/components/shared/Button
+ *   - ./services/adminService
+ *   - ./components/* (AdminListTable, AdminHierarchyTree, AdminAuditLogsPanel, AdminCreationForm)
+ *   - ./types/admin.types
+ *   - External: react, @tanstack/react-query, lucide-react
+ * 
+ * Preserved Features:
+ *   - All three view modes (list, hierarchy, audit)
+ *   - Admin creation and editing
+ *   - View details functionality
+ *   - Data fetching with React Query
+ * 
+ * Fixed Issues:
+ *   - CRITICAL FIX: Added user_id to EntityUser interface
+ *   - CRITICAL FIX: Now passing user_id in initialData to AdminCreationForm
+ *   - This fixes the self-deactivation prevention issue
+ * 
+ * Database Tables:
+ *   - entity_users (admin records)
+ *   - users (user accounts)
+ *   - entity_admin_scope
+ *   - entity_admin_audit_log
+ * 
+ * Connected Files:
+ *   - AdminCreationForm.tsx (receives initialData with user_id)
+ *   - AdminListTable.tsx (passes admin data for editing)
+ *   - adminService.ts (fetches admin data)
+ */
+
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
@@ -9,9 +41,10 @@ import AdminAuditLogsPanel from './components/AdminAuditLogsPanel';
 import { AdminCreationForm } from './components/AdminCreationForm';
 import { AdminLevel } from './types/admin.types';
 
-// Entity User interface for admin data
+// FIXED: Entity User interface now includes user_id field
 interface EntityUser {
   id: string;
+  user_id: string;  // CRITICAL: Added user_id field for self-deactivation check
   email: string;
   name: string;
   admin_level: AdminLevel;
@@ -60,6 +93,11 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
 
   // Handle admin editing
   const handleEditAdmin = (admin: EntityUser) => {
+    console.log('=== ADMIN EDIT HANDLER ===');
+    console.log('Admin being edited:', admin);
+    console.log('Admin user_id:', admin.user_id);
+    console.log('==========================');
+    
     setEditingAdmin(admin);
     setShowCreateAdminModal(true);
   };
@@ -154,7 +192,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         />
       )}
 
-      {/* Admin Creation/Edit Modal */}
+      {/* Admin Creation/Edit Modal - FIXED: Now passing user_id */}
       <AdminCreationForm
         isOpen={showCreateAdminModal}
         onClose={handleModalClose}
@@ -162,13 +200,18 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         companyId={companyId}
         initialData={editingAdmin ? {
           id: editingAdmin.id,
+          user_id: editingAdmin.user_id,  // CRITICAL FIX: Now passing user_id
           name: editingAdmin.name,
           email: editingAdmin.email,
           admin_level: editingAdmin.admin_level,
+          company_id: editingAdmin.company_id,
           is_active: editingAdmin.is_active,
-          createdAt: editingAdmin.created_at,
+          created_at: editingAdmin.created_at,
+          updated_at: editingAdmin.updated_at,
           permissions: editingAdmin.metadata?.permissions,
-          scopes: [] // TODO: Fetch actual scopes for editing admin
+          assigned_schools: editingAdmin.assigned_schools,
+          assigned_branches: editingAdmin.assigned_branches,
+          metadata: editingAdmin.metadata
         } : undefined}
       />
     </div>
