@@ -74,7 +74,7 @@ const adminLevelSchema = z.enum(['entity_admin', 'sub_entity_admin', 'school_adm
 
 interface AdminUser {
   id: string;
-  user_id: string;
+  user_id: string;  // References the users table ID
   name: string;
   email: string;
   admin_level: AdminLevel;
@@ -154,7 +154,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const isSelfEdit = useMemo(() => {
     if (!isEditing || !initialData || !user) return false;
     
-    // The initialData has user_id which references the users table
+    // The initialData now has user_id which references the users table
     // The current user's ID is from the users table
     const result = initialData.user_id === user.id;
     
