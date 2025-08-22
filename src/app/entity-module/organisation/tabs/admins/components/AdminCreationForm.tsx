@@ -18,10 +18,10 @@
  *   - All form fields and layout
  * 
  * Fixed Issues:
- *   - FIXED: Self-deactivation prevention now working correctly
- *   - Added proper user_id comparison for self-deactivation check
- *   - Enhanced debug logging for troubleshooting
- *   - Proper disabled state for ToggleSwitch
+ *   - FIXED: Self-deactivation now properly prevented
+ *   - Added comprehensive debugging
+ *   - Properly disabled toggle for self-edits
+ *   - Multiple validation layers for safety
  * 
  * Database Tables:
  *   - entity_users (admin records with user_id reference)
@@ -150,21 +150,39 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
-  // Check if this is a self-deactivation attempt
-  const isSelfEdit = isEditing && initialData?.user_id === user?.id;
-  
-  // Debug logging for self-deactivation check
+  // CRITICAL FIX: Properly detect self-edit by comparing user_id fields
+  const isSelfEdit = useMemo(() => {
+    if (!isEditing || !initialData || !user) return false;
+    
+    // The initialData has user_id which references the users table
+    // The current user's ID is from the users table
+    const result = initialData.user_id === user.id;
+    
+    console.log('=== SELF-EDIT CHECK ===');
+    console.log('Is editing:', isEditing);
+    console.log('Initial data user_id:', initialData?.user_id);
+    console.log('Current user id:', user?.id);
+    console.log('Is self edit?', result);
+    console.log('=======================');
+    
+    return result;
+  }, [isEditing, initialData, user]);
+
+  // Additional debug logging
   useEffect(() => {
-    if (isEditing && initialData) {
-      console.log('=== ADMIN FORM SELF-DEACTIVATION CHECK ===');
-      console.log('Current user ID:', user?.id);
-      console.log('Editing admin user_id:', initialData.user_id);
-      console.log('Editing admin id:', initialData.id);
-      console.log('Is self edit?', isSelfEdit);
-      console.log('Admin is active?', initialData.is_active);
-      console.log('==========================================');
+    if (isEditing && initialData && user) {
+      console.log('=== FORM DEBUG INFO ===');
+      console.log('Full initialData:', initialData);
+      console.log('Full user:', user);
+      console.log('Comparing:', {
+        'initialData.user_id': initialData.user_id,
+        'user.id': user.id,
+        'match': initialData.user_id === user.id
+      });
+      console.log('Toggle should be disabled?', isSelfEdit);
+      console.log('=======================');
     }
-  }, [isEditing, initialData, user?.id, isSelfEdit]);
+  }, [isEditing, initialData, user, isSelfEdit]);
 
   // Password strength calculation
   const passwordStrength = useMemo(() => 
@@ -175,7 +193,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   // Reset form when modal opens or initialData changes
   useEffect(() => {
     if (initialData) {
-      console.log('Setting form data from initialData:', initialData);
       setFormData({
         name: initialData.name,
         email: initialData.email,
@@ -295,8 +312,9 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Prevent self-deactivation through form submission
+    // CRITICAL: Prevent self-deactivation through form submission
     if (isSelfEdit && !formData.is_active && initialData?.is_active) {
+      console.log('=== BLOCKING SELF-DEACTIVATION IN FORM SUBMIT ===');
       toast.error('You cannot deactivate your own account. Please ask another administrator to deactivate your account if needed.');
       return;
     }
@@ -359,10 +377,13 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
   // Handle input change with validation
   const handleInputChange = useCallback((field: string, value: any) => {
-    // Special handling for is_active to prevent self-deactivation
-    if (field === 'is_active' && isSelfEdit && !value && formData.is_active) {
-      toast.error('You cannot deactivate your own account for security reasons');
-      return; // Don't update the state
+    // CRITICAL: Special handling for is_active to prevent self-deactivation
+    if (field === 'is_active' && isSelfEdit) {
+      if (!value && formData.is_active) {
+        console.log('=== BLOCKING SELF-DEACTIVATION IN INPUT CHANGE ===');
+        toast.error('You cannot deactivate your own account for security reasons');
+        return; // Don't update the state
+      }
     }
     
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -382,6 +403,9 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   }, [errors, validateField, isSelfEdit, formData.is_active]);
 
   if (!isOpen) return null;
+
+  // CRITICAL: Determine if toggle should be completely disabled
+  const isToggleDisabled = isSubmitting || (isSelfEdit && formData.is_active);
 
   return (
     <SlideInForm
@@ -513,23 +537,33 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
 
           <div className="mt-4">
             <FormField id="status" label="Status">
+              {/* Self-deactivation warning message */}
+              {isSelfEdit && formData.is_active && (
+                <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
+                    <span className="text-sm text-amber-700 dark:text-amber-300">
+                      You cannot deactivate your own account for security reasons
+                    </span>
+                  </div>
+                </div>
+              )}
+              
               <ToggleSwitch
                 checked={formData.is_active}
                 onChange={(checked) => handleInputChange('is_active', checked)}
-                disabled={isSubmitting || isSelfEdit}
-                preventSelfDeactivation={true}
-                currentUserId={user?.id}
-                targetUserId={initialData?.user_id}
+                disabled={isToggleDisabled}
                 color="green"
                 size="md"
                 showStateLabel={true}
                 activeLabel="Active"
                 inactiveLabel="Inactive"
                 description={
-                  isSelfEdit 
-                    ? "You cannot deactivate your own account for security reasons" 
+                  isSelfEdit && formData.is_active
+                    ? "Self-deactivation is not allowed" 
                     : "Inactive users cannot log in or access the system"
                 }
+                className={isSelfEdit && formData.is_active ? "opacity-60" : ""}
               />
             </FormField>
           </div>
