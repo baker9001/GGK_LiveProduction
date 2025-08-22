@@ -2,8 +2,7 @@
 
 import { supabase } from '../lib/supabase';
 import { useState, useEffect, useMemo } from 'react';
-import { useUser } from '../contexts/UserContext';
-import { scopeService } from '../app/entity-module/organisation/tabs/admins/services/scopeService';
+import { usePermissions } from '../contexts/PermissionContext';
 
 interface ScopeFilterOptions {
   entityType: 'school' | 'branch';
@@ -25,51 +24,7 @@ export function useScopeFilter<T extends { id: string }>(
   data: T[],
   options: ScopeFilterOptions
 ): ScopeFilterResult<T> {
-  const { user } = useUser();
-  const [userScopes, setUserScopes] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [adminLevel, setAdminLevel] = useState<string | null>(null);
-
-  // Fetch user's scopes and admin level
-  useEffect(() => {
-    const fetchUserScopes = async () => {
-      if (!user?.id) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        
-        // Get user's admin level
-        const { data: userData } = await supabase
-          .from('entity_users')
-          .select('admin_level')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        
-        setAdminLevel(userData?.admin_level || null);
-        
-        // Entity admins have access to everything in their company
-        if (userData?.admin_level === 'entity_admin') {
-          setUserScopes([]);
-          setIsLoading(false);
-          return;
-        }
-        
-        // For other admin levels, fetch their assigned scopes
-        const scopes = await scopeService.getScopes(user.id);
-        setUserScopes(scopes);
-      } catch (error) {
-        console.error('Error fetching user scopes:', error);
-        setUserScopes([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserScopes();
-  }, [user?.id]);
+  const { userScopes, adminLevel, isLoading } = usePermissions();
 
   // Determine if user can access all entities (entity admin)
   const canAccessAll = useMemo(() => {
