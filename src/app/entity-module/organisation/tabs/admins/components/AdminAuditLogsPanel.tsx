@@ -74,7 +74,7 @@ export function AdminAuditLogsPanel({
 
   // Fetch audit logs with React Query
   const { 
-    data: auditLogs = [], 
+    data: queryResult, 
     isLoading, 
     isFetching,
     error 
@@ -99,14 +99,15 @@ export function AdminAuditLogsPanel({
       // Filter by search term on client side (for name/email search)
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        return logs.filter(log => 
+        const filteredLogs = logs.filter(log => 
           log.actor_id?.toLowerCase().includes(searchLower) ||
           log.target_id?.toLowerCase().includes(searchLower) ||
           log.action_type.toLowerCase().includes(searchLower)
         );
+        return { logs: filteredLogs, total: filteredLogs.length };
       }
       
-      return logs;
+      return { logs, total: logs.length };
     },
     {
       keepPreviousData: true,
@@ -115,6 +116,9 @@ export function AdminAuditLogsPanel({
     }
   );
 
+  // Extract logs and total from query result
+  const auditLogs = queryResult?.logs || [];
+  const totalCount = queryResult?.total || 0;
   // Get action type icon
   const getActionIcon = (actionType: string) => {
     switch (actionType) {
@@ -514,8 +518,8 @@ export function AdminAuditLogsPanel({
         pagination={{
           page,
           rowsPerPage,
-          totalCount: auditLogs.length, // TODO: Get actual total count from API
-          totalPages: Math.ceil(auditLogs.length / rowsPerPage),
+          totalCount: totalCount,
+          totalPages: Math.ceil(totalCount / rowsPerPage),
           goToPage: setPage,
           nextPage: () => setPage(prev => prev + 1),
           previousPage: () => setPage(prev => Math.max(prev - 1, 1)),

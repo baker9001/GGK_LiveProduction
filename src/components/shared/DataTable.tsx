@@ -81,7 +81,7 @@ export function DataTable<T>({
   // Use provided pagination or internal state
   const page = pagination?.page || internalPage;
   const rowsPerPage = pagination?.rowsPerPage || internalRowsPerPage;
-  const totalPages = pagination?.totalPages || Math.ceil(data.length / rowsPerPage);
+  const totalPages = pagination?.totalPages || Math.ceil((pagination?.totalCount || data.length) / rowsPerPage);
   
   // Calculate data slice for internal pagination
   const startIndex = pagination ? 0 : (page - 1) * rowsPerPage;
