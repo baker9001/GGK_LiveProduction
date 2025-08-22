@@ -138,23 +138,3 @@ export function ToggleSwitch({
 }
 
 export default ToggleSwitch;
-      
-      {(label || description) && (
-        <div className="ml-3">
-          {label && (
-            <span className="text-sm font-medium text-gray-900 dark:text-white">
-              {label}
-            </span>
-          )}
-          {description && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {description}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default ToggleSwitch;
