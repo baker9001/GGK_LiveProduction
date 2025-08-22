@@ -259,7 +259,14 @@ export function AdminListTable({
 
   // Filter admins based on local filters
   const filteredAdmins = useMemo(() => {
-    return admins?.data || [];
+    let adminList = admins?.data || [];
+    
+    // Filter out Entity Admins if current user is Sub-Entity Admin
+    if (currentUserAdminLevel === 'sub_entity_admin') {
+      adminList = adminList.filter(admin => admin.admin_level !== 'entity_admin');
+    }
+    
+    return adminList;
   }, [admins]);
 
   // Calculate summary statistics
