@@ -47,10 +47,17 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
+  // Enhanced disabled state handling
+  const isDisabled = disabled || props.disabled;
+  
   const buttonElement = (
     <button
-      className={cn(buttonVariants({ variant, size }), className)}
-      disabled={disabled}
+      className={cn(
+        buttonVariants({ variant, size }), 
+        isDisabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+        className
+      )}
+      disabled={isDisabled}
       title={tooltip}
       {...props}
     >

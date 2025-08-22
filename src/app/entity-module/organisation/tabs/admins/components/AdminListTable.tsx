@@ -261,6 +261,9 @@ export function AdminListTable({
     );
     
     if (selfDeactivationAttempt) {
+      console.log('=== SELF DEACTIVATION BLOCKED ===');
+      console.log('Current user ID:', user?.id);
+      console.log('Admins to process:', adminsToProcess.map(a => ({ id: a.id, user_id: a.user_id, email: a.email })));
       toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
       return;
     }
@@ -485,6 +488,7 @@ export function AdminListTable({
 
       // Prevent self-deactivation
       if (admin.is_active && admin.user_id === user?.id) {
+        console.log('🚫 BLOCKING SELF-DEACTIVATION ATTEMPT');
         toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
         return;
       }
@@ -504,7 +508,8 @@ export function AdminListTable({
         rowEmail: row.email,
         currentUserId: user?.id,
         isCurrentUser: row.user_id === user?.id,
-        shouldDisableDeactivate: row.is_active && row.user_id === user?.id
+        shouldDisableDeactivate: row.is_active && row.user_id === user?.id,
+        buttonWillBeDisabled: row.is_active && row.user_id === user?.id
       })}
 
       {onViewDetails && (
@@ -533,7 +538,7 @@ export function AdminListTable({
         leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
         onClick={() => handleDeleteAdmin([row])}
         disabled={row.is_active && row.user_id === user?.id}
-        title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account" : undefined}
+        title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account for security reasons" : undefined}
         className={row.is_active 
           ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
           : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
