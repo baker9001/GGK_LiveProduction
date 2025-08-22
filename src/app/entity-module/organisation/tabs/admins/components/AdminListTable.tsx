@@ -259,14 +259,7 @@ export function AdminListTable({
 
   // Filter admins based on local filters
   const filteredAdmins = useMemo(() => {
-    let adminList = admins?.data || [];
-    
-    // Filter out Entity Admins if current user is Sub-Entity Admin
-    if (currentUserAdminLevel === 'sub_entity_admin') {
-      adminList = adminList.filter(admin => admin.admin_level !== 'entity_admin');
-    }
-    
-    return adminList;
+    return admins?.data || [];
   }, [admins]);
 
   // Calculate summary statistics
@@ -602,44 +595,6 @@ export function AdminListTable({
           </>
         );
       })()}
-    </div>
-  );
-
-  // Remove the old renderRowActions implementation
-  /*
-      {onViewDetails && (
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={<Eye className="h-4 w-4" />}
-          onClick={() => onViewDetails(row)}
-          className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-        >
-          View
-        </Button>
-      )}
-  */
-        size="sm"
-        leftIcon={<Edit2 className="h-4 w-4" />}
-        onClick={() => handleEditAdmin(row)}
-        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-      >
-        Edit
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-        onClick={() => handleDeleteAdmin([row])}
-        disabled={row.is_active && row.user_id === user?.id}
-        title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account for security reasons" : undefined}
-        className={row.is_active 
-          ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-          : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-        }
-      >
-        {row.is_active ? 'Deactivate' : 'Restore'}
-      </Button>
     </div>
   );
 
