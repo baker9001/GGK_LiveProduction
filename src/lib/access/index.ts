@@ -212,7 +212,7 @@ export class AccessControl {
 
   /**
    * Sets the user's scope after it has been fetched.
-   * This method should be called after `getUserScope` has resolved.
+   * This method should be called after \`getUserScope` has resolved.
    * @param scope The fetched user scope.
    */
   setUserScope(scope: UserScope) {
