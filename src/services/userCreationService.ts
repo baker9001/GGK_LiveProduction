@@ -95,10 +95,10 @@ function sanitizeString(input: string): string {
  */
 function getUserTypes(userType: UserType): string[] {
   const typeMap: Record<UserType, string[]> = {
-    'entity_admin': ['entity_user', 'admin'],
-    'sub_entity_admin': ['entity_user', 'admin'],
-    'school_admin': ['entity_user', 'admin'],
-    'branch_admin': ['entity_user', 'admin'],
+    'entity_admin': ['entity', 'admin'],
+    'sub_entity_admin': ['entity', 'admin'],
+    'school_admin': ['entity', 'admin'],
+    'branch_admin': ['entity', 'admin'],
     'teacher': ['teacher', 'staff'],
     'student': ['student']
   };
