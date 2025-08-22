@@ -1,808 +1,389 @@
-/**
- * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
- * 
- * Schools Management Tab Component
- * Handles school data display, creation, and editing with comprehensive forms
- * 
- * Dependencies:
- *   - @/lib/supabase
- *   - @/lib/auth
- *   - @/contexts/UserContext
- *   - @/components/shared/* (SlideInForm, FormField, Button)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
- * 
- * Preserved Features:
- *   - All original school management functionality
- *   - Search and filter capabilities
- *   - School creation and editing forms
- *   - SchoolFormContent integration
- *   - Statistics display
- *   - All original event handlers
- * 
- * Added/Modified:
- *   - ENHANCED: Logo display matching organization structure's improved implementation
- *   - IMPROVED: Better logo sizing with proper aspect ratio
- *   - ADDED: Logo fallback with better error handling
- *   - IMPROVED: Logo container styling for better visual presentation
- * 
- * Database Tables:
- *   - schools & schools_additional
- *   - companies (for reference)
- */
+///home/project/src/app/landing/page.tsx
 
-'use client';
-
-import React, { useState, useEffect, memo } from 'react';
-import { 
-  School, Plus, Edit2, Trash2, Search, Filter, GraduationCap,
-  Users, MapPin, Calendar, Globe, BookOpen, FlaskConical, 
-  Dumbbell, Coffee, Phone, Mail, User, CheckCircle2, XCircle,
-  Clock, AlertTriangle, Building2, Info
-} from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../lib/supabase';
-import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '../../lib/auth';
-import { useUser } from '../../contexts/UserContext';
-import { SlideInForm } from '../../components/shared/SlideInForm';
-import { FormField, Input, Select } from '../../components/shared/FormField';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
-import { StatusBadge } from '../../components/shared/StatusBadge';
-import { ConfirmationDialog } from '../../components/shared/ConfirmationDialog';
-import { usePermissions } from '../../contexts/PermissionContext';
-import { useScopeFilter } from '../../hooks/useScopeFilter';
-// Note: DataTable import removed as it wasn't used in the original file
-import { SchoolFormContent } from '../../components/forms/SchoolFormContent';
+import { Navigation } from '../../components/shared/Navigation';
+import { supabase } from '../../lib/supabase';
+import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
+import bcrypt from 'bcryptjs';
 
-// ===== TYPE DEFINITIONS =====
-interface SchoolData {
-  id: string;
-  name: string;
-  code: string;
-  company_id: string;
-  description: string;
-  status: 'active' | 'inactive';
-  address?: string;
-  notes?: string;
-  logo?: string;
-  created_at: string;
-  additional?: SchoolAdditional;
-  branches?: any[];
-  student_count?: number;
-  branch_count?: number;
-}
+export default function LandingPage() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-interface SchoolAdditional {
-  id?: string;
-  school_id: string;
-  school_type?: string;
-  curriculum_type?: string[];
-  total_capacity?: number;
-  teachers_count?: number;
-  student_count?: number;
-  active_teachers_count?: number;
-  principal_name?: string;
-  principal_email?: string;
-  principal_phone?: string;
-  campus_address?: string;
-  campus_city?: string;
-  campus_state?: string;
-  campus_postal_code?: string;
-  latitude?: number;
-  longitude?: number;
-  established_date?: string;
-  academic_year_start?: number;
-  academic_year_end?: number;
-  has_library?: boolean;
-  has_laboratory?: boolean;
-  has_sports_facilities?: boolean;
-  has_cafeteria?: boolean;
-}
+  const handleDevLogin = async () => {
+    setLoading(true);
+    setError(null);
 
-export interface SchoolsTabProps {
-  companyId: string;
-  refreshData?: () => void;
-}
+    try {
+      // Check if dev user exists in users table
+      const { data: user, error: queryError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          email,
+          password_hash,
+          user_type,
+          is_active,
+          raw_user_meta_data
+        `)
+        .eq('email', 'bakir.alramadi@gmail.com')
+        .eq('user_type', 'system')
+        .maybeSingle();
 
-// ===== REF INTERFACE =====
-export interface SchoolsTabRef {
-  openEditSchoolModal: (school: SchoolData) => void;
-}
+      if (queryError) {
+        throw new Error('Failed to check dev user');
+      }
 
-// ===== MAIN COMPONENT =====
-const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId, refreshData }, ref) => {
-  const queryClient = useQueryClient();
-  const { user } = useUser();
-  const authenticatedUser = getAuthenticatedUser();
-  const { canCreate, canModify, canDelete } = usePermissions();
-  
-  // State management
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
-  const [formData, setFormData] = useState<any>({});
-  const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  
-  // Confirmation dialog state for branch deactivation
-  const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
-  const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
+      if (!user) {
+        // Create dev user if it doesn't exist
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash('dev_password', salt);
 
-  // ===== EXPOSE METHODS VIA REF =====
-  React.useImperativeHandle(ref, () => ({
-    openEditSchoolModal: (school: SchoolData) => {
-      handleEdit(school);
-    }
-  }), []);
+        // Get SSA role ID
+        const { data: ssaRole, error: roleError } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', 'Super Admin')
+          .single();
 
-  // ENHANCED: Improved helper to get school logo URL with better error handling
-  const getSchoolLogoUrl = (path: string | null | undefined) => {
-    if (!path) return null;
-    
-    // If it's already a full URL, return as is
-    if (path.startsWith('http')) {
-      return path;
-    }
-    
-    // Construct Supabase storage URL with proper environment variable
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.warn('VITE_SUPABASE_URL is not defined');
-      return null;
-    }
-    
-    // Use the correct bucket name for schools
-    return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
-  };
+        if (roleError || !ssaRole) {
+          throw new Error('Super Admin role not found');
+        }
 
-  // ===== FETCH SCHOOLS =====
-  const { data: schools = [], isLoading, refetch } = useQuery(
-    ['schools-tab', companyId], // Different cache key from organization page
-    async () => {
-      const { data: schoolsData, error: schoolsError } = await supabase
-        .from('schools')
-        .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
-        .eq('company_id', companyId)
-        .order('name');
-      
-      if (schoolsError) throw schoolsError;
-      
-      // Fetch additional data for each school
-      const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
-        const { data: additional } = await supabase
-          .from('schools_additional')
-          .select('*')
-          .eq('school_id', school.id)
-          .maybeSingle();
-        
-        // Count branches
-        const { count: branchCount } = await supabase
-          .from('branches')
-          .select('*', { count: 'exact', head: true })
-          .eq('school_id', school.id);
-        
-        return {
-          ...school,
-          additional,
-          branch_count: branchCount || 0,
-          student_count: additional?.student_count || 0
+        // First create user in users table
+        const { data: newUser, error: userInsertError } = await supabase
+          .from('users')
+          .insert([{
+            email: 'bakir.alramadi@gmail.com',
+            password_hash: hashedPassword,
+            user_type: 'system',
+            is_active: true,
+            email_verified: true,
+            raw_user_meta_data: { name: 'Baker R.' }
+          }])
+          .select(`
+            id,
+            email,
+            user_type,
+            raw_user_meta_data
+          `)
+          .single();
+
+        if (userInsertError) throw userInsertError;
+
+        // Then create admin_users entry
+        const { error: adminInsertError } = await supabase
+          .from('admin_users')
+          .insert([{
+            id: newUser.id,
+            name: 'Baker R.',
+            email: 'bakir.alramadi@gmail.com',
+            role_id: ssaRole.id,
+            status: 'active'
+          }]);
+
+        if (adminInsertError) throw adminInsertError;
+
+        // Create user object for new user
+        const authenticatedUser: User = {
+          id: newUser.id,
+          name: newUser.raw_user_meta_data?.name || 'Baker R.',
+          email: newUser.email,
+          role: 'SSA'
         };
-      }));
-      
-      return schoolsWithAdditional;
-    },
-    {
-      enabled: !!companyId,
-      staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000
-    }
-  );
 
-  // Apply scope filtering to schools
-  const { filteredData: accessibleSchools, hasAccess: hasSchoolAccess, canAccessAll } = useScopeFilter(
-    schools,
-    { entityType: 'school', companyId }
-  );
+        setAuthenticatedUser(authenticatedUser);
+      } else {
+        // Get admin user details for existing user
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('roles!inner(name)')
+          .eq('id', user.id)
+          .single();
 
-  // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
-  const { data: branches = [] } = useQuery(
-    ['branches-for-schools', companyId],
-    async () => {
-      // Get all schools for this company first
-      const { data: schoolsData, error: schoolsError } = await supabase
-        .from('schools')
-        .select('id')
-        .eq('company_id', companyId);
-      
-      if (schoolsError) throw schoolsError;
-      
-      const schoolIds = schoolsData?.map(s => s.id) || [];
-      
-      if (schoolIds.length === 0) return [];
-      
-      // Then get all branches for these schools
-      const { data: branchesData, error: branchesError } = await supabase
-        .from('branches')
-        .select('id, name, school_id, status')
-        .in('school_id', schoolIds);
-      
-      if (branchesError) throw branchesError;
-      
-      return branchesData || [];
-    },
-    {
-      enabled: !!companyId,
-      staleTime: 60 * 1000
-    }
-  );
-  // ===== MUTATIONS =====
-  const createSchoolMutation = useMutation(
-    async ({ data }: { data: any }) => {
-      // Prepare main data
-      const mainData = {
-        name: data.name,
-        code: data.code,
-        company_id: companyId,
-        description: data.description,
-        status: data.status,
-        address: data.address,
-        notes: data.notes,
-        logo: data.logo
-      };
-      
-      // Create main record
-      const { data: school, error } = await supabase
-        .from('schools')
-        .insert([mainData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Create additional record
-      const additionalData: any = {
-        school_id: school.id
-      };
-      
-      // Add additional fields
-      const additionalFields = [
-        'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
-        'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
-        'principal_phone', 'campus_address', 'campus_city', 'campus_state',
-        'campus_postal_code', 'latitude', 'longitude', 'established_date',
-        'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
-        'has_sports_facilities', 'has_cafeteria'
-      ];
-      
-      additionalFields.forEach(field => {
-        if (data[field] !== undefined) {
-          additionalData[field] = data[field];
-        }
-      });
-      
-      if (Object.keys(additionalData).length > 1) {
-        const { error: additionalError } = await supabase
-          .from('schools_additional')
-          .insert([additionalData]);
-        
-        if (additionalError && additionalError.code !== '23505') {
-          console.error('Additional data error:', additionalError);
-        }
-      }
-      
-      return school;
-    },
-    {
-      onSuccess: () => {
-        // FIXED: Use the correct query key that matches the useQuery hook
-        queryClient.invalidateQueries(['schools-tab', companyId]);
-        queryClient.invalidateQueries(['branches-for-schools', companyId]);
-        if (refreshData) refreshData();
-        toast.success('School created successfully');
-        setShowCreateModal(false);
-        setFormData({});
-        setActiveTab('basic');
-      },
-      onError: (error: any) => {
-        console.error('Error creating school:', error);
-        toast.error(error.message || 'Failed to create school. Please try again.');
-      }
-    }
-  );
+        const roleMapping: Record<string, UserRole> = {
+          'Super Admin': 'SSA',
+          'Support Admin': 'SUPPORT',
+          'Viewer': 'VIEWER'
+        };
 
-  const updateSchoolMutation = useMutation(
-    async ({ id, data, deactivateAssociatedBranches = false }: { id: string; data: any; deactivateAssociatedBranches?: boolean }) => {
-      // If deactivating school and we need to deactivate branches
-      if (data.status === 'inactive' && deactivateAssociatedBranches) {
-        // First deactivate all active branches for this school
-        const { error: branchUpdateError } = await supabase
-          .from('branches')
-          .update({ status: 'inactive' })
-          .eq('school_id', id)
-          .eq('status', 'active');
-        
-        if (branchUpdateError) {
-          throw new Error(`Failed to deactivate branches: ${branchUpdateError.message}`);
-        }
-      }
-      
-      // Prepare main data
-      const mainData = {
-        name: data.name,
-        code: data.code,
-        description: data.description,
-        status: data.status,
-        address: data.address,
-        notes: data.notes,
-        logo: data.logo
-      };
-      
-      // Update main record
-      const { error } = await supabase
-        .from('schools')
-        .update(mainData)
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      // Update or insert additional record
-      const additionalData: any = {
-        school_id: id
-      };
-      
-      // Add additional fields
-      const additionalFields = [
-        'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
-        'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
-        'principal_phone', 'campus_address', 'campus_city', 'campus_state',
-        'campus_postal_code', 'latitude', 'longitude', 'established_date',
-        'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
-        'has_sports_facilities', 'has_cafeteria'
-      ];
-      
-      additionalFields.forEach(field => {
-        if (data[field] !== undefined) {
-          additionalData[field] = data[field];
-        }
-      });
-      
-      if (Object.keys(additionalData).length > 1) {
-        // Try update first
-        const { error: updateError } = await supabase
-          .from('schools_additional')
-          .update(additionalData)
-          .eq('school_id', id);
-        
-        // If no rows updated, insert
-        if (updateError?.code === 'PGRST116') {
-          const { error: insertError } = await supabase
-            .from('schools_additional')
-            .insert([additionalData]);
-          
-          if (insertError && insertError.code !== '23505') {
-            console.error('Additional insert error:', insertError);
-          }
-        }
-      }
-    },
-    {
-      onSuccess: () => {
-        // FIXED: Use the correct query key that matches the useQuery hook
-        queryClient.invalidateQueries(['schools-tab', companyId]);
-        queryClient.invalidateQueries(['branches-for-schools', companyId]);
-        if (refreshData) refreshData();
-        toast.success('School updated successfully');
-        setShowEditModal(false);
-        setSelectedSchool(null);
-        setFormData({});
-        setActiveTab('basic');
-      },
-      onError: (error: any) => {
-        console.error('Error updating school:', error);
-        toast.error(error.message || 'Failed to update school. Please try again.');
-      }
-    }
-  );
+        const userRole = roleMapping[adminUser?.roles?.name] || 'SSA';
 
-  // ===== HELPER FUNCTIONS =====
-  const validateForm = () => {
-    if (!formData.name) {
-      toast.error('School name is required');
-      return false;
-    }
-    if (!formData.code) {
-      toast.error('School code is required');
-      return false;
-    }
-    if (!formData.status) {
-      toast.error('Status is required');
-      return false;
-    }
-    
-    // Email validation
-    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
-      toast.error('Please enter a valid email address for principal');
-      return false;
-    }
-    
-    return true;
-  };
+        // Create user object for existing user
+        const authenticatedUser: User = {
+          id: user.id,
+          name: user.raw_user_meta_data?.name || 'Baker R.',
+          email: user.email,
+          role: userRole
+        };
 
-  const handleSubmit = async (mode: 'create' | 'edit') => {
-    if (!validateForm()) {
-      return;
-    }
-    
-    // Check for branch deactivation before proceeding with edit
-    if (mode === 'edit' && formData.status === 'inactive' && selectedSchool) {
-      // Find active branches for this school
-      const activeBranches = branches.filter(branch => 
-        branch.school_id === selectedSchool.id && branch.status === 'active'
-      );
-      
-      if (activeBranches.length > 0) {
-        setBranchesToDeactivate(activeBranches);
-        setShowDeactivateConfirmation(true);
-        return; // Don't proceed with mutation yet
+        setAuthenticatedUser(authenticatedUser);
       }
-    }
-    
-    if (mode === 'create') {
-      createSchoolMutation.mutate({ data: formData });
-    } else {
-      updateSchoolMutation.mutate({ id: selectedSchool!.id, data: formData, deactivateAssociatedBranches: false });
+
+      // Redirect to admin dashboard
+      navigate('/app/system-admin/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Dev login error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to login');
+      setLoading(false);
     }
   };
 
-  // Handle confirmed deactivation with branches
-  const handleConfirmDeactivation = () => {
-    if (selectedSchool) {
-      updateSchoolMutation.mutate({ 
-        id: selectedSchool.id, 
-        data: formData, 
-        deactivateAssociatedBranches: true 
-      });
-    }
-    setShowDeactivateConfirmation(false);
-    setBranchesToDeactivate([]);
-  };
-
-  // Handle cancel deactivation
-  const handleCancelDeactivation = () => {
-    setShowDeactivateConfirmation(false);
-    setBranchesToDeactivate([]);
-  };
-  const handleEdit = (school: SchoolData) => {
-    const combinedData = {
-      ...school,
-      ...(school.additional || {})
-    };
-    setFormData(combinedData);
-    setSelectedSchool(school);
-    setActiveTab('basic');
-    setShowEditModal(true);
-  };
-
-  const handleCreate = () => {
-    setFormData({ status: 'active', company_id: companyId });
-    setActiveTab('basic');
-    setShowCreateModal(true);
-  };
-
-  // Filter schools based on search and status
-  const filteredSchools = accessibleSchools.filter(school => {
-    const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         school.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  // Calculate stats
-  const totalStudents = accessibleSchools.reduce((sum, school) => sum + (school.student_count || 0), 0);
-  const totalTeachers = accessibleSchools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
-
-  // ===== MAIN RENDER =====
   return (
-    <div className="space-y-4">
-      {/* Header & Search */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search schools..."
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-              className="w-32"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
-          </div>
-          <Button onClick={handleCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add School
-          </Button>
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
+      <Navigation />
+
+      {/* Hero Section with Image Background */}
+      <div className="relative h-screen">
+        <div className="absolute inset-0 overflow-hidden">
+          <img
+            src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg"
+            alt="IGCSE Teacher with Students"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-60" />
         </div>
-
-          {!canCreate('school') && (
-            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-              <div className="flex items-center">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  You don't have permission to create schools.
-                </p>
-              </div>
-            </div>
-          )}
-          
-          {!canAccessAll && accessibleSchools.length < schools.length && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-              <div className="flex items-center">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope.
-                </p>
-              </div>
-            </div>
-          )}
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Schools</p>
-                <p className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {accessibleSchools.length}
-                </p>
-              </div>
-              <School className="w-8 h-8 text-gray-400" />
-            </div>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
-                <p className="text-xl font-semibold text-green-600 dark:text-green-400">
-                  {accessibleSchools.filter(s => s.status === 'active').length}
-                </p>
-              </div>
-              <CheckCircle2 className="w-8 h-8 text-green-400" />
-            </div>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
-                <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  {totalStudents}
-                </p>
-              </div>
-              <GraduationCap className="w-8 h-8 text-blue-400" />
-            </div>
-          </div>
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
-                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {totalTeachers}
-                </p>
-              </div>
-              <Users className="w-8 h-8 text-purple-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Schools List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {isLoading ? (
-          <div className="col-span-full text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
-          </div>
-        ) : filteredSchools.length === 0 ? (
-          <div className="col-span-full text-center py-8">
-            <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 dark:text-gray-400">No schools found</p>
-          </div>
-        ) : (
-          filteredSchools.map((school) => {
-            const logoUrl = getSchoolLogoUrl(school.logo);
-            
-            return (
-              <div
-                key={school.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+          <div className="text-center w-full">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6">
+              Your One-Stop
+              <span className="block text-[#8CC63F]">IGCSE Learning Platform</span>
+            </h1>
+            <p className="mt-3 max-w-lg mx-auto text-xl text-gray-100 sm:mt-5">
+              Interactive lessons, structured topics, performance tracking, and real-time exams.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button
+                size="lg"
+                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-gray-700 rounded-full px-8 w-full sm:w-auto"
+                onClick={() => navigate('/signin')}
+                rightIcon={<ChevronRight className="ml-2 -mr-1 h-5 w-5" />}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    {/* ENHANCED: Improved logo display matching org structure implementation */}
-                    <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
-                      {logoUrl ? (
-                        <>
-                          <img
-                            src={logoUrl}
-                            alt={`${school.name} logo`}
-                            className="w-full h-full object-contain p-0.5"
-                            style={{ maxWidth: '100%', maxHeight: '100%' }}
-                            onError={(e) => {
-                              // If logo fails to load, hide the image and show fallback
-                              const imgElement = e.currentTarget as HTMLImageElement;
-                              imgElement.style.display = 'none';
-                              const parent = imgElement.parentElement;
-                              if (parent) {
-                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
-                                if (fallback) {
-                                  fallback.style.display = 'flex';
-                                  fallback.classList.remove('bg-white');
-                                  fallback.classList.add('bg-green-500');
-                                }
-                              }
-                            }}
-                          />
-                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-green-500 text-white">
-                            {school.code?.substring(0, 2).toUpperCase() || 
-                             school.name?.substring(0, 2).toUpperCase() || 
-                             <School className="w-5 h-5" />}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-green-500 text-white">
-                          {school.code?.substring(0, 2).toUpperCase() || 
-                           school.name?.substring(0, 2).toUpperCase() || 
-                           <School className="w-5 h-5" />}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{school.code}</p>
-                    </div>
-                  </div>
-                  <StatusBadge status={school.status} size="xs" />
-                </div>
-
-                {school.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                    {school.description}
-                  </p>
-                )}
-
-                <div className="space-y-2 mb-3">
-                  {school.additional?.principal_name && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <User className="w-3 h-3" />
-                      <span>{school.additional.principal_name}</span>
-                    </div>
-                  )}
-                  {school.additional?.campus_city && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <MapPin className="w-3 h-3" />
-                      <span>{school.additional.campus_city}</span>
-                    </div>
-                  )}
-                  {school.additional?.school_type && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <Building2 className="w-3 h-3" />
-                      <span className="capitalize">{school.additional.school_type.replace('_', ' ')}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
-                  <div className="flex items-center space-x-4 text-xs">
-                    <div className="flex items-center gap-1">
-                      <GraduationCap className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {school.student_count || 0} students
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {school.additional?.teachers_count || 0} teachers
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Building2 className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {school.branch_count || 0} branches
-                      </span>
-                    </div>
-                  </div>
-                  {canModify('school', school.id, 'school') ? (
-                    <button
-                      onClick={() => handleEdit(school)}
-                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      title="Edit school"
-                    >
-                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                    </button>
+                Get Started
+              </Button>
+              <Button
+                size="lg"
+                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-gray-700 rounded-full px-8 w-full sm:w-auto"
+                leftIcon={<PlayCircle className="mr-2 h-5 w-5" />}
+              >
+                Watch Demo
+              </Button>
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-white/20 w-full sm:w-auto"
+                  onClick={handleDevLogin}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Logging in...
+                    </>
                   ) : (
-                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this school">
-                      <Edit2 className="w-4 h-4 text-gray-400" />
-                    </div>
+                    '🔧 Dev Login (Baker R.)'
                   )}
-                </div>
+                </Button>
+              )}
+            </div>
+            {error && (
+              <div className="mt-4 flex items-center justify-center text-red-400 bg-red-900/50 backdrop-blur-sm rounded-lg p-2">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                {error}
               </div>
-            );
-          })
-        )}
+            )}
+            {process.env.NODE_ENV === 'development' && (
+              <p className="mt-4 text-sm text-yellow-300 bg-yellow-900/50 backdrop-blur-sm rounded-lg p-2 inline-block">
+                ⚠️ Dev Login — for development use only. Will be removed before production.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Create Modal */}
-      <SlideInForm
-        title="Create School"
-        isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-          setFormData({});
-        }}
-        onSave={() => handleSubmit('create')}
-      >
-        <SchoolFormContent
-          formData={formData}
-          setFormData={setFormData}
-          formErrors={{}}
-          setFormErrors={() => {}}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          companyId={companyId}
-          isEditing={false}
-        />
-      </SlideInForm>
+      {/* Feature Highlights */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">Why Choose GGK?</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Everything you need to excel in your IGCSE journey</p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              icon={<Book className="h-8 w-8" />}
+              title="Self-paced Learning"
+              description="Learn at your own pace with structured content and interactive materials"
+            />
+            <FeatureCard
+              icon={<BarChart3 className="h-8 w-8" />}
+              title="Personalized Exams"
+              description="Practice with custom exams tailored to your learning progress"
+            />
+            <FeatureCard
+              icon={<Users className="h-8 w-8" />}
+              title="Progress Tracking"
+              description="Monitor your improvement with detailed performance analytics"
+            />
+            <FeatureCard
+              icon={<MessageSquare className="h-8 w-8" />}
+              title="Teacher Feedback"
+              description="Get personalized feedback and guidance from experienced teachers"
+            />
+          </div>
+        </div>
+      </div>
 
-      {/* Edit Modal */}
-      <SlideInForm
-        title="Edit School"
-        isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setSelectedSchool(null);
-          setFormData({});
-        }}
-        onSave={() => handleSubmit('edit')}
-      >
-        <SchoolFormContent
-          formData={formData}
-          setFormData={setFormData}
-          formErrors={{}}
-          setFormErrors={() => {}}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          companyId={companyId}
-          isEditing={true}
-        />
-      </SlideInForm>
+      {/* Popular Subjects */}
+      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">Popular IGCSE Subjects</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Comprehensive coverage of core subjects</p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            <SubjectCard
+              title="Mathematics"
+              image="https://images.pexels.com/photos/3768126/pexels-photo-3768126.jpeg"
+              description="Master key concepts in algebra, geometry, and calculus"
+            />
+            <SubjectCard
+              title="Biology"
+              image="https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg"
+              description="Explore life sciences with interactive experiments"
+            />
+            <SubjectCard
+              title="Physics"
+              image="https://images.pexels.com/photos/60582/pexels-photo-60582.jpeg"
+              description="Understand fundamental laws of the universe"
+            />
+          </div>
+        </div>
+      </div>
 
-      {/* Branch Deactivation Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={showDeactivateConfirmation}
-        title="Deactivate Branches?"
-        message={`This school has ${branchesToDeactivate.length} active branch${branchesToDeactivate.length > 1 ? 'es' : ''}: ${branchesToDeactivate.map(b => b.name).join(', ')}. These branches will also be deactivated. Do you want to proceed?`}
-        confirmText="Deactivate All"
-        cancelText="Cancel"
-        confirmVariant="destructive"
-        onConfirm={handleConfirmDeactivation}
-        onCancel={handleCancelDeactivation}
-      />
+      {/* Testimonials */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">What Our Users Say</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Join thousands of satisfied students and teachers</p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <TestimonialCard
+              quote="GGK has transformed how I prepare for my IGCSE exams. The structured approach and practice tests have boosted my confidence significantly."
+              author="Sarah Chen"
+              role="IGCSE Student"
+            />
+            <TestimonialCard
+              quote="As a teacher, I appreciate how easy it is to track my students' progress and identify areas where they need additional support."
+              author="David Thompson"
+              role="Biology Teacher"
+            />
+            <TestimonialCard
+              quote="The interactive learning materials and instant feedback have made studying more engaging and effective for me."
+              author="Mohammed Al-Rahman"
+              role="IGCSE Student"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
+        <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+            <div className="col-span-2 md:col-span-1">
+              <div className="flex items-center">
+                <span className="text-xl font-bold text-[#8CC63F]">GGK</span>
+              </div>
+              <p className="mt-4 text-sm text-gray-300 dark:text-gray-400">
+                Empowering IGCSE students and teachers with comprehensive learning tools.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-400 tracking-wider uppercase">Legal</h3>
+              <ul className="mt-4 space-y-4">
+                <li>
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
+                    Privacy Policy
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-400 tracking-wider uppercase">Support</h3>
+              <ul className="mt-4 space-y-4">
+                <li>
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
+                    Contact Us
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="text-base text-gray-300 dark:text-gray-400 hover:text-white transition-colors">
+                    Help Center
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-8 border-t border-gray-800 pt-8">
+            <p className="text-base text-gray-300 dark:text-gray-400 text-center">
+              © 2025 Go Green Knowledge. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
-});
+}
 
-SchoolsTab.displayName = 'SchoolsTab';
+function SubjectCard({ title, image, description }: { title: string; image: string; description: string }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+      <div className="h-48 w-full overflow-hidden">
+        <img
+          src={image}
+          alt={title}
+          className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-200"
+        />
+      </div>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">{description}</p>
+      </div>
+    </div>
+  );
+}
 
-export default SchoolsTab;
+function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+      <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
+        {icon}
+      </div>
+      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
+      <p className="text-gray-600 dark:text-gray-400">{description}</p>
+    </div>
+  );
+}
+
+function TestimonialCard({ quote, author, role }: { quote: string; author: string; role: string }) {
+  return (
+    <div className="bg-gray-50 dark:bg-gray-800 p-8 rounded-xl border border-gray-100 dark:border-gray-700 transition-colors duration-200">
+      <p className="text-gray-600 dark:text-gray-400 italic mb-6">{quote}</p>
+      <div>
+        <p className="font-semibold text-gray-900 dark:text-white">{author}</p>
+        <p className="text-sm text-[#8CC63F]">{role}</p>
+      </div>
+    </div>
+  );
+}
