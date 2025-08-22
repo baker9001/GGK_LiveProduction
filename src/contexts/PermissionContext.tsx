@@ -426,3 +426,4 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
       {children}
     </PermissionContext.Provider>
   );
+}
