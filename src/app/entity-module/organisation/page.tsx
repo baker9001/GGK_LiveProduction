@@ -537,4 +537,736 @@ export default function OrganizationManagement() {
   useEffect(() => {
     if (organizationData) {
       setCompanyData(organizationData);
-    } else if
+    } else if (basicData) {
+      setCompanyData({ ...basicData, schools: [] } as Company);
+    }
+  }, [organizationData, basicData]);
+
+  // ===== LAZY LOAD DEPARTMENTS =====
+  const { data: departments = [] } = useQuery(
+    ['departments', selectedItem?.id, selectedType],
+    async () => {
+      if (!selectedItem) return [];
+      
+      let query = supabase
+        .from('entity_departments')
+        .select('id, name, code, employee_count');
+      
+      if (selectedType === 'company') {
+        query = query.eq('company_id', selectedItem.id).is('school_id', null).is('branch_id', null);
+      } else if (selectedType === 'school') {
+        query = query.eq('school_id', selectedItem.id);
+      } else if (selectedType === 'branch') {
+        query = query.eq('branch_id', selectedItem.id);
+      }
+      
+      const { data, error } = await query.order('name').limit(20);
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || [];
+    },
+    {
+      enabled: !!selectedItem && detailsTab === 'departments' && showDetailsPanel,
+      staleTime: 10 * 60 * 1000,
+      cacheTime: 15 * 60 * 1000
+    }
+  );
+
+  // ===== LAZY LOAD ACADEMIC YEARS =====
+  const { data: academicYears = [] } = useQuery(
+    ['academicYears', selectedItem?.id],
+    async () => {
+      if (!selectedItem || selectedType !== 'school') return [];
+      
+      const { data, error } = await supabase
+        .from('academic_years')
+        .select('id, year_name, start_date, end_date, is_current')
+        .eq('school_id', selectedItem.id)
+        .order('start_date', { ascending: false })
+        .limit(10);
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      return data || [];
+    },
+    {
+      enabled: selectedType === 'school' && detailsTab === 'academic' && showDetailsPanel,
+      staleTime: 10 * 60 * 1000,
+      cacheTime: 15 * 60 * 1000
+    }
+  );
+
+  // ===== CALLBACKS =====
+  const handleItemClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
+    if (type === 'school') {
+      // For school cards, open the unified edit form
+      setActiveTab('schools');
+      setTimeout(() => {
+        schoolsTabRef.current?.openEditSchoolModal(item);
+      }, 100);
+    } else if (type === 'branch') {
+      // For branch cards, open the unified edit form
+      setActiveTab('branches');
+      // Use a longer timeout and ensure the tab is fully loaded
+      setTimeout(() => {
+        if (branchesTabRef.current?.openEditBranchModal) {
+          branchesTabRef.current.openEditBranchModal(item);
+        } else {
+          // Retry after another delay if ref is not ready
+          setTimeout(() => {
+            branchesTabRef.current?.openEditBranchModal(item);
+          }, 200);
+        }
+      }, 300);
+    } else {
+      // For other types, show the details panel as before
+      setSelectedItem(item);
+      setSelectedType(type);
+      setShowDetailsPanel(true);
+      setDetailsTab('details');
+    }
+  }, []);
+
+  const handleAddClick = useCallback((parentItem: any, parentType: 'company' | 'school') => {
+    const newFormData: any = {
+      status: 'active',
+      ...(parentType === 'company' ? { company_id: parentItem.id } : { school_id: parentItem.id })
+    };
+    
+    if (parentType === 'company' && companyData) {
+      newFormData.region_id = companyData.region_id;
+      newFormData.country_id = companyData.country_id;
+    }
+    
+    setFormData(newFormData);
+    setFormErrors({});
+    setFormActiveTab('basic');
+    
+    if (parentType === 'company') {
+      setActiveTab('schools');
+    } else {
+      setActiveTab('branches');
+    }
+  }, [companyData]);
+
+  const handleEditClick = useCallback((item: any, type: 'company' | 'school' | 'branch') => {
+    if (type === 'school') {
+      setActiveTab('schools');
+    } else if (type === 'branch') {
+      setActiveTab('branches');
+    }
+  }, []);
+
+  const handleRefreshStats = useCallback(async () => {
+    setIsRefreshingStats(true);
+    try {
+      // Try to refresh MV, but if it fails, just refetch the data
+      await refreshStatsMutation.mutateAsync().catch(() => {
+        // If MV refresh fails, just invalidate queries
+        queryClient.invalidateQueries(['organization-stats-mv']);
+        queryClient.invalidateQueries(['organization-full']);
+      });
+      await refetchStats();
+    } finally {
+      setIsRefreshingStats(false);
+    }
+  }, [refreshStatsMutation, refetchStats, queryClient]);
+
+  // ===== PREFETCH TAB DATA ON HOVER =====
+  const prefetchTabData = useCallback((tab: string) => {
+    if (!userCompanyId) return;
+    
+    switch (tab) {
+      case 'schools':
+        queryClient.prefetchQuery(['schools', userCompanyId], async () => {
+          const { data } = await supabase
+            .from('schools')
+            .select('id, name, code, status')
+            .eq('company_id', userCompanyId)
+            .limit(20);
+          return data;
+        });
+        break;
+      case 'branches':
+        queryClient.prefetchQuery(['branches-preview', userCompanyId], async () => {
+          const { data: schools } = await supabase
+            .from('schools')
+            .select('id')
+            .eq('company_id', userCompanyId);
+          
+          if (schools && schools.length > 0) {
+            const schoolIds = schools.map(s => s.id);
+            const { data: branches } = await supabase
+              .from('branches')
+              .select('id, name, code, status')
+              .in('school_id', schoolIds)
+              .limit(20);
+            return branches;
+          }
+          return [];
+        });
+        break;
+    }
+  }, [userCompanyId, queryClient]);
+
+  // ===== LOADING STATES =====
+  if (!authenticatedUser) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please login to access this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show skeleton while loading initial data
+  if (!userCompanyId || isLoadingBasic) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="max-w-full mx-auto space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 animate-pulse">
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Unable to Load Organization Data
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {(error as Error).message || 'An error occurred while loading your organization structure.'}
+          </p>
+          <Button onClick={() => refetch()}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== MAIN RENDER =====
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="max-w-full mx-auto space-y-6">
+        {/* Header with Performance Badge */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Organization Management
+                </h1>
+                {/* Performance Badge */}
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Optimized
+                </span>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400">
+                {basicData?.name || companyData?.name || 'Loading...'} - Manage your organization hierarchy
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Only show refresh button if we have stats */}
+              {stats && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleRefreshStats}
+                  disabled={isRefreshingStats}
+                  title="Refresh statistics"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshingStats ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              )}
+              <Button variant="outline">
+                <FileText className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button variant="outline">
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Analytics
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards - FIXED ORDER AND LABELS */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {isLoadingStats ? (
+            [...Array(5)].map((_, i) => <StatCardSkeleton key={i} />)
+          ) : (
+            <>
+              {/* Card 1: Total Schools */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Schools</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_schools}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <School className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Total Branches */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Branches</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_branches}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Total Students */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Students</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_students}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Card 4: Total Teachers (Changed from Total Staff) */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Teachers</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_teachers}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Total Users (New) */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {memoizedStats.total_users}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                    <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('structure')}
+                onMouseEnter={() => prefetchTabData('structure')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'structure'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Home className="w-4 h-4 inline-block mr-2" />
+                Organization Structure
+              </button>
+              <button
+                onClick={() => setActiveTab('schools')}
+                onMouseEnter={() => prefetchTabData('schools')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'schools'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <School className="w-4 h-4 inline-block mr-2" />
+                Schools
+              </button>
+              <button
+                onClick={() => setActiveTab('branches')}
+                onMouseEnter={() => prefetchTabData('branches')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'branches'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <MapPin className="w-4 h-4 inline-block mr-2" />
+                Branches
+              </button>
+              <button
+                onClick={() => setActiveTab('admins')}
+                onMouseEnter={() => prefetchTabData('admins')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'admins'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Shield className="h-4 w-4 inline-block mr-2" />
+                Admins
+              </button>
+              <button
+                onClick={() => setActiveTab('teachers')}
+                onMouseEnter={() => prefetchTabData('teachers')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'teachers'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Users className="w-4 h-4 inline-block mr-2" />
+                Teachers
+              </button>
+              <button
+                onClick={() => setActiveTab('students')}
+                onMouseEnter={() => prefetchTabData('students')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'students'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <GraduationCap className="h-4 w-4 inline-block mr-2" />
+                Students
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            <Suspense fallback={<TabSkeleton />}>
+              {activeTab === 'structure' && (
+                <OrganizationStructureTab
+                  companyData={companyData}
+                  companyId={userCompanyId!}
+                  onAddClick={handleAddClick}
+                  onEditClick={handleEditClick}
+                  onItemClick={handleItemClick}
+                  refreshData={() => refetch()}
+                />
+              )}
+              {activeTab === 'schools' && userCompanyId && (
+                <SchoolsTab
+                  ref={schoolsTabRef}
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+              {activeTab === 'branches' && userCompanyId && (
+                <BranchesTab
+                  ref={branchesTabRef}
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+              {activeTab === 'admins' && userCompanyId && (
+                <AdminsTab
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+              {activeTab === 'teachers' && userCompanyId && (
+                <TeachersTab
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+              {activeTab === 'students' && userCompanyId && (
+                <StudentsTab
+                  companyId={userCompanyId}
+                  refreshData={() => {
+                    refetch();
+                    handleRefreshStats();
+                  }}
+                />
+              )}
+            </Suspense>
+          </div>
+        </div>
+
+        {/* Details Panel */}
+        {showDetailsPanel && selectedItem && (
+          <div className="fixed inset-0 z-50">
+            <div 
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
+              onClick={() => setShowDetailsPanel(false)} 
+            />
+            <div className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
+              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 z-10">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {selectedType === 'company' ? 'Company' : selectedType === 'school' ? 'School' : 'Branch'} Details
+                  </h2>
+                  <button
+                    onClick={() => setShowDetailsPanel(false)}
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  </button>
+                </div>
+                <div className="flex mt-4 space-x-4 border-b dark:border-gray-700">
+                  <button
+                    onClick={() => setDetailsTab('details')}
+                    className={`pb-2 px-1 ${detailsTab === 'details' 
+                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    onClick={() => setDetailsTab('departments')}
+                    className={`pb-2 px-1 ${detailsTab === 'departments' 
+                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                  >
+                    Departments
+                  </button>
+                  {selectedType === 'school' && (
+                    <button
+                      onClick={() => setDetailsTab('academic')}
+                      className={`pb-2 px-1 ${detailsTab === 'academic' 
+                        ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                    >
+                      Academic Years
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-6">
+                {detailsTab === 'details' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Name
+                      </label>
+                      <p className="text-gray-900 dark:text-white font-medium">
+                        {selectedItem.name}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Code
+                      </label>
+                      <p className="text-gray-900 dark:text-white font-mono text-sm">
+                        {selectedItem.code}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Status
+                      </label>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        selectedItem.status === 'active' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300'
+                      }`}>
+                        {selectedItem.status}
+                      </span>
+                    </div>
+                    
+                    {selectedItem.description && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Description
+                        </label>
+                        <p className="text-gray-700 dark:text-gray-300 text-sm">
+                          {selectedItem.description}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {selectedItem.address && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Address
+                        </label>
+                        <p className="text-gray-700 dark:text-gray-300 text-sm">
+                          {selectedItem.address}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Performance Metrics */}
+                    {selectedType === 'school' && (
+                      <div className="pt-4 border-t dark:border-gray-700">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                          Metrics
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Students</p>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {selectedItem.student_count || 0}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Teachers</p>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {selectedItem.teachers_count || 0}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Branches</p>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {selectedItem.branch_count || 0}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {detailsTab === 'departments' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        Departments
+                      </h3>
+                      <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {departments && departments.length > 0 ? (
+                        departments.map((dept: any) => (
+                          <div 
+                            key={dept.id} 
+                            className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">
+                                  {dept.name}
+                                </h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  {dept.code} • {dept.employee_count || 0} employees
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <FolderOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No departments found
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {detailsTab === 'academic' && selectedType === 'school' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        Academic Years
+                      </h3>
+                      <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {academicYears && academicYears.length > 0 ? (
+                        academicYears.map((year: any) => (
+                          <div 
+                            key={year.id} 
+                            className="p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium text-gray-900 dark:text-white">
+                                  {year.year_name}
+                                </h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
+                                </p>
+                              </div>
+                              {year.is_current && (
+                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+                                  Current
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                          <p className="text-gray-500 dark:text-gray-400">
+                            No academic years found
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
