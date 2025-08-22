@@ -154,7 +154,6 @@ interface OrganizationStats {
 export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
-  const { isLoading: isLoadingPermissions, canView } = usePermissions();
   const authenticatedUser = getAuthenticatedUser();
   const { canView } = usePermissions();
   
@@ -1054,9 +1053,9 @@ export default function OrganizationManagement() {
         </div>
 
         {/* Details Panel */}
-        {showDetailsPanel && selectedItem && (
+          {filteredCompanyData && (
           <div className="fixed inset-0 z-50">
-            <div 
+              companyData={filteredCompanyData}
               className="absolute inset-0 bg-black/20 backdrop-blur-sm" 
               onClick={() => setShowDetailsPanel(false)} 
             />
@@ -1251,34 +1250,44 @@ export default function OrganizationManagement() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <h4 className="font-medium text-gray-900 dark:text-white">
-                                  {year.year_name}
-                                </h4>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                  {new Date(year.start_date).toLocaleDateString()} - {new Date(year.end_date).toLocaleDateString()}
-                                </p>
+        {canView('schools') && (
+          <TabsContent value="schools">
+            <Suspense fallback={<div className="text-center py-8">Loading schools...</div>}>
+              <SchoolsTab ref={schoolsTabRef} companyId={companyId || ''} refreshData={refetch} />
+            </Suspense>
+          </TabsContent>
+        )}
                               </div>
-                              {year.is_current && (
-                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
-                                  Current
-                                </span>
-                              )}
+        {canView('branches') && (
+          <TabsContent value="branches">
+            <Suspense fallback={<div className="text-center py-8">Loading branches...</div>}>
+              <BranchesTab ref={branchesTabRef} companyId={companyId || ''} refreshData={refetch} />
+            </Suspense>
+          </TabsContent>
+        )}
                             </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-8">
-                          <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+        {canView('users') && (
+          <TabsContent value="admins">
+            <Suspense fallback={<div className="text-center py-8">Loading admins...</div>}>
+              <AdminsTab companyId={companyId || ''} refreshData={refetch} />
+            </Suspense>
+          </TabsContent>
+        )}
                           <p className="text-gray-500 dark:text-gray-400">
-                            No academic years found
-                          </p>
-                        </div>
-                      )}
-                    </div>
+        {canView('users') && (
+          <TabsContent value="teachers">
+            <Suspense fallback={<div className="text-center py-8">Loading teachers...</div>}>
+              <TeachersTab companyId={companyId || ''} refreshData={refetch} />
+            </Suspense>
+          </TabsContent>
+        )}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+        {canView('users') && (
+          <TabsContent value="students">
+            <Suspense fallback={<div className="text-center py-8">Loading students...</div>}>
+              <StudentsTab companyId={companyId || ''} refreshData={refetch} />
+            </Suspense>
+          </TabsContent>
         )}
       </div>
     </div>
