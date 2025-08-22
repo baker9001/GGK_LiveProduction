@@ -1,6 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
+ * PHASE 5: Teachers Tab with Access Control Applied
+ * 
+ * Access Rules Applied:
+ * 1. Access Check: Block entry if !canViewTab('teachers')
+ * 2. Scoped Queries: Apply getScopeFilters to teacher queries
+ * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
+ * 
  * Teachers Management Tab Component
  * Enhanced Teachers Tab with Scope-Based Access Control
  * Teachers will be filtered based on user's assigned schools/branches
@@ -16,11 +23,11 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useUser } from '../../../../../contexts/UserContext';
-import { usePermissions } from '../../../../../contexts/PermissionContext';
-import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
+import { useAccessControl } from '../../../../../hooks/useAccessControl';
 import { FormField, Input, Select } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
+import { toast } from '../../../../../components/shared/Toast';
 
 interface TeacherData {
   id: string;
@@ -47,20 +54,49 @@ export interface TeachersTabProps {
 
 export default function TeachersTab({ companyId, refreshData }: TeachersTabProps) {
   const { user } = useUser();
-  const { canCreate, canModify, adminLevel } = usePermissions();
+  const {
+    canViewTab,
+    can,
+    getScopeFilters,
+    isLoading: isAccessControlLoading,
+    isEntityAdmin,
+    isSubEntityAdmin
+  } = useAccessControl();
+
+  // PHASE 5 RULE 1: ACCESS CHECK
+  // Block entry if user cannot view this tab
+  React.useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('teachers')) {
+      toast.error('You do not have permission to view teachers');
+      window.location.href = '/app/entity-module/dashboard';
+      return;
+    }
+  }, [isAccessControlLoading, canViewTab]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
+
+  // PHASE 5 RULE 2: SCOPED QUERIES
+  // Apply getScopeFilters to all Supabase queries
+  const scopeFilters = getScopeFilters('teachers');
 
   // Fetch teachers data
   const { data: teachers = [], isLoading } = useQuery(
     ['teachers', companyId, searchTerm, filterStatus, filterSchool],
     async () => {
-      // Get all schools for this company first to filter teachers
-      const { data: schoolsData, error: schoolsError } = await supabase
+      // SCOPED QUERY: Get schools with scope filtering
+      let schoolsQuery = supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId);
+
+      // Apply scope filters if user is not entity admin
+      if (scopeFilters.school_ids) {
+        schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+      }
+
+      const { data: schoolsData, error: schoolsError } = await schoolsQuery;
       
       if (schoolsError) throw schoolsError;
       
@@ -68,8 +104,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       if (schoolIds.length === 0) return [];
       
-      // Build query for teachers
-      let query = supabase
+      // SCOPED QUERY: Build query for teachers with scope filtering
+      let teachersQuery = supabase
         .from('teachers')
         .select(`
           *,
@@ -91,16 +127,26 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
 
+      // Apply scope filters for schools
+      if (scopeFilters.school_ids) {
+        teachersQuery = teachersQuery.in('school_id', scopeFilters.school_ids);
+      }
+
+      // Apply scope filters for branches
+      if (scopeFilters.branch_ids) {
+        teachersQuery = teachersQuery.in('branch_id', scopeFilters.branch_ids);
+      }
+
       // Apply filters
       if (filterSchool !== 'all') {
-        query = query.eq('school_id', filterSchool);
+        teachersQuery = teachersQuery.eq('school_id', filterSchool);
       }
 
       if (searchTerm) {
-        query = query.or(`teacher_code.ilike.%${searchTerm}%,users.email.ilike.%${searchTerm}%`);
+        teachersQuery = teachersQuery.or(`teacher_code.ilike.%${searchTerm}%,users.email.ilike.%${searchTerm}%`);
       }
 
-      const { data: teachersData, error: teachersError } = await query;
+      const { data: teachersData, error: teachersError } = await teachersQuery;
       
       if (teachersError) throw teachersError;
       
@@ -137,17 +183,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     { enabled: !!companyId }
   );
 
-  // Apply scope filtering to teachers
-  const { 
-    filteredData: accessibleTeachers, 
-    hasAccess: hasTeacherAccess, 
-    canAccessAll,
-    scopeInfo
-  } = useScopeFilter(teachers, { 
-    entityType: 'school', // Teachers are filtered by school access
-    companyId, 
-    requireActiveStatus: true 
-  });
+  // Teachers are already filtered by scope in the query
+  const accessibleTeachers = teachers;
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // Filter teachers based on search and status
   const displayedTeachers = accessibleTeachers.filter(teacher => {
@@ -196,7 +234,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               ]}
             />
           </div>
-          {canCreate('teacher') && (
+          {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
+          {can('create_teacher') && (
             <Button onClick={() => console.log('Create teacher - TODO')}>
               <Plus className="w-4 h-4 mr-2" />
               Add Teacher
@@ -205,12 +244,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         </div>
 
         {/* Access Control Notices */}
-        {!canCreate('teacher') && (
+        {!can('create_teacher') && (
           <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
             <div className="flex items-center">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
               <p className="text-sm text-amber-700 dark:text-amber-300">
                 You don't have permission to create teachers.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!canAccessAll && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="flex items-center">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Showing teachers based on your assigned scope. You can only view teachers in schools/branches you manage.
               </p>
             </div>
           </div>

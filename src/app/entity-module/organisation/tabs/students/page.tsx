@@ -1,6 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/students/page.tsx
  * 
+ * PHASE 5: Students Tab with Access Control Applied
+ * 
+ * Access Rules Applied:
+ * 1. Access Check: Block entry if !canViewTab('students')
+ * 2. Scoped Queries: Apply getScopeFilters to student queries
+ * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
+ * 
  * Students Management Tab Component (Placeholder)
  * To be implemented with full student management functionality
  * 
@@ -14,6 +21,8 @@
 
 import React from 'react';
 import { GraduationCap, Users, BookOpen, Award, Clock } from 'lucide-react';
+import { useAccessControl } from '../../../../../hooks/useAccessControl';
+import { toast } from '../../../../../components/shared/Toast';
 
 export interface StudentsTabProps {
   companyId: string;
@@ -21,6 +30,34 @@ export interface StudentsTabProps {
 }
 
 export default function StudentsTab({ companyId, refreshData }: StudentsTabProps) {
+  const {
+    canViewTab,
+    can,
+    getScopeFilters,
+    isLoading: isAccessControlLoading,
+    isEntityAdmin,
+    isSubEntityAdmin
+  } = useAccessControl();
+
+  // PHASE 5 RULE 1: ACCESS CHECK
+  // Block entry if user cannot view this tab
+  React.useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('students')) {
+      toast.error('You do not have permission to view students');
+      window.location.href = '/app/entity-module/dashboard';
+      return;
+    }
+  }, [isAccessControlLoading, canViewTab]);
+
+  // PHASE 5 RULE 2: SCOPED QUERIES
+  // Apply getScopeFilters to student queries (when implemented)
+  const scopeFilters = getScopeFilters('students');
+
+  // PHASE 5 RULE 3: UI GATING
+  // Show/hide buttons based on permissions
+  const canCreateStudent = can('create_student');
+  const canModifyStudent = can('modify_student');
+
   return (
     <div className="min-h-[600px] bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8">
       <div className="max-w-2xl mx-auto text-center">
@@ -34,6 +71,15 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           <p className="text-gray-600 dark:text-gray-400">
             Comprehensive student management system coming soon
           </p>
+          
+          {/* Show scope information for non-entity admins */}
+          {!isEntityAdmin && !isSubEntityAdmin && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                When implemented, you will only see students in your assigned {scopeFilters.school_ids ? 'schools' : 'branches'}.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -83,7 +129,24 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             <li>Disciplinary records</li>
             <li>Financial information</li>
             <li>Transport management</li>
+            <li>Scope-based access control (showing only students in your assigned schools/branches)</li>
           </ul>
+          
+          {/* PHASE 5 RULE 3: UI GATING - Show permission preview */}
+          <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-700">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Your Permissions Preview:</h4>
+            <div className="space-y-1 text-xs">
+              <div className={`flex items-center gap-2 ${canCreateStudent ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {canCreateStudent ? '✓' : '✗'} Create Students
+              </div>
+              <div className={`flex items-center gap-2 ${canModifyStudent ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {canModifyStudent ? '✓' : '✗'} Modify Students
+              </div>
+              <div className={`flex items-center gap-2 ${can('delete_student') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {can('delete_student') ? '✓' : '✗'} Delete Students
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

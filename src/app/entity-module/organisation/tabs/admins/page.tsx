@@ -1,5 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/page.tsx
+ * 
+ * PHASE 5: Admins Tab with Access Control Applied
+ * 
+ * Access Rules Applied:
+ * 1. Access Check: Block entry if !canViewTab('admins')
+ * 2. Scoped Queries: Apply getScopeFilters to admin queries
+ * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
+ * 
  * Dependencies:
  *   - @/components/shared/Button
  *   - ./services/adminService
@@ -34,6 +42,8 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { toast } from '@/components/shared/Toast';
 import { adminService } from './services';
 import AdminListTable from './components/AdminListTable';
 import AdminHierarchyTree from './components/AdminHierarchyTree';
@@ -64,16 +74,51 @@ interface AdminsPageProps {
 }
 
 export default function AdminsPage({ companyId }: AdminsPageProps) {
+  const {
+    canViewTab,
+    can,
+    getScopeFilters,
+    isLoading: isAccessControlLoading,
+    isEntityAdmin,
+    isSubEntityAdmin
+  } = useAccessControl();
+
+  // PHASE 5 RULE 1: ACCESS CHECK
+  // Block entry if user cannot view this tab
+  React.useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('admins')) {
+      toast.error('You do not have permission to view administrators');
+      window.location.href = '/app/entity-module/dashboard';
+      return;
+    }
+  }, [isAccessControlLoading, canViewTab]);
+
   const [viewMode, setViewMode] = useState<'list' | 'hierarchy' | 'audit'>('list');
   const [showCreateAdminModal, setShowCreateAdminModal] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<EntityUser | null>(null);
   const [selectedAdminForDetails, setSelectedAdminForDetails] = useState<EntityUser | null>(null);
 
+  // PHASE 5 RULE 2: SCOPED QUERIES
+  // Apply getScopeFilters to admin queries
+  const scopeFilters = getScopeFilters('users');
+
   // Fetch administrators for hierarchy view
   const { data: admins = [], isLoading: isLoadingAdmins } = useQuery(
     ['admins', companyId],
     async () => {
-      const adminList = await adminService.listAdmins(companyId);
+      // SCOPED QUERY: Apply scope filters to admin queries
+      const adminFilters: any = {};
+      
+      // For non-entity admins, apply scope-based filtering
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        // School admins can only see admins in their assigned schools
+        // Branch admins can only see admins in their assigned branches
+        if (scopeFilters.school_ids || scopeFilters.branch_ids) {
+          adminFilters.scope_filter = scopeFilters;
+        }
+      }
+      
+      const adminList = await adminService.listAdmins(companyId, adminFilters);
       return adminList;
     },
     {
@@ -82,8 +127,10 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
     }
   );
 
-  // TODO: Replace with actual useAdminPermissions() hook
-  const canCreateAdmin = true; // Mock for now
+  // PHASE 5 RULE 3: UI GATING
+  // Show/hide buttons based on permissions
+  const canCreateAdmin = can('create_admin');
+  const canViewAuditLogs = can('view_audit_logs');
 
   // Handle admin creation
   const handleCreateAdmin = () => {
@@ -129,7 +176,18 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Management</h1>
           <p className="mt-1 text-gray-600 dark:text-gray-400">Manage administrators, their roles, and access within your organization.</p>
+          
+          {/* Show scope limitation notice for non-entity admins */}
+          {!isEntityAdmin && !isSubEntityAdmin && (
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                You can only view and manage administrators within your assigned scope.
+              </p>
+            </div>
+          )}
         </div>
+        
+        {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
         {canCreateAdmin && (
           <Button
             onClick={handleCreateAdmin}
@@ -158,6 +216,8 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         >
           Hierarchy View
         </Button>
+        {/* PHASE 5 RULE 3: UI GATING - Show audit logs tab based on permissions */}
+        {canViewAuditLogs && (
         <Button
           variant={viewMode === 'audit' ? 'default' : 'ghost'}
           onClick={() => setViewMode('audit')}
@@ -166,6 +226,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         >
           Audit Logs
         </Button>
+        )}
       </div>
 
       {/* Conditional Rendering of Views */}
@@ -186,7 +247,8 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         />
       )}
       
-      {viewMode === 'audit' && (
+      {/* PHASE 5 RULE 3: UI GATING - Show audit logs based on permissions */}
+      {viewMode === 'audit' && canViewAuditLogs && (
         <AdminAuditLogsPanel
           companyId={companyId}
         />
