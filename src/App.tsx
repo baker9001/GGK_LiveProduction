@@ -4,6 +4,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { UserProvider } from './contexts/UserContext';
+import { PermissionProvider } from './contexts/PermissionContext';
 import { Toast } from './components/shared/Toast';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
@@ -65,97 +66,99 @@ function App() {
     <ReactQueryProvider>
       <BrowserRouter>
         <UserProvider>
-          <Toast />
-          {/* Test Mode Bar - Shows only when in test mode */}
-          <TestModeBar />
-          
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/signin" element={<SignInPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/form-validation" element={<FormValidationPage />} />
+          <PermissionProvider>
+            <Toast />
+            {/* Test Mode Bar - Shows only when in test mode */}
+            <TestModeBar />
             
-            {/* Entity Module - Only ENTITY_ADMIN and SSA */}
-            <Route
-              path="/app/entity-module/*"
-              element={
-                <ProtectedRoute>
-                  <ModuleRoute 
-                    path="/app/entity-module"
-                    allowedRoles={['SSA', 'ENTITY_ADMIN']}
-                    element={
-                      <div className="min-h-screen bg-gray-50">
-                        <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                          <EntityModulePage moduleKey="entity-module" />
-                        </main>
-                      </div>
-                    }
-                  />
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* Student Module - Only STUDENT and SSA */}
-            <Route
-              path="/app/student-module/*"
-              element={
-                <ProtectedRoute>
-                  <ModuleRoute 
-                    path="/app/student-module"
-                    allowedRoles={['SSA', 'STUDENT']}
-                    element={
-                      <div className="min-h-screen bg-gray-50">
-                        <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                          <StudentModulePage moduleKey="student-module" />
-                        </main>
-                      </div>
-                    }
-                  />
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* Teachers Module - Only TEACHER and SSA */}
-            <Route
-              path="/app/teachers-module/*"
-              element={
-                <ProtectedRoute>
-                  <ModuleRoute 
-                    path="/app/teachers-module"
-                    allowedRoles={['SSA', 'TEACHER']}
-                    element={
-                      <div className="min-h-screen bg-gray-50">
-                        <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                          <TeachersModulePage moduleKey="teachers-module" />
-                        </main>
-                      </div>
-                    }
-                  />
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* System Admin Module - SSA, SUPPORT, VIEWER */}
-            <Route
-              path="/app/system-admin/*"
-              element={
-                <ProtectedRoute>
-                  <ModuleRoute 
-                    path="/app/system-admin"
-                    allowedRoles={['SSA', 'SUPPORT', 'VIEWER']}
-                    element={
-                      <div className="min-h-screen bg-gray-50">
-                        <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                          <SystemAdminPage moduleKey="system-admin" />
-                        </main>
-                      </div>
-                    }
-                  />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/signin" element={<SignInPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/form-validation" element={<FormValidationPage />} />
+              
+              {/* Entity Module - Only ENTITY_ADMIN and SSA */}
+              <Route
+                path="/app/entity-module/*"
+                element={
+                  <ProtectedRoute>
+                    <ModuleRoute 
+                      path="/app/entity-module"
+                      allowedRoles={['SSA', 'ENTITY_ADMIN']}
+                      element={
+                        <div className="min-h-screen bg-gray-50">
+                          <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                            <EntityModulePage moduleKey="entity-module" />
+                          </main>
+                        </div>
+                      }
+                    />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Student Module - Only STUDENT and SSA */}
+              <Route
+                path="/app/student-module/*"
+                element={
+                  <ProtectedRoute>
+                    <ModuleRoute 
+                      path="/app/student-module"
+                      allowedRoles={['SSA', 'STUDENT']}
+                      element={
+                        <div className="min-h-screen bg-gray-50">
+                          <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                            <StudentModulePage moduleKey="student-module" />
+                          </main>
+                        </div>
+                      }
+                    />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Teachers Module - Only TEACHER and SSA */}
+              <Route
+                path="/app/teachers-module/*"
+                element={
+                  <ProtectedRoute>
+                    <ModuleRoute 
+                      path="/app/teachers-module"
+                      allowedRoles={['SSA', 'TEACHER']}
+                      element={
+                        <div className="min-h-screen bg-gray-50">
+                          <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                            <TeachersModulePage moduleKey="teachers-module" />
+                          </main>
+                        </div>
+                      }
+                    />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* System Admin Module - SSA, SUPPORT, VIEWER */}
+              <Route
+                path="/app/system-admin/*"
+                element={
+                  <ProtectedRoute>
+                    <ModuleRoute 
+                      path="/app/system-admin"
+                      allowedRoles={['SSA', 'SUPPORT', 'VIEWER']}
+                      element={
+                        <div className="min-h-screen bg-gray-50">
+                          <main className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                            <SystemAdminPage moduleKey="system-admin" />
+                          </main>
+                        </div>
+                      }
+                    />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </PermissionProvider>
         </UserProvider>
       </BrowserRouter>
     </ReactQueryProvider>
