@@ -60,7 +60,7 @@ export function useAssignScope(userId: string, onSuccess?: () => void) {
         throw new Error('User not found in users table');
       }
       
-      scopeService.assignScope(userId, scope),
+      return scopeService.assignScope(userId, scope);
     },
     {
       onSuccess: () => {
