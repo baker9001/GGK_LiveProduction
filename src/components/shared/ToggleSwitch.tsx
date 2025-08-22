@@ -39,8 +39,7 @@ export function ToggleSwitch({
                             currentUserId && 
                             targetUserId && 
                             currentUserId === targetUserId && 
-                            checked && // Currently active
-                            !checked; // Trying to deactivate
+                            checked; // Currently active and would be deactivated
 
   // Determine if the toggle should be disabled
   const isDisabled = disabled || isSelfDeactivation;

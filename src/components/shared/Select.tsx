@@ -345,14 +345,22 @@ export function Select({
         </span>
         <span className="absolute inset-y-0 right-0 flex items-center pr-2">
           {selectedOption ? (
-            <button
+            <div
               type="button"
+              role="button"
+              tabIndex={0}
               className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
               onClick={handleClear}
               aria-label="Clear selection"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleClear(e as any);
+                }
+              }}
             >
               <X className="h-4 w-4" />
-            </button>
+            </div>
           ) : (
             <ChevronDown className={cn(
               "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
