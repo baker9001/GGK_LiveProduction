@@ -326,7 +326,6 @@ export function Select({
       <button
         ref={triggerRef}
         type="button"
-        id={props.id}
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm text-left transition-colors duration-200',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
@@ -339,6 +338,7 @@ export function Select({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-labelledby={props.id ? `${props.id}-label` : undefined}
       >
         <span className={selectedOption ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}>
           {selectedOption?.label || placeholder}
