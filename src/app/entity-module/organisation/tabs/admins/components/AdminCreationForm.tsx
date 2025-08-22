@@ -257,12 +257,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
       return;
     }
 
-    // Security check: Prevent admin from deactivating their own account
-    if (isEditing && formData.is_active === false && initialData?.user_id === user?.id) {
-      toast.error('You cannot deactivate your own account');
-      return;
-    }
-
     // Prepare payload
     const payload = {
       name: formData.name.trim(),
@@ -464,11 +458,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 inactiveLabel="Inactive"
                 description="Inactive users cannot log in or access the system"
               />
-              {isEditing && initialData?.user_id === user?.id && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  You cannot change your own account status
-                </p>
-              )}
             </FormField>
           </div>
         </div>
@@ -558,7 +547,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
             </div>
           )}
           <AdminPermissionMatrix
-            value={permissions}
+            value={formData.admin_level === 'entity_admin' ? permissionService.getEntityAdminPermissions() : permissions}
             onChange={setPermissions}
             disabled={isSubmitting || formData.admin_level === 'entity_admin' || !canModify('admin')}
           />
