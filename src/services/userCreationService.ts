@@ -1,690 +1,808 @@
 /**
- * File: /src/services/userCreationService.ts
+ * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
  * 
- * Comprehensive User Creation Service
- * Handles creation of all user types without Supabase Authentication
+ * Schools Management Tab Component
+ * Handles school data display, creation, and editing with comprehensive forms
  * 
- * Workflow:
- * 1. Create user in 'users' table
- * 2. Create corresponding record in entity-specific table
- *    - entity_users for admins
- *    - teachers for teachers
- *    - students for students
+ * Dependencies:
+ *   - @/lib/supabase
+ *   - @/lib/auth
+ *   - @/contexts/UserContext
+ *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * Preserved Features:
+ *   - All original school management functionality
+ *   - Search and filter capabilities
+ *   - School creation and editing forms
+ *   - SchoolFormContent integration
+ *   - Statistics display
+ *   - All original event handlers
+ * 
+ * Added/Modified:
+ *   - ENHANCED: Logo display matching organization structure's improved implementation
+ *   - IMPROVED: Better logo sizing with proper aspect ratio
+ *   - ADDED: Logo fallback with better error handling
+ *   - IMPROVED: Logo container styling for better visual presentation
+ * 
+ * Database Tables:
+ *   - schools & schools_additional
+ *   - companies (for reference)
  */
 
-import { supabase } from '@/lib/supabase';
-import bcrypt from 'bcryptjs';
+'use client';
 
-// ============= TYPE DEFINITIONS =============
+import React, { useState, useEffect, memo } from 'react';
+import { 
+  School, Plus, Edit2, Trash2, Search, Filter, GraduationCap,
+  Users, MapPin, Calendar, Globe, BookOpen, FlaskConical, 
+  Dumbbell, Coffee, Phone, Mail, User, CheckCircle2, XCircle,
+  Clock, AlertTriangle, Building2, Info
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../../../../lib/supabase';
+import { toast } from 'react-hot-toast';
+import { getAuthenticatedUser } from '../../../../../lib/auth';
+import { useUser } from '../../../../../contexts/UserContext';
+import { SlideInForm } from '../../../../../components/shared/SlideInForm';
+import { FormField, Input, Select } from '../../../../../components/shared/FormField';
+import { Button } from '../../../../../components/shared/Button';
+import { StatusBadge } from '../../../../../components/shared/StatusBadge';
+import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
+import { usePermissions } from '../../../../../contexts/PermissionContext';
+import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
+// Note: DataTable import removed as it wasn't used in the original file
+import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
-export type UserType = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin' | 'teacher' | 'student';
-
-export interface BaseUserPayload {
-  email: string;
+// ===== TYPE DEFINITIONS =====
+interface SchoolData {
+  id: string;
   name: string;
-  password: string;
-  phone?: string;
+  code: string;
   company_id: string;
-  is_active?: boolean;
-  metadata?: Record<string, any>;
+  description: string;
+  status: 'active' | 'inactive';
+  address?: string;
+  notes?: string;
+  logo?: string;
+  created_at: string;
+  additional?: SchoolAdditional;
+  branches?: any[];
+  student_count?: number;
+  branch_count?: number;
 }
 
-export interface AdminUserPayload extends BaseUserPayload {
-  user_type: 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin';
-  admin_level: string;
-  permissions?: Record<string, any>;
-  parent_admin_id?: string;
-  created_by?: string;
+interface SchoolAdditional {
+  id?: string;
+  school_id: string;
+  school_type?: string;
+  curriculum_type?: string[];
+  total_capacity?: number;
+  teachers_count?: number;
+  student_count?: number;
+  active_teachers_count?: number;
+  principal_name?: string;
+  principal_email?: string;
+  principal_phone?: string;
+  campus_address?: string;
+  campus_city?: string;
+  campus_state?: string;
+  campus_postal_code?: string;
+  latitude?: number;
+  longitude?: number;
+  established_date?: string;
+  academic_year_start?: number;
+  academic_year_end?: number;
+  has_library?: boolean;
+  has_laboratory?: boolean;
+  has_sports_facilities?: boolean;
+  has_cafeteria?: boolean;
 }
 
-export interface TeacherUserPayload extends BaseUserPayload {
-  user_type: 'teacher';
-  teacher_code: string;
-  specialization?: string[];
-  qualification?: string;
-  experience_years?: number;
-  bio?: string;
-  hire_date?: string;
-  school_id?: string;
-  branch_id?: string;
+export interface SchoolsTabProps {
+  companyId: string;
+  refreshData?: () => void;
 }
 
-export interface StudentUserPayload extends BaseUserPayload {
-  user_type: 'student';
-  student_code: string;
-  enrollment_number: string;
-  grade_level?: string;
-  section?: string;
-  admission_date?: string;
-  parent_name?: string;
-  parent_contact?: string;
-  parent_email?: string;
-  school_id?: string;
-  branch_id?: string;
+// ===== REF INTERFACE =====
+export interface SchoolsTabRef {
+  openEditSchoolModal: (school: SchoolData) => void;
 }
 
-type CreateUserPayload = AdminUserPayload | TeacherUserPayload | StudentUserPayload;
+// ===== MAIN COMPONENT =====
+const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId, refreshData }, ref) => {
+  const queryClient = useQueryClient();
+  const { user } = useUser();
+  const authenticatedUser = getAuthenticatedUser();
+  const { canCreate, canModify, canDelete } = usePermissions();
+  
+  // State management
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+  const [formData, setFormData] = useState<any>({});
+  const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  
+  // Confirmation dialog state for branch deactivation
+  const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
+  const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
 
-// ============= HELPER FUNCTIONS =============
-
-/**
- * Hash password using bcrypt
- */
-async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 10;
-  return await bcrypt.hash(password, saltRounds);
-}
-
-/**
- * Validate email format
- */
-function validateEmail(email: string): boolean {
-  const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
-  return emailRegex.test(email.trim().toLowerCase());
-}
-
-/**
- * Sanitize input strings
- */
-function sanitizeString(input: string): string {
-  return input.trim().replace(/[<>]/g, '');
-}
-
-/**
- * Get user type array based on role
- */
-function getUserTypes(userType: UserType): string[] {
-  const typeMap: Record<UserType, string[]> = {
-    'entity_admin': ['entity', 'admin'],
-    'sub_entity_admin': ['entity', 'admin'],
-    'school_admin': ['entity', 'admin'],
-    'branch_admin': ['entity', 'admin'],
-    'teacher': ['teacher', 'staff'],
-    'student': ['student']
-  };
-  return typeMap[userType] || ['user'];
-}
-
-// ============= MAIN USER CREATION SERVICE =============
-
-export const userCreationService = {
-  /**
-   * Main method to create any type of user
-   */
-  async createUser(payload: CreateUserPayload): Promise<{ userId: string; entityId: string }> {
-    try {
-      // Input validation
-      if (!validateEmail(payload.email)) {
-        throw new Error('Invalid email format');
-      }
-
-      if (!payload.password || payload.password.length < 8) {
-        throw new Error('Password must be at least 8 characters long');
-      }
-
-      if (!payload.name || payload.name.length < 2) {
-        throw new Error('Name must be at least 2 characters long');
-      }
-
-      // Check if email already exists in users table
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', payload.email.toLowerCase())
-        .maybeSingle();
-
-      if (existingUser) {
-        throw new Error('A user with this email already exists');
-      }
-
-      // Start transaction-like operation
-      let userId: string | null = null;
-      let entityId: string | null = null;
-
-      try {
-        // Step 1: Create user in users table
-        userId = await this.createUserInUsersTable(payload);
-
-        // Step 2: Create entity-specific record
-        switch (payload.user_type) {
-          case 'entity_admin':
-          case 'sub_entity_admin':
-          case 'school_admin':
-          case 'branch_admin':
-            entityId = await this.createAdminUser(userId, payload as AdminUserPayload);
-            break;
-          case 'teacher':
-            entityId = await this.createTeacherUser(userId, payload as TeacherUserPayload);
-            break;
-          case 'student':
-            entityId = await this.createStudentUser(userId, payload as StudentUserPayload);
-            break;
-          default:
-            throw new Error('Invalid user type');
-        }
-
-        return { userId, entityId };
-      } catch (error) {
-        // Rollback: Delete user from users table if entity creation fails
-        if (userId) {
-          await this.rollbackUserCreation(userId);
-        }
-        throw error;
-      }
-    } catch (error: any) {
-      console.error('User creation failed:', error);
-      throw error instanceof Error ? error : new Error('Failed to create user');
+  // ===== EXPOSE METHODS VIA REF =====
+  React.useImperativeHandle(ref, () => ({
+    openEditSchoolModal: (school: SchoolData) => {
+      handleEdit(school);
     }
-  },
+  }), []);
 
-  /**
-   * Step 1: Create user in users table
-   */
-  async createUserInUsersTable(payload: CreateUserPayload): Promise<string> {
-    const hashedPassword = await hashPassword(payload.password);
-    const userTypes = getUserTypes(payload.user_type);
+  // ENHANCED: Improved helper to get school logo URL with better error handling
+  const getSchoolLogoUrl = (path: string | null | undefined) => {
+    if (!path) return null;
     
-    const userData = {
-      email: payload.email.toLowerCase(),
-      phone: payload.phone || null,
-      user_type: userTypes[0],
-      user_types: userTypes,
-      primary_type: userTypes[0],
-      is_active: payload.is_active !== false,
-      email_verified: false,
-      password_hash: hashedPassword,
-      password_updated_at: new Date().toISOString(),
-      raw_user_meta_data: {
-        name: sanitizeString(payload.name),
-        company_id: payload.company_id,
-        created_via: 'entity_module',
-        ...payload.metadata
-      },
-      raw_app_meta_data: {
-        provider: 'email',
-        providers: ['email']
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { data, error } = await supabase
-      .from('users')
-      .insert([userData])
-      .select('id')
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to create user account: ${error.message}`);
+    // If it's already a full URL, return as is
+    if (path.startsWith('http')) {
+      return path;
     }
-
-    return data.id;
-  },
-
-  /**
-   * Step 2a: Create admin user in entity_users table
-   */
-  async createAdminUser(userId: string, payload: AdminUserPayload): Promise<string> {
-    // Get default permissions based on admin level
-    const defaultPermissions = this.getDefaultPermissions(payload.admin_level);
-    const finalPermissions = {
-      ...defaultPermissions,
-      ...(payload.permissions || {})
-    };
-
-    const adminData = {
-      user_id: userId,
-      company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
-      admin_level: payload.admin_level,
-      permissions: finalPermissions,
-      is_active: payload.is_active !== false,
-      created_by: payload.created_by || null,
-      parent_admin_id: payload.parent_admin_id || null,
-      metadata: {
-        created_via: 'user_creation_service',
-        created_at: new Date().toISOString(),
-        ...payload.metadata
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { data, error } = await supabase
-      .from('entity_users')
-      .insert([adminData])
-      .select('id')
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to create admin profile: ${error.message}`);
+    
+    // Construct Supabase storage URL with proper environment variable
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
     }
+    
+    // Use the correct bucket name for schools
+    return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
+  };
 
-    return data.id;
-  },
-
-  /**
-   * Step 2b: Create teacher user in teachers table
-   */
-  async createTeacherUser(userId: string, payload: TeacherUserPayload): Promise<string> {
-    const teacherData = {
-      user_id: userId,
-      company_id: payload.company_id,
-      teacher_code: payload.teacher_code,
-      specialization: payload.specialization || [],
-      qualification: payload.qualification || null,
-      experience_years: payload.experience_years || 0,
-      bio: payload.bio || null,
-      hire_date: payload.hire_date || new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    // Add school/branch if provided
-    if (payload.school_id) {
-      (teacherData as any).school_id = payload.school_id;
+  // ===== FETCH SCHOOLS =====
+  const { data: schools = [], isLoading, refetch } = useQuery(
+    ['schools-tab', companyId], // Different cache key from organization page
+    async () => {
+      const { data: schoolsData, error: schoolsError } = await supabase
+        .from('schools')
+        .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
+        .eq('company_id', companyId)
+        .order('name');
+      
+      if (schoolsError) throw schoolsError;
+      
+      // Fetch additional data for each school
+      const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
+        const { data: additional } = await supabase
+          .from('schools_additional')
+          .select('*')
+          .eq('school_id', school.id)
+          .maybeSingle();
+        
+        // Count branches
+        const { count: branchCount } = await supabase
+          .from('branches')
+          .select('*', { count: 'exact', head: true })
+          .eq('school_id', school.id);
+        
+        return {
+          ...school,
+          additional,
+          branch_count: branchCount || 0,
+          student_count: additional?.student_count || 0
+        };
+      }));
+      
+      return schoolsWithAdditional;
+    },
+    {
+      enabled: !!companyId,
+      staleTime: 60 * 1000,
+      cacheTime: 5 * 60 * 1000
     }
-    if (payload.branch_id) {
-      (teacherData as any).branch_id = payload.branch_id;
+  );
+
+  // Apply scope filtering to schools
+  const { filteredData: accessibleSchools, hasAccess: hasSchoolAccess, canAccessAll } = useScopeFilter(
+    schools,
+    { entityType: 'school', companyId }
+  );
+
+  // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
+  const { data: branches = [] } = useQuery(
+    ['branches-for-schools', companyId],
+    async () => {
+      // Get all schools for this company first
+      const { data: schoolsData, error: schoolsError } = await supabase
+        .from('schools')
+        .select('id')
+        .eq('company_id', companyId);
+      
+      if (schoolsError) throw schoolsError;
+      
+      const schoolIds = schoolsData?.map(s => s.id) || [];
+      
+      if (schoolIds.length === 0) return [];
+      
+      // Then get all branches for these schools
+      const { data: branchesData, error: branchesError } = await supabase
+        .from('branches')
+        .select('id, name, school_id, status')
+        .in('school_id', schoolIds);
+      
+      if (branchesError) throw branchesError;
+      
+      return branchesData || [];
+    },
+    {
+      enabled: !!companyId,
+      staleTime: 60 * 1000
     }
-
-    const { data, error } = await supabase
-      .from('teachers')
-      .insert([teacherData])
-      .select('id')
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to create teacher profile: ${error.message}`);
-    }
-
-    return data.id;
-  },
-
-  /**
-   * Step 2c: Create student user in students table
-   */
-  async createStudentUser(userId: string, payload: StudentUserPayload): Promise<string> {
-    const studentData = {
-      user_id: userId,
-      student_code: payload.student_code,
-      enrollment_number: payload.enrollment_number,
-      grade_level: payload.grade_level || null,
-      section: payload.section || null,
-      admission_date: payload.admission_date || new Date().toISOString(),
-      parent_name: payload.parent_name || null,
-      parent_contact: payload.parent_contact || null,
-      parent_email: payload.parent_email || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    // Add school/branch if provided
-    if (payload.school_id) {
-      (studentData as any).school_id = payload.school_id;
-    }
-    if (payload.branch_id) {
-      (studentData as any).branch_id = payload.branch_id;
-    }
-
-    const { data, error } = await supabase
-      .from('students')
-      .insert([studentData])
-      .select('id')
-      .single();
-
-    if (error) {
-      throw new Error(`Failed to create student profile: ${error.message}`);
-    }
-
-    return data.id;
-  },
-
-  /**
-   * Rollback user creation if entity creation fails
-   */
-  async rollbackUserCreation(userId: string): Promise<void> {
-    try {
-      await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-    } catch (error) {
-      console.error('Rollback failed:', error);
-    }
-  },
-
-  /**
-   * Update user password
-   */
-  async updatePassword(userId: string, newPassword: string): Promise<void> {
-    if (!newPassword || newPassword.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        password_hash: hashedPassword,
-        password_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw new Error(`Failed to update password: ${error.message}`);
-    }
-  },
-
-  /**
-   * Deactivate user account with self-deactivation protection
-   */
-  async deactivateUser(userId: string, actorId: string): Promise<void> {
-    // Prevent self-deactivation
-    if (userId === actorId) {
-      throw new Error('You cannot deactivate your own account for security reasons');
-    }
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        is_active: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw new Error(`Failed to deactivate user: ${error.message}`);
-    }
-  },
-
-  /**
-   * Verify user password for login
-   */
-  async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, password_hash, is_active')
-      .eq('email', email.toLowerCase())
-      .single();
-
-    if (error || !user) {
-      return { isValid: false };
-    }
-
-    if (!user.is_active) {
-      throw new Error('Account is deactivated');
-    }
-
-    const isValid = await bcrypt.compare(password, user.password_hash);
-
-    if (isValid) {
-      // Update last login
-      await supabase
-        .from('users')
-        .update({
-          last_login_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-    }
-
-    return { isValid, userId: isValid ? user.id : undefined };
-  },
-
-  /**
-   * Get default permissions based on admin level
-   */
-  getDefaultPermissions(adminLevel: string): Record<string, any> {
-    const permissionMap: Record<string, any> = {
-      'entity_admin': {
-        users: {
-          create_entity_admin: true,
-          create_sub_admin: true,
-          create_school_admin: true,
-          create_branch_admin: true,
-          create_teacher: true,
-          create_student: true,
-          modify_entity_admin: true,
-          modify_sub_admin: true,
-          modify_school_admin: true,
-          modify_branch_admin: true,
-          modify_teacher: true,
-          modify_student: true,
-          delete_users: true,
-          view_all_users: true
-        },
-        organization: {
-          create_school: true,
-          modify_school: true,
-          delete_school: true,
-          create_branch: true,
-          modify_branch: true,
-          delete_branch: true,
-          view_all_schools: true,
-          view_all_branches: true,
-          manage_departments: true
-        },
-        settings: {
-          manage_company_settings: true,
-          manage_school_settings: true,
-          manage_branch_settings: true,
-          view_audit_logs: true,
-          export_data: true
+  );
+  // ===== MUTATIONS =====
+  const createSchoolMutation = useMutation(
+    async ({ data }: { data: any }) => {
+      // Prepare main data
+      const mainData = {
+        name: data.name,
+        code: data.code,
+        company_id: companyId,
+        description: data.description,
+        status: data.status,
+        address: data.address,
+        notes: data.notes,
+        logo: data.logo
+      };
+      
+      // Create main record
+      const { data: school, error } = await supabase
+        .from('schools')
+        .insert([mainData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Create additional record
+      const additionalData: any = {
+        school_id: school.id
+      };
+      
+      // Add additional fields
+      const additionalFields = [
+        'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+        'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+        'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+        'campus_postal_code', 'latitude', 'longitude', 'established_date',
+        'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+        'has_sports_facilities', 'has_cafeteria'
+      ];
+      
+      additionalFields.forEach(field => {
+        if (data[field] !== undefined) {
+          additionalData[field] = data[field];
         }
-      },
-      'sub_entity_admin': {
-        users: {
-          create_entity_admin: false,
-          create_sub_admin: true,
-          create_school_admin: true,
-          create_branch_admin: true,
-          create_teacher: true,
-          create_student: true,
-          modify_entity_admin: false,
-          modify_sub_admin: true,
-          modify_school_admin: true,
-          modify_branch_admin: true,
-          modify_teacher: true,
-          modify_student: true,
-          delete_users: true,
-          view_all_users: true
-        },
-        organization: {
-          create_school: true,
-          modify_school: true,
-          delete_school: true,
-          create_branch: true,
-          modify_branch: true,
-          delete_branch: true,
-          view_all_schools: true,
-          view_all_branches: true,
-          manage_departments: true
-        },
-        settings: {
-          manage_company_settings: false,
-          manage_school_settings: true,
-          manage_branch_settings: true,
-          view_audit_logs: true,
-          export_data: true
-        }
-      },
-      'school_admin': {
-        users: {
-          create_entity_admin: false,
-          create_sub_admin: false,
-          create_school_admin: false,
-          create_branch_admin: true,
-          create_teacher: true,
-          create_student: true,
-          modify_entity_admin: false,
-          modify_sub_admin: false,
-          modify_school_admin: false,
-          modify_branch_admin: true,
-          modify_teacher: true,
-          modify_student: true,
-          delete_users: false,
-          view_all_users: true
-        },
-        organization: {
-          create_school: false,
-          modify_school: false,
-          delete_school: false,
-          create_branch: true,
-          modify_branch: true,
-          delete_branch: false,
-          view_all_schools: false,
-          view_all_branches: true,
-          manage_departments: true
-        },
-        settings: {
-          manage_company_settings: false,
-          manage_school_settings: true,
-          manage_branch_settings: true,
-          view_audit_logs: false,
-          export_data: true
-        }
-      },
-      'branch_admin': {
-        users: {
-          create_entity_admin: false,
-          create_sub_admin: false,
-          create_school_admin: false,
-          create_branch_admin: false,
-          create_teacher: true,
-          create_student: true,
-          modify_entity_admin: false,
-          modify_sub_admin: false,
-          modify_school_admin: false,
-          modify_branch_admin: false,
-          modify_teacher: true,
-          modify_student: true,
-          delete_users: false,
-          view_all_users: true
-        },
-        organization: {
-          create_school: false,
-          modify_school: false,
-          delete_school: false,
-          create_branch: false,
-          modify_branch: false,
-          delete_branch: false,
-          view_all_schools: false,
-          view_all_branches: false,
-          manage_departments: true
-        },
-        settings: {
-          manage_company_settings: false,
-          manage_school_settings: false,
-          manage_branch_settings: true,
-          view_audit_logs: false,
-          export_data: true
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        const { error: additionalError } = await supabase
+          .from('schools_additional')
+          .insert([additionalData]);
+        
+        if (additionalError && additionalError.code !== '23505') {
+          console.error('Additional data error:', additionalError);
         }
       }
-    };
-
-    return permissionMap[adminLevel] || this.getMinimalPermissions();
-  },
-
-  /**
-   * Get minimal permissions (view only)
-   */
-  getMinimalPermissions(): Record<string, any> {
-    return {
-      users: {
-        create_entity_admin: false,
-        create_sub_admin: false,
-        create_school_admin: false,
-        create_branch_admin: false,
-        create_teacher: false,
-        create_student: false,
-        modify_entity_admin: false,
-        modify_sub_admin: false,
-        modify_school_admin: false,
-        modify_branch_admin: false,
-        modify_teacher: false,
-        modify_student: false,
-        delete_users: false,
-        view_all_users: false
+      
+      return school;
+    },
+    {
+      onSuccess: () => {
+        // FIXED: Use the correct query key that matches the useQuery hook
+        queryClient.invalidateQueries(['schools-tab', companyId]);
+        queryClient.invalidateQueries(['branches-for-schools', companyId]);
+        if (refreshData) refreshData();
+        toast.success('School created successfully');
+        setShowCreateModal(false);
+        setFormData({});
+        setActiveTab('basic');
       },
-      organization: {
-        create_school: false,
-        modify_school: false,
-        delete_school: false,
-        create_branch: false,
-        modify_branch: false,
-        delete_branch: false,
-        view_all_schools: false,
-        view_all_branches: false,
-        manage_departments: false
-      },
-      settings: {
-        manage_company_settings: false,
-        manage_school_settings: false,
-        manage_branch_settings: false,
-        view_audit_logs: false,
-        export_data: false
+      onError: (error: any) => {
+        console.error('Error creating school:', error);
+        toast.error(error.message || 'Failed to create school. Please try again.');
       }
+    }
+  );
+
+  const updateSchoolMutation = useMutation(
+    async ({ id, data, deactivateAssociatedBranches = false }: { id: string; data: any; deactivateAssociatedBranches?: boolean }) => {
+      // If deactivating school and we need to deactivate branches
+      if (data.status === 'inactive' && deactivateAssociatedBranches) {
+        // First deactivate all active branches for this school
+        const { error: branchUpdateError } = await supabase
+          .from('branches')
+          .update({ status: 'inactive' })
+          .eq('school_id', id)
+          .eq('status', 'active');
+        
+        if (branchUpdateError) {
+          throw new Error(`Failed to deactivate branches: ${branchUpdateError.message}`);
+        }
+      }
+      
+      // Prepare main data
+      const mainData = {
+        name: data.name,
+        code: data.code,
+        description: data.description,
+        status: data.status,
+        address: data.address,
+        notes: data.notes,
+        logo: data.logo
+      };
+      
+      // Update main record
+      const { error } = await supabase
+        .from('schools')
+        .update(mainData)
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      // Update or insert additional record
+      const additionalData: any = {
+        school_id: id
+      };
+      
+      // Add additional fields
+      const additionalFields = [
+        'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+        'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+        'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+        'campus_postal_code', 'latitude', 'longitude', 'established_date',
+        'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+        'has_sports_facilities', 'has_cafeteria'
+      ];
+      
+      additionalFields.forEach(field => {
+        if (data[field] !== undefined) {
+          additionalData[field] = data[field];
+        }
+      });
+      
+      if (Object.keys(additionalData).length > 1) {
+        // Try update first
+        const { error: updateError } = await supabase
+          .from('schools_additional')
+          .update(additionalData)
+          .eq('school_id', id);
+        
+        // If no rows updated, insert
+        if (updateError?.code === 'PGRST116') {
+          const { error: insertError } = await supabase
+            .from('schools_additional')
+            .insert([additionalData]);
+          
+          if (insertError && insertError.code !== '23505') {
+            console.error('Additional insert error:', insertError);
+          }
+        }
+      }
+    },
+    {
+      onSuccess: () => {
+        // FIXED: Use the correct query key that matches the useQuery hook
+        queryClient.invalidateQueries(['schools-tab', companyId]);
+        queryClient.invalidateQueries(['branches-for-schools', companyId]);
+        if (refreshData) refreshData();
+        toast.success('School updated successfully');
+        setShowEditModal(false);
+        setSelectedSchool(null);
+        setFormData({});
+        setActiveTab('basic');
+      },
+      onError: (error: any) => {
+        console.error('Error updating school:', error);
+        toast.error(error.message || 'Failed to update school. Please try again.');
+      }
+    }
+  );
+
+  // ===== HELPER FUNCTIONS =====
+  const validateForm = () => {
+    if (!formData.name) {
+      toast.error('School name is required');
+      return false;
+    }
+    if (!formData.code) {
+      toast.error('School code is required');
+      return false;
+    }
+    if (!formData.status) {
+      toast.error('Status is required');
+      return false;
+    }
+    
+    // Email validation
+    if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
+      toast.error('Please enter a valid email address for principal');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async (mode: 'create' | 'edit') => {
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Check for branch deactivation before proceeding with edit
+    if (mode === 'edit' && formData.status === 'inactive' && selectedSchool) {
+      // Find active branches for this school
+      const activeBranches = branches.filter(branch => 
+        branch.school_id === selectedSchool.id && branch.status === 'active'
+      );
+      
+      if (activeBranches.length > 0) {
+        setBranchesToDeactivate(activeBranches);
+        setShowDeactivateConfirmation(true);
+        return; // Don't proceed with mutation yet
+      }
+    }
+    
+    if (mode === 'create') {
+      createSchoolMutation.mutate({ data: formData });
+    } else {
+      updateSchoolMutation.mutate({ id: selectedSchool!.id, data: formData, deactivateAssociatedBranches: false });
+    }
+  };
+
+  // Handle confirmed deactivation with branches
+  const handleConfirmDeactivation = () => {
+    if (selectedSchool) {
+      updateSchoolMutation.mutate({ 
+        id: selectedSchool.id, 
+        data: formData, 
+        deactivateAssociatedBranches: true 
+      });
+    }
+    setShowDeactivateConfirmation(false);
+    setBranchesToDeactivate([]);
+  };
+
+  // Handle cancel deactivation
+  const handleCancelDeactivation = () => {
+    setShowDeactivateConfirmation(false);
+    setBranchesToDeactivate([]);
+  };
+  const handleEdit = (school: SchoolData) => {
+    const combinedData = {
+      ...school,
+      ...(school.additional || {})
     };
-  }
-};
+    setFormData(combinedData);
+    setSelectedSchool(school);
+    setActiveTab('basic');
+    setShowEditModal(true);
+  };
 
-// ============= USAGE EXAMPLES =============
+  const handleCreate = () => {
+    setFormData({ status: 'active', company_id: companyId });
+    setActiveTab('basic');
+    setShowCreateModal(true);
+  };
 
-/*
-// Example 1: Create an Entity Admin
-const adminResult = await userCreationService.createUser({
-  user_type: 'entity_admin',
-  email: 'admin@company.com',
-  name: 'John Admin',
-  password: 'SecurePassword123!',
-  company_id: 'company-uuid',
-  admin_level: 'entity_admin',
-  permissions: {}, // Will use defaults
-  is_active: true
+  // Filter schools based on search and status
+  const filteredSchools = accessibleSchools.filter(school => {
+    const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         school.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate stats
+  const totalStudents = accessibleSchools.reduce((sum, school) => sum + (school.student_count || 0), 0);
+  const totalTeachers = accessibleSchools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
+
+  // ===== MAIN RENDER =====
+  return (
+    <div className="space-y-4">
+      {/* Header & Search */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search schools..."
+                className="pl-10"
+              />
+            </div>
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+              className="w-32"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
+          </div>
+          <Button onClick={handleCreate}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add School
+          </Button>
+        </div>
+
+          {!canCreate('school') && (
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <div className="flex items-center">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  You don't have permission to create schools.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {!canAccessAll && accessibleSchools.length < schools.length && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div className="flex items-center">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope.
+                </p>
+              </div>
+            </div>
+          )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Schools</p>
+                <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {accessibleSchools.length}
+                </p>
+              </div>
+              <School className="w-8 h-8 text-gray-400" />
+            </div>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
+                <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                  {accessibleSchools.filter(s => s.status === 'active').length}
+                </p>
+              </div>
+              <CheckCircle2 className="w-8 h-8 text-green-400" />
+            </div>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
+                <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
+                  {totalStudents}
+                </p>
+              </div>
+              <GraduationCap className="w-8 h-8 text-blue-400" />
+            </div>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
+                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
+                  {totalTeachers}
+                </p>
+              </div>
+              <Users className="w-8 h-8 text-purple-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Schools List */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {isLoading ? (
+          <div className="col-span-full text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
+          </div>
+        ) : filteredSchools.length === 0 ? (
+          <div className="col-span-full text-center py-8">
+            <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 dark:text-gray-400">No schools found</p>
+          </div>
+        ) : (
+          filteredSchools.map((school) => {
+            const logoUrl = getSchoolLogoUrl(school.logo);
+            
+            return (
+              <div
+                key={school.id}
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    {/* ENHANCED: Improved logo display matching org structure implementation */}
+                    <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
+                      {logoUrl ? (
+                        <>
+                          <img
+                            src={logoUrl}
+                            alt={`${school.name} logo`}
+                            className="w-full h-full object-contain p-0.5"
+                            style={{ maxWidth: '100%', maxHeight: '100%' }}
+                            onError={(e) => {
+                              // If logo fails to load, hide the image and show fallback
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              imgElement.style.display = 'none';
+                              const parent = imgElement.parentElement;
+                              if (parent) {
+                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
+                                if (fallback) {
+                                  fallback.style.display = 'flex';
+                                  fallback.classList.remove('bg-white');
+                                  fallback.classList.add('bg-green-500');
+                                }
+                              }
+                            }}
+                          />
+                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-green-500 text-white">
+                            {school.code?.substring(0, 2).toUpperCase() || 
+                             school.name?.substring(0, 2).toUpperCase() || 
+                             <School className="w-5 h-5" />}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-green-500 text-white">
+                          {school.code?.substring(0, 2).toUpperCase() || 
+                           school.name?.substring(0, 2).toUpperCase() || 
+                           <School className="w-5 h-5" />}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{school.name}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{school.code}</p>
+                    </div>
+                  </div>
+                  <StatusBadge status={school.status} size="xs" />
+                </div>
+
+                {school.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                    {school.description}
+                  </p>
+                )}
+
+                <div className="space-y-2 mb-3">
+                  {school.additional?.principal_name && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <User className="w-3 h-3" />
+                      <span>{school.additional.principal_name}</span>
+                    </div>
+                  )}
+                  {school.additional?.campus_city && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <MapPin className="w-3 h-3" />
+                      <span>{school.additional.campus_city}</span>
+                    </div>
+                  )}
+                  {school.additional?.school_type && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <Building2 className="w-3 h-3" />
+                      <span className="capitalize">{school.additional.school_type.replace('_', ' ')}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                  <div className="flex items-center space-x-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <GraduationCap className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.student_count || 0} students
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.additional?.teachers_count || 0} teachers
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {school.branch_count || 0} branches
+                      </span>
+                    </div>
+                  </div>
+                  {canModify('school', school.id, 'school') ? (
+                    <button
+                      onClick={() => handleEdit(school)}
+                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Edit school"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this school">
+                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Create Modal */}
+      <SlideInForm
+        title="Create School"
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setFormData({});
+        }}
+        onSave={() => handleSubmit('create')}
+      >
+        <SchoolFormContent
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={{}}
+          setFormErrors={() => {}}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          companyId={companyId}
+          isEditing={false}
+        />
+      </SlideInForm>
+
+      {/* Edit Modal */}
+      <SlideInForm
+        title="Edit School"
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedSchool(null);
+          setFormData({});
+        }}
+        onSave={() => handleSubmit('edit')}
+      >
+        <SchoolFormContent
+          formData={formData}
+          setFormData={setFormData}
+          formErrors={{}}
+          setFormErrors={() => {}}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          companyId={companyId}
+          isEditing={true}
+        />
+      </SlideInForm>
+
+      {/* Branch Deactivation Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeactivateConfirmation}
+        title="Deactivate Branches?"
+        message={`This school has ${branchesToDeactivate.length} active branch${branchesToDeactivate.length > 1 ? 'es' : ''}: ${branchesToDeactivate.map(b => b.name).join(', ')}. These branches will also be deactivated. Do you want to proceed?`}
+        confirmText="Deactivate All"
+        cancelText="Cancel"
+        confirmVariant="destructive"
+        onConfirm={handleConfirmDeactivation}
+        onCancel={handleCancelDeactivation}
+      />
+    </div>
+  );
 });
 
-// Example 2: Create a Teacher
-const teacherResult = await userCreationService.createUser({
-  user_type: 'teacher',
-  email: 'teacher@school.com',
-  name: 'Jane Teacher',
-  password: 'TeacherPass123!',
-  company_id: 'company-uuid',
-  teacher_code: 'TCH001',
-  specialization: ['Mathematics', 'Physics'],
-  qualification: 'M.Sc Physics',
-  experience_years: 5,
-  school_id: 'school-uuid',
-  branch_id: 'branch-uuid'
-});
+SchoolsTab.displayName = 'SchoolsTab';
 
-// Example 3: Create a Student
-const studentResult = await userCreationService.createUser({
-  user_type: 'student',
-  email: 'student@school.com',
-  name: 'Bob Student',
-  password: 'StudentPass123!',
-  company_id: 'company-uuid',
-  student_code: 'STD001',
-  enrollment_number: 'ENR2024001',
-  grade_level: '10',
-  section: 'A',
-  parent_name: 'Parent Name',
-  parent_contact: '+1234567890',
-  school_id: 'school-uuid',
-  branch_id: 'branch-uuid'
-});
-
-// Example 4: Verify password for login
-const loginResult = await userCreationService.verifyPassword(
-  'admin@company.com',
-  'SecurePassword123!'
-);
-if (loginResult.isValid) {
-  console.log('Login successful, userId:', loginResult.userId);
-}
-*/
+export default SchoolsTab;
