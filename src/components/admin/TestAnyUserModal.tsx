@@ -167,7 +167,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
             position,
             department,
             employee_id,
-            users!inner(
+            users!entity_users_user_id_fkey(
               id,
               email,
               created_at,
