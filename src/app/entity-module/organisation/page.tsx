@@ -507,6 +507,12 @@ export default function OrganizationManagement() {
     }
   );
 
+  // Apply scope filtering to schools for organization structure
+  const { filteredData: accessibleSchools, canAccessAll } = useScopeFilter(
+    organizationData?.schools,
+    { entityType: 'school', companyId: userCompanyId || '' }
+  );
+
   // ===== MEMOIZED STATS - FIXED =====
   const memoizedStats = useMemo(() => {
     if (stats) return stats;
