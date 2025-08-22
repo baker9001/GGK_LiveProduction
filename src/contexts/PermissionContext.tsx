@@ -12,12 +12,12 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { AdminPermissions, AdminLevel } from '@/app/entity-module/organisation/tabs/admins/types/admin.types';
-import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
-import { scopeService } from '@/app/entity-module/organisation/tabs/admins/services/scopeService';
-import { supabase } from '@/lib/supabase';
+import { AdminPermissions, AdminLevel } from '../app/entity-module/organisation/tabs/admins/types/admin.types';
+import { permissionService } from '../app/entity-module/organisation/tabs/admins/services/permissionService';
+import { scopeService } from '../app/entity-module/organisation/tabs/admins/services/scopeService';
+import { supabase } from '../lib/supabase';
 import { useUser } from './UserContext';
-import { toast } from '@/components/shared/Toast';
+import { toast } from '../components/shared/Toast';
 
 interface PermissionContextType {
   // Current user's permissions

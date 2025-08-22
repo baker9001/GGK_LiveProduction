@@ -58,12 +58,27 @@ interface TabsListProps {
 }
 
 export function TabsList({ children, className, activeTab, onTabChange }: TabsListProps) {
+  // Filter out null/undefined children and count valid tabs
+  const validChildren = React.Children.toArray(children).filter(child => 
+    React.isValidElement(child)
+  );
+  
+  // Calculate grid columns based on number of valid children
+  const getGridCols = (count: number) => {
+    if (count <= 1) return 'grid-cols-1';
+    if (count <= 2) return 'grid-cols-2';
+    if (count <= 3) return 'grid-cols-3';
+    if (count <= 4) return 'grid-cols-4';
+    if (count <= 5) return 'grid-cols-5';
+    return 'grid-cols-6';
+  };
+
   return (
     <div className={cn(
-      'inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-1.5 border border-gray-200 dark:border-gray-600 shadow-sm transition-all duration-300',
+      `grid h-12 items-center justify-center rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 p-1.5 border border-gray-200 dark:border-gray-600 shadow-sm transition-all duration-300 ${getGridCols(validChildren.length)}`,
       className
     )}>
-      {React.Children.map(children, child => {
+      {React.Children.map(validChildren, child => {
         if (React.isValidElement(child)) {
           return React.cloneElement(child as React.ReactElement<any>, {
             activeTab,

@@ -22,6 +22,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { usePermissions } from '../../../contexts/PermissionContext';
+import { permissionService } from './tabs/admins/services/permissionService';
 import { useScopeFilter } from '../../../hooks/useScopeFilter';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
@@ -154,6 +155,7 @@ interface OrganizationStats {
 export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const { permissions } = usePermissions();
   const authenticatedUser = getAuthenticatedUser();
   const { canView } = usePermissions();
   
@@ -173,6 +175,16 @@ export default function OrganizationManagement() {
   // ===== REFS FOR TAB COMPONENTS =====
   const schoolsTabRef = useRef<SchoolsTabRef>(null);
   const branchesTabRef = useRef<BranchesTabRef>(null);
+
+  // Get accessible tabs based on user permissions
+  const accessibleTabs = permissions ? permissionService.getAccessibleTabs(permissions) : [];
+
+  // Set default active tab to the first accessible tab
+  useEffect(() => {
+    if (accessibleTabs.length > 0 && !accessibleTabs.includes(activeTab)) {
+      setActiveTab(accessibleTabs[0]);
+    }
+  }, [accessibleTabs, activeTab]);
 
   // ===== FETCH USER COMPANY (OPTIMIZED) =====
   useEffect(() => {
@@ -903,19 +915,21 @@ export default function OrganizationManagement() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="border-b border-gray-200 dark:border-gray-700">
             <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('structure')}
-                onMouseEnter={() => prefetchTabData('structure')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'structure'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Building2 className="w-4 h-4 inline-block mr-2" />
-                Structure
-              </button>
-              {canView('schools') && (
+              {accessibleTabs.includes('structure') && (
+                <button
+                  onClick={() => setActiveTab('structure')}
+                  onMouseEnter={() => prefetchTabData('structure')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'structure'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 inline-block mr-2" />
+                  Structure
+                </button>
+              )}
+              {accessibleTabs.includes('schools') && canView('schools') && (
                 <button
                   onClick={() => setActiveTab('schools')}
                   onMouseEnter={() => prefetchTabData('schools')}
@@ -929,7 +943,7 @@ export default function OrganizationManagement() {
                   Schools
                 </button>
               )}
-              {canView('branches') && (
+              {accessibleTabs.includes('branches') && canView('branches') && (
                 <button
                   onClick={() => setActiveTab('branches')}
                   onMouseEnter={() => prefetchTabData('branches')}
@@ -943,7 +957,7 @@ export default function OrganizationManagement() {
                   Branches
                 </button>
               )}
-              {canView('users') && (
+              {accessibleTabs.includes('admins') && canView('users') && (
                 <button
                   onClick={() => setActiveTab('admins')}
                   onMouseEnter={() => prefetchTabData('admins')}
@@ -957,7 +971,7 @@ export default function OrganizationManagement() {
                   Admins
                 </button>
               )}
-              {canView('users') && (
+              {accessibleTabs.includes('teachers') && canView('users') && (
                 <button
                   onClick={() => setActiveTab('teachers')}
                   onMouseEnter={() => prefetchTabData('teachers')}
@@ -971,7 +985,7 @@ export default function OrganizationManagement() {
                   Teachers
                 </button>
               )}
-              {canView('users') && (
+              {accessibleTabs.includes('students') && canView('users') && (
                 <button
                   onClick={() => setActiveTab('students')}
                   onMouseEnter={() => prefetchTabData('students')}
@@ -991,7 +1005,7 @@ export default function OrganizationManagement() {
           {/* Tab Content */}
           <div className="p-6">
             <Suspense fallback={<TabSkeleton />}>
-              {activeTab === 'structure' && (
+              {accessibleTabs.includes('structure') && activeTab === 'structure' && (
                 <OrganizationStructureTab
                   companyData={companyData}
                   companyId={userCompanyId!}
@@ -1001,7 +1015,7 @@ export default function OrganizationManagement() {
                   refreshData={() => refetch()}
                 />
               )}
-              {activeTab === 'schools' && userCompanyId && (
+              {accessibleTabs.includes('schools') && activeTab === 'schools' && userCompanyId && (
                 <SchoolsTab
                   ref={schoolsTabRef}
                   companyId={userCompanyId}
@@ -1011,7 +1025,7 @@ export default function OrganizationManagement() {
                   }}
                 />
               )}
-              {activeTab === 'branches' && userCompanyId && (
+              {accessibleTabs.includes('branches') && activeTab === 'branches' && userCompanyId && (
                 <BranchesTab
                   ref={branchesTabRef}
                   companyId={userCompanyId}
@@ -1021,7 +1035,7 @@ export default function OrganizationManagement() {
                   }}
                 />
               )}
-              {activeTab === 'admins' && userCompanyId && (
+              {accessibleTabs.includes('admins') && activeTab === 'admins' && userCompanyId && (
                 <AdminsTab
                   companyId={userCompanyId}
                   refreshData={() => {
@@ -1030,7 +1044,7 @@ export default function OrganizationManagement() {
                   }}
                 />
               )}
-              {activeTab === 'teachers' && userCompanyId && (
+              {accessibleTabs.includes('teachers') && activeTab === 'teachers' && userCompanyId && (
                 <TeachersTab
                   companyId={userCompanyId}
                   refreshData={() => {
@@ -1039,7 +1053,7 @@ export default function OrganizationManagement() {
                   }}
                 />
               )}
-              {activeTab === 'students' && userCompanyId && (
+              {accessibleTabs.includes('students') && activeTab === 'students' && userCompanyId && (
                 <StudentsTab
                   companyId={userCompanyId}
                   refreshData={() => {
@@ -1051,6 +1065,20 @@ export default function OrganizationManagement() {
             </Suspense>
           </div>
         </div>
+
+        {/* No Access Message */}
+        {accessibleTabs.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+            <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              No Access
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400">
+              You don't have permission to access any organization management features. 
+              Please contact your administrator if you believe this is an error.
+            </p>
+          </div>
+        )}
 
         {/* Details Panel */}
         {showDetailsPanel && selectedItem && (
