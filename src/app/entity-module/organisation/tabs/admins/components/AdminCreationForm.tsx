@@ -24,7 +24,6 @@ import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { toast } from '@/components/shared/Toast';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
 import { useAdminScope } from '../hooks/useAdminScope';
-import { useAdminScope } from '../hooks/useAdminScope';
 import { AdminLevel, AdminPermissions, EntityAdminScope } from '../types/admin.types';
 import { AdminScopeAssignment } from './AdminScopeAssignment';
 import { AdminPermissionMatrix } from './AdminPermissionMatrix';
@@ -137,8 +136,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
         email: initialData.email,
         password: '',
         admin_level: initialData.admin_level,
-        is_active: initialData.is_active,
-        // Scopes are managed separately in AdminScopeAssignment
+        is_active: initialData.is_active
         // Scopes are managed separately in AdminScopeAssignment
       }); 
       setPermissions(initialData.permissions ?? permissionService.getDefaultPermissions());
@@ -537,8 +535,15 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 </p>
               </div>
             </div>
-            <AdminPermissionMatrix
-              permissions={permissions}
-              onChange={setPermissions}
-              adminLevel={formData.admin_level}
-              disabled={isSubmitting || formData.admin_level === 'entity_admin'}
+          )}
+          <AdminPermissionMatrix
+            permissions={permissions}
+            onChange={setPermissions}
+            adminLevel={formData.admin_level}
+            disabled={isSubmitting || formData.admin_level === 'entity_admin'}
+          />
+        </div>
+      </form>
+    </SlideInForm>
+  );
+};
