@@ -211,7 +211,7 @@ export const permissionService = {
   },
 
   /**
-   * Sub-Entity Admin - Almost full permissions except entity admin management
+   * Sub-Entity Admin - Full permissions except entity admin management and self-editing
    */
   getSubEntityAdminPermissions(): AdminPermissions {
     return {
@@ -253,7 +253,7 @@ export const permissionService = {
   },
 
   /**
-   * School Admin - School-level permissions
+   * School Admin - School and branch level permissions, no admin management
    */
   getSchoolAdminPermissions(): AdminPermissions {
     return {
@@ -313,16 +313,16 @@ export const permissionService = {
         modify_teacher: true,
         modify_student: true,
         delete_users: false,
-        view_all_users: true,
+        view_all_users: false, // Cannot view admins
       },
       organization: {
         create_school: false,
-        modify_school: false,
+        modify_school: true,
         delete_school: false,
         create_branch: false,
         modify_branch: false,
         delete_branch: false,
-        view_all_schools: false,
+        view_all_schools: true,
         view_all_branches: false,
         manage_departments: true,
       },
@@ -337,7 +337,7 @@ export const permissionService = {
   },
 
   /**
-   * Minimal permissions - view only
+   * Branch Admin - Branch-level permissions only
    */
   getMinimalPermissions(): AdminPermissions {
     return {
@@ -355,14 +355,14 @@ export const permissionService = {
         modify_teacher: false,
         modify_student: false,
         delete_users: false,
-        view_all_users: false,
+        view_all_users: false, // Cannot view admins
       },
       organization: {
         create_school: false,
         modify_school: false,
         delete_school: false,
         create_branch: false,
-        modify_branch: false,
+        modify_branch: true,
         delete_branch: false,
         view_all_schools: false,
         view_all_branches: false,
@@ -383,6 +383,69 @@ export const permissionService = {
    */
   getDefaultPermissions(): AdminPermissions {
     return this.getMinimalPermissions();
+  },
+
+  /**
+   * Check if user can access a specific tab based on their permissions
+   */
+  canAccessTab(tabId: string, permissions: AdminPermissions): boolean {
+    switch (tabId) {
+      case 'structure':
+        // Structure tab requires ability to view schools or branches
+        return permissions.organization.view_all_schools || 
+               permissions.organization.view_all_branches ||
+               permissions.organization.create_school ||
+               permissions.organization.create_branch;
+               
+      case 'schools':
+        // Schools tab requires any school-related permission
+        return permissions.organization.view_all_schools ||
+               permissions.organization.create_school ||
+               permissions.organization.modify_school ||
+               permissions.organization.delete_school;
+               
+      case 'branches':
+        // Branches tab requires any branch-related permission
+        return permissions.organization.view_all_branches ||
+               permissions.organization.create_branch ||
+               permissions.organization.modify_branch ||
+               permissions.organization.delete_branch;
+               
+      case 'admins':
+        // Admins tab requires ability to view or manage any type of admin
+        return permissions.users.view_all_users ||
+               permissions.users.create_entity_admin ||
+               permissions.users.create_sub_admin ||
+               permissions.users.create_school_admin ||
+               permissions.users.create_branch_admin ||
+               permissions.users.modify_entity_admin ||
+               permissions.users.modify_sub_admin ||
+               permissions.users.modify_school_admin ||
+               permissions.users.modify_branch_admin;
+               
+      case 'teachers':
+        // Teachers tab requires any teacher-related permission
+        return permissions.users.create_teacher ||
+               permissions.users.modify_teacher ||
+               permissions.users.delete_users; // Assuming delete_users applies to teachers
+               
+      case 'students':
+        // Students tab requires any student-related permission
+        return permissions.users.create_student ||
+               permissions.users.modify_student ||
+               permissions.users.delete_users; // Assuming delete_users applies to students
+               
+      default:
+        return false;
+    }
+  },
+
+  /**
+   * Get accessible tabs for a user based on their permissions
+   */
+  getAccessibleTabs(permissions: AdminPermissions): string[] {
+    const allTabs = ['structure', 'schools', 'branches', 'admins', 'teachers', 'students'];
+    return allTabs.filter(tabId => this.canAccessTab(tabId, permissions));
   },
 
   /**
