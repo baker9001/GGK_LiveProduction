@@ -118,7 +118,6 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
   const [isValidating, setIsValidating] = useState(false);
 
   const { data: assignedScopes = [] } = useAdminScope(initialData?.id || '');
-  const { data: assignedScopes = [] } = useAdminScope(initialData?.id || '');
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
 
@@ -480,7 +479,7 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
               companyId={companyId} 
               adminLevel={formData.admin_level} 
               onScopesUpdated={() => toast.success('Scope assignments updated')} 
-            /> 
+            />
           </div>
         )}
 
@@ -538,12 +537,8 @@ export const AdminCreationForm: React.FC<AdminCreationFormProps> = ({
                 </p>
               </div>
             </div>
-            {/* AdminScopeAssignment component will handle its own rendering based on adminLevel */}
-            <AdminScopeAssignment 
-              userId={initialData.id} 
-              companyId={companyId} 
-              adminLevel={formData.admin_level} 
-              onScopesUpdated={() => toast.success('Scope assignments updated')} 
-            /> 
-  );
-};
+            <AdminPermissionMatrix
+              permissions={permissions}
+              onChange={setPermissions}
+              adminLevel={formData.admin_level}
+              disabled={isSubmitting || formData.admin_level === 'entity_admin'}
