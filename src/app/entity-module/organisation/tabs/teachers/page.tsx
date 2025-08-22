@@ -1,20 +1,7 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
- * Teachers Management Tab Component (Placeholder)
- * To be implemented with full teacher management functionality
- * 
- * Dependencies:
- *   - @/lib/supabase
- *   - @/contexts/UserContext
- *   - External: react, lucide-react
- */
-
-'use client';
-
-import React from 'react';
-import { Users, Award, Calendar, BookOpen, Clock, Briefcase } from 'lucide-react';
-/**
+ * Teachers Management Tab Component
  * Enhanced Teachers Tab with Scope-Based Access Control
  * Teachers will be filtered based on user's assigned schools/branches
  */
@@ -227,6 +214,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </p>
             </div>
           </div>
+        )}
+
+        {/* Feature Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
             <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -245,8 +236,18 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               Monitor teaching effectiveness
             </p>
           </div>
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+            <BookOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+              Subject Management
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Assign subjects and courses
+            </p>
+          </div>
         </div>
 
+        {/* Development Notice */}
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
           <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 mb-2">
             <Clock className="w-5 h-5" />
