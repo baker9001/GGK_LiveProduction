@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '../../../../../../components/shared/Toast';
 import { adminService } from '../services/adminService';
 import { AdminUser, CreateAdminPayload, UpdateAdminPayload } from '../types/admin.types';
+import { useUser } from '../../../../../../contexts/UserContext';
 
 /**
  * Custom hooks for admin-related mutations using React Query.
@@ -10,8 +11,13 @@ import { AdminUser, CreateAdminPayload, UpdateAdminPayload } from '../types/admi
 
 export function useCreateAdmin(onSuccess?: (data: AdminUser) => void) {
   const queryClient = useQueryClient();
+  const { user } = useUser();
+  
   return useMutation(
-    (payload: CreateAdminPayload) => adminService.createAdmin(payload),
+    (payload: CreateAdminPayload) => adminService.createAdmin({
+      ...payload,
+      actor_id: user?.id || ''
+    }),
     {
       onSuccess: (data) => {
         toast.success('Admin created successfully!');
@@ -29,9 +35,14 @@ export function useCreateAdmin(onSuccess?: (data: AdminUser) => void) {
 
 export function useUpdateAdmin(onSuccess?: (data: AdminUser) => void) {
   const queryClient = useQueryClient();
+  const { user } = useUser();
+  
   return useMutation(
     ({ userId, updates }: { userId: string; updates: UpdateAdminPayload }) =>
-      adminService.updateAdmin(userId, updates),
+      adminService.updateAdmin(userId, {
+        ...updates,
+        actor_id: user?.id || ''
+      }),
     {
       onSuccess: (data) => {
         toast.success('Admin updated successfully!');
@@ -50,8 +61,10 @@ export function useUpdateAdmin(onSuccess?: (data: AdminUser) => void) {
 
 export function useDeleteAdmin(onSuccess?: (userId: string) => void) {
   const queryClient = useQueryClient();
+  const { user } = useUser();
+  
   return useMutation(
-    (userId: string) => adminService.deleteAdmin(userId),
+    (userId: string) => adminService.deleteAdmin(userId, user?.id || ''),
     {
       onSuccess: (userId) => {
         toast.success('Admin deactivated successfully!');
@@ -69,8 +82,10 @@ export function useDeleteAdmin(onSuccess?: (userId: string) => void) {
 
 export function useRestoreAdmin(onSuccess?: (userId: string) => void) {
   const queryClient = useQueryClient();
+  const { user } = useUser();
+  
   return useMutation(
-    (userId: string) => adminService.restoreAdmin(userId),
+    (userId: string) => adminService.restoreAdmin(userId, user?.id || ''),
     {
       onSuccess: (userId) => {
         toast.success('Admin restored successfully!');

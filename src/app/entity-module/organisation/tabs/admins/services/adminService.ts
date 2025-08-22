@@ -22,6 +22,7 @@ interface CreateAdminPayload {
   created_by?: string;
   parent_admin_id?: string;
   metadata?: Record<string, any>;
+  actor_id: string; // Required for audit logging
 }
 
 interface UpdateAdminPayload {
@@ -32,6 +33,7 @@ interface UpdateAdminPayload {
   permissions?: AdminPermissions;
   is_active?: boolean;
   metadata?: Record<string, any>;
+  actor_id: string; // Required for audit logging
 }
 
 interface AdminFilters {
@@ -77,18 +79,13 @@ const getAdminName = (admin: any): string => {
   return 'Unknown Admin';
 };
 
-const getCurrentUserId = (): string => {
-  // Should be replaced with actual user context
-  return 'system';
-};
-
 export const adminService = {
   /**
    * Create a new administrator using the userCreationService
    */
   async createAdmin(payload: CreateAdminPayload): Promise<AdminUser> {
     try {
-      const createdBy = payload.created_by || getCurrentUserId();
+      const createdBy = payload.created_by || payload.actor_id;
 
       // Validate required fields
       if (!payload.email || !payload.name || !payload.company_id) {
@@ -125,7 +122,7 @@ export const adminService = {
         await auditService.logAction({
           company_id: payload.company_id,
           action_type: 'admin_created',
-          actor_id: createdBy,
+          actor_id: payload.actor_id,
           target_id: entityId,
           target_type: 'entity_user',
           changes: {
@@ -151,8 +148,6 @@ export const adminService = {
    */
   async updateAdmin(userId: string, payload: UpdateAdminPayload): Promise<AdminUser> {
     try {
-      const actorId = getCurrentUserId();
-
       // Validate userId
       if (!userId) {
         throw new Error('User ID is required');
@@ -267,7 +262,7 @@ export const adminService = {
           await auditService.logAction({
             company_id: existingAdmin.company_id,
             action_type: 'admin_modified',
-            actor_id: actorId,
+            actor_id: payload.actor_id,
             target_id: userId,
             target_type: 'entity_user',
             changes,
@@ -480,9 +475,8 @@ export const adminService = {
   /**
    * Delete (deactivate) an administrator
    */
-  async deleteAdmin(adminId: string): Promise<void> {
+  async deleteAdmin(adminId: string, actorId: string): Promise<void> {
     try {
-      const actorId = getCurrentUserId();
 
       const admin = await this.getAdminById(adminId);
       if (!admin) {
@@ -543,7 +537,7 @@ export const adminService = {
   /**
    * Restore (reactivate) an administrator
    */
-  async restoreAdmin(adminId: string): Promise<void> {
+  async restoreAdmin(adminId: string, actorId: string): Promise<void> {
     try {
       const admin = await this.getAdminById(adminId);
       if (!admin) {
@@ -576,6 +570,21 @@ export const adminService = {
         if (userError) {
           console.error('Failed to reactivate user account:', userError);
         }
+      }
+
+      // Log the action
+      try {
+        await auditService.logAction({
+          company_id: admin.company_id,
+          action_type: 'admin_activated',
+          actor_id: actorId,
+          target_id: adminId,
+          target_type: 'entity_user',
+          changes: { is_active: { old: false, new: true } },
+          metadata: { source: 'adminService.restoreAdmin' }
+        });
+      } catch (auditError) {
+        console.log('Audit logging failed:', auditError);
       }
     } catch (error: any) {
       console.error('restoreAdmin error:', error);
