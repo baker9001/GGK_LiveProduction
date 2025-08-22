@@ -264,8 +264,12 @@ export function FilterCard({
   const [collapsed, setCollapsed] = useState(true);
   
   const handleClear = () => {
-    onClear();
-    onApply();
+    if (typeof onClear === 'function') {
+      onClear();
+    }
+    if (typeof onApply === 'function') {
+      onApply();
+    }
   };
   
   return (
