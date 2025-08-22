@@ -1,6 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
  * 
+ * PHASE 5: Schools Tab with Access Control Applied
+ * 
+ * Access Rules Applied:
+ * 1. Access Check: Block entry if !canViewTab('schools')
+ * 2. Scoped Queries: Apply getScopeFilters to all Supabase queries
+ * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
+ * 
  * Schools Management Tab Component
  * Handles school data display, creation, and editing with comprehensive forms
  * 
@@ -49,8 +56,7 @@ import { FormField, Input, Select } from '../../../../../components/shared/FormF
 import { Button } from '../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
-import { usePermissions } from '../../../../../contexts/PermissionContext';
-import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
+import { useAccessControl } from '../../../../../hooks/useAccessControl';
 // Note: DataTable import removed as it wasn't used in the original file
 import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
 
@@ -114,7 +120,24 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
-  const { canCreate, canModify, canDelete } = usePermissions();
+  const {
+    canViewTab,
+    can,
+    getScopeFilters,
+    isLoading: isAccessControlLoading,
+    isEntityAdmin,
+    isSubEntityAdmin
+  } = useAccessControl();
+
+  // PHASE 5 RULE 1: ACCESS CHECK
+  // Block entry if user cannot view this tab
+  useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('schools')) {
+      toast.error('You do not have permission to view schools');
+      window.location.href = '/app/entity-module/dashboard';
+      return;
+    }
+  }, [isAccessControlLoading, canViewTab]);
   
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -156,15 +179,26 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
   };
 
+  // PHASE 5 RULE 2: SCOPED QUERIES
+  // Apply getScopeFilters to all Supabase queries
+  const scopeFilters = getScopeFilters('schools');
+
   // ===== FETCH SCHOOLS =====
   const { data: schools = [], isLoading, refetch } = useQuery(
     ['schools-tab', companyId], // Different cache key from organization page
     async () => {
-      const { data: schoolsData, error: schoolsError } = await supabase
+      // SCOPED QUERY: Apply scope filters to schools query
+      let schoolsQuery = supabase
         .from('schools')
         .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
-        .eq('company_id', companyId)
-        .order('name');
+        .eq('company_id', companyId);
+
+      // Apply scope filters if user is not entity admin
+      if (scopeFilters.school_ids) {
+        schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+      }
+
+      const { data: schoolsData, error: schoolsError } = await schoolsQuery.order('name');
       
       if (schoolsError) throw schoolsError;
       
@@ -199,11 +233,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
   );
 
-  // Apply scope filtering to schools
-  const { filteredData: accessibleSchools, hasAccess: hasSchoolAccess, canAccessAll } = useScopeFilter(
-    schools,
-    { entityType: 'school', companyId, requireActiveStatus: true }
-  );
+  // Schools are already filtered by scope in the query
+  const accessibleSchools = schools;
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
   const { data: branches = [] } = useQuery(
@@ -491,7 +523,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   };
 
   // Filter schools based on search and status
-  const filteredSchools = accessibleSchools.filter(school => {
+  const displayedSchools = accessibleSchools.filter(school => {
     const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          school.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
@@ -528,13 +560,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          <Button onClick={handleCreate}>
+          {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
+          {can('create_school') && (
+            <Button onClick={handleCreate}>
             <Plus className="w-4 h-4 mr-2" />
             Add School
           </Button>
+          )}
         </div>
 
-          {!canCreate('school') && (
+          {/* PHASE 5 RULE 3: UI GATING - Show permission notices */}
+          {!can('create_school') && (
             <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
               <div className="flex items-center">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
@@ -545,12 +581,12 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
             </div>
           )}
           
-          {!canAccessAll && accessibleSchools.length < schools.length && (
+          {!canAccessAll && (
             <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
               <div className="flex items-center">
                 <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope. You have access to schools you're specifically assigned to manage.
+                  Showing schools based on your assigned scope. You have access to schools you're specifically assigned to manage.
                 </p>
               </div>
             </div>
@@ -612,13 +648,13 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
             <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
           </div>
-        ) : filteredSchools.length === 0 ? (
+        ) : displayedSchools.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-600 dark:text-gray-400">No schools found</p>
           </div>
         ) : (
-          filteredSchools.map((school) => {
+          displayedSchools.map((school) => {
             const logoUrl = getSchoolLogoUrl(school.logo);
             
             return (
@@ -723,7 +759,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       </span>
                     </div>
                   </div>
-                  {canModify('school', school.id, 'school') ? (
+                  {/* PHASE 5 RULE 3: UI GATING - Show edit button based on permissions */}
+                  {can('modify_school', school.id) ? (
                     <button
                       onClick={() => handleEdit(school)}
                       className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
