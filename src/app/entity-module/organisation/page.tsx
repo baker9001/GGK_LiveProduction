@@ -154,6 +154,7 @@ interface OrganizationStats {
 export default function OrganizationManagement() {
   const queryClient = useQueryClient();
   const { user } = useUser();
+  const { isLoading: isLoadingPermissions, canView } = usePermissions();
   const authenticatedUser = getAuthenticatedUser();
   const { canView } = usePermissions();
   
