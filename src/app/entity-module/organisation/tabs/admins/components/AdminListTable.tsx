@@ -622,7 +622,7 @@ export function AdminListTable({
       {/* Filters */}
       <FilterCard
         title="Filter Administrators"
-        onReset={() => {
+        onClear={() => {
           setFilters({
             search: '',
             admin_level: [],
@@ -631,6 +631,9 @@ export function AdminListTable({
             created_before: ''
           });
           setPage(1);
+        }}
+        onApply={() => {
+          // Auto-apply with React Query - no explicit action needed
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -691,6 +694,7 @@ export function AdminListTable({
                 setFilters(prev => ({ ...prev, created_after: e.target.value }));
                 setPage(1);
               }}
+              leftIcon={<Calendar className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
             />
           </FormField>
 
@@ -702,6 +706,7 @@ export function AdminListTable({
                 setFilters(prev => ({ ...prev, created_before: e.target.value }));
                 setPage(1);
               }}
+              leftIcon={<Calendar className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
             />
           </FormField>
 
@@ -744,15 +749,7 @@ export function AdminListTable({
       {/* Actions Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {onCreateAdmin && (
-            <Button
-              variant="primary"
-              leftIcon={<UserPlus className="h-4 w-4" />}
-              onClick={onCreateAdmin}
-            >
-              Add Administrator
-            </Button>
-          )}
+          {/* Removed duplicate Add Administrator button */}
         </div>
 
         <div className="flex items-center gap-2">
