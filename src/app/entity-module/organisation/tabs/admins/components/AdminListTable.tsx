@@ -261,9 +261,17 @@ export function AdminListTable({
   const filteredAdmins = useMemo(() => {
     let adminList = admins?.data || [];
     
-    // Filter out Entity Admins if current user is Sub-Entity Admin
+    // CRITICAL: Filter out Entity Admins if current user is Sub-Entity Admin
     if (currentUserAdminLevel === 'sub_entity_admin') {
       adminList = adminList.filter(admin => admin.admin_level !== 'entity_admin');
+    }
+    
+    // Apply additional filtering based on user's scope access
+    // For non-entity admins, they should only see admins within their scope
+    if (currentUserAdminLevel !== 'entity_admin') {
+      // TODO: Implement scope-based admin filtering
+      // This would require checking if the admin being viewed has overlapping scopes
+      // with the current user's assigned scopes
     }
     
     return adminList;

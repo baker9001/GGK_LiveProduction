@@ -252,7 +252,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // Apply scope filtering to branches
   const { filteredData: accessibleBranches, hasAccess: hasBranchAccess, canAccessAll } = useScopeFilter(
     branches,
-    { entityType: 'branch', companyId }
+    { entityType: 'branch', companyId, requireActiveStatus: true }
   );
 
   // ===== MUTATIONS =====
@@ -819,7 +819,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           <div className="flex items-center">
             <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              Showing {accessibleBranches.length} of {branches.length} branches based on your assigned scope.
+              Showing {accessibleBranches.length} of {branches.length} branches based on your assigned scope. You have access to branches you're specifically assigned to manage or branches under your assigned schools.
             </p>
           </div>
         </div>

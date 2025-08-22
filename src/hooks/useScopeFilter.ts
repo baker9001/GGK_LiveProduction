@@ -4,10 +4,12 @@ import { supabase } from '../lib/supabase';
 import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { scopeService } from '../app/entity-module/organisation/tabs/admins/services/scopeService';
+import { usePermissions } from '../contexts/PermissionContext';
 
 interface ScopeFilterOptions {
   entityType: 'school' | 'branch';
   companyId: string;
+  requireActiveStatus?: boolean;
 }
 
 interface ScopeFilterResult<T> {
@@ -15,6 +17,11 @@ interface ScopeFilterResult<T> {
   isLoading: boolean;
   hasAccess: (entityId: string) => boolean;
   canAccessAll: boolean;
+  scopeInfo: {
+    assignedSchools: string[];
+    assignedBranches: string[];
+    totalAssigned: number;
+  };
 }
 
 /**
@@ -26,9 +33,14 @@ export function useScopeFilter<T extends { id: string }>(
   options: ScopeFilterOptions
 ): ScopeFilterResult<T> {
   const { user } = useUser();
+  const { adminLevel } = usePermissions();
   const [userScopes, setUserScopes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [adminLevel, setAdminLevel] = useState<string | null>(null);
+  const [scopeInfo, setScopeInfo] = useState({
+    assignedSchools: [] as string[],
+    assignedBranches: [] as string[],
+    totalAssigned: 0
+  });
 
   // Fetch user's scopes and admin level
   useEffect(() => {
@@ -41,18 +53,14 @@ export function useScopeFilter<T extends { id: string }>(
       try {
         setIsLoading(true);
         
-        // Get user's admin level
-        const { data: userData } = await supabase
-          .from('entity_users')
-          .select('admin_level')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        
-        setAdminLevel(userData?.admin_level || null);
-        
         // Entity admins have access to everything in their company
-        if (userData?.admin_level === 'entity_admin') {
+        if (adminLevel === 'entity_admin') {
           setUserScopes([]);
+          setScopeInfo({
+            assignedSchools: [],
+            assignedBranches: [],
+            totalAssigned: 0
+          });
           setIsLoading(false);
           return;
         }
@@ -60,16 +68,35 @@ export function useScopeFilter<T extends { id: string }>(
         // For other admin levels, fetch their assigned scopes
         const scopes = await scopeService.getScopes(user.id);
         setUserScopes(scopes);
+        
+        // Calculate scope info
+        const assignedSchools = scopes
+          .filter(scope => scope.scope_type === 'school')
+          .map(scope => scope.scope_id);
+        const assignedBranches = scopes
+          .filter(scope => scope.scope_type === 'branch')
+          .map(scope => scope.scope_id);
+        
+        setScopeInfo({
+          assignedSchools,
+          assignedBranches,
+          totalAssigned: assignedSchools.length + assignedBranches.length
+        });
       } catch (error) {
         console.error('Error fetching user scopes:', error);
         setUserScopes([]);
+        setScopeInfo({
+          assignedSchools: [],
+          assignedBranches: [],
+          totalAssigned: 0
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUserScopes();
-  }, [user?.id]);
+  }, [user?.id, adminLevel]);
 
   // Determine if user can access all entities (entity admin)
   const canAccessAll = useMemo(() => {
@@ -82,10 +109,30 @@ export function useScopeFilter<T extends { id: string }>(
       // Entity admins have access to everything
       if (canAccessAll) return true;
       
+      // If no scopes assigned, no access (except for entity admins)
+      if (userScopes.length === 0) return false;
+      
       // Check if entity is in user's assigned scopes
-      return userScopes.some(scope => 
-        scope.scope_type === options.entityType && scope.scope_id === entityId
+      const hasDirectAccess = userScopes.some(scope => 
+        scope.scope_type === options.entityType && 
+        scope.scope_id === entityId &&
+        (!options.requireActiveStatus || scope.is_active !== false)
       );
+      
+      // For branches, also check if user has access to the parent school
+      if (!hasDirectAccess && options.entityType === 'branch') {
+        // Find the school that owns this branch
+        const branchData = data.find(item => item.id === entityId) as any;
+        if (branchData?.school_id) {
+          return userScopes.some(scope => 
+            scope.scope_type === 'school' && 
+            scope.scope_id === branchData.school_id &&
+            (!options.requireActiveStatus || scope.is_active !== false)
+          );
+        }
+      }
+      
+      return hasDirectAccess;
     };
   }, [canAccessAll, userScopes, options.entityType]);
 
@@ -103,6 +150,7 @@ export function useScopeFilter<T extends { id: string }>(
     filteredData,
     isLoading,
     hasAccess,
-    canAccessAll
+    canAccessAll,
+    scopeInfo
   };
 }

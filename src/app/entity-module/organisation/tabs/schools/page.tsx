@@ -202,7 +202,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   // Apply scope filtering to schools
   const { filteredData: accessibleSchools, hasAccess: hasSchoolAccess, canAccessAll } = useScopeFilter(
     schools,
-    { entityType: 'school', companyId }
+    { entityType: 'school', companyId, requireActiveStatus: true }
   );
 
   // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
@@ -550,7 +550,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div className="flex items-center">
                 <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope.
+                  Showing {accessibleSchools.length} of {schools.length} schools based on your assigned scope. You have access to schools you're specifically assigned to manage.
                 </p>
               </div>
             </div>
