@@ -507,12 +507,6 @@ export default function OrganizationManagement() {
     }
   );
 
-  // Apply scope filtering to schools for organization structure
-  const { filteredData: accessibleSchools, canAccessAll } = useScopeFilter(
-    organizationData?.schools,
-    { entityType: 'school', companyId: userCompanyId || '' }
-  );
-
   // ===== MEMOIZED STATS - FIXED =====
   const memoizedStats = useMemo(() => {
     if (stats) return stats;
@@ -907,56 +901,66 @@ export default function OrganizationManagement() {
 
         {/* Tab Navigation */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="flex space-x-8 px-6" aria-label="Tabs">
-              <button
-                onClick={() => setActiveTab('structure')}
-                onMouseEnter={() => prefetchTabData('structure')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'structure'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Home className="w-4 h-4 inline-block mr-2" />
-                Organization Structure
-              </button>
-              <button
-                onClick={() => setActiveTab('schools')}
-                onMouseEnter={() => prefetchTabData('schools')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'schools'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <School className="w-4 h-4 inline-block mr-2" />
-                Schools
-              </button>
-              <button
-                onClick={() => setActiveTab('branches')}
-                onMouseEnter={() => prefetchTabData('branches')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'branches'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <MapPin className="w-4 h-4 inline-block mr-2" />
-                Branches
-              </button>
-              <button
-                onClick={() => setActiveTab('admins')}
-                onMouseEnter={() => prefetchTabData('admins')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'admins'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
-              >
-                <Shield className="h-4 w-4 inline-block mr-2" />
-                Admins
-              </button>
+              {canView('schools') && (
+                <button
+                  onClick={() => setActiveTab('schools')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'schools'
+                      ? 'border-[#8CC63F] text-[#8CC63F]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Schools
+                </button>
+              )}
+              {canView('branches') && (
+                <button
+                  onClick={() => setActiveTab('branches')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'branches'
+                      ? 'border-[#8CC63F] text-[#8CC63F]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Branches
+                </button>
+              )}
+              {canView('users') && (
+                <button
+                  onClick={() => setActiveTab('teachers')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'teachers'
+                      ? 'border-[#8CC63F] text-[#8CC63F]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Teachers
+                </button>
+              )}
+              {canView('users') && (
+                <button
+                  onClick={() => setActiveTab('students')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'students'
+                      ? 'border-[#8CC63F] text-[#8CC63F]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Students
+                </button>
+              )}
+              {canView('users') && (
+                <button
+                  onClick={() => setActiveTab('admins')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'admins'
+                      ? 'border-[#8CC63F] text-[#8CC63F]'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Admins
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('teachers')}
                 onMouseEnter={() => prefetchTabData('teachers')}

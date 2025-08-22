@@ -42,6 +42,28 @@ export const auditService = {
    */
   async logAction(payload: AuditLogPayload): Promise<AdminAuditLog> {
     try {
+      // Validate that target_id exists in users table if provided
+      if (payload.target_id) {
+        const { data: targetExists, error: targetCheckError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', payload.target_id)
+          .maybeSingle();
+        
+        if (targetCheckError || !targetExists) {
+          console.warn('Target user not found in users table, skipping audit log');
+          // Return a mock entry rather than failing
+          return {
+            id: 'skipped-' + Date.now(),
+            ...payload,
+            ip_address: null,
+            user_agent: null,
+            created_at: new Date().toISOString(),
+            metadata: { skipped: true, reason: 'target_user_not_found' }
+          } as AdminAuditLog;
+        }
+      }
+      
       // Get additional context
       const ipAddress = await this.getClientIP();
       const userAgent = this.getUserAgent();

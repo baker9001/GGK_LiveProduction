@@ -162,7 +162,7 @@ export function AdminScopeAssignment({
         can_view_all: true, 
         can_export_data: false, 
         can_manage_settings: false,
-        assigned_by: userId, // Assuming the current user is the one assigning
+        assigned_by: user?.id || 'system',
         expires_at: null,
         is_active: true,
         notes: null,
@@ -181,7 +181,7 @@ export function AdminScopeAssignment({
         can_view_all: true, 
         can_export_data: false, 
         can_manage_settings: false,
-        assigned_by: userId,
+        assigned_by: user?.id || 'system',
         expires_at: null,
         is_active: true,
         notes: null,
@@ -209,7 +209,7 @@ export function AdminScopeAssignment({
       onScopesUpdated?.();
     } catch (error) {
       console.error('Failed to update scope assignments:', error);
-      toast.error('Failed to update scope assignments.');
+      toast.error(error instanceof Error ? error.message : 'Failed to update scope assignments.');
     }
   };
 

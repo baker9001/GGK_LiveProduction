@@ -48,8 +48,20 @@ export function useAssignScope(userId: string, onSuccess?: () => void) {
   const queryClient = useQueryClient();
   
   return useMutation(
-    (scope: Omit<EntityAdminScope, 'id' | 'user_id' | 'assigned_at'>) =>
+    async (scope: Omit<EntityAdminScope, 'id' | 'user_id' | 'assigned_at'>) => {
+      // Validate that the user exists in the users table
+      const { data: userExists, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (userCheckError || !userExists) {
+        throw new Error('User not found in users table');
+      }
+      
       scopeService.assignScope(userId, scope),
+    },
     {
       onSuccess: () => {
         toast.success('Scope assigned successfully!');

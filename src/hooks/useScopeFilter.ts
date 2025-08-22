@@ -1,5 +1,6 @@
 // /src/hooks/useScopeFilter.ts
 
+import { supabase } from '../lib/supabase';
 import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { scopeService } from '../app/entity-module/organisation/tabs/admins/services/scopeService';
