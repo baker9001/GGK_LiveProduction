@@ -23,7 +23,7 @@ export const permissionService = {
       const { data: userData, error: userError } = await supabase
         .from('entity_users')
         .select('permissions, admin_level')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
 
       if (userError) {
