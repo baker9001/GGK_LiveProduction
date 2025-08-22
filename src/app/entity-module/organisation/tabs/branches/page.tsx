@@ -1,6 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
  * 
+ * PHASE 5: Branches Tab with Access Control Applied
+ * 
+ * Access Rules Applied:
+ * 1. Access Check: Block entry if !canViewTab('branches')
+ * 2. Scoped Queries: Apply getScopeFilters to all Supabase queries
+ * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
+ * 
  * Branches Management Tab Component
  * Handles branch data display, creation, and editing with comprehensive forms
  * 
@@ -47,8 +54,7 @@ import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
 import { ImageUpload } from '../../../../../components/shared/ImageUpload';
-import { usePermissions } from '../../../../../contexts/PermissionContext';
-import { useScopeFilter } from '../../../../../hooks/useScopeFilter';
+import { useAccessControl } from '../../../../../hooks/useAccessControl';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -138,7 +144,25 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
-  const { canCreate, canModify, canDelete } = usePermissions();
+  const {
+    canViewTab,
+    can,
+    getScopeFilters,
+    isLoading: isAccessControlLoading,
+    isEntityAdmin,
+    isSubEntityAdmin,
+    isBranchAdmin
+  } = useAccessControl();
+
+  // PHASE 5 RULE 1: ACCESS CHECK
+  // Block entry if user cannot view this tab
+  useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('branches')) {
+      toast.error('You do not have permission to view branches');
+      window.location.href = '/app/entity-module/dashboard';
+      return;
+    }
+  }, [isAccessControlLoading, canViewTab]);
   
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -150,6 +174,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
+
+  // PHASE 5 RULE 2: SCOPED QUERIES
+  // Apply getScopeFilters to all Supabase queries
+  const scopeFilters = getScopeFilters('branches');
 
   // ===== EXPOSE METHODS VIA REF =====
   React.useImperativeHandle(ref, () => ({
@@ -200,11 +228,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const { data: branches = [], isLoading, refetch } = useQuery(
     ['branches', companyId],
     async () => {
-      // First get all schools for this company
-      const { data: schoolsData, error: schoolsError } = await supabase
+      // SCOPED QUERY: Get schools with scope filtering
+      let schoolsQuery = supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId);
+
+      // Apply scope filters if user is not entity admin
+      if (scopeFilters.school_ids) {
+        schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+      }
+
+      const { data: schoolsData, error: schoolsError } = await schoolsQuery;
       
       if (schoolsError) throw schoolsError;
       
@@ -212,12 +247,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       
       if (schoolIds.length === 0) return [];
       
-      // Then get all branches for these schools
-      const { data: branchesData, error: branchesError } = await supabase
+      // SCOPED QUERY: Get branches with scope filtering
+      let branchesQuery = supabase
         .from('branches')
         .select('id, name, code, school_id, status, address, notes, logo, created_at')
-        .in('school_id', schoolIds)
-        .order('name');
+        .in('school_id', schoolIds);
+
+      // Apply additional scope filters for branches
+      if (scopeFilters.branch_ids) {
+        branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
+      }
+
+      const { data: branchesData, error: branchesError } = await branchesQuery.order('name');
       
       if (branchesError) throw branchesError;
       
@@ -249,11 +290,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     }
   );
 
-  // Apply scope filtering to branches
-  const { filteredData: accessibleBranches, hasAccess: hasBranchAccess, canAccessAll } = useScopeFilter(
-    branches,
-    { entityType: 'branch', companyId, requireActiveStatus: true }
-  );
+  // Branches are already filtered by scope in the query
+  const accessibleBranches = branches;
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== MUTATIONS =====
   const createBranchMutation = useMutation(
@@ -747,10 +786,13 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               ]}
             />
           </div>
-          <Button onClick={handleCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Branch
-          </Button>
+          {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
+          {can('create_branch') && (
+            <Button onClick={handleCreate}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Branch
+            </Button>
+          )}
         </div>
 
         {/* Stats */}
@@ -802,8 +844,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         </div>
       </div>
 
-      {/* Access Control Notices */}
-      {!canCreate('branch') && (
+      {/* PHASE 5 RULE 3: UI GATING - Show permission notices */}
+      {!can('create_branch') && (
         <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
           <div className="flex items-center">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
@@ -814,12 +856,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         </div>
       )}
       
-      {!canAccessAll && accessibleBranches.length < branches.length && (
+      {!canAccessAll && (
         <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
           <div className="flex items-center">
             <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              Showing {accessibleBranches.length} of {branches.length} branches based on your assigned scope. You have access to branches you're specifically assigned to manage or branches under your assigned schools.
+              Showing branches based on your assigned scope. You have access to branches you're specifically assigned to manage or branches under your assigned schools.
             </p>
           </div>
         </div>
@@ -944,7 +986,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       </span>
                     </div>
                   </div>
-                  {canModify('branch', branch.id, 'branch') ? (
+                  {/* PHASE 5 RULE 3: UI GATING - Show edit button based on permissions */}
+                  {can('modify_branch', branch.id) ? (
                     <button
                       onClick={() => handleEdit(branch)}
                       className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
