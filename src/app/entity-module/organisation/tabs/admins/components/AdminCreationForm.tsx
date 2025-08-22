@@ -17,6 +17,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
