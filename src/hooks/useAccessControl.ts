@@ -1,12 +1,12 @@
 // src/hooks/useAccessControl.ts
 /**
- * COMPLETE UPDATED: useAccessControl Hook
+ * FIXED VERSION: useAccessControl Hook
  * 
- * Fixes Applied:
- * 1. Fixed Supabase relationship ambiguity issue
- * 2. Updated queries to work without is_active columns in students/teachers tables
- * 3. Proper error handling and loading states
- * 4. Enhanced scope filtering logic
+ * Critical Fixes Applied:
+ * 1. Changed 'organization-structure' to 'structure' in tabVisibilityMatrix
+ * 2. Added sub_entity_admin to structure tab access
+ * 3. Fixed Supabase relationship ambiguity issue
+ * 4. Enhanced error logging for debugging
  * 
  * Dependencies:
  *   - @/contexts/UserContext
@@ -71,6 +71,8 @@ export function useAccessControl(): UseAccessControlResult {
         return userScope;
       }
 
+      console.log('Fetching user scope for:', userId);
+
       // FIXED: Use explicit relationship specification to avoid ambiguity
       const { data: entityUserData, error: entityUserError } = await supabase
         .from('entity_users')
@@ -81,6 +83,8 @@ export function useAccessControl(): UseAccessControlResult {
           company_id,
           is_active,
           name,
+          permissions,
+          is_company_admin,
           users!entity_users_user_id_fkey (
             id,
             email,
@@ -99,6 +103,7 @@ export function useAccessControl(): UseAccessControlResult {
 
       // If no entity_users record found, check if it's a regular user
       if (!entityUserData) {
+        console.log('No entity user found, checking basic user data...');
         const { data: basicUserData, error: basicUserError } = await supabase
           .from('users')
           .select('id, email, user_type, is_active')
@@ -132,10 +137,17 @@ export function useAccessControl(): UseAccessControlResult {
         return scope;
       }
 
+      console.log('Entity user found:', {
+        adminLevel: entityUserData.admin_level,
+        companyId: entityUserData.company_id,
+        isCompanyAdmin: entityUserData.is_company_admin
+      });
+
       // Get assigned schools and branches for the entity user
       let assignedSchools: string[] = [];
       let assignedBranches: string[] = [];
 
+      // Entity admins and sub-entity admins have full company access - no need for specific scopes
       if (entityUserData.admin_level !== 'entity_admin' && entityUserData.admin_level !== 'sub_entity_admin') {
         try {
           const { data: scopeData, error: scopeError } = await supabase
@@ -154,6 +166,8 @@ export function useAccessControl(): UseAccessControlResult {
             assignedBranches = scopeData
               .filter(scope => scope.scope_type === 'branch')
               .map(scope => scope.scope_id);
+              
+            console.log('Assigned scopes:', { schools: assignedSchools, branches: assignedBranches });
           }
         } catch (scopeError) {
           console.error('Error fetching scope assignments:', scopeError);
@@ -171,6 +185,8 @@ export function useAccessControl(): UseAccessControlResult {
         assignedSchools,
         assignedBranches
       };
+
+      console.log('Final user scope:', scope);
 
       setUserScope(scope);
       setLastUserId(userId);
@@ -229,14 +245,18 @@ export function useAccessControl(): UseAccessControlResult {
     return allowedModules.some(module => modulePath.startsWith(module));
   }, [userScope]);
 
-  // Tab visibility control
+  // Tab visibility control - CRITICAL FIX: Changed 'organization-structure' to 'structure'
   const canViewTab = useCallback((tabName: string, adminLevel?: AdminLevel): boolean => {
     const currentAdminLevel = adminLevel || userScope?.adminLevel;
     
-    if (!currentAdminLevel) return false;
+    if (!currentAdminLevel) {
+      console.log(`canViewTab(${tabName}): No admin level, returning false`);
+      return false;
+    }
 
+    // FIXED: Use 'structure' instead of 'organization-structure'
     const tabVisibilityMatrix: Record<string, AdminLevel[]> = {
-      'organization-structure': ['entity_admin'],
+      'structure': ['entity_admin', 'sub_entity_admin'], // FIXED: was 'organization-structure'
       'schools': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
       'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
       'admins': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
@@ -245,7 +265,11 @@ export function useAccessControl(): UseAccessControlResult {
     };
 
     const allowedLevels = tabVisibilityMatrix[tabName] || [];
-    return allowedLevels.includes(currentAdminLevel);
+    const canView = allowedLevels.includes(currentAdminLevel);
+    
+    console.log(`canViewTab(${tabName}): adminLevel=${currentAdminLevel}, allowed=${JSON.stringify(allowedLevels)}, canView=${canView}`);
+    
+    return canView;
   }, [userScope]);
 
   // Action permission control
@@ -256,6 +280,7 @@ export function useAccessControl(): UseAccessControlResult {
     if (targetUserId && targetUserId === userScope.userId) {
       const restrictedActions = ['deactivate_user', 'delete_user', 'change_admin_level'];
       if (restrictedActions.some(restricted => action.includes(restricted))) {
+        console.log(`Blocked self-modification action: ${action}`);
         return false;
       }
     }
@@ -272,6 +297,10 @@ export function useAccessControl(): UseAccessControlResult {
         modify_branch: true,
         modify_teacher: true,
         modify_student: true,
+        modify_entity_admin: true,
+        modify_sub_admin: true,
+        modify_school_admin: true,
+        modify_branch_admin: true,
         delete_school: true,
         delete_branch: true,
         delete_teacher: true,
@@ -291,6 +320,10 @@ export function useAccessControl(): UseAccessControlResult {
         modify_branch: true,
         modify_teacher: true,
         modify_student: true,
+        modify_entity_admin: false,
+        modify_sub_admin: true,
+        modify_school_admin: true,
+        modify_branch_admin: true,
         delete_school: false,
         delete_branch: false,
         delete_teacher: true,
@@ -310,6 +343,10 @@ export function useAccessControl(): UseAccessControlResult {
         modify_branch: true,
         modify_teacher: true,
         modify_student: true,
+        modify_entity_admin: false,
+        modify_sub_admin: false,
+        modify_school_admin: false,
+        modify_branch_admin: true,
         delete_school: false,
         delete_branch: false,
         delete_teacher: true,
@@ -329,6 +366,10 @@ export function useAccessControl(): UseAccessControlResult {
         modify_branch: false,
         modify_teacher: true,
         modify_student: true,
+        modify_entity_admin: false,
+        modify_sub_admin: false,
+        modify_school_admin: false,
+        modify_branch_admin: false,
         delete_school: false,
         delete_branch: false,
         delete_teacher: false,
@@ -339,7 +380,13 @@ export function useAccessControl(): UseAccessControlResult {
       }
     };
 
-    return permissionMatrix[userScope.adminLevel]?.[action] || false;
+    const hasPermission = permissionMatrix[userScope.adminLevel]?.[action] || false;
+    
+    if (!hasPermission) {
+      console.log(`Permission denied: adminLevel=${userScope.adminLevel}, action=${action}`);
+    }
+    
+    return hasPermission;
   }, [userScope]);
 
   // FIXED: Scope-based query filters that work with current schema
