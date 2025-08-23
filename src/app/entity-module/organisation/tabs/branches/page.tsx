@@ -9,6 +9,9 @@
  *   - @/components/shared/ImageUpload
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
+ * FIXED: Changed permission checks from 'organization.modify_branch' to 'modify_branch'
+ * This matches the permission format in useAccessControl hook
+ * 
  * Preserved Features:
  *   - All original branch management functionality
  *   - Search, filter, and status management
@@ -17,13 +20,6 @@
  *   - Statistics display
  *   - All original event handlers
  *   - Tab-based form organization
- * 
- * Added/Modified:
- *   - ENHANCED: Better permission checks with proper format
- *   - IMPROVED: Performance optimizations with useCallback
- *   - ADDED: Better error handling and user feedback
- *   - FIXED: Proper scope filtering for branch admins
- *   - IMPROVED: Clearer permission messages
  * 
  * Database Tables:
  *   - branches & branches_additional
@@ -891,8 +887,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          {/* UI GATING: Show create button based on permissions */}
-          {can('organization.create_branch') ? (
+          {/* FIXED: Changed from 'organization.create_branch' to 'create_branch' */}
+          {can('create_branch') ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add Branch
@@ -987,7 +983,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         ) : (
           filteredBranches.map((branch) => {
             const logoUrl = getBranchLogoUrl(branch.logo);
-            const canEdit = can('organization.modify_branch');
+            // FIXED: Changed from 'organization.modify_branch' to 'modify_branch'
+            const canEdit = can('modify_branch');
             
             return (
               <div
