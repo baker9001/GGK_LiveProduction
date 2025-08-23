@@ -1,21 +1,12 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
- * 
- * PHASE 5: Schools Tab with Access Control Applied
- * 
- * Access Rules Applied:
- * 1. Access Check: Block entry if !canViewTab('schools')
- * 2. Scoped Queries: Apply getScopeFilters to all Supabase queries
- * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
- * 
- * Schools Management Tab Component
- * Handles school data display, creation, and editing with comprehensive forms
- * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
+ *   - @/hooks/useAccessControl
  *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - @/components/forms/SchoolFormContent
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * Preserved Features:
@@ -25,40 +16,45 @@
  *   - SchoolFormContent integration
  *   - Statistics display
  *   - All original event handlers
+ *   - Branch deactivation confirmation
  * 
  * Added/Modified:
- *   - ENHANCED: Logo display matching organization structure's improved implementation
- *   - IMPROVED: Better logo sizing with proper aspect ratio
- *   - ADDED: Logo fallback with better error handling
- *   - IMPROVED: Logo container styling for better visual presentation
+ *   - ENHANCED: Logo display with better error handling
+ *   - IMPROVED: Better permission checks with proper scope
+ *   - ADDED: More informative permission messages
+ *   - FIXED: Proper scope filtering implementation
  * 
  * Database Tables:
  *   - schools & schools_additional
+ *   - branches (for deactivation check)
  *   - companies (for reference)
+ * 
+ * Connected Files:
+ *   - useAccessControl.ts (permission checking)
+ *   - SchoolFormContent.tsx (form component)
  */
 
 'use client';
 
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useCallback } from 'react';
 import { 
   School, Plus, Edit2, Trash2, Search, Filter, GraduationCap,
   Users, MapPin, Calendar, Globe, BookOpen, FlaskConical, 
   Dumbbell, Coffee, Phone, Mail, User, CheckCircle2, XCircle,
-  Clock, AlertTriangle, Building2, Info
+  Clock, AlertTriangle, Building2, Info, Lock, Shield
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '../../../../../lib/auth';
-import { useUser } from '../../../../../contexts/UserContext';
-import { SlideInForm } from '../../../../../components/shared/SlideInForm';
-import { FormField, Input, Select } from '../../../../../components/shared/FormField';
-import { Button } from '../../../../../components/shared/Button';
-import { StatusBadge } from '../../../../../components/shared/StatusBadge';
-import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
-import { useAccessControl } from '../../../../../hooks/useAccessControl';
-// Note: DataTable import removed as it wasn't used in the original file
-import { SchoolFormContent } from '../../../../../components/forms/SchoolFormContent';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { FormField, Input, Select } from '@/components/shared/FormField';
+import { Button } from '@/components/shared/Button';
+import { StatusBadge } from '@/components/shared/StatusBadge';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { SchoolFormContent } from '@/components/forms/SchoolFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolData {
@@ -76,6 +72,7 @@ interface SchoolData {
   branches?: any[];
   student_count?: number;
   branch_count?: number;
+  teachers_count?: number;
 }
 
 interface SchoolAdditional {
@@ -124,21 +121,16 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     canViewTab,
     can,
     getScopeFilters,
+    getUserContext,
     isLoading: isAccessControlLoading,
     isEntityAdmin,
-    isSubEntityAdmin
+    isSubEntityAdmin,
+    isSchoolAdmin,
+    isBranchAdmin,
+    hasError: hasAccessError,
+    error: accessError
   } = useAccessControl();
 
-  // PHASE 5 RULE 1: ACCESS CHECK
-  // Block entry if user cannot view this tab
-  useEffect(() => {
-    if (!isAccessControlLoading && !canViewTab('schools')) {
-      toast.error('You do not have permission to view schools');
-      window.location.href = '/app/entity-module/dashboard';
-      return;
-    }
-  }, [isAccessControlLoading, canViewTab]);
-  
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -152,6 +144,24 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
   const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
 
+  // ACCESS CHECK: Block entry if user cannot view this tab
+  useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('schools')) {
+      toast.error('You do not have permission to view schools');
+      // Use a slight delay to ensure the error message is shown
+      setTimeout(() => {
+        window.location.href = '/app/entity-module/dashboard';
+      }, 1000);
+    }
+  }, [isAccessControlLoading, canViewTab]);
+
+  // Show access error if there's one
+  useEffect(() => {
+    if (hasAccessError && accessError) {
+      toast.error(`Access Control Error: ${accessError}`);
+    }
+  }, [hasAccessError, accessError]);
+
   // ===== EXPOSE METHODS VIA REF =====
   React.useImperativeHandle(ref, () => ({
     openEditSchoolModal: (school: SchoolData) => {
@@ -159,8 +169,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
   }), []);
 
-  // ENHANCED: Improved helper to get school logo URL with better error handling
-  const getSchoolLogoUrl = (path: string | null | undefined) => {
+  // Helper to get school logo URL with better error handling
+  const getSchoolLogoUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
     
     // If it's already a full URL, return as is
@@ -168,7 +178,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       return path;
     }
     
-    // Construct Supabase storage URL with proper environment variable
+    // Construct Supabase storage URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       console.warn('VITE_SUPABASE_URL is not defined');
@@ -177,25 +187,30 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     
     // Use the correct bucket name for schools
     return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
-  };
+  }, []);
 
-  // PHASE 5 RULE 2: SCOPED QUERIES
-  // Apply getScopeFilters to all Supabase queries
+  // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
   const scopeFilters = getScopeFilters('schools');
 
-  // ===== FETCH SCHOOLS =====
-  const { data: schools = [], isLoading, refetch } = useQuery(
-    ['schools-tab', companyId], // Different cache key from organization page
+  // ===== FETCH SCHOOLS WITH SCOPE =====
+  const { data: schools = [], isLoading, error: fetchError, refetch } = useQuery(
+    ['schools-tab', companyId, scopeFilters],
     async () => {
-      // SCOPED QUERY: Apply scope filters to schools query
       let schoolsQuery = supabase
         .from('schools')
         .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
         .eq('company_id', companyId);
 
-      // Apply scope filters if user is not entity admin
-      if (scopeFilters.school_ids) {
-        schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+      // Apply scope filters based on user's admin level
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        // For school and branch admins, filter by assigned schools
+        if (scopeFilters.id && Array.isArray(scopeFilters.id)) {
+          if (scopeFilters.id.length === 0) {
+            // No schools assigned, return empty array
+            return [];
+          }
+          schoolsQuery = schoolsQuery.in('id', scopeFilters.id);
+        }
       }
 
       const { data: schoolsData, error: schoolsError } = await schoolsQuery.order('name');
@@ -204,6 +219,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       
       // Fetch additional data for each school
       const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
+        // Fetch additional data
         const { data: additional } = await supabase
           .from('schools_additional')
           .select('*')
@@ -214,27 +230,39 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
         const { count: branchCount } = await supabase
           .from('branches')
           .select('*', { count: 'exact', head: true })
-          .eq('school_id', school.id);
+          .eq('school_id', school.id)
+          .eq('status', 'active');
+        
+        // Get teacher count if not in additional data
+        let teacherCount = additional?.teachers_count || 0;
+        if (!teacherCount) {
+          const { count } = await supabase
+            .from('teachers')
+            .select('*', { count: 'exact', head: true })
+            .eq('school_id', school.id)
+            .eq('is_active', true);
+          teacherCount = count || 0;
+        }
         
         return {
           ...school,
           additional,
           branch_count: branchCount || 0,
-          student_count: additional?.student_count || 0
+          student_count: additional?.student_count || 0,
+          teachers_count: teacherCount
         };
       }));
       
       return schoolsWithAdditional;
     },
     {
-      enabled: !!companyId,
+      enabled: !!companyId && !isAccessControlLoading,
       staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000
+      retry: 2
     }
   );
 
-  // Schools are already filtered by scope in the query
-  const accessibleSchools = schools;
+  // Check if user can access all schools
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
@@ -268,6 +296,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       staleTime: 60 * 1000
     }
   );
+
   // ===== MUTATIONS =====
   const createSchoolMutation = useMutation(
     async ({ data }: { data: any }) => {
@@ -327,9 +356,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     },
     {
       onSuccess: () => {
-        // FIXED: Use the correct query key that matches the useQuery hook
         queryClient.invalidateQueries(['schools-tab', companyId]);
         queryClient.invalidateQueries(['branches-for-schools', companyId]);
+        queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('School created successfully');
         setShowCreateModal(false);
@@ -420,9 +449,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     },
     {
       onSuccess: () => {
-        // FIXED: Use the correct query key that matches the useQuery hook
         queryClient.invalidateQueries(['schools-tab', companyId]);
         queryClient.invalidateQueries(['branches-for-schools', companyId]);
+        queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('School updated successfully');
         setShowEditModal(false);
@@ -438,7 +467,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   );
 
   // ===== HELPER FUNCTIONS =====
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     if (!formData.name) {
       toast.error('School name is required');
       return false;
@@ -459,9 +488,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
     
     return true;
-  };
+  }, [formData]);
 
-  const handleSubmit = async (mode: 'create' | 'edit') => {
+  const handleSubmit = useCallback(async (mode: 'create' | 'edit') => {
     if (!validateForm()) {
       return;
     }
@@ -485,10 +514,10 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     } else {
       updateSchoolMutation.mutate({ id: selectedSchool!.id, data: formData, deactivateAssociatedBranches: false });
     }
-  };
+  }, [validateForm, formData, selectedSchool, branches, createSchoolMutation, updateSchoolMutation]);
 
   // Handle confirmed deactivation with branches
-  const handleConfirmDeactivation = () => {
+  const handleConfirmDeactivation = useCallback(() => {
     if (selectedSchool) {
       updateSchoolMutation.mutate({ 
         id: selectedSchool.id, 
@@ -498,14 +527,15 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
     setShowDeactivateConfirmation(false);
     setBranchesToDeactivate([]);
-  };
+  }, [selectedSchool, formData, updateSchoolMutation]);
 
   // Handle cancel deactivation
-  const handleCancelDeactivation = () => {
+  const handleCancelDeactivation = useCallback(() => {
     setShowDeactivateConfirmation(false);
     setBranchesToDeactivate([]);
-  };
-  const handleEdit = (school: SchoolData) => {
+  }, []);
+
+  const handleEdit = useCallback((school: SchoolData) => {
     const combinedData = {
       ...school,
       ...(school.additional || {})
@@ -514,16 +544,16 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     setSelectedSchool(school);
     setActiveTab('basic');
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setFormData({ status: 'active', company_id: companyId });
     setActiveTab('basic');
     setShowCreateModal(true);
-  };
+  }, [companyId]);
 
   // Filter schools based on search and status
-  const displayedSchools = accessibleSchools.filter(school => {
+  const displayedSchools = schools.filter(school => {
     const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          school.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
@@ -531,8 +561,40 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   });
 
   // Calculate stats
-  const totalStudents = accessibleSchools.reduce((sum, school) => sum + (school.student_count || 0), 0);
-  const totalTeachers = accessibleSchools.reduce((sum, school) => sum + (school.additional?.teachers_count || 0), 0);
+  const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
+  const totalTeachers = schools.reduce((sum, school) => sum + (school.teachers_count || 0), 0);
+
+  // Get user context for display
+  const userContext = getUserContext();
+  const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
+
+  // Loading state
+  if (isLoading || isAccessControlLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (fetchError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-400">Failed to load schools</p>
+          <p className="text-sm text-gray-500 mt-1">{fetchError instanceof Error ? fetchError.message : 'Unknown error'}</p>
+          <Button onClick={() => refetch()} className="mt-4">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ===== MAIN RENDER =====
   return (
@@ -560,37 +622,38 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
-          {can('create_school') && (
+          {/* UI GATING: Show create button based on permissions */}
+          {can('organization.create_school') ? (
             <Button onClick={handleCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add School
-          </Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add School
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <Lock className="w-4 h-4" />
+              <span>Read-only access</span>
+            </div>
           )}
         </div>
 
-          {/* PHASE 5 RULE 3: UI GATING - Show permission notices */}
-          {!can('create_school') && (
-            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-              <div className="flex items-center">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  You don't have permission to create schools.
+        {/* Permission notices */}
+        {!canAccessAll && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Limited Scope Access
+                </p>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  As a {adminLevelDisplay}, you're viewing schools within your assigned scope.
+                  {isSchoolAdmin && ' You can manage the schools you are assigned to.'}
+                  {isBranchAdmin && ' You can view schools that contain your assigned branches.'}
                 </p>
               </div>
             </div>
-          )}
-          
-          {!canAccessAll && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-              <div className="flex items-center">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Showing schools based on your assigned scope. You have access to schools you're specifically assigned to manage.
-                </p>
-              </div>
-            </div>
-          )}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -599,7 +662,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Schools</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {accessibleSchools.length}
+                  {schools.length}
                 </p>
               </div>
               <School className="w-8 h-8 text-gray-400" />
@@ -610,7 +673,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
                 <p className="text-xl font-semibold text-green-600 dark:text-green-400">
-                  {accessibleSchools.filter(s => s.status === 'active').length}
+                  {schools.filter(s => s.status === 'active').length}
                 </p>
               </div>
               <CheckCircle2 className="w-8 h-8 text-green-400" />
@@ -621,7 +684,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
                 <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  {totalStudents}
+                  {totalStudents.toLocaleString()}
                 </p>
               </div>
               <GraduationCap className="w-8 h-8 text-blue-400" />
@@ -632,7 +695,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
                 <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {totalTeachers}
+                  {totalTeachers.toLocaleString()}
                 </p>
               </div>
               <Users className="w-8 h-8 text-purple-400" />
@@ -643,19 +706,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
 
       {/* Schools List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {isLoading ? (
-          <div className="col-span-full text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
-          </div>
-        ) : displayedSchools.length === 0 ? (
+        {displayedSchools.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 dark:text-gray-400">No schools found</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              {searchTerm || filterStatus !== 'all' ? 'No schools match your filters' : 'No schools found'}
+            </p>
           </div>
         ) : (
           displayedSchools.map((school) => {
             const logoUrl = getSchoolLogoUrl(school.logo);
+            const canEdit = can('organization.modify_school');
             
             return (
               <div
@@ -664,15 +725,14 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    {/* ENHANCED: Improved logo display matching org structure implementation */}
-                    <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
+                    {/* Logo display with better error handling */}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-md overflow-hidden relative bg-white">
                       {logoUrl ? (
                         <>
                           <img
                             src={logoUrl}
                             alt={`${school.name} logo`}
                             className="w-full h-full object-contain p-0.5"
-                            style={{ maxWidth: '100%', maxHeight: '100%' }}
                             onError={(e) => {
                               // If logo fails to load, hide the image and show fallback
                               const imgElement = e.currentTarget as HTMLImageElement;
@@ -682,24 +742,18 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                                 const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
                                 if (fallback) {
                                   fallback.style.display = 'flex';
-                                  fallback.classList.remove('bg-white');
-                                  fallback.classList.add('bg-green-500');
                                 }
                               }
                             }}
                           />
-                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-green-500 text-white">
-                            {school.code?.substring(0, 2).toUpperCase() || 
-                             school.name?.substring(0, 2).toUpperCase() || 
-                             <School className="w-5 h-5" />}
-                          </span>
+                          <div className="logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-green-500 text-white">
+                            <School className="w-5 h-5" />
+                          </div>
                         </>
                       ) : (
-                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-green-500 text-white">
-                          {school.code?.substring(0, 2).toUpperCase() || 
-                           school.name?.substring(0, 2).toUpperCase() || 
-                           <School className="w-5 h-5" />}
-                        </span>
+                        <div className="flex items-center justify-center w-full h-full bg-green-500 text-white">
+                          <School className="w-5 h-5" />
+                        </div>
                       )}
                     </div>
                     
@@ -743,24 +797,24 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                     <div className="flex items-center gap-1">
                       <GraduationCap className="w-3 h-3 text-gray-400" />
                       <span className="text-gray-600 dark:text-gray-400">
-                        {school.student_count || 0} students
+                        {school.student_count || 0}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="w-3 h-3 text-gray-400" />
                       <span className="text-gray-600 dark:text-gray-400">
-                        {school.additional?.teachers_count || 0} teachers
+                        {school.teachers_count || 0}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Building2 className="w-3 h-3 text-gray-400" />
+                      <MapPin className="w-3 h-3 text-gray-400" />
                       <span className="text-gray-600 dark:text-gray-400">
-                        {school.branch_count || 0} branches
+                        {school.branch_count || 0}
                       </span>
                     </div>
                   </div>
-                  {/* PHASE 5 RULE 3: UI GATING - Show edit button based on permissions */}
-                  {can('modify_school', school.id) ? (
+                  {/* UI GATING: Show edit button based on permissions */}
+                  {canEdit ? (
                     <button
                       onClick={() => handleEdit(school)}
                       className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -769,8 +823,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                     </button>
                   ) : (
-                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this school">
-                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit schools">
+                      <Shield className="w-4 h-4 text-gray-400" />
                     </div>
                   )}
                 </div>
@@ -789,6 +843,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           setFormData({});
         }}
         onSave={() => handleSubmit('create')}
+        loading={createSchoolMutation.isLoading}
       >
         <SchoolFormContent
           formData={formData}
@@ -812,6 +867,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           setFormData({});
         }}
         onSave={() => handleSubmit('edit')}
+        loading={updateSchoolMutation.isLoading}
       >
         <SchoolFormContent
           formData={formData}
