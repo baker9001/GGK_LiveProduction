@@ -5,19 +5,18 @@
  *   - External: react, lucide-react
  * 
  * Preserved Features:
- *   - Original tab shapes and sizes (h-12, px-4 py-2.5)
  *   - All original functionality (controlled/uncontrolled modes)
  *   - Status icons support
- *   - Rounded corners (rounded-xl, rounded-lg)
+ *   - Rounded corners
  *   - Shadow effects
  *   - Transform hover effects
+ *   - Green color scheme (#8CC63F)
  * 
  * Enhancements:
- *   - Updated to green color scheme (#8CC63F)
- *   - Refined gradients for better visual appeal
- *   - Improved dark mode contrast
- *   - Better hover states
- *   - Subtle animation improvements
+ *   - Dynamic height based on content
+ *   - Compact padding for better space efficiency
+ *   - Auto-sizing to text content
+ *   - Flexible layout (inline-flex instead of grid for better sizing)
  */
 
 import * as React from 'react';
@@ -80,30 +79,12 @@ interface TabsListProps {
 }
 
 export function TabsList({ children, className, activeTab, onTabChange }: TabsListProps) {
-  // Filter out null/undefined children for accurate count
-  const validChildren = React.Children.toArray(children).filter(child => 
-    React.isValidElement(child)
-  );
-  
-  // Calculate grid columns based on number of valid children
-  const getGridCols = (count: number) => {
-    if (count <= 1) return '';
-    if (count === 2) return 'grid grid-cols-2 gap-1';
-    if (count === 3) return 'grid grid-cols-3 gap-1';
-    if (count === 4) return 'grid grid-cols-4 gap-1';
-    if (count === 5) return 'grid grid-cols-5 gap-1';
-    return 'inline-flex gap-1';
-  };
-
-  const gridClass = getGridCols(validChildren.length);
-
   return (
     <div className={cn(
-      'h-12 items-center justify-center rounded-xl bg-gradient-to-r from-gray-50/50 to-gray-100/50 dark:from-gray-800/30 dark:to-gray-700/30 p-1.5 backdrop-blur-sm border border-gray-200/50 dark:border-gray-600/50 shadow-sm transition-all duration-300',
-      gridClass,
+      'inline-flex items-center gap-1 p-1 rounded-xl bg-gradient-to-r from-gray-50/50 to-gray-100/50 dark:from-gray-800/30 dark:to-gray-700/30 backdrop-blur-sm border border-gray-200/50 dark:border-gray-600/50 shadow-sm transition-all duration-300',
       className
     )}>
-      {React.Children.map(validChildren, child => {
+      {React.Children.map(children, child => {
         if (React.isValidElement(child)) {
           return React.cloneElement(child as React.ReactElement<any>, {
             activeTab,
@@ -156,11 +137,11 @@ export function TabsTrigger({
 
     switch (tabStatus) {
       case 'completed':
-        return <CircleCheck className="h-4 w-4 mr-1.5 text-green-500 dark:text-green-400" />;
+        return <CircleCheck className="h-3.5 w-3.5 mr-1.5 text-green-500 dark:text-green-400" />;
       case 'error':
-        return <AlertCircle className="h-4 w-4 mr-1.5 text-red-500 dark:text-red-400" />;
+        return <AlertCircle className="h-3.5 w-3.5 mr-1.5 text-red-500 dark:text-red-400" />;
       case 'active':
-        return <Loader2 className="h-4 w-4 mr-1.5 text-[#8CC63F] animate-spin" />;
+        return <Loader2 className="h-3.5 w-3.5 mr-1.5 text-[#8CC63F] animate-spin" />;
       default:
         return null;
     }
@@ -169,7 +150,7 @@ export function TabsTrigger({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105 w-full',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105',
         isActive
           ? 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white shadow-lg shadow-[#8CC63F]/20 border border-[#8CC63F]/30 dark:shadow-[#8CC63F]/10'
           : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] hover:bg-white/60 dark:hover:bg-gray-700/50 hover:shadow-md hover:border-[#8CC63F]/20 border border-transparent',
@@ -188,10 +169,6 @@ export function TabsTrigger({
       )}>
         {children}
       </span>
-      {/* Optional: Add a subtle indicator for active tab */}
-      {isActive && (
-        <span className="absolute inset-x-2 -bottom-1 h-0.5 bg-white/30 rounded-full" />
-      )}
     </button>
   );
 }
@@ -214,7 +191,7 @@ export function TabsContent({
   return (
     <div
       className={cn(
-        'mt-4 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2',
+        'mt-3 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2',
         'animate-in fade-in-50 slide-in-from-bottom-1 duration-300',
         className
       )}
