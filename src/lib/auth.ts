@@ -3,24 +3,11 @@
  * Dependencies: 
  *   - None (Supabase auth removed)
  * 
- * Preserved Features:
- *   - User authentication state management
- *   - Test mode functionality
- *   - Role-based access control
- *   - Simple JWT-like token generation
- * 
- * Added/Modified:
- *   - Remember Me functionality with extended sessions
- *   - Session expiration management
- *   - Auto-logout on expiration
- *   - FIXED: Exclude landing page from automatic redirects
- *   - SECURITY FIX: Added auth change events and proper cleanup
- * 
- * Database Tables:
- *   - None (auth managed in localStorage)
- * 
- * Connected Files:
- *   - All components that check authentication
+ * SECURITY FIXES:
+ *   - Added auth change events
+ *   - Improved session monitoring
+ *   - Prevent redirect loops
+ *   - Complete session cleanup
  */
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
@@ -52,7 +39,9 @@ const PUBLIC_PAGES = [
   '/about',
   '/contact',
   '/features',
-  '/pricing'
+  '/pricing',
+  '/subjects',
+  '/resources'
 ];
 
 // SECURITY: Dispatch auth change event
@@ -94,7 +83,7 @@ export function getAuthenticatedUser(): User | null {
   // First check if token is valid
   const token = getAuthToken();
   if (!token) {
-    clearAuthenticatedUser();
+    // Don't call clearAuthenticatedUser here to avoid loops
     return null;
   }
   
@@ -102,11 +91,12 @@ export function getAuthenticatedUser(): User | null {
     const payload = JSON.parse(atob(token));
     if (payload.exp && payload.exp < Date.now()) {
       console.log('Session expired. Clearing authentication.');
-      clearAuthenticatedUser();
+      // Clear without dispatching events to avoid loops
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
   } catch {
-    clearAuthenticatedUser();
     return null;
   }
   
@@ -347,34 +337,64 @@ function isPublicPage(): boolean {
   });
 }
 
-// Session monitoring - check every minute
+// Session monitoring - check every minute (FIXED VERSION)
 let sessionCheckInterval: NodeJS.Timeout | null = null;
+let isMonitoringActive = false;
+let isRedirecting = false;
 
 export function startSessionMonitoring(): void {
+  // Prevent multiple intervals
   if (sessionCheckInterval) {
     clearInterval(sessionCheckInterval);
   }
   
-  sessionCheckInterval = setInterval(() => {
-    // Skip monitoring for public pages
-    if (isPublicPage()) {
-      return; // Don't check authentication on public pages
-    }
+  // Reset flags
+  isRedirecting = false;
+  
+  // Don't start monitoring immediately - wait for app to initialize
+  setTimeout(() => {
+    isMonitoringActive = true;
     
-    const user = getAuthenticatedUser();
-    if (!user) {
-      // Session expired or no user, redirect to login
-      // But only if we're not already on a public page
-      console.log('Session expired. Redirecting to login.');
-      window.location.href = '/signin';
-    } else if (isSessionExpiringSoon()) {
-      // Optional: Show warning to user
-      console.warn('Session expiring soon. Consider extending.');
-    }
-  }, 60000); // Check every minute
+    sessionCheckInterval = setInterval(() => {
+      // Skip if not monitoring or already redirecting
+      if (!isMonitoringActive || isRedirecting) return;
+      
+      // Get current path
+      const currentPath = window.location.pathname;
+      
+      // Skip monitoring for public pages AND signin page
+      if (isPublicPage() || currentPath === '/signin' || currentPath.startsWith('/signin')) {
+        return;
+      }
+      
+      const user = getAuthenticatedUser();
+      if (!user) {
+        // Session expired or no user
+        console.log('Session expired. Redirecting to login.');
+        
+        // Set flags to prevent loops
+        isMonitoringActive = false;
+        isRedirecting = true;
+        
+        // Stop the interval
+        if (sessionCheckInterval) {
+          clearInterval(sessionCheckInterval);
+          sessionCheckInterval = null;
+        }
+        
+        // Use replace to prevent back button issues
+        window.location.replace('/signin');
+      } else if (isSessionExpiringSoon()) {
+        // Optional: Show warning to user
+        console.warn('Session expiring soon. Consider extending.');
+      }
+    }, 60000); // Check every minute
+  }, 2000); // Wait 2 seconds before starting monitoring
 }
 
 export function stopSessionMonitoring(): void {
+  isMonitoringActive = false;
+  isRedirecting = false;
   if (sessionCheckInterval) {
     clearInterval(sessionCheckInterval);
     sessionCheckInterval = null;
@@ -391,10 +411,21 @@ export function setupSessionRefresh(): void {
   }, 30 * 60 * 1000); // 30 minutes
 }
 
-// Initialize on app start
+// Initialize on app start - but with delay
 if (typeof window !== 'undefined') {
-  setupSessionRefresh();
-  startSessionMonitoring();
+  // Wait for app to fully load before starting session management
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setupSessionRefresh();
+      startSessionMonitoring();
+    });
+  } else {
+    // DOM already loaded
+    setTimeout(() => {
+      setupSessionRefresh();
+      startSessionMonitoring();
+    }, 1000);
+  }
 }
 
 // Helper to map user types to roles
