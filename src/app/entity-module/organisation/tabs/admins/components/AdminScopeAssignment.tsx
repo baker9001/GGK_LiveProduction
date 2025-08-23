@@ -22,6 +22,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useUser } from '@/contexts/UserContext';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { Button } from '@/components/shared/Button';
 import { toast } from '@/components/shared/Toast';
@@ -58,6 +59,9 @@ export function AdminScopeAssignment({
   canModifyScope = true,
   onScopesUpdated,
 }: AdminScopeAssignmentProps) {
+  // Get current user for assigned_by field
+  const { user } = useUser();
+
   // Fetch assigned scopes for the user
   const { data: assignedScopes = [], isLoading: isLoadingAssignedScopes, isError: isErrorAssignedScopes } = useAdminScope(userId);
 
