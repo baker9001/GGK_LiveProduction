@@ -8,48 +8,10 @@
  *   - zod
  *   - React and related
  * 
- * Preserved Features:
- *   - Company CRUD operations
- *   - Tenant admin management (create/edit/delete)
- *   - View/Manage admins modal
- *   - Filter and search functionality
- *   - Image upload for company logos
- *   - All UI interactions and modals
- * 
- * Fixed Issues:
- *   - UUID validation for audit logs (handles non-UUID user IDs like "dev-001")
- *   - Phone field properly saved to entity_users table
- *   - Update flow correctly refreshes admin list
- *   - Password requirements checker
- *   - Generate/manual password options
- *   - Password display and print functionality
- *   - Browser-compatible token generation (no Node.js crypto)
- *   - Simplified admin form (only name, email, phone, position, password)
- *   - Fixed z-index layering for modals (view admins: z-50, password form: z-70, generated password: z-80)
- * 
- * Fields managed in this stage:
- *   - name (required)
- *   - email (required)
- *   - phone (optional) - PROPERLY SAVED TO entity_users
- *   - position (optional, defaults to 'Administrator')
- *   - password (required for new, optional for edit)
- * 
- * Fields to be managed later in entity management:
- *   - department
- *   - employee_id
- *   - hire_date (auto-set to today for now)
- * 
- * Database Tables:
- *   - companies
- *   - users (main auth table)
- *   - entity_users (profile table - includes phone)
- *   - regions
- *   - countries
- *   - audit_logs (with UUID validation)
- * 
- * Connected Files:
- *   - Uses same patterns as UsersTab.tsx
- *   - Follows hierarchical user model
+ * FIXED: Logo upload/deletion handling
+ * - Updated getLogoUrl to handle both old and new path formats
+ * - Updated deleteMutation to properly delete logos from storage
+ * - Handles both flat structure and subfolder structure
  */
 
 import React, { useState, useEffect } from 'react';
@@ -228,7 +190,7 @@ interface CompanyAdmin {
   employee_status?: string;
   department_id?: string | null;
   is_company_admin: boolean;
-  phone?: string; // Added phone field to interface
+  phone?: string;
   created_at: string;
   updated_at: string;
   users?: {
@@ -263,8 +225,6 @@ async function createAuditLog(
   try {
     const currentUser = getAuthenticatedUser();
     
-    // Only insert if we have a valid UUID user ID
-    // If user ID is not a UUID (like "dev-001"), skip audit logging
     if (currentUser?.id && isValidUUID(currentUser.id)) {
       await supabase
         .from('audit_logs')
@@ -277,7 +237,6 @@ async function createAuditLog(
           created_at: new Date().toISOString()
         });
     } else {
-      // Log to console for dev/test environments
       console.log('Audit Log (dev mode):', {
         user: currentUser?.email || 'unknown',
         action,
@@ -287,7 +246,6 @@ async function createAuditLog(
       });
     }
   } catch (error) {
-    // Don't throw error for audit logging failures
     console.error('Failed to create audit log:', error);
   }
 }
@@ -300,41 +258,33 @@ function generateComplexPassword(length: number = 12): string {
   const allChars = uppercase + lowercase + numbers + special;
   
   let password = '';
-  // Ensure at least one of each required character type
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
   password += special[Math.floor(Math.random() * special.length)];
   
-  // Fill the rest randomly
   for (let i = password.length; i < length; i++) {
     password += allChars[Math.floor(Math.random() * allChars.length)];
   }
   
-  // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
 function generateVerificationToken(): string {
-  // Browser-compatible random token generation
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Alternative: Generate UUID v4 for tokens and IDs
 function generateUUID(): string {
-  // Proper UUID v4 generation for database IDs
   const array = new Uint8Array(16);
   window.crypto.getRandomValues(array);
   
-  // Set version (4) and variant bits
-  array[6] = (array[6] & 0x0f) | 0x40; // Version 4
-  array[8] = (array[8] & 0x3f) | 0x80; // Variant 10
+  array[6] = (array[6] & 0x0f) | 0x40;
+  array[8] = (array[8] & 0x3f) | 0x80;
   
   const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   
-  // Format as UUID
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
@@ -369,7 +319,7 @@ export default function CompaniesTab() {
   const [adminFormErrors, setAdminFormErrors] = useState<Record<string, string>>({});
   const [editingAdmin, setEditingAdmin] = useState<CompanyAdmin | null>(null);
   
-  // Password management state (unified with UsersTab)
+  // Password management state
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [generatePassword, setGeneratePassword] = useState(true);
@@ -412,6 +362,66 @@ export default function CompaniesTab() {
     notes: '',
     status: 'active'
   });
+
+  // ===== CORRECTED LOGO HELPER FUNCTIONS =====
+  
+  // Get logo URL - handles both old and new path formats
+  const getLogoUrl = (path: string | null) => {
+    if (!path) return null;
+    
+    // If path is already a full URL, return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    
+    // Get public URL from Supabase
+    const { data } = supabase.storage
+      .from('company-logos')
+      .getPublicUrl(path);
+    
+    return data?.publicUrl || null;
+  };
+
+  // Delete logo from storage - handles both old and new formats
+  const deleteLogoFromStorage = async (path: string | null): Promise<void> => {
+    if (!path) return;
+    
+    try {
+      // Try to delete with the stored path
+      const { error } = await supabase.storage
+        .from('company-logos')
+        .remove([path]);
+      
+      if (error) {
+        console.warn(`Failed to delete logo at: ${path}`, error);
+        
+        // If path has 'companies/' prefix, try without it
+        if (path.startsWith('companies/')) {
+          const fileNameOnly = path.replace('companies/', '');
+          const { error: retryError } = await supabase.storage
+            .from('company-logos')
+            .remove([fileNameOnly]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${fileNameOnly}`, retryError);
+          }
+        } 
+        // If path doesn't have prefix, try with it (for old files)
+        else {
+          const withPrefix = `companies/${path}`;
+          const { error: retryError } = await supabase.storage
+            .from('company-logos')
+            .remove([withPrefix]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${withPrefix}`, retryError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting logo:', error);
+    }
+  };
 
   // ===== QUERIES =====
   
@@ -637,7 +647,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation (Direct Database - No API) - FIXED PHONE FIELD AND AUDIT LOGS
+  // Tenant admin mutation
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -645,14 +655,11 @@ export default function CompaniesTab() {
         const email = formData.get('email') as string;
         const password = formData.get('password') as string | null;
         const phoneValue = formData.get('phone') as string;
-        // Convert empty string to null for database
         const phone = phoneValue?.trim() || null;
         const position = formData.get('position') as string;
 
-        // Debug logging to verify phone is received
         console.log('Admin form submission:', { name, email, phone, position });
 
-        // Basic validation
         if (!name || name.length < 2) {
           throw new Error('Name must be at least 2 characters');
         }
@@ -667,12 +674,10 @@ export default function CompaniesTab() {
         const companyId = selectedCompanyForAdmin.id;
 
         if (editingAdmin) {
-          // ===== UPDATE EXISTING ADMIN =====
-          
-          // Update entity_users profile with managed fields including PHONE
+          // Update existing admin
           const entityUpdates: any = {
             position: position || editingAdmin.position || 'Administrator',
-            phone: phone, // Use the already processed phone value (null or string)
+            phone: phone,
             updated_at: new Date().toISOString()
           };
 
@@ -685,7 +690,6 @@ export default function CompaniesTab() {
 
           if (entityError) throw entityError;
 
-          // Update users table if email/phone/name changed
           const userUpdates: any = {
             updated_at: new Date().toISOString(),
             raw_user_meta_data: {
@@ -697,7 +701,6 @@ export default function CompaniesTab() {
             }
           };
 
-          // Check if email is changing
           if (email !== editingAdmin.users?.email) {
             userUpdates.email = email.toLowerCase();
             userUpdates.email_verified = false;
@@ -706,11 +709,9 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Update phone in users table if changed
-          // Compare with both entity_users.phone and users.phone
           const currentPhone = editingAdmin.phone || editingAdmin.users?.phone;
           if (phone !== currentPhone) {
-            userUpdates.phone = phone; // Use the already processed phone value
+            userUpdates.phone = phone;
           }
 
           const { error: userError } = await supabase
@@ -720,7 +721,6 @@ export default function CompaniesTab() {
 
           if (userError) throw userError;
 
-          // Log the update (with UUID validation)
           await createAuditLog(
             'update_entity_admin',
             'entity_user',
@@ -740,9 +740,7 @@ export default function CompaniesTab() {
           };
 
         } else {
-          // ===== CREATE NEW ADMIN =====
-          
-          // Check if user already exists
+          // Create new admin
           const { data: existingUser } = await supabase
             .from('users')
             .select('*')
@@ -750,7 +748,6 @@ export default function CompaniesTab() {
             .maybeSingle();
 
           if (existingUser) {
-            // User exists - check if already linked to this company
             const { data: existingLink } = await supabase
               .from('entity_users')
               .select('id')
@@ -762,16 +759,14 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin with phone field
             const entityUserData = {
-              // id will be auto-generated by database (uuid_generate_v4())
               user_id: existingUser.id,
               company_id: companyId,
               position: position || 'Administrator',
-              phone: phone, // Use the already processed phone value (null or string)
-              department: null, // Will be set later in entity management
-              employee_id: null, // Will be set later in entity management
-              hire_date: new Date().toISOString().split('T')[0], // Default to today
+              phone: phone,
+              department: null,
+              employee_id: null,
+              hire_date: new Date().toISOString().split('T')[0],
               is_company_admin: true,
               employee_status: 'active',
               department_id: null,
@@ -787,7 +782,6 @@ export default function CompaniesTab() {
 
             if (linkError) throw linkError;
 
-            // Log the action (with UUID validation)
             await createAuditLog(
               'link_entity_admin',
               'entity_user',
@@ -809,18 +803,14 @@ export default function CompaniesTab() {
           }
 
           // Create new user
-          // Generate password if needed
           const finalPassword = password || generateComplexPassword();
           const isGeneratedPassword = !password;
           
-          // Hash password
           const salt = await bcrypt.genSalt(10);
           const passwordHash = await bcrypt.hash(finalPassword, salt);
           
-          // Generate verification token
           const verificationToken = generateVerificationToken();
           
-          // Create user in users table with all required fields
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
@@ -829,7 +819,7 @@ export default function CompaniesTab() {
               user_type: 'entity',
               is_active: true,
               email_verified: false,
-              phone: phone, // Use the already processed phone value
+              phone: phone,
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
               verified_at: null,
@@ -862,19 +852,17 @@ export default function CompaniesTab() {
             throw userError;
           }
           
-          // Create entity user profile with phone field
           const entityUserData = {
-            // id will be auto-generated by database (uuid_generate_v4())
-            user_id: newUser.id, // Link to the user we just created
-           email: email.toLowerCase(), // Required field - add email
-           name: name, // Required field - add name
+            user_id: newUser.id,
+            email: email.toLowerCase(),
+            name: name,
             company_id: companyId,
             position: position || 'Administrator',
-            phone: phone, // Use the already processed phone value (null or string)
-            department: null, // Will be set later in entity management
-            employee_id: null, // Will be set later in entity management
-            hire_date: new Date().toISOString().split('T')[0], // Default to today
-            is_company_admin: true, // Set as company admin
+            phone: phone,
+            department: null,
+            employee_id: null,
+            hire_date: new Date().toISOString().split('T')[0],
+            is_company_admin: true,
             employee_status: 'active',
             department_id: null,
             created_at: new Date().toISOString(),
@@ -888,12 +876,10 @@ export default function CompaniesTab() {
             .insert(entityUserData);
           
           if (entityError) {
-            // Rollback: delete the user if entity_users insert fails
             await supabase.from('users').delete().eq('id', newUser.id);
             throw entityError;
           }
           
-          // Log the creation (with UUID validation)
           await createAuditLog(
             'create_entity_admin',
             'entity_user',
@@ -933,7 +919,6 @@ export default function CompaniesTab() {
         queryClient.invalidateQueries(['companies']);
         
         if (result.type === 'created' && result.user?.temporary_password) {
-          // Show password modal for new users with generated password
           setGeneratedPassword(result.user.temporary_password);
           toast.success('Admin created successfully. Copy the temporary password!');
         } else {
@@ -943,10 +928,7 @@ export default function CompaniesTab() {
           setAdminFormErrors({});
           resetAdminForm();
           
-          // Return to View Admins modal if we came from there
-          // For both create and update operations
           if (returnToViewAfterAdd && selectedCompanyForView) {
-            // Use the company from either the result or the selectedCompanyForView
             const companyId = result.company?.id || selectedCompanyForView.id;
             fetchCompanyAdmins(companyId);
             setIsViewAdminsOpen(true);
@@ -973,14 +955,12 @@ export default function CompaniesTab() {
     }
   );
 
-  // Change password mutation (Direct Database - Like UsersTab)
+  // Change password mutation
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
-      // Hash the new password
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(data.password, salt);
       
-      // Update password in users table
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -995,7 +975,6 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Log the password change (with UUID validation)
       await createAuditLog(
         'admin_password_change',
         'entity_user',
@@ -1007,7 +986,6 @@ export default function CompaniesTab() {
         }
       );
       
-      // TODO: Send email notification if requested
       if (data.sendEmail) {
         console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
       }
@@ -1036,19 +1014,12 @@ export default function CompaniesTab() {
     }
   );
 
-  // Delete company mutation
+  // CORRECTED Delete company mutation
   const deleteMutation = useMutation(
     async (companies: Company[]) => {
       // Delete logos from storage
       for (const company of companies) {
-        if (company.logo) {
-          const logoPath = company.logo.split('/').pop();
-          if (logoPath) {
-            await supabase.storage
-              .from('company-logos')
-              .remove([logoPath]);
-          }
-        }
+        await deleteLogoFromStorage(company.logo);
       }
 
       // Delete companies from database (cascade will handle related records)
@@ -1105,10 +1076,8 @@ export default function CompaniesTab() {
   // Resend verification mutation
   const resendVerificationMutation = useMutation(
     async (userId: string) => {
-      // Generate new verification token
       const token = generateVerificationToken();
       
-      // Update user with new token
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -1119,7 +1088,6 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Get user email
       const { data: user } = await supabase
         .from('users')
         .select('email, raw_user_meta_data')
@@ -1128,7 +1096,6 @@ export default function CompaniesTab() {
       
       if (!user) throw new Error('User not found');
       
-      // TODO: Send actual email
       console.log('Verification email would be sent to:', user.email);
       console.log('Verification token:', token);
       
@@ -1148,7 +1115,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // ===== HELPER FUNCTIONS =====
+  // ===== HELPER FUNCTIONS (Component-specific) =====
   
   const resetAdminForm = () => {
     setAdminFormState({
@@ -1167,10 +1134,8 @@ export default function CompaniesTab() {
   const fetchCompanyAdmins = async (companyId: string) => {
     setLoadingAdmins(true);
     try {
-      // Small delay to ensure database has updated
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Fetch entity_users with user details - Now includes phone from entity_users
       const { data: entityUsers, error: entityError } = await supabase
         .from('entity_users')
         .select('*')
@@ -1185,7 +1150,6 @@ export default function CompaniesTab() {
         return;
       }
 
-      // Fetch user details
       const userIds = entityUsers.map(eu => eu.user_id);
       const { data: users, error: usersError } = await supabase
         .from('users')
@@ -1194,10 +1158,8 @@ export default function CompaniesTab() {
 
       if (usersError) throw usersError;
 
-      // Create user map
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
-      // Combine data - entity_users now includes phone field
       const adminsWithUsers = entityUsers.map(entityUser => ({
         ...entityUser,
         users: userMap.get(entityUser.user_id) || null
@@ -1213,27 +1175,11 @@ export default function CompaniesTab() {
     }
   };
 
-  const getLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    
-    // If path is already a full URL, return it
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    
-    // Otherwise, get public URL from Supabase storage
-    const { data } = supabase.storage
-      .from('company-logos')
-      .getPublicUrl(path);
-    
-    return data?.publicUrl || null;
-  };
-
   const handleRegionChange = (regionId: string) => {
     setFormState(prev => ({
       ...prev,
       region_id: regionId,
-      country_id: '' // Reset country when region changes
+      country_id: ''
     }));
   };
 
@@ -1254,11 +1200,9 @@ export default function CompaniesTab() {
     e.preventDefault();
     setAdminFormErrors({});
     
-    // Use state values directly instead of FormData
     const formData = new FormData();
     formData.append('name', adminFormState.name);
     formData.append('email', adminFormState.email);
-    // Handle phone - ensure empty string is converted to null for database
     formData.append('phone', adminFormState.phone?.trim() || '');
     formData.append('position', adminFormState.position || '');
     formData.append('password', adminFormState.password || '');
@@ -1276,7 +1220,6 @@ export default function CompaniesTab() {
     const newPassword = formData.get('newPassword') as string;
     const sendEmail = formData.get('sendEmail') === 'on';
     
-    // Validate password
     try {
       passwordChangeSchema.parse({ newPassword, sendEmail });
     } catch (error) {
@@ -1292,7 +1235,6 @@ export default function CompaniesTab() {
       }
     }
     
-    // Use generated password if checkbox is checked
     const passwordToSet = generateNewPassword ? generateComplexPassword() : newPassword;
     
     changePasswordMutation.mutate({
@@ -1386,7 +1328,6 @@ export default function CompaniesTab() {
     });
     setGenerateNewPassword(true);
     
-    // Return to View Admins modal if needed
     if (returnToViewAfterAdd && selectedCompanyForView) {
       fetchCompanyAdmins(selectedCompanyForView.id);
       setIsViewAdminsOpen(true);
@@ -1423,13 +1364,13 @@ export default function CompaniesTab() {
     }
   }, [editingCompany]);
 
-  // Update admin form when editing - FIXED to include phone from entity_users
+  // Update admin form when editing
   React.useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || editingAdmin.users?.phone || '', // Prefer entity_users.phone
+        phone: editingAdmin.phone || editingAdmin.users?.phone || '',
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -1466,6 +1407,10 @@ export default function CompaniesTab() {
               src={getLogoUrl(row.logo)}
               alt={`${row.name} logo`}
               className="w-10 h-10 object-contain rounded-md"
+              onError={(e) => {
+                console.error('Failed to load logo:', row.logo);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
             />
           ) : (
             <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
@@ -1806,7 +1751,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form Modal (Unified with UsersTab pattern) */}
+      {/* Tenant Admin Form Modal */}
       <SlideInForm
         key={`${selectedCompanyForAdmin?.id || 'admin-new'}-${editingAdmin?.id || 'new'}`}
         title={editingAdmin ? `Edit Admin for ${selectedCompanyForAdmin?.name}` : `Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
@@ -2015,7 +1960,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Change Password Form - Highest z-index to appear above all modals */}
+      {/* Change Password Form */}
       {isPasswordFormOpen && !generatedPassword && (
         <div className="fixed inset-0 z-[70]">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => {
@@ -2192,7 +2137,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* View/Manage Admins Modal - FIXED to display phone from entity_users */}
+      {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -2468,7 +2413,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal - Highest z-index */}
+      {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
