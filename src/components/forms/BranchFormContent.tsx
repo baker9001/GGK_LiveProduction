@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
+import { ToggleSwitch } from '../shared/ToggleSwitch';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchFormData {
@@ -170,14 +171,14 @@ export function BranchFormContent({
             </FormField>
 
             <FormField id="status" label="Status" required error={formErrors.status}>
-              <Select
-                id="status"
-                options={[
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' }
-                ]}
-                value={formData.status || 'active'}
-                onChange={(value) => updateFormData('status', value)}
+              <ToggleSwitch
+                checked={formData.status === 'active'}
+                onChange={(checked) => updateFormData('status', checked ? 'active' : 'inactive')}
+                label="Branch Status"
+                description={formData.status === 'active' ? 'Branch is currently active' : 'Branch is currently inactive'}
+                activeLabel="Active"
+                inactiveLabel="Inactive"
+                showStateLabel={true}
               />
             </FormField>
 

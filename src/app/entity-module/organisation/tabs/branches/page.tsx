@@ -186,7 +186,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     async () => {
       let query = supabase
         .from('schools')
-        .select('id, name')
+        .select(`
+          id, name, code, company_id,
+          companies (id, name)
+        `)
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
@@ -218,7 +221,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       if (isBranchAdmin && scopeFilters.branch_id) {
         let branchQuery = supabase
           .from('branches')
-          .select('id, name, code, school_id, status, address, notes, logo, created_at');
+          .select(`
+            id, name, code, school_id, status, address, notes, logo, created_at,
+            additional:branches_additional (*)
+          `);
         
         if (Array.isArray(scopeFilters.branch_id)) {
           if (scopeFilters.branch_id.length === 0) return [];
@@ -271,7 +277,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       // For others, get schools first then branches
       let schoolsQuery = supabase
         .from('schools')
-        .select('id, name')
+        .select(`
+          id, name, code, company_id,
+          companies (id, name)
+        `)
         .eq('company_id', companyId);
 
       // Apply school scope filters
@@ -293,7 +302,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       // Get branches for these schools
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
-        .select('id, name, code, school_id, status, address, notes, logo, created_at')
+        .select(`
+          id, name, code, school_id, status, address, notes, logo, created_at,
+          additional:branches_additional (*)
+        `)
         .in('school_id', schoolIds)
         .order('name');
       
@@ -303,7 +315,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       const branchesWithAdditional = await Promise.all((branchesData || []).map(async (branch) => {
         const { data: additional } = await supabase
           .from('branches_additional')
-          .select('*')
+          .select('*') 
           .eq('branch_id', branch.id)
           .maybeSingle();
         
@@ -321,6 +333,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           teacherCount = count || 0;
         }
         
+        // Return enriched branch data
         return {
           ...branch,
           additional,
@@ -519,6 +532,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // Effect to populate form data when editing
   useEffect(() => {
     if (selectedBranch && showEditModal) {
+      console.log('Populating form for branch:', selectedBranch);
       const populateEditForm = async () => {
         try {
           const { data: schoolData, error } = await supabase
@@ -534,6 +548,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           }
           
           const additionalData = selectedBranch.additional || {};
+          console.log('Additional data:', additionalData);
           
           const combinedData = {
             ...selectedBranch,
@@ -542,6 +557,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             ...additionalData
           };
           
+          console.log('Setting form data:', combinedData);
           setFormData(combinedData);
         } catch (error) {
           console.error('Error populating form:', error);
@@ -552,6 +568,15 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       populateEditForm();
     }
   }, [selectedBranch, showEditModal]);
+
+  // Effect to fetch schools when formData.company_id changes
+  useEffect(() => {
+    if (formData.company_id && schools.length === 0) {
+      console.log('Fetching schools for company:', formData.company_id);
+      // Trigger schools fetch by updating the schools query
+      // This will be handled by the schools query dependency
+    }
+  }, [formData.company_id]);
 
   const handleSubmit = useCallback((mode: 'create' | 'edit') => {
     if (!validateForm()) {
@@ -1114,6 +1139,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         onSave={() => handleSubmit('create')}
         loading={createBranchMutation.isLoading}
       >
+        {/* Use BranchFormContent component */}
         <div className="space-y-4">
           {/* Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
@@ -1145,7 +1171,16 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
           {/* Form Content */}
           <div className="mt-4">
-            {renderBranchForm()}
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              schools={schools}
+              isEditing={false}
+            />
           </div>
         </div>
       </SlideInForm>
@@ -1165,6 +1200,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         onSave={() => handleSubmit('edit')}
         loading={updateBranchMutation.isLoading}
       >
+        {/* Use BranchFormContent component */}
         <div className="space-y-4">
           {/* Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
@@ -1196,7 +1232,16 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
           {/* Form Content */}
           <div className="mt-4">
-            {renderBranchForm()}
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              schools={schools}
+              isEditing={true}
+            />
           </div>
         </div>
       </SlideInForm>
