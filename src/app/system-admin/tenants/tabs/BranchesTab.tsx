@@ -9,8 +9,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { toast } from '@/components/shared/Toast';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
-import { FormField } from '@/components/shared/FormField';
-import { Input } from '@/components/shared/Input';
+import { FormField, Input } from '@/components/shared/FormField';
 
 interface FilterState {
   search: string;
