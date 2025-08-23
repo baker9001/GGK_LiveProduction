@@ -9,6 +9,9 @@
  *   - @/components/forms/SchoolFormContent
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
+ * FIXED: Changed permission checks from 'organization.modify_school' to 'modify_school'
+ * This matches the permission format in useAccessControl hook
+ * 
  * Preserved Features:
  *   - All original school management functionality
  *   - Search and filter capabilities
@@ -17,12 +20,6 @@
  *   - Statistics display
  *   - All original event handlers
  *   - Branch deactivation confirmation
- * 
- * Added/Modified:
- *   - ENHANCED: Logo display with better error handling
- *   - IMPROVED: Better permission checks with proper scope
- *   - ADDED: More informative permission messages
- *   - FIXED: Proper scope filtering implementation
  * 
  * Database Tables:
  *   - schools & schools_additional
@@ -622,8 +619,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          {/* UI GATING: Show create button based on permissions */}
-          {can('organization.create_school') ? (
+          {/* FIXED: Changed from 'organization.create_school' to 'create_school' */}
+          {can('create_school') ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add School
@@ -716,7 +713,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
         ) : (
           displayedSchools.map((school) => {
             const logoUrl = getSchoolLogoUrl(school.logo);
-            const canEdit = can('organization.modify_school');
+            // FIXED: Changed from 'organization.modify_school' to 'modify_school'
+            const canEdit = can('modify_school');
             
             return (
               <div
