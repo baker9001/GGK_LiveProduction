@@ -10,10 +10,6 @@
  *   - @/app/entity-module/organisation/tabs/admins/services/permissionService
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * FIXED ISSUES:
- *   - Issue 1: Default tab now dynamically selects first accessible tab
- *   - Issue 2: Organization structure data fetching fixed with proper schools/branches loading
- * 
  * Preserved Features:
  *   - All 6 tabs (Structure, Schools, Branches, Admins, Teachers, Students)
  *   - Statistics cards with real-time data
@@ -21,6 +17,18 @@
  *   - Lazy loading of tab components
  *   - Company data fetching
  *   - Error handling and loading states
+ * 
+ * Added/Modified:
+ *   - Unified green color (#8CC63F) for all active tabs
+ *   - Removed flashing dots animation
+ *   - Consistent hover and active states
+ * 
+ * Database Tables:
+ *   - companies, schools, branches, entity_users, teachers, students
+ * 
+ * Connected Files:
+ *   - All tab components in ./tabs/*
+ *   - Permission service and contexts
  */
 
 'use client';
@@ -140,7 +148,7 @@ export default function OrganizationManagement() {
     isBranchAdmin
   } = useAccessControl();
   
-  // State management - FIXED: Don't set default active tab yet
+  // State management
   const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students' | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
@@ -181,13 +189,11 @@ export default function OrganizationManagement() {
     return tabs;
   }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab]);
 
-  // FIXED: Set default active tab to the first accessible tab
+  // Set default active tab to the first accessible tab
   useEffect(() => {
     if (accessibleTabs.length > 0 && !activeTab) {
-      // Set the first accessible tab as default
       setActiveTab(accessibleTabs[0] as any);
     } else if (accessibleTabs.length > 0 && activeTab && !accessibleTabs.includes(activeTab)) {
-      // If current tab is not accessible, switch to first accessible tab
       setActiveTab(accessibleTabs[0] as any);
     }
   }, [accessibleTabs, activeTab]);
@@ -198,7 +204,6 @@ export default function OrganizationManagement() {
       if (!authenticatedUser) return;
 
       try {
-        // Check if user is an entity user
         const { data: entityUserData, error: entityUserError } = await supabase
           .from('entity_users')
           .select('company_id')
@@ -217,7 +222,7 @@ export default function OrganizationManagement() {
     fetchUserCompany();
   }, [authenticatedUser]);
 
-  // FIXED: Fetch complete organization data including schools and branches
+  // Fetch complete organization data including schools and branches
   const { 
     data: organizationData, 
     isLoading: isLoadingOrgData,
@@ -227,7 +232,6 @@ export default function OrganizationManagement() {
     async () => {
       if (!userCompanyId) return null;
 
-      // Fetch company details
       const { data: company, error: companyError } = await supabase
         .from('companies')
         .select('*')
@@ -236,14 +240,12 @@ export default function OrganizationManagement() {
 
       if (companyError) throw companyError;
 
-      // Fetch company additional data
       const { data: companyAdditional } = await supabase
         .from('companies_additional')
         .select('*')
         .eq('company_id', userCompanyId)
         .maybeSingle();
 
-      // Fetch all schools for this company
       const { data: schools, error: schoolsError } = await supabase
         .from('schools')
         .select('*')
@@ -252,24 +254,20 @@ export default function OrganizationManagement() {
 
       if (schoolsError) throw schoolsError;
 
-      // Fetch additional data and branches for each school
       const schoolsWithDetails = await Promise.all(
         (schools || []).map(async (school) => {
-          // Fetch school additional data
           const { data: schoolAdditional } = await supabase
             .from('schools_additional')
             .select('*')
             .eq('school_id', school.id)
             .maybeSingle();
 
-          // Fetch branches for this school
           const { data: branches } = await supabase
             .from('branches')
             .select('*')
             .eq('school_id', school.id)
             .order('name');
 
-          // Fetch branch additional data
           const branchesWithDetails = await Promise.all(
             (branches || []).map(async (branch) => {
               const { data: branchAdditional } = await supabase
@@ -287,7 +285,6 @@ export default function OrganizationManagement() {
             })
           );
 
-          // Count active branches
           const activeBranches = branchesWithDetails.filter(b => b.status === 'active');
 
           return { 
@@ -312,7 +309,7 @@ export default function OrganizationManagement() {
     },
     {
       enabled: !!userCompanyId && !isAccessControlLoading,
-      staleTime: 2 * 60 * 1000, // 2 minutes
+      staleTime: 2 * 60 * 1000,
       retry: 2,
       onError: (error) => {
         console.error('Error fetching organization data:', error);
@@ -336,7 +333,6 @@ export default function OrganizationManagement() {
     async () => {
       if (!userCompanyId) return null;
 
-      // Build queries with scope filters
       let schoolsQuery = supabase
         .from('schools')
         .select('id', { count: 'exact' })
@@ -348,7 +344,6 @@ export default function OrganizationManagement() {
         .select('id, school_id', { count: 'exact' })
         .eq('status', 'active');
 
-      // Apply scope filters if not entity admin
       if (!isEntityAdmin && !isSubEntityAdmin) {
         if (scopeFilters.school_id) {
           schoolsQuery = schoolsQuery.in('id', scopeFilters.school_id);
@@ -364,7 +359,6 @@ export default function OrganizationManagement() {
         branchesQuery
       ]);
 
-      // Get teacher and student counts
       const { count: teacherCount } = await supabase
         .from('teachers')
         .select('id', { count: 'exact' })
@@ -394,7 +388,7 @@ export default function OrganizationManagement() {
     },
     {
       enabled: !!userCompanyId && !isAccessControlLoading && isAuthenticated,
-      staleTime: 2 * 60 * 1000, // 2 minutes
+      staleTime: 2 * 60 * 1000,
     }
   );
 
@@ -402,7 +396,6 @@ export default function OrganizationManagement() {
   const memoizedStats = useMemo(() => {
     if (organizationStats) return organizationStats;
     
-    // Fallback calculation from organization data if available
     if (organizationData?.schools) {
       return {
         company_id: userCompanyId || '',
@@ -498,6 +491,10 @@ export default function OrganizationManagement() {
     );
   }
 
+  // Define unified green color for active tabs
+  const activeColor = '#8CC63F';
+  const activeColorDark = '#7AB635';
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -524,7 +521,6 @@ export default function OrganizationManagement() {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        {/* Schools Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -539,7 +535,6 @@ export default function OrganizationManagement() {
           </div>
         </div>
 
-        {/* Branches Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -554,7 +549,6 @@ export default function OrganizationManagement() {
           </div>
         </div>
 
-        {/* Teachers Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -569,7 +563,6 @@ export default function OrganizationManagement() {
           </div>
         </div>
 
-        {/* Students Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -584,7 +577,6 @@ export default function OrganizationManagement() {
           </div>
         </div>
 
-        {/* Total Users Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -600,9 +592,8 @@ export default function OrganizationManagement() {
         </div>
       </div>
 
-      {/* Enhanced Tab Navigation */}
+      {/* Enhanced Tab Navigation with Unified Green Color */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        {/* Tab Navigation Container with gradient background */}
         <div className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-t-xl">
           <nav className="flex gap-1.5" aria-label="Tabs">
             {accessibleTabs.includes('structure') && (
@@ -617,25 +608,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'structure' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'structure' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-green-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <Building2 className={`w-4 h-4 transition-colors ${
                   activeTab === 'structure' 
-                    ? 'text-green-600 dark:text-green-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'structure' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Structure
                 </span>
-                {activeTab === 'structure' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                )}
               </button>
             )}
 
@@ -651,25 +643,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'schools' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'schools' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-blue-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <School className={`w-4 h-4 transition-colors ${
                   activeTab === 'schools' 
-                    ? 'text-blue-600 dark:text-blue-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'schools' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Schools
                 </span>
-                {activeTab === 'schools' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                )}
               </button>
             )}
 
@@ -685,25 +678,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'branches' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'branches' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-purple-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <MapPin className={`w-4 h-4 transition-colors ${
                   activeTab === 'branches' 
-                    ? 'text-purple-600 dark:text-purple-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'branches' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Branches
                 </span>
-                {activeTab === 'branches' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-                )}
               </button>
             )}
 
@@ -719,25 +713,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'admins' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'admins' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-orange-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <Shield className={`w-4 h-4 transition-colors ${
                   activeTab === 'admins' 
-                    ? 'text-orange-600 dark:text-orange-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'admins' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Admins
                 </span>
-                {activeTab === 'admins' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                )}
               </button>
             )}
 
@@ -753,25 +748,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'teachers' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'teachers' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-indigo-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <Users className={`w-4 h-4 transition-colors ${
                   activeTab === 'teachers' 
-                    ? 'text-indigo-600 dark:text-indigo-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'teachers' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Teachers
                 </span>
-                {activeTab === 'teachers' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                )}
               </button>
             )}
 
@@ -787,25 +783,26 @@ export default function OrganizationManagement() {
                     : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
                   }
                 `}
+                style={activeTab === 'students' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
               >
                 {activeTab === 'students' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-amber-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
                 )}
                 <GraduationCap className={`w-4 h-4 transition-colors ${
                   activeTab === 'students' 
-                    ? 'text-amber-600 dark:text-amber-400'
+                    ? 'text-white'
                     : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
                 }`} />
                 <span className={`transition-colors ${
                   activeTab === 'students' 
-                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    ? 'text-white font-semibold' 
                     : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
                 }`}>
                   Students
                 </span>
-                {activeTab === 'students' && (
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                )}
               </button>
             )}
           </nav>
@@ -820,13 +817,11 @@ export default function OrganizationManagement() {
               </div>
             }
           >
-            {/* Structure Tab - FIXED: Pass complete organizationData */}
             {activeTab === 'structure' && accessibleTabs.includes('structure') && userCompanyId && organizationData && (
               <OrganizationStructureTab
                 companyData={organizationData}
                 companyId={userCompanyId}
                 onAddClick={(parent, type) => {
-                  // Handle add action
                   if (type === 'company') {
                     setActiveTab('schools');
                   } else if (type === 'school') {
@@ -834,7 +829,6 @@ export default function OrganizationManagement() {
                   }
                 }}
                 onEditClick={(item, type) => {
-                  // Handle edit action
                   if (type === 'school') {
                     setActiveTab('schools');
                     schoolsTabRef.current?.openEditSchoolModal(item);
@@ -844,7 +838,6 @@ export default function OrganizationManagement() {
                   }
                 }}
                 onItemClick={(item, type) => {
-                  // Handle item click - navigate to corresponding tab
                   if (type === 'school' && accessibleTabs.includes('schools')) {
                     setActiveTab('schools');
                   } else if (type === 'branch' && accessibleTabs.includes('branches')) {
@@ -860,7 +853,6 @@ export default function OrganizationManagement() {
               />
             )}
 
-            {/* Schools Tab */}
             {activeTab === 'schools' && accessibleTabs.includes('schools') && userCompanyId && (
               <SchoolsTab
                 ref={schoolsTabRef}
@@ -873,7 +865,6 @@ export default function OrganizationManagement() {
               />
             )}
 
-            {/* Branches Tab */}
             {activeTab === 'branches' && accessibleTabs.includes('branches') && userCompanyId && (
               <BranchesTab
                 ref={branchesTabRef}
@@ -886,14 +877,12 @@ export default function OrganizationManagement() {
               />
             )}
 
-            {/* Admins Tab */}
             {activeTab === 'admins' && accessibleTabs.includes('admins') && userCompanyId && (
               <AdminsTab
                 companyId={userCompanyId}
               />
             )}
 
-            {/* Teachers Tab */}
             {activeTab === 'teachers' && accessibleTabs.includes('teachers') && userCompanyId && (
               <TeachersTab
                 companyId={userCompanyId}
@@ -905,7 +894,6 @@ export default function OrganizationManagement() {
               />
             )}
 
-            {/* Students Tab */}
             {activeTab === 'students' && accessibleTabs.includes('students') && userCompanyId && (
               <StudentsTab
                 companyId={userCompanyId}
