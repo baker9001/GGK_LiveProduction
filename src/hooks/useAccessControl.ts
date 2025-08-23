@@ -1,11 +1,12 @@
-// src/hooks/useAccessControl.ts - UPDATED VERSION
+// src/hooks/useAccessControl.ts
 /**
- * FIXED: useAccessControl Hook - Updated for Current Database Schema
+ * COMPLETE UPDATED: useAccessControl Hook
  * 
  * Fixes Applied:
- * 1. Fixed Supabase relationship ambiguity
- * 2. Updated queries to work with current schema (no is_active in students/teachers tables)
- * 3. Proper handling of user status through users table relationship
+ * 1. Fixed Supabase relationship ambiguity issue
+ * 2. Updated queries to work without is_active columns in students/teachers tables
+ * 3. Proper error handling and loading states
+ * 4. Enhanced scope filtering logic
  * 
  * Dependencies:
  *   - @/contexts/UserContext
@@ -55,6 +56,7 @@ export function useAccessControl(): UseAccessControlResult {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUserId, setLastUserId] = useState<string | null>(null);
 
   // Fetch user scope data
   const fetchUserScope = useCallback(async (userId: string) => {
@@ -62,6 +64,12 @@ export function useAccessControl(): UseAccessControlResult {
       setIsLoading(true);
       setHasError(false);
       setError(null);
+
+      // Cache check - avoid refetching for same user
+      if (lastUserId === userId && userScope) {
+        setIsLoading(false);
+        return userScope;
+      }
 
       // FIXED: Use explicit relationship specification to avoid ambiguity
       const { data: entityUserData, error: entityUserError } = await supabase
@@ -120,6 +128,7 @@ export function useAccessControl(): UseAccessControlResult {
         };
 
         setUserScope(scope);
+        setLastUserId(userId);
         return scope;
       }
 
@@ -164,6 +173,7 @@ export function useAccessControl(): UseAccessControlResult {
       };
 
       setUserScope(scope);
+      setLastUserId(userId);
       return scope;
 
     } catch (error) {
@@ -175,7 +185,7 @@ export function useAccessControl(): UseAccessControlResult {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [lastUserId, userScope]);
 
   // Initialize user scope when user changes
   useEffect(() => {
@@ -193,6 +203,7 @@ export function useAccessControl(): UseAccessControlResult {
         }
       } else {
         setUserScope(null);
+        setLastUserId(null);
         setIsLoading(false);
       }
     };
@@ -352,13 +363,10 @@ export function useAccessControl(): UseAccessControlResult {
         case 'users':
         case 'teachers':
         case 'students':
-          // FIXED: For teachers and students, filter by school/branch but don't use is_active
-          // The is_active filtering should be done through the users table relationship
+          // Return both school and branch filters for flexible querying
           return { 
-            or: [
-              { school_id: schoolIds },
-              { branch_id: branchIds }
-            ]
+            school_ids: schoolIds,
+            branch_ids: branchIds.length > 0 ? branchIds : []
           };
         default:
           return { school_id: schoolIds };
@@ -367,11 +375,18 @@ export function useAccessControl(): UseAccessControlResult {
 
     // Branch admin sees only their assigned branches
     if (adminLevel === 'branch_admin' && branchIds.length > 0) {
-      return { branch_id: branchIds };
+      switch (resourceType) {
+        case 'users':
+        case 'teachers':
+        case 'students':
+          return { branch_ids: branchIds };
+        default:
+          return { branch_id: branchIds };
+      }
     }
 
     // Default: no access
-    return { id: [] }; // This will return no results
+    return { id: [] };
   }, [userScope]);
 
   // Get user context
@@ -428,158 +443,3 @@ export function useAccessControl(): UseAccessControlResult {
     error
   };
 }
-
-// ADDITIONAL FIX: Helper function to properly query students with active status
-export const queryActiveStudents = async (companyId: string, scopeFilters?: Record<string, any>) => {
-  let query = supabase
-    .from('students')
-    .select(`
-      id,
-      user_id,
-      student_code,
-      name,
-      grade_level,
-      section,
-      company_id,
-      school_id,
-      branch_id,
-      created_at,
-      updated_at,
-      users!students_user_id_fkey (
-        id,
-        email,
-        is_active,
-        raw_user_meta_data,
-        last_login_at
-      ),
-      schools (
-        id,
-        name
-      ),
-      branches (
-        id,
-        name
-      )
-    `)
-    .eq('company_id', companyId)
-    .eq('users.is_active', true)  // FIXED: Filter active status through users table
-    .order('created_at', { ascending: false });
-
-  // Apply scope filters if provided
-  if (scopeFilters) {
-    if (scopeFilters.school_ids && Array.isArray(scopeFilters.school_ids)) {
-      query = query.in('school_id', scopeFilters.school_ids);
-    }
-    
-    if (scopeFilters.branch_ids && Array.isArray(scopeFilters.branch_ids)) {
-      query = query.in('branch_id', scopeFilters.branch_ids);
-    }
-    
-    if (scopeFilters.or) {
-      // Handle OR conditions for school/branch access
-      const orConditions: string[] = [];
-      if (scopeFilters.or.school_id && Array.isArray(scopeFilters.or.school_id)) {
-        orConditions.push(`school_id.in.(${scopeFilters.or.school_id.join(',')})`);
-      }
-      if (scopeFilters.or.branch_id && Array.isArray(scopeFilters.or.branch_id)) {
-        orConditions.push(`branch_id.in.(${scopeFilters.or.branch_id.join(',')})`);
-      }
-      if (orConditions.length > 0) {
-        query = query.or(orConditions.join(','));
-      }
-    }
-  }
-
-  const { data, error } = await query;
-  
-  if (error) {
-    throw new Error(`Failed to fetch students: ${error.message}`);
-  }
-  
-  return (data || []).map(student => ({
-    ...student,
-    is_active: student.users?.is_active || false,
-    email: student.users?.email || '',
-    name: student.name || student.users?.raw_user_meta_data?.name || 'Unknown Student',
-    school_name: student.schools?.name || 'No School',
-    branch_name: student.branches?.name || 'No Branch'
-  }));
-};
-
-// ADDITIONAL FIX: Helper function to properly query teachers with active status
-export const queryActiveTeachers = async (companyId: string, scopeFilters?: Record<string, any>) => {
-  let query = supabase
-    .from('teachers')
-    .select(`
-      id,
-      user_id,
-      teacher_code,
-      name,
-      specialization,
-      qualification,
-      experience_years,
-      company_id,
-      school_id,
-      branch_id,
-      created_at,
-      updated_at,
-      users!teachers_user_id_fkey (
-        id,
-        email,
-        is_active,
-        raw_user_meta_data,
-        last_login_at
-      ),
-      schools (
-        id,
-        name
-      ),
-      branches (
-        id,
-        name
-      )
-    `)
-    .eq('company_id', companyId)
-    .eq('users.is_active', true)  // FIXED: Filter active status through users table
-    .order('created_at', { ascending: false });
-
-  // Apply scope filters if provided
-  if (scopeFilters) {
-    if (scopeFilters.school_ids && Array.isArray(scopeFilters.school_ids)) {
-      query = query.in('school_id', scopeFilters.school_ids);
-    }
-    
-    if (scopeFilters.branch_ids && Array.isArray(scopeFilters.branch_ids)) {
-      query = query.in('branch_id', scopeFilters.branch_ids);
-    }
-    
-    if (scopeFilters.or) {
-      // Handle OR conditions for school/branch access
-      const orConditions: string[] = [];
-      if (scopeFilters.or.school_id && Array.isArray(scopeFilters.or.school_id)) {
-        orConditions.push(`school_id.in.(${scopeFilters.or.school_id.join(',')})`);
-      }
-      if (scopeFilters.or.branch_id && Array.isArray(scopeFilters.or.branch_id)) {
-        orConditions.push(`branch_id.in.(${scopeFilters.or.branch_id.join(',')})`);
-      }
-      if (orConditions.length > 0) {
-        query = query.or(orConditions.join(','));
-      }
-    }
-  }
-
-  const { data, error } = await query;
-  
-  if (error) {
-    throw new Error(`Failed to fetch teachers: ${error.message}`);
-  }
-  
-  return (data || []).map(teacher => ({
-    ...teacher,
-    is_active: teacher.users?.is_active || false,
-    email: teacher.users?.email || '',
-    name: teacher.name || teacher.users?.raw_user_meta_data?.name || 'Unknown Teacher',
-    school_name: teacher.schools?.name || 'No School',
-    branch_name: teacher.branches?.name || 'No Branch'
-  }));
-};
