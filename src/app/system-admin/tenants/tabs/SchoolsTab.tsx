@@ -67,6 +67,66 @@ export default function SchoolsTab() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [schoolsToDelete, setSchoolsToDelete] = useState<School[]>([]);
 
+  // ===== CORRECTED LOGO HELPER FUNCTIONS =====
+  
+  // Get logo URL - handles both old and new path formats
+  const getLogoUrl = (path: string | null) => {
+    if (!path) return null;
+    
+    // If path is already a full URL, return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    
+    // Get public URL from Supabase
+    const { data } = supabase.storage
+      .from('school-logos')
+      .getPublicUrl(path);
+    
+    return data?.publicUrl || null;
+  };
+
+  // Delete logo from storage - handles both old and new formats
+  const deleteLogoFromStorage = async (path: string | null): Promise<void> => {
+    if (!path) return;
+    
+    try {
+      // Try to delete with the stored path
+      const { error } = await supabase.storage
+        .from('school-logos')
+        .remove([path]);
+      
+      if (error) {
+        console.warn(`Failed to delete logo at: ${path}`, error);
+        
+        // If path has 'schools/' prefix, try without it
+        if (path.startsWith('schools/')) {
+          const fileNameOnly = path.replace('schools/', '');
+          const { error: retryError } = await supabase.storage
+            .from('school-logos')
+            .remove([fileNameOnly]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${fileNameOnly}`, retryError);
+          }
+        } 
+        // If path doesn't have prefix, try with it (for old files)
+        else {
+          const withPrefix = `schools/${path}`;
+          const { error: retryError } = await supabase.storage
+            .from('school-logos')
+            .remove([withPrefix]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${withPrefix}`, retryError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting logo:', error);
+    }
+  };
+
   // Fetch companies with React Query
   const { data: companies = [] } = useQuery<Company[]>(
     ['companies'],
@@ -243,21 +303,15 @@ export default function SchoolsTab() {
     }
   );
 
-  // Delete school mutation
+  // CORRECTED Delete school mutation
   const deleteMutation = useMutation(
     async (schools: School[]) => {
-      // Delete logos from storage if they exist
+      // Delete logos from storage
       for (const school of schools) {
-        if (school.logo) {
-          const logoPath = school.logo.split('/').pop();
-          if (logoPath) {
-            await supabase.storage
-              .from('school-logos')
-              .remove([logoPath]);
-          }
-        }
+        await deleteLogoFromStorage(school.logo);
       }
 
+      // Delete schools from database (cascade will handle related records)
       const { error } = await supabase
         .from('schools')
         .delete()
@@ -281,13 +335,6 @@ export default function SchoolsTab() {
       }
     }
   );
-
-  const getLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    return supabase.storage
-      .from('school-logos')
-      .getPublicUrl(path).data.publicUrl;
-  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -320,6 +367,10 @@ export default function SchoolsTab() {
               src={getLogoUrl(row.logo)}
               alt={`${row.name} logo`}
               className="w-10 h-10 object-contain rounded-md"
+              onError={(e) => {
+                console.error('Failed to load logo:', row.logo);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
             />
           ) : (
             <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
