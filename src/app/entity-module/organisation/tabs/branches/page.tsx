@@ -52,6 +52,7 @@ import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { useAccessControl } from '@/hooks/useAccessControl';
+import { BranchFormContent } from '@/components/forms/BranchFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
