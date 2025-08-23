@@ -9,6 +9,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { toast } from '@/components/shared/Toast';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
+import { FormField } from '@/components/shared/FormField';
+import { Input } from '@/components/shared/Input';
 
 interface FilterState {
   search: string;
@@ -30,6 +32,7 @@ type Branch = {
   status: 'active' | 'inactive';
   created_at: string;
   additional?: BranchAdditional;
+  logo?: string;
 };
 
 type Company = {
@@ -70,8 +73,11 @@ interface BranchAdditional {
 interface FormState extends BranchAdditional {
   name: string;
   code: string;
+  company_id: string;
   school_id: string;
   status: 'active' | 'inactive';
+  address?: string;
+  notes?: string;
 }
 
 export default function BranchesTab() {
@@ -82,6 +88,7 @@ export default function BranchesTab() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState('basic');
   const formRef = useRef<HTMLFormElement>(null);
   const [formState, setFormState] = useState<FormState>({
     name: '',
@@ -102,6 +109,7 @@ export default function BranchesTab() {
     opening_time: '',
     closing_time: '',
     working_days: [],
+    branch_id: ''
   });
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -111,9 +119,89 @@ export default function BranchesTab() {
   });
 
   const fetchBranches = React.useCallback(async () => {
+    try {
+      setLoading(true);
+
+      let query = supabase
+        .from('branches')
+        .select(`
+          id, name, code, school_id, status, address, notes, logo, created_at,
+          additional:branches_additional (*),
+          schools (
+            name,
+            id,
+            companies (
+              name,
+              regions (name)
+            )
+          )
+        `);
+
+      // Apply filters
+      if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
+      }
+
+      let finalSchoolIds: string[] = [];
+
+      if (filters.school_ids.length > 0) {
+        finalSchoolIds = filters.school_ids;
+      }
+
+      // If companies are selected, we need to filter by schools that belong to those companies
+      if (filters.company_ids.length > 0) {
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('id')
+          .in('company_id', filters.company_ids);
+        
+        if (schoolsError) throw schoolsError;
+        const schoolIds = schoolsData.map(school => school.id);
+        
+        if (schoolIds.length > 0) {
+          finalSchoolIds = finalSchoolIds.length > 0 
+            ? finalSchoolIds.filter(id => schoolIds.includes(id))
+            : schoolIds;
+        } else {
+          // No schools found for selected companies, return empty result
+          setBranches([]);
+          return;
+        }
+      }
+
+      if (finalSchoolIds.length > 0) {
+        query = query.in('school_id', finalSchoolIds);
+      }
+
+      if (filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const formattedData = data.map(branch => ({
+        ...branch, // Basic branch data
+        school_name: branch.schools?.name ?? 'Unknown School',
+        company_name: branch.schools?.companies?.name ?? 'Unknown Company',
+        region_name: branch.schools?.companies?.regions?.name ?? 'Unknown Region',
+        additional: branch.additional // Include additional data
+      }));
+
+      setBranches(formattedData);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+      toast.error('Failed to fetch branches');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
     fetchBranches();
     fetchCompanies();
-  }, [filters]);
+  }, [fetchBranches]);
 
   useEffect(() => {
     if (filters.company_ids.length > 0) {
@@ -179,6 +267,7 @@ export default function BranchesTab() {
           building_name: additionalData?.building_name || '',
           floor_details: additionalData?.floor_details || '',
           logo: editingBranch.logo || '',
+          branch_id: editingBranch.id
         });
 
         // Fetch schools for this company to populate the school dropdown
@@ -209,79 +298,10 @@ export default function BranchesTab() {
       opening_time: '',
       closing_time: '',
       working_days: [],
+      branch_id: ''
     });
     setSchools([]);
-
-      let query = supabase
-        .from('branches')
-        .select(`
-          id, name, code, school_id, status, address, notes, logo, created_at,
-          additional:branches_additional (*),
-          additional:branches_additional (*),
-          schools (
-            name,
-            id,
-            companies (
-              name,
-              regions (name)
-            )
-          )
-        `)
-
-      // Apply filters
-      if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
-      }
-
-      if (filters.schools.length > 0) {
-        query = query.in('school_id', filters.schools);
-      if (finalSchoolIds.length > 0) {
-        query = query.in('school_id', finalSchoolIds);
-      }
-
-      if (filters.status.length > 0) {
-        query = query.in('status', filters.status);
-      }
-
-      // If companies are selected, we need to filter by schools that belong to those companies
-      if (filters.companies.length > 0) {
-        const { data: schoolsData, error: schoolsError } = await supabase
-          .from('schools')
-          .select('id')
-          .in('company_id', filters.companies);
-        
-        if (schoolsError) throw schoolsError;
-        const schoolIds = schoolsData.map(school => school.id);
-        
-        if (schoolIds.length > 0) {
-          query = query.in('school_id', schoolIds);
-        } else {
-          // No schools found for selected companies, return empty result
-          setBranches([]);
-          return;
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      const formattedData = data.map(branch => ({
-        ...branch, // Basic branch data
-        school_name: branch.schools?.name ?? 'Unknown School',
-        company_name: branch.schools?.companies?.name ?? 'Unknown Company',
-        region_name: branch.schools?.companies?.regions?.name ?? 'Unknown Region',
-        additional: branch.additional // Include additional data
-      }));
-
-      setBranches(formattedData);
-    } catch (error) {
-      console.error('Error fetching branches:', error);
-      toast.error('Failed to fetch branches');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -625,6 +645,7 @@ export default function BranchesTab() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             schools={schools}
+            companies={companies}
             isEditing={!!editingBranch}
             onCompanyChange={handleCompanyChange}
           />
