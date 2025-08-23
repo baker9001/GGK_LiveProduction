@@ -110,7 +110,7 @@ export default function BranchesTab() {
     status: []
   });
 
-  useEffect(() => {
+  const fetchBranches = React.useCallback(async () => {
     fetchBranches();
     fetchCompanies();
   }, [filters]);
@@ -281,7 +281,7 @@ export default function BranchesTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
   const fetchCompanies = async () => {
     try {
