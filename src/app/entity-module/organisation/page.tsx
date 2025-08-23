@@ -1,5 +1,11 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
+ * 
+ * FIXED ISSUES:
+ * 1. Default tab now selects first accessible tab based on permissions
+ * 2. Fixed company data fetching and passing to structure tab
+ * 3. Added proper data fetching for organization structure
+ * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
@@ -9,31 +15,6 @@
  *   - @/app/entity-module/organisation/tabs/* (all tab components)
  *   - @/app/entity-module/organisation/tabs/admins/services/permissionService
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
- * 
- * Preserved Features:
- *   - All 6 tabs (Structure, Schools, Branches, Admins, Teachers, Students)
- *   - Statistics cards with real-time data
- *   - Tab navigation with permission checking
- *   - Lazy loading of tab components
- *   - Company data fetching
- *   - Error handling and loading states
- * 
- * Added/Modified:
- *   - Integrated with useAccessControl hook
- *   - Proper permission-based tab visibility
- *   - Scope-based data filtering
- *   - Admin level enforcement
- *   - Access denied handling
- * 
- * Database Tables:
- *   - companies, schools, branches
- *   - entity_users, teachers, students
- *   - entity_user_schools, entity_user_branches
- * 
- * Connected Files:
- *   - All tab components in tabs folder
- *   - useAccessControl.ts hook
- *   - PermissionContext.tsx
  */
 
 'use client';
@@ -83,6 +64,19 @@ interface Company {
   logo?: string;
   created_at: string;
   updated_at?: string;
+  description?: string;
+  additional?: any;
+}
+
+interface OrganizationData {
+  company: Company;
+  schools: any[];
+  branches?: any[];
+  totalSchools: number;
+  totalBranches: number;
+  totalStudents: number;
+  totalTeachers: number;
+  totalUsers: number;
 }
 
 interface OrganizationStats {
@@ -125,10 +119,11 @@ export default function OrganizationManagement() {
     isBranchAdmin
   } = useAccessControl();
   
-  // State management
-  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students'>('structure');
+  // State management - FIXED: Don't set default tab yet
+  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students' | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
+  const [organizationData, setOrganizationData] = useState<OrganizationData | null>(null);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
 
   // Refs for tab components
@@ -166,16 +161,21 @@ export default function OrganizationManagement() {
     return tabs;
   }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab]);
 
-  // Set default active tab to the first accessible tab
+  // FIXED: Set default active tab to the first accessible tab
   useEffect(() => {
-    if (accessibleTabs.length > 0 && !accessibleTabs.includes(activeTab)) {
+    if (accessibleTabs.length > 0 && activeTab === null) {
+      console.log('Setting default tab to first accessible:', accessibleTabs[0]);
+      setActiveTab(accessibleTabs[0] as any);
+    } else if (accessibleTabs.length > 0 && !accessibleTabs.includes(activeTab as string)) {
+      // If current tab is not accessible, switch to first accessible
+      console.log('Current tab not accessible, switching to:', accessibleTabs[0]);
       setActiveTab(accessibleTabs[0] as any);
     }
   }, [accessibleTabs, activeTab]);
 
-  // Fetch user's company
+  // Fetch user's company and organization data
   useEffect(() => {
-    const fetchUserCompany = async () => {
+    const fetchUserCompanyAndOrganization = async () => {
       if (!authenticatedUser) return;
 
       try {
@@ -189,16 +189,8 @@ export default function OrganizationManagement() {
         if (!entityUserError && entityUserData?.company_id) {
           setUserCompanyId(entityUserData.company_id);
           
-          // Fetch company details
-          const { data: company, error: companyError } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', entityUserData.company_id)
-            .single();
-
-          if (!companyError && company) {
-            setCompanyData(company);
-          }
+          // Fetch complete organization data for structure tab
+          await fetchOrganizationData(entityUserData.company_id);
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
@@ -206,8 +198,112 @@ export default function OrganizationManagement() {
       }
     };
 
-    fetchUserCompany();
+    fetchUserCompanyAndOrganization();
   }, [authenticatedUser]);
+
+  // FIXED: Fetch complete organization data including schools and branches
+  const fetchOrganizationData = async (companyId: string) => {
+    try {
+      // Fetch company details with additional data
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+
+      if (companyError) throw companyError;
+
+      // Fetch company additional data
+      const { data: companyAdditional } = await supabase
+        .from('companies_additional')
+        .select('*')
+        .eq('company_id', companyId)
+        .maybeSingle();
+
+      // Fetch all schools for this company
+      const { data: schools, error: schoolsError } = await supabase
+        .from('schools')
+        .select(`
+          *,
+          schools_additional (*)
+        `)
+        .eq('company_id', companyId)
+        .order('name');
+
+      if (schoolsError) throw schoolsError;
+
+      // Fetch all branches for the schools
+      const schoolIds = schools?.map(s => s.id) || [];
+      let branches: any[] = [];
+      
+      if (schoolIds.length > 0) {
+        const { data: branchesData, error: branchesError } = await supabase
+          .from('branches')
+          .select(`
+            *,
+            branches_additional (*)
+          `)
+          .in('school_id', schoolIds)
+          .order('name');
+
+        if (!branchesError && branchesData) {
+          branches = branchesData;
+        }
+      }
+
+      // Process schools with their branches
+      const processedSchools = (schools || []).map(school => {
+        const schoolBranches = branches.filter(b => b.school_id === school.id);
+        return {
+          ...school,
+          additional: school.schools_additional?.[0] || school.schools_additional || {},
+          branches: schoolBranches,
+          branch_count: schoolBranches.length,
+          student_count: school.schools_additional?.[0]?.student_count || 0,
+          teachers_count: school.schools_additional?.[0]?.teachers_count || 0
+        };
+      });
+
+      // Calculate totals
+      const totalStudents = processedSchools.reduce((sum, school) => 
+        sum + (school.student_count || 0), 0
+      );
+      const totalTeachers = processedSchools.reduce((sum, school) => 
+        sum + (school.teachers_count || 0), 0
+      );
+
+      // Set company data
+      const fullCompany: Company = {
+        ...company,
+        additional: companyAdditional || {}
+      };
+      setCompanyData(fullCompany);
+
+      // Set organization data for structure tab
+      const orgData: OrganizationData = {
+        company: fullCompany,
+        schools: processedSchools,
+        branches: branches,
+        totalSchools: processedSchools.length,
+        totalBranches: branches.length,
+        totalStudents,
+        totalTeachers,
+        totalUsers: 0 // Will be calculated from stats query
+      };
+      
+      setOrganizationData(orgData);
+      
+      console.log('Organization data fetched:', {
+        company: fullCompany.name,
+        schoolsCount: processedSchools.length,
+        branchesCount: branches.length
+      });
+
+    } catch (error) {
+      console.error('Error fetching organization data:', error);
+      toast.error('Failed to load organization structure');
+    }
+  };
 
   // Get scope filters for data queries
   const scopeFilters = useMemo(() => {
@@ -289,21 +385,24 @@ export default function OrganizationManagement() {
   // Memoized stats for performance
   const memoizedStats = useMemo(() => {
     return organizationStats || {
-      total_schools: 0,
-      total_branches: 0,
-      total_students: 0,
-      total_teachers: 0,
-      total_users: 0
+      total_schools: organizationData?.totalSchools || 0,
+      total_branches: organizationData?.totalBranches || 0,
+      total_students: organizationData?.totalStudents || 0,
+      total_teachers: organizationData?.totalTeachers || 0,
+      total_users: organizationData?.totalUsers || 0
     };
-  }, [organizationStats]);
+  }, [organizationStats, organizationData]);
 
   // Handle stats refresh
   const handleRefreshStats = useCallback(async () => {
     setIsRefreshingStats(true);
     await refetchStats();
+    if (userCompanyId) {
+      await fetchOrganizationData(userCompanyId);
+    }
     setIsRefreshingStats(false);
     toast.success('Statistics refreshed');
-  }, [refetchStats]);
+  }, [refetchStats, userCompanyId]);
 
   // Prefetch tab data for better UX
   const prefetchTabData = useCallback((tab: string) => {
@@ -364,6 +463,18 @@ export default function OrganizationManagement() {
               <div>Company: {companyData?.name || 'Not assigned'}</div>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If we don't have an active tab yet, wait for it to be set
+  if (!activeTab) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+          <p className="text-gray-600 dark:text-gray-400">Initializing...</p>
         </div>
       </div>
     );
@@ -571,10 +682,10 @@ export default function OrganizationManagement() {
               </div>
             }
           >
-            {/* Structure Tab */}
-            {activeTab === 'structure' && accessibleTabs.includes('structure') && userCompanyId && companyData && (
+            {/* Structure Tab - FIXED: Pass organizationData instead of just companyData */}
+            {activeTab === 'structure' && accessibleTabs.includes('structure') && userCompanyId && organizationData && (
               <OrganizationStructureTab
-                companyData={companyData}
+                companyData={organizationData} // FIXED: Pass complete organization data
                 companyId={userCompanyId}
                 onAddClick={(parent, type) => {
                   // Handle add action
@@ -595,7 +706,12 @@ export default function OrganizationManagement() {
                   }
                 }}
                 onItemClick={(item, type) => {
-                  // Handle item click
+                  // Handle item click - Navigate to branches tab when clicking a branch
+                  if (type === 'branch') {
+                    setActiveTab('branches');
+                  } else if (type === 'school') {
+                    setActiveTab('schools');
+                  }
                   console.log('Item clicked:', item, type);
                 }}
                 refreshData={() => {
