@@ -215,6 +215,24 @@ export default function BranchesTab() {
 
   const fetchBranches = async () => {
     try {
+      // If filtering by companies, first get the school IDs for those companies
+      let schoolIdsToFilter: string[] = [];
+      if (filters.company_ids.length > 0) {
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('id')
+          .in('company_id', filters.company_ids);
+        
+        if (schoolsError) throw schoolsError;
+        schoolIdsToFilter = schoolsData.map(school => school.id);
+        
+        // If no schools found for the selected companies, return empty results
+        if (schoolIdsToFilter.length === 0) {
+          setBranches([]);
+          return;
+        }
+      }
+
       let query = supabase
         .from('branches')
         .select(`
@@ -234,8 +252,10 @@ export default function BranchesTab() {
         query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
       }
 
-      if (filters.school_ids.length > 0) {
-        query = query.in('school_id', filters.school_ids);
+      // Apply school filter - either from direct school filter or from company filter
+      const finalSchoolIds = filters.school_ids.length > 0 ? filters.school_ids : schoolIdsToFilter;
+      if (finalSchoolIds.length > 0) {
+        query = query.in('school_id', finalSchoolIds);
       }
 
       if (filters.status.length > 0) {
