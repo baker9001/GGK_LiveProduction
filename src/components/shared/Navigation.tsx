@@ -1,5 +1,8 @@
+///home/project/src/components/shared/Navigation.tsx
+
+
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, X, Menu, Moon, Sun } from 'lucide-react';
 import { Button } from './Button';
 
@@ -13,6 +16,7 @@ const NAV_ITEMS = [
 
 export function Navigation() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return document.documentElement.classList.contains('dark');
@@ -29,6 +33,11 @@ export function Navigation() {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('darkMode', 'false');
     }
+  };
+  
+  const handleSignInClick = () => {
+    // Use React Router navigation instead of window.location
+    navigate('/signin');
   };
   
   return (
@@ -60,6 +69,7 @@ export function Navigation() {
             <button
               onClick={toggleDarkMode}
               className="p-2 mr-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors duration-200"
+              aria-label="Toggle dark mode"
             >
               {isDarkMode ? (
                 <Sun className="h-5 w-5" />
@@ -70,11 +80,12 @@ export function Navigation() {
             
             <Button
               variant="default"
-              onClick={() => window.location.href = '/signin'}
+              onClick={handleSignInClick}
               className="ml-4 bg-[#8CC63F] hover:bg-[#7AB32F]"
             >
               Sign In
             </Button>
+            
             <button
               type="button"
               className="md:hidden ml-2 p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#8CC63F] transition-colors duration-200"
@@ -109,6 +120,18 @@ export function Navigation() {
                 {item.label}
               </Link>
             ))}
+            
+            {/* Mobile Sign In Button */}
+            <Button
+              variant="default"
+              onClick={() => {
+                setIsMenuOpen(false);
+                handleSignInClick();
+              }}
+              className="w-full mt-4 bg-[#8CC63F] hover:bg-[#7AB32F]"
+            >
+              Sign In
+            </Button>
           </div>
         </div>
       )}
