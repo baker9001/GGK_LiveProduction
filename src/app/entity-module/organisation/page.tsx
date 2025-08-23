@@ -186,6 +186,7 @@ export default function OrganizationManagement() {
 
   // Set default active tab to the first accessible tab
   useEffect(() => {
+    console.log('Active tab effect - accessibleTabs:', accessibleTabs, 'activeTab:', activeTab);
     if (accessibleTabs.length > 0 && !activeTab) {
       console.log('Setting default tab to first accessible:', accessibleTabs[0]);
       setActiveTab(accessibleTabs[0]);
@@ -195,6 +196,12 @@ export default function OrganizationManagement() {
       setActiveTab(accessibleTabs[0]);
     }
   }, [accessibleTabs, activeTab]);
+
+  // Debug tab change
+  const handleTabChange = useCallback((newTab: string) => {
+    console.log('Tab changing from', activeTab, 'to', newTab);
+    setActiveTab(newTab);
+  }, [activeTab]);
 
   // Fetch complete organization data including schools and branches
   const fetchOrganizationData = useCallback(async (companyId: string) => {
@@ -678,7 +685,7 @@ export default function OrganizationManagement() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <Tabs 
           value={activeTab} 
-          onValueChange={setActiveTab}
+          onValueChange={handleTabChange}
           defaultValue={activeTab || accessibleTabs[0] || 'schools'}
           className="w-full"
         >
@@ -732,86 +739,74 @@ export default function OrganizationManagement() {
               }
             >
               {/* Structure Tab - Pass complete organization data with schools */}
-              {accessibleTabs.includes('structure') && (
-                <TabsContent value="structure" activeTab={activeTab}>
-                  {userCompanyId && organizationData && !isLoadingOrgData ? (
-                    <OrganizationStructureTab
-                      companyData={organizationData} // Pass complete data with schools
-                      companyId={userCompanyId}
-                      onAddClick={handleAddClick}
-                      onEditClick={handleEditClick}
-                      onItemClick={handleItemClick}
-                      refreshData={handleRefreshStats}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-64">
-                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                      <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
-                    </div>
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="structure">
+                {accessibleTabs.includes('structure') && userCompanyId && organizationData && !isLoadingOrgData ? (
+                  <OrganizationStructureTab
+                    companyData={organizationData} // Pass complete data with schools
+                    companyId={userCompanyId}
+                    onAddClick={handleAddClick}
+                    onEditClick={handleEditClick}
+                    onItemClick={handleItemClick}
+                    refreshData={handleRefreshStats}
+                  />
+                ) : accessibleTabs.includes('structure') ? (
+                  <div className="flex items-center justify-center h-64">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
+                  </div>
+                ) : null}
+              </TabsContent>
 
               {/* Schools Tab */}
-              {accessibleTabs.includes('schools') && (
-                <TabsContent value="schools" activeTab={activeTab}>
-                  {userCompanyId && (
-                    <SchoolsTab
-                      ref={schoolsTabRef}
-                      companyId={userCompanyId}
-                      refreshData={handleRefreshStats}
-                    />
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="schools">
+                {accessibleTabs.includes('schools') && userCompanyId && (
+                  <SchoolsTab
+                    ref={schoolsTabRef}
+                    companyId={userCompanyId}
+                    refreshData={handleRefreshStats}
+                  />
+                )}
+              </TabsContent>
 
               {/* Branches Tab */}
-              {accessibleTabs.includes('branches') && (
-                <TabsContent value="branches" activeTab={activeTab}>
-                  {userCompanyId && (
-                    <BranchesTab
-                      ref={branchesTabRef}
-                      companyId={userCompanyId}
-                      refreshData={handleRefreshStats}
-                    />
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="branches">
+                {accessibleTabs.includes('branches') && userCompanyId && (
+                  <BranchesTab
+                    ref={branchesTabRef}
+                    companyId={userCompanyId}
+                    refreshData={handleRefreshStats}
+                  />
+                )}
+              </TabsContent>
 
               {/* Admins Tab */}
-              {accessibleTabs.includes('admins') && (
-                <TabsContent value="admins" activeTab={activeTab}>
-                  {userCompanyId && (
-                    <AdminsTab
-                      companyId={userCompanyId}
-                    />
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="admins">
+                {accessibleTabs.includes('admins') && userCompanyId && (
+                  <AdminsTab
+                    companyId={userCompanyId}
+                  />
+                )}
+              </TabsContent>
 
               {/* Teachers Tab */}
-              {accessibleTabs.includes('teachers') && (
-                <TabsContent value="teachers" activeTab={activeTab}>
-                  {userCompanyId && (
-                    <TeachersTab
-                      companyId={userCompanyId}
-                      refreshData={handleRefreshStats}
-                    />
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="teachers">
+                {accessibleTabs.includes('teachers') && userCompanyId && (
+                  <TeachersTab
+                    companyId={userCompanyId}
+                    refreshData={handleRefreshStats}
+                  />
+                )}
+              </TabsContent>
 
               {/* Students Tab */}
-              {accessibleTabs.includes('students') && (
-                <TabsContent value="students" activeTab={activeTab}>
-                  {userCompanyId && (
-                    <StudentsTab
-                      companyId={userCompanyId}
-                      refreshData={handleRefreshStats}
-                    />
-                  )}
-                </TabsContent>
-              )}
+              <TabsContent value="students">
+                {accessibleTabs.includes('students') && userCompanyId && (
+                  <StudentsTab
+                    companyId={userCompanyId}
+                    refreshData={handleRefreshStats}
+                  />
+                )}
+              </TabsContent>
             </Suspense>
           </div>
         </Tabs>
