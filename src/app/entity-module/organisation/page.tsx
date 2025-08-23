@@ -1,20 +1,26 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
- * 
- * COMPLETE FIX FOR ALL ISSUES:
- * 1. ✅ Default tab selects first accessible tab based on permissions
- * 2. ✅ Organization structure properly loads and displays schools/branches
- * 3. ✅ Using shared Tabs component for consistent UI/UX
- * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/contexts/PermissionContext
  *   - @/hooks/useAccessControl
- *   - @/components/shared/Tabs (NEW: Using shared tabs component)
  *   - @/app/entity-module/organisation/tabs/* (all tab components)
+ *   - @/app/entity-module/organisation/tabs/admins/services/permissionService
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * 
+ * FIXED ISSUES:
+ *   - Issue 1: Default tab now dynamically selects first accessible tab
+ *   - Issue 2: Organization structure data fetching fixed with proper schools/branches loading
+ * 
+ * Preserved Features:
+ *   - All 6 tabs (Structure, Schools, Branches, Admins, Teachers, Students)
+ *   - Statistics cards with real-time data
+ *   - Tab navigation with permission checking
+ *   - Lazy loading of tab components
+ *   - Company data fetching
+ *   - Error handling and loading states
  */
 
 'use client';
@@ -34,8 +40,6 @@ import { useAccessControl } from '@/hooks/useAccessControl';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/shared/Button';
-// FIXED: Using shared Tabs component for consistency
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
 
 // ===== LAZY LOAD TAB COMPONENTS =====
 const OrganizationStructureTab = lazy(() => 
@@ -66,36 +70,34 @@ interface Company {
   logo?: string;
   created_at: string;
   updated_at?: string;
-  description?: string;
+  schools?: School[];
   additional?: any;
 }
 
-interface SchoolData {
+interface School {
   id: string;
   name: string;
   code: string;
   company_id: string;
-  description?: string;
   status: 'active' | 'inactive';
-  logo?: string;
   created_at: string;
+  branches?: Branch[];
   additional?: any;
-  branches?: any[];
-  branch_count?: number;
   student_count?: number;
   teachers_count?: number;
+  branch_count?: number;
 }
 
-interface OrganizationData {
+interface Branch {
   id: string;
   name: string;
   code: string;
+  school_id: string;
   status: 'active' | 'inactive';
-  logo?: string;
   created_at: string;
-  description?: string;
   additional?: any;
-  schools?: SchoolData[];
+  student_count?: number;
+  teachers_count?: number;
 }
 
 interface OrganizationStats {
@@ -138,13 +140,11 @@ export default function OrganizationManagement() {
     isBranchAdmin
   } = useAccessControl();
   
-  // State management - FIXED: Don't set default tab yet
-  const [activeTab, setActiveTab] = useState<string>('');
+  // State management - FIXED: Don't set default active tab yet
+  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students' | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
-  const [organizationData, setOrganizationData] = useState<OrganizationData | null>(null);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
-  const [isLoadingOrgData, setIsLoadingOrgData] = useState(true);
 
   // Refs for tab components
   const schoolsTabRef = useRef<SchoolsTabRef>(null);
@@ -178,148 +178,26 @@ export default function OrganizationManagement() {
       tabs.push('students');
     }
     
-    console.log('Accessible tabs:', tabs);
     return tabs;
   }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab]);
 
   // FIXED: Set default active tab to the first accessible tab
   useEffect(() => {
     if (accessibleTabs.length > 0 && !activeTab) {
-      console.log('Setting default tab to first accessible:', accessibleTabs[0]);
-      setActiveTab(accessibleTabs[0]);
-    } else if (accessibleTabs.length > 0 && !accessibleTabs.includes(activeTab)) {
-      // If current tab is not accessible, switch to first accessible
-      console.log('Current tab not accessible, switching to:', accessibleTabs[0]);
-      setActiveTab(accessibleTabs[0]);
+      // Set the first accessible tab as default
+      setActiveTab(accessibleTabs[0] as any);
+    } else if (accessibleTabs.length > 0 && activeTab && !accessibleTabs.includes(activeTab)) {
+      // If current tab is not accessible, switch to first accessible tab
+      setActiveTab(accessibleTabs[0] as any);
     }
   }, [accessibleTabs, activeTab]);
 
-  // FIXED: Fetch complete organization data including schools and branches
-  const fetchOrganizationData = useCallback(async (companyId: string) => {
-    try {
-      setIsLoadingOrgData(true);
-      console.log('Fetching organization data for company:', companyId);
-      
-      // Fetch company details with additional data
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .single();
-
-      if (companyError) {
-        console.error('Company fetch error:', companyError);
-        throw companyError;
-      }
-
-      console.log('Company data fetched:', company);
-
-      // Fetch company additional data
-      const { data: companyAdditional } = await supabase
-        .from('companies_additional')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle();
-
-      // Fetch all schools for this company with their additional data
-      const { data: schools, error: schoolsError } = await supabase
-        .from('schools')
-        .select(`
-          *,
-          schools_additional (*)
-        `)
-        .eq('company_id', companyId)
-        .order('name');
-
-      if (schoolsError) {
-        console.error('Schools fetch error:', schoolsError);
-        throw schoolsError;
-      }
-
-      console.log('Schools fetched:', schools?.length || 0);
-
-      // Fetch all branches for the schools
-      const schoolIds = schools?.map(s => s.id) || [];
-      let allBranches: any[] = [];
-      
-      if (schoolIds.length > 0) {
-        const { data: branchesData, error: branchesError } = await supabase
-          .from('branches')
-          .select(`
-            *,
-            branches_additional (*)
-          `)
-          .in('school_id', schoolIds)
-          .order('name');
-
-        if (!branchesError && branchesData) {
-          allBranches = branchesData;
-          console.log('Branches fetched:', allBranches.length);
-        }
-      }
-
-      // Process schools with their branches and additional data
-      const processedSchools = (schools || []).map(school => {
-        const schoolBranches = allBranches.filter(b => b.school_id === school.id);
-        
-        // Process additional data
-        const additionalData = Array.isArray(school.schools_additional) 
-          ? school.schools_additional[0] 
-          : school.schools_additional || {};
-        
-        return {
-          ...school,
-          additional: additionalData,
-          branches: schoolBranches.map(branch => ({
-            ...branch,
-            additional: Array.isArray(branch.branches_additional) 
-              ? branch.branches_additional[0] 
-              : branch.branches_additional || {}
-          })),
-          branch_count: schoolBranches.length,
-          student_count: additionalData.student_count || 0,
-          teachers_count: additionalData.teachers_count || 0
-        };
-      });
-
-      // Set company data
-      const fullCompany: Company = {
-        ...company,
-        additional: companyAdditional || {}
-      };
-      setCompanyData(fullCompany);
-
-      // Set organization data with schools for structure tab
-      const orgData: OrganizationData = {
-        ...fullCompany,
-        schools: processedSchools
-      };
-      
-      setOrganizationData(orgData);
-      
-      console.log('Organization data prepared:', {
-        company: fullCompany.name,
-        schoolsCount: processedSchools.length,
-        branchesCount: allBranches.length,
-        schools: processedSchools
-      });
-
-    } catch (error) {
-      console.error('Error fetching organization data:', error);
-      toast.error('Failed to load organization structure');
-    } finally {
-      setIsLoadingOrgData(false);
-    }
-  }, []);
-
-  // Fetch user's company and organization data
+  // Fetch user's company
   useEffect(() => {
-    const fetchUserCompanyAndOrganization = async () => {
+    const fetchUserCompany = async () => {
       if (!authenticatedUser) return;
 
       try {
-        console.log('Fetching company for user:', authenticatedUser.id);
-        
         // Check if user is an entity user
         const { data: entityUserData, error: entityUserError } = await supabase
           .from('entity_users')
@@ -328,13 +206,7 @@ export default function OrganizationManagement() {
           .single();
 
         if (!entityUserError && entityUserData?.company_id) {
-          console.log('User company ID:', entityUserData.company_id);
           setUserCompanyId(entityUserData.company_id);
-          
-          // Fetch complete organization data for structure tab
-          await fetchOrganizationData(entityUserData.company_id);
-        } else {
-          console.error('Error fetching entity user:', entityUserError);
         }
       } catch (error) {
         console.error('Error fetching user company:', error);
@@ -342,8 +214,112 @@ export default function OrganizationManagement() {
       }
     };
 
-    fetchUserCompanyAndOrganization();
-  }, [authenticatedUser, fetchOrganizationData]);
+    fetchUserCompany();
+  }, [authenticatedUser]);
+
+  // FIXED: Fetch complete organization data including schools and branches
+  const { 
+    data: organizationData, 
+    isLoading: isLoadingOrgData,
+    refetch: refetchOrgData 
+  } = useQuery(
+    ['organization-complete', userCompanyId],
+    async () => {
+      if (!userCompanyId) return null;
+
+      // Fetch company details
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', userCompanyId)
+        .single();
+
+      if (companyError) throw companyError;
+
+      // Fetch company additional data
+      const { data: companyAdditional } = await supabase
+        .from('companies_additional')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .maybeSingle();
+
+      // Fetch all schools for this company
+      const { data: schools, error: schoolsError } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .order('name');
+
+      if (schoolsError) throw schoolsError;
+
+      // Fetch additional data and branches for each school
+      const schoolsWithDetails = await Promise.all(
+        (schools || []).map(async (school) => {
+          // Fetch school additional data
+          const { data: schoolAdditional } = await supabase
+            .from('schools_additional')
+            .select('*')
+            .eq('school_id', school.id)
+            .maybeSingle();
+
+          // Fetch branches for this school
+          const { data: branches } = await supabase
+            .from('branches')
+            .select('*')
+            .eq('school_id', school.id)
+            .order('name');
+
+          // Fetch branch additional data
+          const branchesWithDetails = await Promise.all(
+            (branches || []).map(async (branch) => {
+              const { data: branchAdditional } = await supabase
+                .from('branches_additional')
+                .select('*')
+                .eq('branch_id', branch.id)
+                .maybeSingle();
+
+              return { 
+                ...branch, 
+                additional: branchAdditional,
+                student_count: branchAdditional?.student_count || branchAdditional?.current_students || 0,
+                teachers_count: branchAdditional?.teachers_count || branchAdditional?.active_teachers_count || 0
+              };
+            })
+          );
+
+          // Count active branches
+          const activeBranches = branchesWithDetails.filter(b => b.status === 'active');
+
+          return { 
+            ...school, 
+            additional: schoolAdditional, 
+            branches: branchesWithDetails,
+            branch_count: activeBranches.length,
+            student_count: schoolAdditional?.student_count || 0,
+            teachers_count: schoolAdditional?.teachers_count || 0
+          };
+        })
+      );
+
+      const fullData: Company = { 
+        ...company, 
+        additional: companyAdditional, 
+        schools: schoolsWithDetails 
+      };
+
+      setCompanyData(fullData);
+      return fullData;
+    },
+    {
+      enabled: !!userCompanyId && !isAccessControlLoading,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+      retry: 2,
+      onError: (error) => {
+        console.error('Error fetching organization data:', error);
+        toast.error('Failed to load organization structure');
+      }
+    }
+  );
 
   // Get scope filters for data queries
   const scopeFilters = useMemo(() => {
@@ -424,37 +400,44 @@ export default function OrganizationManagement() {
 
   // Memoized stats for performance
   const memoizedStats = useMemo(() => {
-    return organizationStats || {
-      total_schools: organizationData?.schools?.length || 0,
-      total_branches: organizationData?.schools?.reduce((sum, school) => sum + (school.branch_count || 0), 0) || 0,
+    if (organizationStats) return organizationStats;
+    
+    // Fallback calculation from organization data if available
+    if (organizationData?.schools) {
+      return {
+        company_id: userCompanyId || '',
+        total_schools: organizationData.schools.length,
+        total_branches: organizationData.schools.reduce((acc, s) => acc + (s.branch_count || 0), 0),
+        total_students: organizationData.schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
+        total_teachers: organizationData.schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0),
+        total_users: 0
+      };
+    }
+    
+    return {
+      total_schools: 0,
+      total_branches: 0,
       total_students: 0,
       total_teachers: 0,
       total_users: 0
     };
-  }, [organizationStats, organizationData]);
+  }, [organizationStats, organizationData, userCompanyId]);
 
   // Handle stats refresh
   const handleRefreshStats = useCallback(async () => {
     setIsRefreshingStats(true);
-    await refetchStats();
-    if (userCompanyId) {
-      await fetchOrganizationData(userCompanyId);
-    }
+    await Promise.all([
+      refetchStats(),
+      refetchOrgData()
+    ]);
     setIsRefreshingStats(false);
     toast.success('Statistics refreshed');
-  }, [refetchStats, userCompanyId, fetchOrganizationData]);
+  }, [refetchStats, refetchOrgData]);
 
-  // Handle tab navigation from structure diagram
-  const handleItemClick = useCallback((item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => {
-    console.log('Item clicked:', type, item);
-    
-    // Navigate to appropriate tab based on item type
-    if (type === 'branch' && accessibleTabs.includes('branches')) {
-      setActiveTab('branches');
-    } else if (type === 'school' && accessibleTabs.includes('schools')) {
-      setActiveTab('schools');
-    }
-  }, [accessibleTabs]);
+  // Prefetch tab data for better UX
+  const prefetchTabData = useCallback((tab: string) => {
+    // Implement prefetching logic if needed
+  }, []);
 
   // Loading state
   if (isAccessControlLoading || !userCompanyId) {
@@ -515,18 +498,6 @@ export default function OrganizationManagement() {
     );
   }
 
-  // If we don't have an active tab yet, wait for it to be set
-  if (!activeTab) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
-          <p className="text-gray-600 dark:text-gray-400">Initializing...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -536,7 +507,7 @@ export default function OrganizationManagement() {
             Organization Management
           </h1>
           <p className="mt-1 text-gray-600 dark:text-gray-400">
-            {companyData?.name || 'Loading...'} • {getUserContext()?.adminLevel?.replace('_', ' ') || 'User'}
+            {companyData?.name || organizationData?.name || 'Loading...'} • {getUserContext()?.adminLevel?.replace('_', ' ') || 'User'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -629,151 +600,204 @@ export default function OrganizationManagement() {
         </div>
       </div>
 
-      {/* Tab Navigation and Content - USING SHARED TABS COMPONENT */}
+      {/* Tab Navigation */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <Tabs 
-          value={activeTab} 
-          onValueChange={setActiveTab}
-          defaultValue={accessibleTabs[0] || 'schools'}
-          className="w-full"
-        >
-          <div className="border-b border-gray-200 dark:border-gray-700 p-4">
-            <TabsList className="w-full justify-start">
-              {accessibleTabs.includes('structure') && (
-                <TabsTrigger value="structure">
-                  <Building2 className="w-4 h-4 mr-2" />
-                  Structure
-                </TabsTrigger>
-              )}
-              {accessibleTabs.includes('schools') && (
-                <TabsTrigger value="schools">
-                  <School className="w-4 h-4 mr-2" />
-                  Schools
-                </TabsTrigger>
-              )}
-              {accessibleTabs.includes('branches') && (
-                <TabsTrigger value="branches">
-                  <MapPin className="w-4 h-4 mr-2" />
-                  Branches
-                </TabsTrigger>
-              )}
-              {accessibleTabs.includes('admins') && (
-                <TabsTrigger value="admins">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Admins
-                </TabsTrigger>
-              )}
-              {accessibleTabs.includes('teachers') && (
-                <TabsTrigger value="teachers">
-                  <Users className="w-4 h-4 mr-2" />
-                  Teachers
-                </TabsTrigger>
-              )}
-              {accessibleTabs.includes('students') && (
-                <TabsTrigger value="students">
-                  <GraduationCap className="w-4 h-4 mr-2" />
-                  Students
-                </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+            {accessibleTabs.includes('structure') && (
+              <button
+                onClick={() => setActiveTab('structure')}
+                onMouseEnter={() => prefetchTabData('structure')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'structure'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Building2 className="w-4 h-4 inline-block mr-2" />
+                Structure
+              </button>
+            )}
+            {accessibleTabs.includes('schools') && (
+              <button
+                onClick={() => setActiveTab('schools')}
+                onMouseEnter={() => prefetchTabData('schools')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'schools'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <School className="w-4 h-4 inline-block mr-2" />
+                Schools
+              </button>
+            )}
+            {accessibleTabs.includes('branches') && (
+              <button
+                onClick={() => setActiveTab('branches')}
+                onMouseEnter={() => prefetchTabData('branches')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'branches'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <MapPin className="w-4 h-4 inline-block mr-2" />
+                Branches
+              </button>
+            )}
+            {accessibleTabs.includes('admins') && (
+              <button
+                onClick={() => setActiveTab('admins')}
+                onMouseEnter={() => prefetchTabData('admins')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'admins'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Shield className="w-4 h-4 inline-block mr-2" />
+                Admins
+              </button>
+            )}
+            {accessibleTabs.includes('teachers') && (
+              <button
+                onClick={() => setActiveTab('teachers')}
+                onMouseEnter={() => prefetchTabData('teachers')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'teachers'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Users className="w-4 h-4 inline-block mr-2" />
+                Teachers
+              </button>
+            )}
+            {accessibleTabs.includes('students') && (
+              <button
+                onClick={() => setActiveTab('students')}
+                onMouseEnter={() => prefetchTabData('students')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'students'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4 inline-block mr-2" />
+                Students
+              </button>
+            )}
+          </nav>
+        </div>
 
-          <div className="p-6">
-            <Suspense
-              fallback={
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                </div>
-              }
-            >
-              {/* Structure Tab - FIXED: Pass complete organization data with schools */}
-              <TabsContent value="structure">
-                {accessibleTabs.includes('structure') && userCompanyId && organizationData && !isLoadingOrgData ? (
-                  <OrganizationStructureTab
-                    companyData={organizationData} // Pass complete data with schools
-                    companyId={userCompanyId}
-                    onAddClick={(parent, type) => {
-                      // Handle add action
-                      if (type === 'company') {
-                        setActiveTab('schools');
-                      } else if (type === 'school') {
-                        setActiveTab('branches');
-                      }
-                    }}
-                    onEditClick={(item, type) => {
-                      // Handle edit action
-                      if (type === 'school') {
-                        setActiveTab('schools');
-                        schoolsTabRef.current?.openEditSchoolModal(item);
-                      } else if (type === 'branch') {
-                        setActiveTab('branches');
-                        branchesTabRef.current?.openEditBranchModal(item);
-                      }
-                    }}
-                    onItemClick={handleItemClick}
-                    refreshData={handleRefreshStats}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-64">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
-                  </div>
-                )}
-              </TabsContent>
+        {/* Tab Content */}
+        <div className="p-6">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            }
+          >
+            {/* Structure Tab - FIXED: Pass complete organizationData */}
+            {activeTab === 'structure' && accessibleTabs.includes('structure') && userCompanyId && organizationData && (
+              <OrganizationStructureTab
+                companyData={organizationData}
+                companyId={userCompanyId}
+                onAddClick={(parent, type) => {
+                  // Handle add action
+                  if (type === 'company') {
+                    setActiveTab('schools');
+                  } else if (type === 'school') {
+                    setActiveTab('branches');
+                  }
+                }}
+                onEditClick={(item, type) => {
+                  // Handle edit action
+                  if (type === 'school') {
+                    setActiveTab('schools');
+                    schoolsTabRef.current?.openEditSchoolModal(item);
+                  } else if (type === 'branch') {
+                    setActiveTab('branches');
+                    branchesTabRef.current?.openEditBranchModal(item);
+                  }
+                }}
+                onItemClick={(item, type) => {
+                  // Handle item click - navigate to corresponding tab
+                  if (type === 'school' && accessibleTabs.includes('schools')) {
+                    setActiveTab('schools');
+                  } else if (type === 'branch' && accessibleTabs.includes('branches')) {
+                    setActiveTab('branches');
+                  }
+                  console.log('Item clicked:', item, type);
+                }}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
 
-              {/* Schools Tab */}
-              <TabsContent value="schools">
-                {accessibleTabs.includes('schools') && userCompanyId && (
-                  <SchoolsTab
-                    ref={schoolsTabRef}
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Schools Tab */}
+            {activeTab === 'schools' && accessibleTabs.includes('schools') && userCompanyId && (
+              <SchoolsTab
+                ref={schoolsTabRef}
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
 
-              {/* Branches Tab */}
-              <TabsContent value="branches">
-                {accessibleTabs.includes('branches') && userCompanyId && (
-                  <BranchesTab
-                    ref={branchesTabRef}
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Branches Tab */}
+            {activeTab === 'branches' && accessibleTabs.includes('branches') && userCompanyId && (
+              <BranchesTab
+                ref={branchesTabRef}
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
 
-              {/* Admins Tab */}
-              <TabsContent value="admins">
-                {accessibleTabs.includes('admins') && userCompanyId && (
-                  <AdminsTab
-                    companyId={userCompanyId}
-                  />
-                )}
-              </TabsContent>
+            {/* Admins Tab */}
+            {activeTab === 'admins' && accessibleTabs.includes('admins') && userCompanyId && (
+              <AdminsTab
+                companyId={userCompanyId}
+              />
+            )}
 
-              {/* Teachers Tab */}
-              <TabsContent value="teachers">
-                {accessibleTabs.includes('teachers') && userCompanyId && (
-                  <TeachersTab
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Teachers Tab */}
+            {activeTab === 'teachers' && accessibleTabs.includes('teachers') && userCompanyId && (
+              <TeachersTab
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
 
-              {/* Students Tab */}
-              <TabsContent value="students">
-                {accessibleTabs.includes('students') && userCompanyId && (
-                  <StudentsTab
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
-            </Suspense>
-          </div>
-        </Tabs>
+            {/* Students Tab */}
+            {activeTab === 'students' && accessibleTabs.includes('students') && userCompanyId && (
+              <StudentsTab
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+          </Suspense>
+        </div>
       </div>
 
       {/* Scope Info for Non-Entity Admins */}
