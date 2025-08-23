@@ -148,7 +148,7 @@ export default function OrganizationManagement() {
     isBranchAdmin
   } = useAccessControl();
   
-  // State management
+  // State management - Start with null to ensure proper initialization
   const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students' | null>(null);
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
@@ -160,43 +160,67 @@ export default function OrganizationManagement() {
 
   // Get accessible tabs based on user permissions
   const accessibleTabs = useMemo(() => {
-    if (!permissions) return [];
+    // Wait for permissions to be loaded
+    if (!permissions || isAccessControlLoading) return [];
     
     const tabs = [];
     
+    // IMPORTANT: Check Structure tab FIRST to ensure it's the default when available
     // Structure tab - only for entity_admin and sub_entity_admin
     if ((isEntityAdmin || isSubEntityAdmin) && canViewTab('structure')) {
       tabs.push('structure');
     }
     
-    // Other tabs based on permissions
+    // Schools tab
     if (permissionService.canAccessTab('schools', permissions)) {
       tabs.push('schools');
     }
+    
+    // Branches tab
     if (permissionService.canAccessTab('branches', permissions)) {
       tabs.push('branches');
     }
+    
+    // Admins tab
     if (permissionService.canAccessTab('admins', permissions)) {
       tabs.push('admins');
     }
+    
+    // Teachers tab
     if (permissionService.canAccessTab('teachers', permissions)) {
       tabs.push('teachers');
     }
+    
+    // Students tab
     if (permissionService.canAccessTab('students', permissions)) {
       tabs.push('students');
     }
     
+    console.log('Accessible tabs calculated:', {
+      isEntityAdmin,
+      isSubEntityAdmin,
+      canViewStructure: canViewTab('structure'),
+      tabs,
+      permissions: !!permissions
+    });
+    
     return tabs;
-  }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab]);
+  }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab, isAccessControlLoading]);
 
   // Set default active tab to the first accessible tab
   useEffect(() => {
-    if (accessibleTabs.length > 0 && !activeTab) {
-      setActiveTab(accessibleTabs[0] as any);
-    } else if (accessibleTabs.length > 0 && activeTab && !accessibleTabs.includes(activeTab)) {
-      setActiveTab(accessibleTabs[0] as any);
+    // Only set tab after permissions are loaded and tabs are calculated
+    if (isAccessControlLoading) return;
+    
+    if (accessibleTabs.length > 0) {
+      // If no tab is active or current tab is not accessible
+      if (!activeTab || !accessibleTabs.includes(activeTab)) {
+        const defaultTab = accessibleTabs[0] as any;
+        console.log('Setting default active tab to:', defaultTab);
+        setActiveTab(defaultTab);
+      }
     }
-  }, [accessibleTabs, activeTab]);
+  }, [accessibleTabs, activeTab, isAccessControlLoading]);
 
   // Fetch user's company
   useEffect(() => {
