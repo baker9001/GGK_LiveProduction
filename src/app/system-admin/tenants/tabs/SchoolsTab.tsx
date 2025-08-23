@@ -187,11 +187,11 @@ export default function SchoolsTab() {
     async (formData: FormData) => {
       const data = {
         name: formData.get('name') as string,
-        code: formData.get('code') as string || '',
+        code: formData.get('code') as string || undefined,
         company_id: formData.get('company_id') as string,
-        logo: formData.get('logo') as string || '',
-        address: formData.get('address') as string || '',
-        notes: formData.get('notes') as string || '',
+        logo: formData.get('logo') as string || undefined,
+        address: formData.get('address') as string || undefined,
+        notes: formData.get('notes') as string || undefined,
         status: formData.get('status') as 'active' | 'inactive'
       };
 
