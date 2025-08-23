@@ -1,41 +1,32 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
- * Dependencies: 
+ * 
+ * REIMPLEMENTED: Admin Creation/Edit Form
+ * Matches standard shared slide form with proper database field alignment
+ * 
+ * Dependencies:
+ *   - @/components/shared/* (SlideInForm, FormField, Input, Select, ToggleSwitch)
  *   - @/contexts/UserContext
- *   - @/components/shared/* (SlideInForm, FormField, Button, ToggleSwitch, Toast)
  *   - ../hooks/useAdminMutations
  *   - ../types/admin.types
  *   - ../services/permissionService
- *   - @/contexts/PermissionContext
  *   - External: react, zod, lucide-react
- * 
- * Preserved Features:
- *   - All validation schemas with Zod
- *   - Password strength indicator
- *   - Error handling and toast messages
- *   - Permission matrix functionality
- *   - Scope assignment for non-entity admins
- * 
- * Added/Modified:
- *   - SIMPLIFIED: Form fields to match database exactly
- *   - FIXED: Removed self-edit restrictions for entity admins
- *   - FIXED: Proper admin level selection based on current user level
- *   - ALIGNED: Fields match entity_users and users table columns
  * 
  * Database Tables:
  *   - entity_users (id, user_id, name, email, admin_level, permissions, is_active, company_id, metadata)
  *   - users (id, email, password_hash, user_type, is_active)
  *   - entity_admin_scope (user_id, scope_type, scope_id, permissions)
  * 
- * Connected Files:
- *   - AdminListTable.tsx (lists admins and calls this form)
- *   - ../hooks/useAdminMutations.ts (mutation hooks)
- *   - ../services/adminService.ts (API calls)
+ * Form Sections:
+ *   1. Basic Information (name, email, password)
+ *   2. Role & Status (admin_level, is_active)
+ *   3. Scope Assignment (schools/branches for non-entity admins)
+ *   4. Permissions (customizable permissions matrix)
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { z } from 'zod';
-import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, XCircle, Building, School, MapPin } from 'lucide-react';
+import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, Building, School, MapPin } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
@@ -48,10 +39,8 @@ import { AdminScopeAssignment } from './AdminScopeAssignment';
 import { AdminPermissionMatrix } from './AdminPermissionMatrix';
 import { permissionService } from '../services/permissionService';
 import { usePermissions } from '@/contexts/PermissionContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
 
-// Validation schemas
+// ===== VALIDATION SCHEMAS =====
 const nameSchema = z.string()
   .min(2, 'Name must be at least 2 characters')
   .max(100, 'Name must not exceed 100 characters')
@@ -68,7 +57,7 @@ const passwordSchema = z.string()
   .regex(/[0-9]/, 'Password must contain at least one number')
   .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
 
-// Password strength calculator
+// ===== HELPER FUNCTIONS =====
 function calculatePasswordStrength(password: string): number {
   if (!password) return 0;
   let strength = 0;
@@ -78,6 +67,15 @@ function calculatePasswordStrength(password: string): number {
   if (/[0-9]/.test(password)) strength += 12.5;
   if (/[^A-Za-z0-9]/.test(password)) strength += 12.5;
   return Math.min(strength, 100);
+}
+
+// ===== INTERFACES =====
+interface AdminFormData {
+  name: string;
+  email: string;
+  password: string;
+  admin_level: AdminLevel;
+  is_active: boolean;
 }
 
 interface AdminCreationFormProps {
@@ -102,6 +100,7 @@ interface AdminCreationFormProps {
   };
 }
 
+// ===== MAIN COMPONENT =====
 export function AdminCreationForm({
   isOpen,
   onClose,
@@ -111,14 +110,14 @@ export function AdminCreationForm({
 }: AdminCreationFormProps) {
   const isEditing = !!initialData;
   const { user } = useUser();
-  const { adminLevel: currentUserAdminLevel, hasPermission } = usePermissions();
+  const { adminLevel: currentUserAdminLevel } = usePermissions();
   
-  const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
+  // ===== FORM STATE =====
+  const [formData, setFormData] = useState<AdminFormData>({
     name: '',
     email: '',
     password: '',
-    admin_level: 'branch_admin' as AdminLevel, // Default to lowest level
+    admin_level: 'branch_admin',
     is_active: true
   });
   
@@ -126,53 +125,20 @@ export function AdminCreationForm({
     permissionService.getMinimalPermissions()
   );
   
-  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
-  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
+  // ===== MUTATIONS =====
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
-
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
-  // Fetch schools and branches for scope assignment
-  const { data: schools = [] } = useQuery({
-    queryKey: ['schools', companyId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('schools')
-        .select('id, name, code')
-        .eq('company_id', companyId)
-        .eq('status', 'active');
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: isOpen && !!companyId
-  });
-
-  const { data: branches = [] } = useQuery({
-    queryKey: ['branches', companyId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, code, school_id')
-        .eq('company_id', companyId)
-        .eq('status', 'active');
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: isOpen && !!companyId
-  });
-
-  // Determine if this is a self-edit
+  // ===== COMPUTED VALUES =====
   const isSelfEdit = useMemo(() => {
     return isEditing && initialData?.user_id === user?.id;
   }, [isEditing, initialData, user]);
 
-  // Determine available admin levels based on current user's level
   const availableAdminLevels = useMemo(() => {
     const levels: { value: AdminLevel; label: string }[] = [];
     
@@ -198,66 +164,75 @@ export function AdminCreationForm({
     return levels;
   }, [currentUserAdminLevel]);
 
-  // Check if user can modify this admin
   const canModifyThisAdmin = useMemo(() => {
-    if (!isEditing) return true; // Can always create new
+    if (!isEditing) return true;
     if (!initialData) return false;
     
-    // Entity admins can modify anyone (except deactivate themselves)
+    // Entity admins can modify anyone
     if (currentUserAdminLevel === 'entity_admin') {
-      return true; // Will handle self-deactivation separately
+      return true;
     }
     
-    // Check hierarchy
+    // Check hierarchy permissions
     return permissionService.canModifyAdminLevel(
       currentUserAdminLevel || 'branch_admin',
       initialData.admin_level
     );
   }, [isEditing, initialData, currentUserAdminLevel]);
 
-  // Password strength calculation
+  const needsScopeAssignment = useMemo(() => {
+    return formData.admin_level === 'school_admin' || formData.admin_level === 'branch_admin';
+  }, [formData.admin_level]);
+
   const passwordStrength = useMemo(() => 
     calculatePasswordStrength(formData.password), 
     [formData.password]
   );
 
-  // Reset form when modal opens or initialData changes
+  // ===== FORM INITIALIZATION =====
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name,
-        email: initialData.email,
-        password: '',
-        admin_level: initialData.admin_level,
-        is_active: initialData.is_active
-      });
-      setPermissions(initialData.permissions || permissionService.getPermissionsForLevel(initialData.admin_level));
-      setSelectedSchools(initialData.assigned_schools || []);
-      setSelectedBranches(initialData.assigned_branches || []);
-    } else {
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        admin_level: availableAdminLevels[availableAdminLevels.length - 1]?.value || 'branch_admin',
-        is_active: true
-      });
-      setPermissions(permissionService.getMinimalPermissions());
-      setSelectedSchools([]);
-      setSelectedBranches([]);
+    if (isOpen) {
+      if (initialData) {
+        // Edit mode: populate form with existing data
+        setFormData({
+          name: initialData.name,
+          email: initialData.email,
+          password: '', // Always start with empty password for security
+          admin_level: initialData.admin_level,
+          is_active: initialData.is_active
+        });
+        setPermissions(
+          initialData.permissions || 
+          permissionService.getPermissionsForLevel(initialData.admin_level)
+        );
+      } else {
+        // Create mode: set defaults
+        const defaultLevel = availableAdminLevels[availableAdminLevels.length - 1]?.value || 'branch_admin';
+        setFormData({
+          name: '',
+          email: '',
+          password: '',
+          admin_level: defaultLevel,
+          is_active: true
+        });
+        setPermissions(permissionService.getPermissionsForLevel(defaultLevel));
+      }
+      setErrors({});
+      setShowPassword(false);
+      setIsValidating(false);
     }
-    setErrors({});
-  }, [initialData, isOpen, availableAdminLevels]);
+  }, [isOpen, initialData, availableAdminLevels]);
 
-  // Update permissions when admin level changes
+  // ===== PERMISSION UPDATES =====
   useEffect(() => {
+    // Update permissions when admin level changes (only for new admins or if no custom permissions)
     if (!isEditing || !initialData?.permissions) {
       const defaultPermissions = permissionService.getPermissionsForLevel(formData.admin_level);
       setPermissions(defaultPermissions);
     }
   }, [formData.admin_level, isEditing, initialData]);
 
-  // Validate individual field
+  // ===== VALIDATION =====
   const validateField = useCallback((field: string, value: any): string | undefined => {
     try {
       switch (field) {
@@ -282,8 +257,8 @@ export function AdminCreationForm({
     }
   }, [isEditing]);
 
-  // Handle form field changes
-  const handleFieldChange = useCallback((field: string, value: any) => {
+  // ===== FORM HANDLERS =====
+  const handleFieldChange = useCallback((field: keyof AdminFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear error for this field
@@ -295,7 +270,7 @@ export function AdminCreationForm({
       });
     }
     
-    // Validate on change for better UX
+    // Real-time validation for better UX
     if (isValidating) {
       const error = validateField(field, value);
       if (error) {
@@ -304,11 +279,10 @@ export function AdminCreationForm({
     }
   }, [errors, isValidating, validateField]);
 
-  // Handle form submission
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     setIsValidating(true);
     
-    // Validate all fields
+    // Validate all required fields
     const newErrors: Record<string, string> = {};
     
     const nameError = validateField('name', formData.name);
@@ -317,21 +291,26 @@ export function AdminCreationForm({
     const emailError = validateField('email', formData.email);
     if (emailError) newErrors.email = emailError;
     
-    if (!isEditing || formData.password) {
+    // Password validation
+    if (!isEditing && !formData.password) {
+      newErrors.password = 'Password is required for new administrators';
+    } else if (formData.password) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
     }
     
-    if (!isEditing && !formData.password) {
-      newErrors.password = 'Password is required for new administrators';
+    // Admin level validation
+    if (!formData.admin_level) {
+      newErrors.admin_level = 'Administrator level is required';
     }
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      toast.error('Please fix the validation errors');
       return;
     }
     
-    // Check permissions
+    // Permission checks
     if (!canModifyThisAdmin) {
       toast.error('You do not have permission to modify this administrator');
       return;
@@ -339,12 +318,13 @@ export function AdminCreationForm({
     
     // Prevent self-deactivation
     if (isSelfEdit && !formData.is_active) {
-      toast.error('You cannot deactivate your own account');
+      toast.error('You cannot deactivate your own account for security reasons');
       return;
     }
     
     try {
       if (isEditing && initialData) {
+        // Update existing admin
         await updateAdminMutation.mutateAsync({
           userId: initialData.id,
           updates: {
@@ -358,12 +338,8 @@ export function AdminCreationForm({
               : permissions
           }
         });
-        
-        // Update scopes if needed
-        if (formData.admin_level !== 'entity_admin') {
-          // TODO: Update scope assignments
-        }
       } else {
+        // Create new admin
         await createAdminMutation.mutateAsync({
           email: formData.email,
           name: formData.name,
@@ -381,83 +357,106 @@ export function AdminCreationForm({
       onClose();
     } catch (error: any) {
       console.error('Form submission error:', error);
-      // Error toast is handled by the mutation hook
+      // Error toast is handled by the mutation hooks
     }
-  };
+  }, [
+    formData, 
+    permissions, 
+    isEditing, 
+    initialData, 
+    companyId, 
+    canModifyThisAdmin, 
+    isSelfEdit,
+    validateField,
+    createAdminMutation,
+    updateAdminMutation,
+    onSuccess,
+    onClose
+  ]);
 
-  // Determine if user needs scope assignment
-  const needsScopeAssignment = formData.admin_level === 'school_admin' || formData.admin_level === 'branch_admin';
-
+  // ===== RENDER =====
   return (
     <SlideInForm
+      title={isEditing ? 'Edit Administrator' : 'Create New Administrator'}
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? 'Edit Administrator' : 'Create New Administrator'}
-      onSubmit={handleSubmit}
-      isSubmitting={isSubmitting}
-      width="max-w-2xl"
+      onSave={handleSubmit}
+      loading={isSubmitting}
+      width="lg"
     >
       <div className="space-y-6">
-        {/* Basic Information */}
+        {/* SECTION 1: Basic Information */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-            <User className="h-5 w-5 mr-2 text-[#8CC63F]" />
-            Basic Information
-          </h3>
+          <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+            <User className="h-5 w-5 text-[#8CC63F]" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Basic Information
+            </h3>
+          </div>
           
           <FormField
+            id="name"
             label="Full Name"
             required
             error={errors.name}
-            icon={<User className="h-4 w-4" />}
           >
             <Input
+              id="name"
               value={formData.name}
               onChange={(e) => handleFieldChange('name', e.target.value)}
               placeholder="Enter administrator's full name"
               disabled={!canModifyThisAdmin}
+              leftIcon={<User className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
           
           <FormField
+            id="email"
             label="Email Address"
             required
             error={errors.email}
-            icon={<Mail className="h-4 w-4" />}
           >
             <Input
+              id="email"
               type="email"
               value={formData.email}
               onChange={(e) => handleFieldChange('email', e.target.value)}
               placeholder="admin@example.com"
               disabled={!canModifyThisAdmin}
+              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
           
           <FormField
+            id="password"
             label={isEditing ? "New Password (leave blank to keep current)" : "Password"}
             required={!isEditing}
             error={errors.password}
-            icon={<Lock className="h-4 w-4" />}
           >
             <div className="relative">
               <Input
+                id="password"
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={(e) => handleFieldChange('password', e.target.value)}
                 placeholder={isEditing ? "Leave blank to keep current password" : "Enter a secure password"}
                 disabled={!canModifyThisAdmin}
+                leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
+                rightIcon={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
             </div>
           </FormField>
           
+          {/* Password Strength Indicator */}
           {formData.password && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -486,47 +485,47 @@ export function AdminCreationForm({
           )}
         </div>
 
-        {/* Role & Status */}
+        {/* SECTION 2: Role & Status */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-            <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
-            Role & Status
-          </h3>
+          <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+            <Shield className="h-5 w-5 text-[#8CC63F]" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Role & Status
+            </h3>
+          </div>
           
           <FormField
+            id="admin_level"
             label="Administrator Level"
             required
-            icon={<Shield className="h-4 w-4" />}
+            error={errors.admin_level}
           >
             <Select
+              id="admin_level"
               value={formData.admin_level}
-              onChange={(e) => handleFieldChange('admin_level', e.target.value)}
+              onChange={(value) => handleFieldChange('admin_level', value)}
+              options={availableAdminLevels}
               disabled={!canModifyThisAdmin || availableAdminLevels.length <= 1}
-            >
-              {availableAdminLevels.map(level => (
-                <option key={level.value} value={level.value}>
-                  {level.label}
-                </option>
-              ))}
-            </Select>
+            />
           </FormField>
           
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-            <div>
-              <label className="text-sm font-medium text-gray-900 dark:text-white">
-                Account Status
-              </label>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {formData.is_active ? 'User can access the system' : 'User cannot log in'}
-              </p>
-            </div>
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
             <ToggleSwitch
               checked={formData.is_active}
               onChange={(checked) => handleFieldChange('is_active', checked)}
               disabled={isSelfEdit || !canModifyThisAdmin}
+              label="Account Status"
+              description={formData.is_active ? 'User can access the system' : 'User cannot log in'}
+              activeLabel="Active"
+              inactiveLabel="Inactive"
+              showStateLabel={true}
+              preventSelfDeactivation={true}
+              currentUserId={user?.id}
+              targetUserId={initialData?.user_id}
             />
           </div>
           
+          {/* Self-edit warning */}
           {isSelfEdit && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
               <div className="flex items-center">
@@ -539,13 +538,15 @@ export function AdminCreationForm({
           )}
         </div>
 
-        {/* Scope Assignment for School/Branch Admins */}
-        {needsScopeAssignment && (
+        {/* SECTION 3: Scope Assignment (for School/Branch Admins) */}
+        {needsScopeAssignment && initialData?.user_id && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <Building className="h-5 w-5 mr-2 text-[#8CC63F]" />
-              Scope Assignment
-            </h3>
+            <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+              <Building className="h-5 w-5 text-[#8CC63F]" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Scope Assignment
+              </h3>
+            </div>
             
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
               <div className="flex items-center">
@@ -558,71 +559,32 @@ export function AdminCreationForm({
               </div>
             </div>
             
-            {formData.admin_level === 'school_admin' && (
-              <FormField label="Assigned Schools" icon={<School className="h-4 w-4" />}>
-                <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                  {schools.map(school => (
-                    <label key={school.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={selectedSchools.includes(school.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSchools([...selectedSchools, school.id]);
-                          } else {
-                            setSelectedSchools(selectedSchools.filter(id => id !== school.id));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {school.name} ({school.code})
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </FormField>
-            )}
-            
-            {formData.admin_level === 'branch_admin' && (
-              <FormField label="Assigned Branches" icon={<MapPin className="h-4 w-4" />}>
-                <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                  {branches.map(branch => (
-                    <label key={branch.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={selectedBranches.includes(branch.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedBranches([...selectedBranches, branch.id]);
-                          } else {
-                            setSelectedBranches(selectedBranches.filter(id => id !== branch.id));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {branch.name} ({branch.code})
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </FormField>
-            )}
+            <AdminScopeAssignment
+              userId={initialData.user_id}
+              companyId={companyId}
+              adminLevel={formData.admin_level}
+              canModifyScope={canModifyThisAdmin}
+              onScopesUpdated={() => {
+                // Refresh parent data if needed
+                console.log('Scopes updated for admin:', initialData.user_id);
+              }}
+            />
           </div>
         )}
 
-        {/* Permissions Section */}
+        {/* SECTION 4: Permissions (for non-Entity Admins) */}
         {formData.admin_level !== 'entity_admin' && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <Shield className="h-5 w-5 mr-2 text-[#8CC63F]" />
-              Permissions
-            </h3>
+            <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+              <Shield className="h-5 w-5 text-[#8CC63F]" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Permissions
+              </h3>
+            </div>
             
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3">
               <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mr-2" />
                 <p className="text-sm text-green-700 dark:text-green-300">
                   Permissions are automatically set based on the admin level. You can customize them if needed.
                 </p>
@@ -633,11 +595,11 @@ export function AdminCreationForm({
               value={permissions}
               onChange={setPermissions}
               disabled={!canModifyThisAdmin || isSelfEdit}
-              adminLevel={formData.admin_level}
             />
           </div>
         )}
         
+        {/* Entity Admin Full Permissions Notice */}
         {formData.admin_level === 'entity_admin' && (
           <div className="bg-[#8CC63F]/10 border border-[#8CC63F]/20 rounded-lg p-4">
             <div className="flex items-center">
@@ -647,8 +609,27 @@ export function AdminCreationForm({
                   Full Permissions Automatically Granted
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Entity Administrators automatically receive all system permissions.
+                  Entity Administrators automatically receive all system permissions and full company access.
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Validation Errors Summary */}
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  Please fix the following errors:
+                </p>
+                <ul className="text-sm text-red-700 dark:text-red-300 mt-1 list-disc list-inside">
+                  {Object.entries(errors).map(([field, error]) => (
+                    <li key={field}>{error}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
