@@ -1,9 +1,9 @@
 /**
  * File: /src/hooks/useAccessControl.ts
  * 
- * FIXED: Added organization permissions (create/modify/delete school/branch)
- * SECURITY FIX: Properly invalidate cache on user change
- * Prevent loading wrong user's permissions
+ * COMPLETE VERSION: All original security features + permission fixes
+ * FIXED: Entity admins CAN now modify other entity admins
+ * SECURITY: All original security features preserved
  * 
  * Dependencies:
  *   - @/lib/supabase
@@ -11,11 +11,17 @@
  * 
  * Database Tables:
  *   - entity_users
- *   - entity_user_schools
- *   - entity_user_branches
+ *   - entity_admin_scope
+ *   - users
  * 
- * Connected Files:
- *   - All tabs in organisation module use this for permissions
+ * Security Features:
+ *   - UUID validation with strict regex
+ *   - Development mode detection
+ *   - Cache TTL (5 minutes)
+ *   - Retry logic with exponential backoff (3 attempts)
+ *   - Security logging
+ *   - Cache invalidation on user change
+ *   - LocalStorage cache removal
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -341,51 +347,72 @@ export function useAccessControl(): UseAccessControlResult {
     if (!level) return false;
     
     const tabPermissions: Record<string, AdminLevel[]> = {
-      'structure': ['entity_admin', 'sub_entity_admin'], // FIXED: Only entity & sub-entity admins
+      'structure': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
       'schools': ['entity_admin', 'sub_entity_admin', 'school_admin'], // school_admin can see schools
-      'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all except structure
+      'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all can see branches
       'admins': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
       'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all levels
       'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'] // all levels
     };
     
-    return tabPermissions[tabName]?.includes(level) || false;
+    const hasAccess = tabPermissions[tabName]?.includes(level) || false;
+    
+    logAction('tab_access_check', { tabName, level, hasAccess });
+    
+    return hasAccess;
   }, [userScope]);
 
-  // Permission check - FIXED: Added organization permissions
+  // Permission check - FIXED: Entity admins CAN modify other entity admins
   const can = useCallback((action: string, targetUserId?: string, targetAdminLevel?: AdminLevel): boolean => {
     if (!userScope) return false;
     
-    // Prevent self-modification for certain actions
-    if (action === 'deactivate' && targetUserId === userScope.userId) {
+    // Special handling for self-actions
+    const isSelfAction = targetUserId === userScope.userId;
+    
+    // Prevent self-deactivation for ALL admin levels
+    if (action === 'deactivate' && isSelfAction) {
+      logAction('self_deactivation_blocked', { userId: userScope.userId });
       return false;
     }
     
     const permissions: Record<string, boolean> = {
-      // User management permissions - FIXED: entity_admin cannot manage other entity_admins
-      'create_entity_admin': false, // entity_admin CANNOT create other entity_admins
+      // User management permissions - FIXED: Entity admin CAN manage other entity admins
+      'create_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'create_entity_admin': userScope.adminLevel === 'entity_admin', // FIXED: Entity admin CAN create
       'create_sub_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'create_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'create_teacher': true,
       'create_student': true,
-      'modify_entity_admin': false, // entity_admin CANNOT modify other entity_admins
+      
+      // CRITICAL FIX: Entity admins CAN modify other entity admins (but not deactivate themselves)
+      'modify_entity_admin': userScope.adminLevel === 'entity_admin', // FIXED: Changed from false to true
       'modify_sub_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'modify_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'modify_teacher': true,
       'modify_student': true,
-      'delete_users': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'view_all_users': true,
       
-      // FIXED: Organization management permissions - Aligned with hierarchy
+      // Deletion permissions
+      'delete_users': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'delete_entity_admin': userScope.adminLevel === 'entity_admin' && !isSelfAction,
+      'delete_sub_admin': ['entity_admin'].includes(userScope.adminLevel || ''),
+      'delete_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'delete_branch_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      
+      // View permissions
+      'view_all_users': true,
+      'view_admins': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'view_audit_logs': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      
+      // Organization management permissions - Aligned with hierarchy
       'create_school': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'modify_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // school_admin CAN modify
+      'modify_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'delete_school': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'view_all_schools': true,
       
       'create_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      'modify_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''), // branch_admin CAN modify
+      'modify_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
       'delete_branch': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'view_all_branches': true,
       
@@ -394,14 +421,50 @@ export function useAccessControl(): UseAccessControlResult {
       'manage_company_settings': userScope.adminLevel === 'entity_admin',
       'manage_school_settings': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'manage_branch_settings': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
-      'view_audit_logs': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'export_data': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || '')
+      'export_data': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      
+      // Edit permissions (for UI buttons)
+      'edit_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'edit_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'edit_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
+      'edit_teacher': true,
+      'edit_student': true
     };
+    
+    // Check for hierarchy-based modification permissions
+    if (action.startsWith('modify_') && targetAdminLevel) {
+      // Entity admin can modify anyone (including other entity admins) except themselves for deactivation
+      if (userScope.adminLevel === 'entity_admin') {
+        // Special case: prevent self-deactivation
+        if (isSelfAction && action === 'modify_entity_admin') {
+          // Allow self-edit for profile updates, but not deactivation (handled above)
+          return true;
+        }
+        return true; // Can modify everyone
+      }
+      
+      // Sub-entity admin cannot modify entity admins
+      if (userScope.adminLevel === 'sub_entity_admin' && targetAdminLevel === 'entity_admin') {
+        return false;
+      }
+      
+      // School admin can only modify branch admins and below
+      if (userScope.adminLevel === 'school_admin' && 
+          ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(targetAdminLevel)) {
+        return false;
+      }
+      
+      // Branch admin cannot modify any admin
+      if (userScope.adminLevel === 'branch_admin' && 
+          ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(targetAdminLevel)) {
+        return false;
+      }
+    }
     
     const hasPermission = permissions[action] || false;
     
     if (!hasPermission) {
-      console.log(`Permission denied: ${action} for ${userScope.adminLevel}`);
+      logAction('permission_denied', { action, adminLevel: userScope.adminLevel });
     }
     
     return hasPermission;
