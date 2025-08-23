@@ -1,14 +1,14 @@
 // /src/components/shared/ImageUpload.tsx
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Upload, X, AlertCircle } from 'lucide-react';
+import { Upload, X, AlertCircle, Camera, RefreshCw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { supabase } from '../../lib/supabase';
 import { useUser } from '../../contexts/UserContext';
 import { toast } from './Toast';
 import { ConfirmationDialog } from './ConfirmationDialog';
-import { getAuthenticatedUser } from '../../lib/auth';
+import { getAuthenticatedUser } from './auth';
 
 interface ImageUploadProps {
   id: string;
@@ -24,6 +24,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showRemoveConfirmation, setShowRemoveConfirmation] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser();
 
@@ -69,11 +70,59 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     }
   };
 
+  // Delete old file from storage
+  const deleteOldFile = async (oldPath: string): Promise<void> => {
+    if (!oldPath) return;
+
+    try {
+      // Try to delete with the stored path
+      const { error } = await supabase.storage
+        .from(bucket)
+        .remove([oldPath]);
+
+      if (error) {
+        console.warn(`Failed to delete old file at: ${oldPath}`, error);
+
+        // Try alternative paths based on bucket type
+        const bucketToSubfolder: Record<string, string> = {
+          'company-logos': 'companies',
+          'school-logos': 'schools',
+          'branch-logos': 'branches',
+          'subject-logos': 'subjects'
+        };
+
+        const expectedSubfolder = bucketToSubfolder[bucket];
+
+        if (expectedSubfolder) {
+          // Try alternative paths
+          if (oldPath.startsWith(`${expectedSubfolder}/`)) {
+            // Path has subfolder, try without it
+            const fileNameOnly = oldPath.replace(`${expectedSubfolder}/`, '');
+            await supabase.storage.from(bucket).remove([fileNameOnly]);
+          } else {
+            // Path doesn't have subfolder, try with it (for old files)
+            const withSubfolder = `${expectedSubfolder}/${oldPath}`;
+            await supabase.storage.from(bucket).remove([withSubfolder]);
+          }
+        }
+      } else {
+        console.log(`Successfully deleted old file: ${oldPath}`);
+      }
+    } catch (error) {
+      console.error('Error deleting old file:', error);
+      // Don't throw - we still want to proceed with the new upload
+    }
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const loadingToastId = toast.loading('Uploading image...');
+    // Store the old path before uploading new file
+    const oldPath = value;
+    const isReplacement = !!oldPath;
+
+    const loadingToastId = toast.loading(isReplacement ? 'Replacing image...' : 'Uploading image...');
 
     try {
       setUploading(true);
@@ -100,14 +149,13 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
       
-      // FIXED: Use flat structure for all buckets except avatars
+      // Use flat structure for all buckets except avatars
       let uploadPath = fileName;
       
       // Only use subfolder for avatars (user-specific isolation)
       if (bucket === 'avatars' && userId !== 'anonymous') {
         uploadPath = `${userId}/${fileName}`;
       }
-      // All logo buckets use flat structure (no subfolders)
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -141,8 +189,15 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             toast.error("Failed to upload image. Please try again.");
             return;
           } else {
+            // Success on retry
             toast.dismiss(loadingToastId);
-            toast.success('Image uploaded successfully!');
+            
+            // Delete old file if this is a replacement
+            if (isReplacement && oldPath) {
+              await deleteOldFile(oldPath);
+            }
+            
+            toast.success(isReplacement ? 'Image replaced successfully!' : 'Image uploaded successfully!');
             onChange(retryData.path);
             return;
           }
@@ -152,12 +207,16 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         return;
       }
 
-      // Success!
+      // Success! Now delete the old file if this is a replacement
+      if (isReplacement && oldPath) {
+        await deleteOldFile(oldPath);
+      }
+
       toast.dismiss(loadingToastId);
-      toast.success('Image uploaded successfully!');
+      toast.success(isReplacement ? 'Image replaced successfully!' : 'Image uploaded successfully!');
       onChange(data.path);
       
-      console.log('File uploaded successfully:', data.path);
+      console.log(`File ${isReplacement ? 'replaced' : 'uploaded'} successfully:`, data.path);
     } catch (error) {
       console.error('Error uploading file:', error);
       toast.dismiss(loadingToastId);
@@ -179,49 +238,18 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
   const confirmRemove = async () => {
     setShowRemoveConfirmation(false);
+    
+    const oldPath = value;
     onChange(null);
 
     try {
-      if (value) {
-        // Try to remove with the stored path
-        const { error } = await supabase.storage
-          .from(bucket)
-          .remove([value]);
-
-        if (error) {
-          console.error('Storage remove error:', error);
-          
-          // If it fails and path has a subfolder, try without it
-          if (value.includes('/')) {
-            const fileName = value.split('/').pop();
-            if (fileName) {
-              const { error: retryError } = await supabase.storage
-                .from(bucket)
-                .remove([fileName]);
-              
-              if (!retryError) {
-                setTimeout(() => {
-                  toast.success('Image removed successfully');
-                }, 200);
-                return;
-              }
-            }
-          }
-          
-          setTimeout(() => {
-            toast.info('Image removed from form (storage cleanup may have failed)');
-          }, 200);
-        } else {
-          setTimeout(() => {
-            toast.success('Image removed successfully');
-          }, 200);
-        }
+      if (oldPath) {
+        await deleteOldFile(oldPath);
+        toast.success('Image removed successfully');
       }
     } catch (error) {
       console.error('Error removing file:', error);
-      setTimeout(() => {
-        toast.info('Image removed from form (storage cleanup failed)');
-      }, 200);
+      toast.info('Image removed from form');
     }
   };
 
@@ -288,41 +316,78 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       />
 
       {value && displayUrl ? (
-        <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
+        <div 
+          className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-gray-200 dark:border-gray-700 group cursor-pointer transition-all hover:border-purple-400 dark:hover:border-purple-400"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onClick={() => {
+            if (!uploading && hasAuth) {
+              fileInputRef.current?.click();
+            }
+          }}
+        >
           {hasError ? (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
               <div className="text-center">
                 <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-1" />
                 <p className="text-xs text-gray-500">Failed to load</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Click to upload</p>
               </div>
             </div>
           ) : (
-            <img
-              src={displayUrl}
-              alt="Uploaded image"
-              className="w-full h-full object-contain bg-white dark:bg-gray-700"
-              onError={() => {
-                console.error('Image load error for:', displayUrl);
-                setHasError(true);
-                toast.warning('Failed to load image preview');
-              }}
-            />
+            <>
+              <img
+                src={displayUrl}
+                alt="Uploaded image"
+                className={cn(
+                  "w-full h-full object-contain bg-white dark:bg-gray-700 transition-all",
+                  isHovered && !uploading && "opacity-70 scale-105"
+                )}
+                onError={() => {
+                  console.error('Image load error for:', displayUrl);
+                  setHasError(true);
+                }}
+              />
+              
+              {/* Overlay on hover */}
+              <div className={cn(
+                "absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center transition-opacity",
+                isHovered && !uploading ? "opacity-100" : "opacity-0 pointer-events-none"
+              )}>
+                <RefreshCw className="h-6 w-6 text-white mb-1" />
+                <span className="text-xs text-white font-medium">Replace</span>
+              </div>
+
+              {/* Loading overlay */}
+              {uploading && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                </div>
+              )}
+            </>
           )}
-          <button
-            type="button"
-            onClick={handleRemove}
-            className="absolute top-1 right-1 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md transition-all opacity-0 group-hover:opacity-100"
-            title="Remove image"
-          >
-            <X className="h-4 w-4 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400" />
-          </button>
+
+          {/* Remove button - only show on hover and not while uploading */}
+          {!uploading && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemove();
+              }}
+              className="absolute top-1 right-1 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md transition-all opacity-0 group-hover:opacity-100"
+              title="Remove image"
+            >
+              <X className="h-3 w-3 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400" />
+            </button>
+          )}
         </div>
       ) : (
         <Button
           type="button"
           variant="outline"
           className={cn(
-            "w-24 h-24 flex flex-col items-center justify-center gap-2 border-dashed transition-all",
+            "w-24 h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed transition-all",
             "hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10",
             uploading && "opacity-50 cursor-not-allowed",
             !hasAuth && "opacity-50"
@@ -346,25 +411,33 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             </>
           ) : (
             <>
-              <Upload className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              <Camera className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {!hasAuth && !isPublicBucket ? 'Login Required' : 'Upload'}
+                {!hasAuth && !isPublicBucket ? 'Login Required' : 'Upload Logo'}
               </span>
             </>
           )}
         </Button>
       )}
       
+      {/* Help text */}
       {!value && hasAuth && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          PNG, JPG, JPEG or SVG • Max 2MB
+          Click to upload • PNG, JPG, JPEG or SVG • Max 2MB
         </p>
       )}
       
+      {value && !uploading && (
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Click image to replace • Click × to remove
+        </p>
+      )}
+      
+      {/* Confirmation Dialog for removing image */}
       <ConfirmationDialog
         isOpen={showRemoveConfirmation}
-        title="Remove Image"
-        message="Are you sure you want to remove this image? This action cannot be undone."
+        title="Remove Logo"
+        message="Are you sure you want to remove this logo? This action cannot be undone."
         confirmText="Remove"
         cancelText="Keep"
         confirmVariant="destructive"
