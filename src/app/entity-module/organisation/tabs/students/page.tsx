@@ -153,14 +153,13 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // Base query with explicit relationship to avoid ambiguity
+        // FIXED: Base query without 'name' column (doesn't exist in students table)
         let query = supabase
           .from('students')
           .select(`
             id,
             user_id,
             student_code,
-            name,
             grade_level,
             section,
             admission_date,
@@ -219,11 +218,10 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // Transform and enrich the data
+        // FIXED: Transform and enrich data - name derived from users table
         return studentsData.map(student => ({
           ...student,
-          name: student.name || 
-                student.users?.raw_user_meta_data?.name || 
+          name: student.users?.raw_user_meta_data?.name || 
                 student.users?.email?.split('@')[0] || 
                 'Unknown Student',
           email: student.users?.email || '',
