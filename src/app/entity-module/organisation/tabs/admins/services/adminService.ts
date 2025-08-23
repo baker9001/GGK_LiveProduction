@@ -79,14 +79,14 @@ interface UpdateAdminPayload {
 }
 
 interface AdminFilters {
-  company_id?: string;
   admin_level?: AdminLevel | AdminLevel[];
-  is_active?: boolean | string[];
+  is_active?: boolean | string[] | boolean[];
   search?: string;
   created_after?: string;
   created_before?: string;
   limit?: number;
   offset?: number;
+  scope_filter?: any; // For scope-based filtering
 }
 
 interface AdminUser {
@@ -177,6 +177,11 @@ export const adminService = {
    */
   async getAdminById(adminId: string): Promise<AdminUser | null> {
     try {
+      if (!adminId) {
+        console.error('getAdminById: Admin ID is required');
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('entity_users')
         .select(`
@@ -186,13 +191,15 @@ export const adminService = {
             email,
             raw_user_meta_data,
             created_at,
-            last_sign_in_at
+            last_sign_in_at,
+            is_active
           )
         `)
         .eq('id', adminId)
         .single();
 
       if (error || !data) {
+        console.error('Admin not found:', adminId, error);
         return null;
       }
 
@@ -509,9 +516,19 @@ export const adminService = {
 
   /**
    * List administrators with filters
+   * @param companyId - The company ID to filter admins (required)
+   * @param filters - Additional filters (optional)
    */
-  async listAdmins(filters: AdminFilters = {}): Promise<AdminUser[]> {
+  async listAdmins(companyId: string, filters: AdminFilters = {}): Promise<AdminUser[]> {
     try {
+      // Validate company ID
+      if (!companyId) {
+        console.error('listAdmins: Company ID is required');
+        return [];
+      }
+
+      console.log('Fetching admins for company:', companyId, 'with filters:', filters);
+
       let query = supabase
         .from('entity_users')
         .select(`
@@ -521,26 +538,30 @@ export const adminService = {
             email,
             raw_user_meta_data,
             created_at,
-            last_sign_in_at
+            last_sign_in_at,
+            is_active
           )
-        `);
+        `)
+        .eq('company_id', companyId); // Always filter by company ID
 
-      // Apply filters
-      if (filters.company_id) {
-        query = query.eq('company_id', filters.company_id);
-      }
+      // Apply additional filters
 
+      // Apply additional filters
       if (filters.admin_level) {
-        if (Array.isArray(filters.admin_level)) {
+        if (Array.isArray(filters.admin_level) && filters.admin_level.length > 0) {
           query = query.in('admin_level', filters.admin_level);
-        } else {
+        } else if (!Array.isArray(filters.admin_level)) {
           query = query.eq('admin_level', filters.admin_level);
         }
       }
 
       if (filters.is_active !== undefined) {
         if (Array.isArray(filters.is_active)) {
-          query = query.in('is_active', filters.is_active);
+          // Convert string array to boolean array if needed
+          const booleanValues = filters.is_active.map(val => 
+            typeof val === 'string' ? val === 'active' : val
+          );
+          query = query.in('is_active', booleanValues);
         } else {
           query = query.eq('is_active', filters.is_active);
         }
@@ -559,30 +580,26 @@ export const adminService = {
         query = query.lte('created_at', filters.created_before);
       }
 
-      if (filters.limit) {
-        query = query.limit(filters.limit);
-      }
-
-      if (filters.offset) {
-        query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
-      }
-
       // Order by created_at desc by default
       query = query.order('created_at', { ascending: false });
 
       const { data: admins, error } = await query;
 
       if (error) {
+        console.error('Error fetching admins:', error);
         throw new Error(`Failed to list admins: ${error.message}`);
       }
 
-      if (!admins) {
+      if (!admins || admins.length === 0) {
+        console.log('No admins found for company:', companyId);
         return [];
       }
 
+      console.log(`Found ${admins.length} admins for company:`, companyId);
+
       // Enrich with scopes
       const enrichedAdmins = await Promise.all(admins.map(async (admin) => {
-        // Get assigned scopes
+        // Get assigned scopes for this admin
         const { data: scopes } = await supabase
           .from('entity_admin_scope')
           .select('scope_id, scope_type')
