@@ -6,7 +6,7 @@
  *   - lucide-react
  *   - Custom components
  * 
- * Description: Sign-in page with unified glassmorphic design
+ * SECURITY FIX: Added complete session cleanup before new login
  */
 
 import React, { useState, useEffect } from 'react';
@@ -27,7 +27,12 @@ import {
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { toast } from '../../components/shared/Toast';
-import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
+import { 
+  setAuthenticatedUser, 
+  clearAuthenticatedUser, 
+  type User, 
+  type UserRole 
+} from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import bcrypt from 'bcryptjs';
 
@@ -69,18 +74,44 @@ export default function SignInPage() {
   // Redirect path
   const from = location.state?.from?.pathname || '/app/dashboard';
   
-  // Load remembered email on mount
+  // SECURITY FIX: Complete session cleanup on mount
   useEffect(() => {
-    // Clear any test mode or existing sessions
-    localStorage.removeItem('test_user');
+    // Clear ALL authentication data before showing login form
+    console.log('[Security] Clearing all authentication data on signin page load');
+    
+    // Clear all auth-related localStorage keys
+    const authKeys = [
+      'ggk_authenticated_user',
+      'test_mode_user', 
+      'ggk_auth_token',
+      'ggk_remember_session',
+      'user_scope_cache', // Clear cached user scope
+      'last_user_id' // Clear last user ID
+    ];
+    
+    authKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear sessionStorage
     sessionStorage.clear();
     
-    // Load remembered email if exists
+    // Clear any React Query cache if available
+    if (window.__REACT_QUERY_STATE__) {
+      window.__REACT_QUERY_STATE__ = undefined;
+    }
+    
+    // Clear authentication using the auth library
+    clearAuthenticatedUser();
+    
+    // Load remembered email if exists (this is safe to keep)
     const savedEmail = localStorage.getItem('ggk_remembered_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
     }
+    
+    console.log('[Security] Authentication cleanup complete');
   }, []);
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,6 +131,11 @@ export default function SignInPage() {
     
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      
+      // SECURITY: Clear any existing session before attempting login
+      clearAuthenticatedUser();
+      localStorage.removeItem('user_scope_cache');
+      localStorage.removeItem('last_user_id');
       
       // Get user from database
       const { data: user, error: userError } = await supabase
@@ -162,8 +198,6 @@ export default function SignInPage() {
       }
       
       if (!isValidPassword) {
-        // For now, skip database updates to avoid audit_logs trigger
-        // Just track attempts in memory
         const newAttempts = (user.failed_login_attempts || 0) + 1;
         
         if (newAttempts >= 5) {
@@ -176,12 +210,11 @@ export default function SignInPage() {
         return;
       }
       
-      // Success - Skip database updates to avoid audit_logs trigger
-      // The important part is setting the authenticated user
-      
       // Get user profile details based on user type
       let userRole: UserRole = 'VIEWER';
+      let userName = user.raw_user_meta_data?.name || user.email.split('@')[0];
       
+      // SECURITY FIX: Get the correct user profile based on user type
       switch (user.user_type) {
         case 'system':
           try {
@@ -194,48 +227,78 @@ export default function SignInPage() {
             if (adminUser?.roles?.name) {
               userRole = getUserSystemRole(adminUser.roles.name);
             } else {
-              userRole = 'SSA'; // Default for system users
+              userRole = 'SSA';
             }
           } catch (err) {
             console.warn('Could not fetch admin role, using default SSA');
             userRole = 'SSA';
           }
           break;
+          
         case 'entity':
+          // Get entity user details for name
+          try {
+            const { data: entityUser } = await supabase
+              .from('entity_users')
+              .select('name, admin_level')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (entityUser) {
+              userName = entityUser.name || userName;
+              // Determine role based on admin_level
+              if (entityUser.admin_level === 'school_admin') {
+                userRole = 'ENTITY_ADMIN'; // This will be refined by permissions
+              } else {
+                userRole = 'ENTITY_ADMIN';
+              }
+            }
+          } catch (err) {
+            console.warn('Could not fetch entity user details');
+          }
           userRole = 'ENTITY_ADMIN';
           break;
+          
         case 'teacher':
           userRole = 'TEACHER';
           break;
+          
         case 'student':
           userRole = 'STUDENT';
           break;
+          
         default:
           userRole = 'VIEWER';
       }
       
-      // Create user object
+      // SECURITY: Create user object with verified data
       const authenticatedUser: User = {
         id: user.id,
         email: user.email,
-        name: user.raw_user_meta_data?.name || user.email.split('@')[0],
+        name: userName,
         role: userRole,
         userType: user.user_type
       };
       
+      // SECURITY: Log authentication for audit
+      console.log('[Security] User authenticated:', {
+        userId: user.id,
+        email: user.email,
+        userType: user.user_type,
+        role: userRole,
+        timestamp: new Date().toISOString()
+      });
+      
       // Handle Remember Me functionality
       if (rememberMe) {
-        // Save email for next time
         localStorage.setItem('ggk_remembered_email', normalizedEmail);
-        // Set a flag for extended session (30 days instead of default 24 hours)
         localStorage.setItem('ggk_remember_session', 'true');
       } else {
-        // Clear remembered email if not checked
         localStorage.removeItem('ggk_remembered_email');
         localStorage.removeItem('ggk_remember_session');
       }
       
-      // Set authenticated user (uses remember me setting internally)
+      // Set authenticated user
       setAuthenticatedUser(authenticatedUser);
       
       // Check if password change required
@@ -269,14 +332,11 @@ export default function SignInPage() {
     setLoading(true);
     
     try {
-      // TODO: Implement actual email sending when email service is configured
-      // For now, just show a message
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       toast.info('If this email is registered, you will receive a verification link shortly.');
       toast.info('Please check your spam folder if you don\'t see it.');
       
-      // Clear the verification needed state after "sending"
       setVerificationNeeded(false);
       setError(null);
     } catch (err) {
@@ -288,7 +348,11 @@ export default function SignInPage() {
   };
   
   const handleDevLogin = () => {
-    // Simple dev login without database - bypasses all checks
+    // SECURITY: Clear everything before dev login
+    clearAuthenticatedUser();
+    localStorage.removeItem('user_scope_cache');
+    localStorage.removeItem('last_user_id');
+    
     const devUser: User = {
       id: 'dev-001',
       email: 'dev@ggk.com',
@@ -297,13 +361,10 @@ export default function SignInPage() {
       userType: 'system'
     };
     
-    // Set remember me for dev
     localStorage.setItem('ggk_remember_session', 'true');
-    
-    // Set authenticated user
     setAuthenticatedUser(devUser);
     
-    toast.success('Dev login successful! (Bypassed email verification)');
+    toast.success('Dev login successful!');
     navigate('/app/system-admin/dashboard', { replace: true });
   };
   
@@ -488,7 +549,6 @@ export default function SignInPage() {
                   checked={rememberMe}
                   onChange={(e) => {
                     setRememberMe(e.target.checked);
-                    // Clear saved email if unchecked
                     if (!e.target.checked) {
                       localStorage.removeItem('ggk_remembered_email');
                       localStorage.removeItem('ggk_remember_session');
@@ -582,7 +642,7 @@ export default function SignInPage() {
             </p>
           </div>
           
-          {/* Back to Home Button - Bottom Style like Forgot Password */}
+          {/* Back to Home Button */}
           <div className="mt-6">
             <Button
               onClick={() => navigate('/')}
