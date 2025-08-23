@@ -28,7 +28,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const { user } = useUser(); // Get user from context
 
   // Define public buckets that don't require authentication
-  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos'].includes(bucket);
+  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos'].includes(bucket);
 
   // Check authentication status on mount - Updated to use custom auth
   useEffect(() => {
@@ -102,17 +102,15 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
       
       // Determine upload path based on bucket type
+      // FIXED: Removed subfolder paths for logo buckets to match deletion logic
       let uploadPath = fileName;
       
+      // Only use subfolder for avatars (user-specific isolation)
       if (bucket === 'avatars' && userId !== 'anonymous') {
         uploadPath = `${userId}/${fileName}`;
-      } else if (bucket === 'company-logos' || bucket === 'logos') {
-        uploadPath = `companies/${fileName}`;
-      } else if (bucket === 'school-logos') {
-        uploadPath = `schools/${fileName}`;
-      } else if (bucket === 'subject-logos') {
-        uploadPath = `subjects/${fileName}`;
       }
+      // All other buckets use flat structure (no subfolders)
+      // This includes: company-logos, school-logos, subject-logos, branch-logos, logos
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -134,11 +132,10 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         } else if (error.message?.includes('duplicate')) {
           // Try with a different filename
           const altFileName = `${Math.random().toString(36).slice(2)}_${Date.now()}_alt.${fileExt}`;
-          const altUploadPath = bucket === 'company-logos' ? `companies/${altFileName}` : altFileName;
           
           const { data: retryData, error: retryError } = await supabase.storage
             .from(bucket)
-            .upload(altUploadPath, file, {
+            .upload(altFileName, file, {
               cacheControl: '3600',
               upsert: false
             });
