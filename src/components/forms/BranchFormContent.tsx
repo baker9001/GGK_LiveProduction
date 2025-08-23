@@ -93,7 +93,7 @@ export function BranchFormContent({
   };
 
   // Helper to get branch logo URL
-  const getBranchLogoUrl = (path: string | null) => {
+  const getBranchLogoUrl = (path: string | null | undefined) => {
     if (!path) return null;
     
     // If it's already a full URL, return as is
@@ -102,7 +102,13 @@ export function BranchFormContent({
     }
     
     // Construct Supabase storage URL
-    return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branch-logos/${path}`;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
+    }
+    
+    return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
   };
 
   return (

@@ -217,8 +217,9 @@ export default function BranchesTab() {
     try {
       let query = supabase
         .from('branches')
-        .select(` 
+        .select(`
           id, name, code, school_id, status, address, notes, logo, created_at,
+          additional:branches_additional (*),
           schools (
             name,
             id,
@@ -228,7 +229,6 @@ export default function BranchesTab() {
             )
           )
         `)
-        .order('created_at', { ascending: false });
 
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
