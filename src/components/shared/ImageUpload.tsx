@@ -8,7 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useUser } from '../../contexts/UserContext';
 import { toast } from './Toast';
 import { ConfirmationDialog } from './ConfirmationDialog';
-import { getAuthenticatedUser } from './auth';
+import { getAuthenticatedUser } from '../../lib/auth';
 
 interface ImageUploadProps {
   id: string;
