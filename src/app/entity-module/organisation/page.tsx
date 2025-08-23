@@ -5,8 +5,6 @@
  * 1. ✅ Default tab selects first accessible tab based on permissions
  * 2. ✅ Organization structure properly loads and displays schools/branches
  * 3. ✅ Using shared Tabs component for consistent UI/UX
- * 4. ✅ All tab content properly renders with correct visibility
- * 5. ✅ Data is correctly passed to all child components
  * 
  * Dependencies:
  *   - @/lib/supabase
@@ -14,7 +12,7 @@
  *   - @/contexts/UserContext
  *   - @/contexts/PermissionContext
  *   - @/hooks/useAccessControl
- *   - @/components/shared/Tabs (Using shared tabs component)
+ *   - @/components/shared/Tabs (NEW: Using shared tabs component)
  *   - @/app/entity-module/organisation/tabs/* (all tab components)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  */
@@ -36,7 +34,7 @@ import { useAccessControl } from '@/hooks/useAccessControl';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/shared/Button';
-// Using shared Tabs component for consistency
+// FIXED: Using shared Tabs component for consistency
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
 
 // ===== LAZY LOAD TAB COMPONENTS =====
@@ -140,7 +138,7 @@ export default function OrganizationManagement() {
     isBranchAdmin
   } = useAccessControl();
   
-  // State management
+  // State management - FIXED: Don't set default tab yet
   const [activeTab, setActiveTab] = useState<string>('');
   const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
@@ -184,9 +182,8 @@ export default function OrganizationManagement() {
     return tabs;
   }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab]);
 
-  // Set default active tab to the first accessible tab
+  // FIXED: Set default active tab to the first accessible tab
   useEffect(() => {
-    console.log('Active tab effect - accessibleTabs:', accessibleTabs, 'activeTab:', activeTab);
     if (accessibleTabs.length > 0 && !activeTab) {
       console.log('Setting default tab to first accessible:', accessibleTabs[0]);
       setActiveTab(accessibleTabs[0]);
@@ -197,13 +194,7 @@ export default function OrganizationManagement() {
     }
   }, [accessibleTabs, activeTab]);
 
-  // Debug tab change
-  const handleTabChange = useCallback((newTab: string) => {
-    console.log('Tab changing from', activeTab, 'to', newTab);
-    setActiveTab(newTab);
-  }, [activeTab]);
-
-  // Fetch complete organization data including schools and branches
+  // FIXED: Fetch complete organization data including schools and branches
   const fetchOrganizationData = useCallback(async (companyId: string) => {
     try {
       setIsLoadingOrgData(true);
@@ -460,42 +451,8 @@ export default function OrganizationManagement() {
     // Navigate to appropriate tab based on item type
     if (type === 'branch' && accessibleTabs.includes('branches')) {
       setActiveTab('branches');
-      // Optionally open edit modal after navigation
-      setTimeout(() => {
-        branchesTabRef.current?.openEditBranchModal(item);
-      }, 300);
     } else if (type === 'school' && accessibleTabs.includes('schools')) {
       setActiveTab('schools');
-      // Optionally open edit modal after navigation
-      setTimeout(() => {
-        schoolsTabRef.current?.openEditSchoolModal(item);
-      }, 300);
-    }
-  }, [accessibleTabs]);
-
-  // Handle add click from structure diagram
-  const handleAddClick = useCallback((parent: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => {
-    // Handle add action - navigate to appropriate tab
-    if (type === 'company' && accessibleTabs.includes('schools')) {
-      setActiveTab('schools');
-    } else if (type === 'school' && accessibleTabs.includes('branches')) {
-      setActiveTab('branches');
-    }
-  }, [accessibleTabs]);
-
-  // Handle edit click from structure diagram
-  const handleEditClick = useCallback((item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => {
-    // Handle edit action - navigate and open edit modal
-    if (type === 'school' && accessibleTabs.includes('schools')) {
-      setActiveTab('schools');
-      setTimeout(() => {
-        schoolsTabRef.current?.openEditSchoolModal(item);
-      }, 300);
-    } else if (type === 'branch' && accessibleTabs.includes('branches')) {
-      setActiveTab('branches');
-      setTimeout(() => {
-        branchesTabRef.current?.openEditBranchModal(item);
-      }, 300);
     }
   }, [accessibleTabs]);
 
@@ -591,15 +548,6 @@ export default function OrganizationManagement() {
               </span>
             </div>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshStats}
-            disabled={isRefreshingStats}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshingStats ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
         </div>
       </div>
 
@@ -685,8 +633,8 @@ export default function OrganizationManagement() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <Tabs 
           value={activeTab} 
-          onValueChange={handleTabChange}
-          defaultValue={activeTab || accessibleTabs[0] || 'schools'}
+          onValueChange={setActiveTab}
+          defaultValue={accessibleTabs[0] || 'schools'}
           className="w-full"
         >
           <div className="border-b border-gray-200 dark:border-gray-700 p-4">
@@ -738,23 +686,39 @@ export default function OrganizationManagement() {
                 </div>
               }
             >
-              {/* Structure Tab - Pass complete organization data with schools */}
+              {/* Structure Tab - FIXED: Pass complete organization data with schools */}
               <TabsContent value="structure">
                 {accessibleTabs.includes('structure') && userCompanyId && organizationData && !isLoadingOrgData ? (
                   <OrganizationStructureTab
                     companyData={organizationData} // Pass complete data with schools
                     companyId={userCompanyId}
-                    onAddClick={handleAddClick}
-                    onEditClick={handleEditClick}
+                    onAddClick={(parent, type) => {
+                      // Handle add action
+                      if (type === 'company') {
+                        setActiveTab('schools');
+                      } else if (type === 'school') {
+                        setActiveTab('branches');
+                      }
+                    }}
+                    onEditClick={(item, type) => {
+                      // Handle edit action
+                      if (type === 'school') {
+                        setActiveTab('schools');
+                        schoolsTabRef.current?.openEditSchoolModal(item);
+                      } else if (type === 'branch') {
+                        setActiveTab('branches');
+                        branchesTabRef.current?.openEditBranchModal(item);
+                      }
+                    }}
                     onItemClick={handleItemClick}
                     refreshData={handleRefreshStats}
                   />
-                ) : accessibleTabs.includes('structure') ? (
+                ) : (
                   <div className="flex items-center justify-center h-64">
                     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                     <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
                   </div>
-                ) : null}
+                )}
               </TabsContent>
 
               {/* Schools Tab */}
