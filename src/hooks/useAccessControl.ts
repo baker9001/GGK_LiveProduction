@@ -256,26 +256,21 @@ export function useAccessControl(): UseAccessControlResult {
       let assignedSchools: string[] = [];
       let assignedBranches: string[] = [];
       
-      // Fetch assigned schools
-      const { data: schoolData } = await supabase
-        .from('entity_user_schools')
-        .select('school_id')
+      // Fetch assigned schools and branches from entity_admin_scope table
+      const { data: scopeData } = await supabase
+        .from('entity_admin_scope')
+        .select('scope_type, scope_id')
         .eq('user_id', userId)
         .eq('is_active', true);
       
-      if (schoolData) {
-        assignedSchools = schoolData.map(s => s.school_id);
-      }
-      
-      // Fetch assigned branches
-      const { data: branchData } = await supabase
-        .from('entity_user_branches')
-        .select('branch_id')
-        .eq('user_id', userId)
-        .eq('is_active', true);
-      
-      if (branchData) {
-        assignedBranches = branchData.map(b => b.branch_id);
+      if (scopeData) {
+        assignedSchools = scopeData
+          .filter(s => s.scope_type === 'school')
+          .map(s => s.scope_id);
+        
+        assignedBranches = scopeData
+          .filter(s => s.scope_type === 'branch')
+          .map(s => s.scope_id);
       }
       
       const userScope: CompleteUserScope = {
