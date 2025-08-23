@@ -1,11 +1,11 @@
-// src/hooks/useAccessControl.ts
+// src/hooks/useAccessControl.ts - UPDATED VERSION
 /**
- * FIXED: useAccessControl Hook - Supabase Relationship Ambiguity Issue
+ * FIXED: useAccessControl Hook - Updated for Current Database Schema
  * 
- * Issue Fixed: 
- * - Supabase error: "Could not embed because more than one relationship was found"
- * - Problem: Multiple foreign keys between 'users' and 'entity_users' tables
- * - Solution: Use explicit relationship naming and separate queries
+ * Fixes Applied:
+ * 1. Fixed Supabase relationship ambiguity
+ * 2. Updated queries to work with current schema (no is_active in students/teachers tables)
+ * 3. Proper handling of user status through users table relationship
  * 
  * Dependencies:
  *   - @/contexts/UserContext
@@ -64,10 +64,6 @@ export function useAccessControl(): UseAccessControlResult {
       setError(null);
 
       // FIXED: Use explicit relationship specification to avoid ambiguity
-      // Instead of: users.select('*, entity_users!inner(...)')
-      // Use: entity_users.select('*, users!entity_users_user_id_fkey(...)')
-      
-      // First, get the entity_users record with the correct relationship
       const { data: entityUserData, error: entityUserError } = await supabase
         .from('entity_users')
         .select(`
@@ -95,7 +91,6 @@ export function useAccessControl(): UseAccessControlResult {
 
       // If no entity_users record found, check if it's a regular user
       if (!entityUserData) {
-        // Fallback: Get basic user data for non-entity users
         const { data: basicUserData, error: basicUserError } = await supabase
           .from('users')
           .select('id, email, user_type, is_active')
@@ -112,7 +107,6 @@ export function useAccessControl(): UseAccessControlResult {
           throw new Error('User not found or inactive');
         }
 
-        // Return scope for non-entity user (limited access)
         const scope: CompleteUserScope = {
           userId: basicUserData.id,
           userType: (basicUserData.user_type as UserType) || 'student',
@@ -133,10 +127,8 @@ export function useAccessControl(): UseAccessControlResult {
       let assignedSchools: string[] = [];
       let assignedBranches: string[] = [];
 
-      // Only fetch scope assignments for non-entity admins
       if (entityUserData.admin_level !== 'entity_admin' && entityUserData.admin_level !== 'sub_entity_admin') {
         try {
-          // FIXED: Separate query to avoid relationship conflicts
           const { data: scopeData, error: scopeError } = await supabase
             .from('entity_admin_scope')
             .select('scope_type, scope_id')
@@ -145,7 +137,6 @@ export function useAccessControl(): UseAccessControlResult {
 
           if (scopeError) {
             console.error('Scope fetch error:', scopeError);
-            // Don't throw here, just log the error and continue with empty scopes
           } else if (scopeData) {
             assignedSchools = scopeData
               .filter(scope => scope.scope_type === 'school')
@@ -157,11 +148,9 @@ export function useAccessControl(): UseAccessControlResult {
           }
         } catch (scopeError) {
           console.error('Error fetching scope assignments:', scopeError);
-          // Continue with empty scopes
         }
       }
 
-      // Construct complete user scope
       const scope: CompleteUserScope = {
         userId: entityUserData.user_id,
         userType: (entityUserData.users?.user_type as UserType) || 'entity',
@@ -342,7 +331,7 @@ export function useAccessControl(): UseAccessControlResult {
     return permissionMatrix[userScope.adminLevel]?.[action] || false;
   }, [userScope]);
 
-  // Scope-based query filters
+  // FIXED: Scope-based query filters that work with current schema
   const getScopeFilters = useCallback((resourceType?: 'schools' | 'branches' | 'users' | 'teachers' | 'students'): Record<string, any> => {
     if (!userScope) return {};
 
@@ -363,6 +352,8 @@ export function useAccessControl(): UseAccessControlResult {
         case 'users':
         case 'teachers':
         case 'students':
+          // FIXED: For teachers and students, filter by school/branch but don't use is_active
+          // The is_active filtering should be done through the users table relationship
           return { 
             or: [
               { school_id: schoolIds },
@@ -437,3 +428,158 @@ export function useAccessControl(): UseAccessControlResult {
     error
   };
 }
+
+// ADDITIONAL FIX: Helper function to properly query students with active status
+export const queryActiveStudents = async (companyId: string, scopeFilters?: Record<string, any>) => {
+  let query = supabase
+    .from('students')
+    .select(`
+      id,
+      user_id,
+      student_code,
+      name,
+      grade_level,
+      section,
+      company_id,
+      school_id,
+      branch_id,
+      created_at,
+      updated_at,
+      users!students_user_id_fkey (
+        id,
+        email,
+        is_active,
+        raw_user_meta_data,
+        last_login_at
+      ),
+      schools (
+        id,
+        name
+      ),
+      branches (
+        id,
+        name
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('users.is_active', true)  // FIXED: Filter active status through users table
+    .order('created_at', { ascending: false });
+
+  // Apply scope filters if provided
+  if (scopeFilters) {
+    if (scopeFilters.school_ids && Array.isArray(scopeFilters.school_ids)) {
+      query = query.in('school_id', scopeFilters.school_ids);
+    }
+    
+    if (scopeFilters.branch_ids && Array.isArray(scopeFilters.branch_ids)) {
+      query = query.in('branch_id', scopeFilters.branch_ids);
+    }
+    
+    if (scopeFilters.or) {
+      // Handle OR conditions for school/branch access
+      const orConditions: string[] = [];
+      if (scopeFilters.or.school_id && Array.isArray(scopeFilters.or.school_id)) {
+        orConditions.push(`school_id.in.(${scopeFilters.or.school_id.join(',')})`);
+      }
+      if (scopeFilters.or.branch_id && Array.isArray(scopeFilters.or.branch_id)) {
+        orConditions.push(`branch_id.in.(${scopeFilters.or.branch_id.join(',')})`);
+      }
+      if (orConditions.length > 0) {
+        query = query.or(orConditions.join(','));
+      }
+    }
+  }
+
+  const { data, error } = await query;
+  
+  if (error) {
+    throw new Error(`Failed to fetch students: ${error.message}`);
+  }
+  
+  return (data || []).map(student => ({
+    ...student,
+    is_active: student.users?.is_active || false,
+    email: student.users?.email || '',
+    name: student.name || student.users?.raw_user_meta_data?.name || 'Unknown Student',
+    school_name: student.schools?.name || 'No School',
+    branch_name: student.branches?.name || 'No Branch'
+  }));
+};
+
+// ADDITIONAL FIX: Helper function to properly query teachers with active status
+export const queryActiveTeachers = async (companyId: string, scopeFilters?: Record<string, any>) => {
+  let query = supabase
+    .from('teachers')
+    .select(`
+      id,
+      user_id,
+      teacher_code,
+      name,
+      specialization,
+      qualification,
+      experience_years,
+      company_id,
+      school_id,
+      branch_id,
+      created_at,
+      updated_at,
+      users!teachers_user_id_fkey (
+        id,
+        email,
+        is_active,
+        raw_user_meta_data,
+        last_login_at
+      ),
+      schools (
+        id,
+        name
+      ),
+      branches (
+        id,
+        name
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('users.is_active', true)  // FIXED: Filter active status through users table
+    .order('created_at', { ascending: false });
+
+  // Apply scope filters if provided
+  if (scopeFilters) {
+    if (scopeFilters.school_ids && Array.isArray(scopeFilters.school_ids)) {
+      query = query.in('school_id', scopeFilters.school_ids);
+    }
+    
+    if (scopeFilters.branch_ids && Array.isArray(scopeFilters.branch_ids)) {
+      query = query.in('branch_id', scopeFilters.branch_ids);
+    }
+    
+    if (scopeFilters.or) {
+      // Handle OR conditions for school/branch access
+      const orConditions: string[] = [];
+      if (scopeFilters.or.school_id && Array.isArray(scopeFilters.or.school_id)) {
+        orConditions.push(`school_id.in.(${scopeFilters.or.school_id.join(',')})`);
+      }
+      if (scopeFilters.or.branch_id && Array.isArray(scopeFilters.or.branch_id)) {
+        orConditions.push(`branch_id.in.(${scopeFilters.or.branch_id.join(',')})`);
+      }
+      if (orConditions.length > 0) {
+        query = query.or(orConditions.join(','));
+      }
+    }
+  }
+
+  const { data, error } = await query;
+  
+  if (error) {
+    throw new Error(`Failed to fetch teachers: ${error.message}`);
+  }
+  
+  return (data || []).map(teacher => ({
+    ...teacher,
+    is_active: teacher.users?.is_active || false,
+    email: teacher.users?.email || '',
+    name: teacher.name || teacher.users?.raw_user_meta_data?.name || 'Unknown Teacher',
+    school_name: teacher.schools?.name || 'No School',
+    branch_name: teacher.branches?.name || 'No Branch'
+  }));
+};
