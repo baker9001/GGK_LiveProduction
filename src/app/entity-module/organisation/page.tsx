@@ -600,99 +600,219 @@ export default function OrganizationManagement() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+      {/* Enhanced Tab Navigation */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        {/* Tab Navigation Container with gradient background */}
+        <div className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-t-xl">
+          <nav className="flex gap-1.5" aria-label="Tabs">
             {accessibleTabs.includes('structure') && (
               <button
                 onClick={() => setActiveTab('structure')}
                 onMouseEnter={() => prefetchTabData('structure')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'structure'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'structure' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <Building2 className="w-4 h-4 inline-block mr-2" />
-                Structure
+                {activeTab === 'structure' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-green-500" />
+                )}
+                <Building2 className={`w-4 h-4 transition-colors ${
+                  activeTab === 'structure' 
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'structure' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Structure
+                </span>
+                {activeTab === 'structure' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                )}
               </button>
             )}
+
             {accessibleTabs.includes('schools') && (
               <button
                 onClick={() => setActiveTab('schools')}
                 onMouseEnter={() => prefetchTabData('schools')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'schools'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'schools' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <School className="w-4 h-4 inline-block mr-2" />
-                Schools
+                {activeTab === 'schools' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-blue-500" />
+                )}
+                <School className={`w-4 h-4 transition-colors ${
+                  activeTab === 'schools' 
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'schools' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Schools
+                </span>
+                {activeTab === 'schools' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                )}
               </button>
             )}
+
             {accessibleTabs.includes('branches') && (
               <button
                 onClick={() => setActiveTab('branches')}
                 onMouseEnter={() => prefetchTabData('branches')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'branches'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'branches' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <MapPin className="w-4 h-4 inline-block mr-2" />
-                Branches
+                {activeTab === 'branches' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-purple-500" />
+                )}
+                <MapPin className={`w-4 h-4 transition-colors ${
+                  activeTab === 'branches' 
+                    ? 'text-purple-600 dark:text-purple-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'branches' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Branches
+                </span>
+                {activeTab === 'branches' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                )}
               </button>
             )}
+
             {accessibleTabs.includes('admins') && (
               <button
                 onClick={() => setActiveTab('admins')}
                 onMouseEnter={() => prefetchTabData('admins')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'admins'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'admins' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <Shield className="w-4 h-4 inline-block mr-2" />
-                Admins
+                {activeTab === 'admins' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-orange-500" />
+                )}
+                <Shield className={`w-4 h-4 transition-colors ${
+                  activeTab === 'admins' 
+                    ? 'text-orange-600 dark:text-orange-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'admins' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Admins
+                </span>
+                {activeTab === 'admins' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                )}
               </button>
             )}
+
             {accessibleTabs.includes('teachers') && (
               <button
                 onClick={() => setActiveTab('teachers')}
                 onMouseEnter={() => prefetchTabData('teachers')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'teachers'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'teachers' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <Users className="w-4 h-4 inline-block mr-2" />
-                Teachers
+                {activeTab === 'teachers' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-indigo-500" />
+                )}
+                <Users className={`w-4 h-4 transition-colors ${
+                  activeTab === 'teachers' 
+                    ? 'text-indigo-600 dark:text-indigo-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'teachers' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Teachers
+                </span>
+                {activeTab === 'teachers' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                )}
               </button>
             )}
+
             {accessibleTabs.includes('students') && (
               <button
                 onClick={() => setActiveTab('students')}
                 onMouseEnter={() => prefetchTabData('students')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === 'students'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                }`}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'students' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
               >
-                <GraduationCap className="w-4 h-4 inline-block mr-2" />
-                Students
+                {activeTab === 'students' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-amber-500" />
+                )}
+                <GraduationCap className={`w-4 h-4 transition-colors ${
+                  activeTab === 'students' 
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'students' 
+                    ? 'text-gray-900 dark:text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Students
+                </span>
+                {activeTab === 'students' && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
               </button>
             )}
           </nav>
         </div>
 
         {/* Tab Content */}
-        <div className="p-6">
+        <div className="p-6 bg-white dark:bg-gray-800 rounded-b-xl">
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-64">
