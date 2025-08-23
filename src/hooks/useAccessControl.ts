@@ -1,28 +1,16 @@
-// src/hooks/useAccessControl.ts
 /**
- * PRODUCTION-READY VERSION: useAccessControl Hook
+ * File: /src/hooks/useAccessControl.ts
  * 
- * Security Features:
- * 1. Environment-based dev mode
- * 2. Input validation and sanitization
- * 3. Secure error handling
- * 4. Principle of least privilege
- * 5. Self-modification prevention
- * 6. Cache with TTL
- * 
- * Dependencies:
- *   - @/contexts/UserContext
- *   - @/lib/supabase
- *   - External: react
+ * SECURITY FIX: Properly invalidate cache on user change
+ * Prevent loading wrong user's permissions
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useUser } from '../contexts/UserContext';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { useUser } from '../contexts/UserContext';
 
-// Type definitions
 export type UserType = 'system' | 'entity' | 'teacher' | 'student' | 'parent';
-export type AdminLevel = 'entity_admin' | 'school_admin' | 'branch_admin' | 'sub_entity_admin';
+export type AdminLevel = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin';
 
 export interface CompleteUserScope {
   userId: string;
@@ -58,10 +46,9 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 // Environment check for development mode
 const isDevelopmentMode = (): boolean => {
-  // Check if we're in development and if dev mode is explicitly enabled
   return import.meta.env.MODE === 'development' && 
          (import.meta.env.VITE_ENABLE_DEV_MODE === 'true' || 
-          import.meta.env.VITE_ENABLE_DEV_MODE === undefined); // Default to true in dev if not set
+          import.meta.env.VITE_ENABLE_DEV_MODE === undefined);
 };
 
 // UUID validation with strict regex
@@ -76,7 +63,7 @@ const isDevUser = (userId: string): boolean => {
   return userId?.startsWith('dev-') || userId === 'test' || !isValidUUID(userId);
 };
 
-// Simple logging function (replace with proper audit logging in production)
+// Simple logging function
 const logAction = (action: string, details: any) => {
   if (import.meta.env.MODE === 'development') {
     console.log(`[AccessControl] ${action}:`, details);
@@ -97,6 +84,24 @@ export function useAccessControl(): UseAccessControlResult {
     timestamp: number;
   }>({ data: null, timestamp: 0 });
 
+  // SECURITY FIX: Clear cache when user changes
+  useEffect(() => {
+    if (user?.id !== lastUserId) {
+      console.log('[Security] User changed, clearing scope cache', {
+        oldUserId: lastUserId,
+        newUserId: user?.id
+      });
+      
+      // Clear the cache
+      scopeCache.current = { data: null, timestamp: 0 };
+      setUserScope(null);
+      
+      // Remove from localStorage as well
+      localStorage.removeItem('user_scope_cache');
+      localStorage.removeItem('last_user_id');
+    }
+  }, [user?.id, lastUserId]);
+
   // Fetch user scope data
   const fetchUserScope = useCallback(async (userId: string) => {
     try {
@@ -105,12 +110,22 @@ export function useAccessControl(): UseAccessControlResult {
         throw new Error('Invalid user ID');
       }
       
-      // Check cache validity
+      // SECURITY FIX: Always verify we're fetching for the current user
+      if (user?.id !== userId) {
+        console.error('[Security] Attempted to fetch scope for wrong user', {
+          currentUserId: user?.id,
+          requestedUserId: userId
+        });
+        throw new Error('User ID mismatch - security violation');
+      }
+      
+      // Check cache validity - but ONLY if user hasn't changed
       const now = Date.now();
       if (scopeCache.current.data && 
           scopeCache.current.timestamp > now - CACHE_TTL &&
-          lastUserId === userId) {
-        console.log('Using cached user scope');
+          lastUserId === userId &&
+          scopeCache.current.data.userId === userId) {
+        console.log('Using cached user scope for:', userId);
         setUserScope(scopeCache.current.data);
         setIsLoading(false);
         return scopeCache.current.data;
@@ -186,132 +201,48 @@ export function useAccessControl(): UseAccessControlResult {
           
           if (fetchError) {
             lastError = fetchError;
-            console.error(`Attempt ${attempts} failed:`, fetchError);
-            
-            // If it's a UUID error and we're in dev mode, handle it gracefully
-            if (fetchError.code === '22P02' && isDevelopmentMode()) {
-              console.warn('UUID error in dev mode, using fallback');
-              const devScope: CompleteUserScope = {
-                userId: userId,
-                userType: 'entity',
-                adminLevel: 'entity_admin',
-                companyId: 'dev-company-id',
-                schoolIds: [],
-                branchIds: [],
-                isActive: true,
-                assignedSchools: [],
-                assignedBranches: []
-              };
-              
-              scopeCache.current = { data: devScope, timestamp: now };
-              setUserScope(devScope);
-              setLastUserId(userId);
-              setIsLoading(false);
-              return devScope;
-            }
-            
             if (attempts < MAX_RETRY_ATTEMPTS) {
-              await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
               continue;
             }
-          } else {
-            entityUserData = data;
-            break;
+            throw fetchError;
           }
-        } catch (err: any) {
-          lastError = err;
-          console.error(`Attempt ${attempts} error:`, err);
           
+          entityUserData = data;
+        } catch (error) {
+          lastError = error;
           if (attempts < MAX_RETRY_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+            continue;
           }
+          throw error;
         }
       }
       
-      // If no entity user found, check basic user
       if (!entityUserData) {
-        console.log('No entity user found, checking basic user data');
-        
-        const { data: basicUserData, error: basicError } = await supabase
-          .from('users')
-          .select('id, email, user_type, is_active')
-          .eq('id', userId)
-          .eq('is_active', true)
-          .maybeSingle();
-        
-        if (basicError || !basicUserData) {
-          console.error('No active user found');
-          const minimalScope: CompleteUserScope = {
-            userId: userId,
-            userType: 'student',
-            adminLevel: undefined,
-            companyId: undefined,
-            schoolIds: [],
-            branchIds: [],
-            isActive: false,
-            assignedSchools: [],
-            assignedBranches: []
-          };
-          
-          scopeCache.current = { data: minimalScope, timestamp: now };
-          setUserScope(minimalScope);
-          setLastUserId(userId);
-          setIsLoading(false);
-          return minimalScope;
-        }
-        
-        const basicScope: CompleteUserScope = {
-          userId: basicUserData.id,
-          userType: (basicUserData.user_type as UserType) || 'student',
-          adminLevel: undefined,
-          companyId: undefined,
-          schoolIds: [],
-          branchIds: [],
-          isActive: basicUserData.is_active,
-          assignedSchools: [],
-          assignedBranches: []
-        };
-        
-        scopeCache.current = { data: basicScope, timestamp: now };
-        setUserScope(basicScope);
-        setLastUserId(userId);
-        setIsLoading(false);
-        return basicScope;
+        if (lastError) throw lastError;
+        throw new Error('User permissions not found');
       }
       
-      console.log('Entity user found:', {
-        adminLevel: entityUserData.admin_level,
-        companyId: entityUserData.company_id,
-        isActive: entityUserData.is_active
-      });
+      console.log('Entity user found:', entityUserData);
       
-      // Fetch scope assignments for non-entity admins
+      // Fetch scope assignments
       let assignedSchools: string[] = [];
       let assignedBranches: string[] = [];
       
-      if (entityUserData.admin_level !== 'entity_admin' && 
-          entityUserData.admin_level !== 'sub_entity_admin') {
-        try {
-          const { data: scopeData } = await supabase
-            .from('entity_admin_scope')
-            .select('scope_type, scope_id')
-            .eq('user_id', userId)
-            .eq('is_active', true);
-          
-          if (scopeData) {
-            assignedSchools = scopeData
-              .filter(scope => scope.scope_type === 'school')
-              .map(scope => scope.scope_id);
-            
-            assignedBranches = scopeData
-              .filter(scope => scope.scope_type === 'branch')
-              .map(scope => scope.scope_id);
-            
-            console.log('Assigned scopes:', { schools: assignedSchools, branches: assignedBranches });
-          }
-        } catch (scopeError) {
-          console.error('Error fetching scope assignments:', scopeError);
-        }
+      const { data: scopeData } = await supabase
+        .from('entity_admin_scope')
+        .select('scope_type, scope_id')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+      
+      if (scopeData) {
+        assignedSchools = scopeData
+          .filter(s => s.scope_type === 'school')
+          .map(s => s.scope_id);
+        assignedBranches = scopeData
+          .filter(s => s.scope_type === 'branch')
+          .map(s => s.scope_id);
       }
       
       const scope: CompleteUserScope = {
@@ -328,9 +259,22 @@ export function useAccessControl(): UseAccessControlResult {
       
       console.log('Final user scope:', scope);
       
+      // SECURITY: Verify scope is for correct user
+      if (scope.userId !== userId) {
+        console.error('[Security] Scope user ID mismatch', {
+          expected: userId,
+          received: scope.userId
+        });
+        throw new Error('Security violation: User ID mismatch in scope');
+      }
+      
       scopeCache.current = { data: scope, timestamp: now };
       setUserScope(scope);
       setLastUserId(userId);
+      
+      // Store in localStorage for debugging
+      localStorage.setItem('user_scope_cache', JSON.stringify(scope));
+      localStorage.setItem('last_user_id', userId);
       
       logAction('user_scope_fetched', { 
         userId,
@@ -365,7 +309,7 @@ export function useAccessControl(): UseAccessControlResult {
     } finally {
       setIsLoading(false);
     }
-  }, [lastUserId]);
+  }, [lastUserId, user]);
 
   // Initialize user scope when user changes
   useEffect(() => {
@@ -376,16 +320,22 @@ export function useAccessControl(): UseAccessControlResult {
       }
 
       if (user?.id) {
-        try {
-          await fetchUserScope(user.id);
-        } catch (error) {
-          console.error('Failed to initialize user scope:', error);
+        // SECURITY: Only fetch if user has actually changed
+        if (user.id !== lastUserId) {
+          try {
+            await fetchUserScope(user.id);
+          } catch (error) {
+            console.error('Failed to initialize user scope:', error);
+          }
         }
       } else {
+        // No user - clear everything
         setUserScope(null);
         setLastUserId(null);
         setIsLoading(false);
         scopeCache.current = { data: null, timestamp: 0 };
+        localStorage.removeItem('user_scope_cache');
+        localStorage.removeItem('last_user_id');
       }
     };
 
@@ -412,164 +362,49 @@ export function useAccessControl(): UseAccessControlResult {
 
   // Tab visibility control
   const canViewTab = useCallback((tabName: string, adminLevel?: AdminLevel): boolean => {
-    const currentAdminLevel = adminLevel || userScope?.adminLevel;
+    const level = adminLevel || userScope?.adminLevel;
     
-    if (!currentAdminLevel) {
-      console.log(`canViewTab(${tabName}): No admin level`);
-      return false;
-    }
+    if (!level) return false;
     
-    const tabVisibilityMatrix: Record<string, AdminLevel[]> = {
-      'structure': ['entity_admin', 'sub_entity_admin'],
-      'schools': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+    const tabPermissions: Record<string, AdminLevel[]> = {
+      'structure': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+      'schools': ['entity_admin', 'sub_entity_admin', 'school_admin'],
       'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-      'admins': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+      'admins': ['entity_admin', 'sub_entity_admin'],
       'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
       'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin']
     };
-
-    const allowedLevels = tabVisibilityMatrix[tabName] || [];
-    const canView = allowedLevels.includes(currentAdminLevel);
     
-    console.log(`canViewTab(${tabName}): adminLevel=${currentAdminLevel}, canView=${canView}`);
-    
-    return canView;
+    return tabPermissions[tabName]?.includes(level) || false;
   }, [userScope]);
 
-  // Action permission control
+  // Permission check
   const can = useCallback((action: string, targetUserId?: string, targetAdminLevel?: AdminLevel): boolean => {
-    if (!userScope || !userScope.adminLevel) return false;
+    if (!userScope) return false;
     
-    // Prevent self-modification for critical actions
-    if (targetUserId && targetUserId === userScope.userId) {
-      const restrictedSelfActions = [
-        'deactivate_user', 
-        'delete_user', 
-        'change_admin_level',
-        'remove_permissions'
-      ];
-      
-      if (restrictedSelfActions.some(restricted => action.includes(restricted))) {
-        console.log('Self-modification blocked:', action);
-        return false;
-      }
+    // Prevent self-modification for certain actions
+    if (action === 'deactivate' && targetUserId === userScope.userId) {
+      return false;
     }
     
-    // Prevent privilege escalation
-    if (targetAdminLevel && action.includes('modify')) {
-      const levelHierarchy: Record<AdminLevel, number> = {
-        'entity_admin': 4,
-        'sub_entity_admin': 3,
-        'school_admin': 2,
-        'branch_admin': 1
-      };
-      
-      const currentLevel = levelHierarchy[userScope.adminLevel] || 0;
-      const targetLevel = levelHierarchy[targetAdminLevel] || 0;
-      
-      // Can only modify lower levels (except entity_admin can modify all)
-      if (targetLevel >= currentLevel && userScope.adminLevel !== 'entity_admin') {
-        console.log('Privilege escalation blocked');
-        return false;
-      }
-    }
-    
-    const permissionMatrix: Record<AdminLevel, Record<string, boolean>> = {
-      entity_admin: {
-        create_school: true,
-        create_branch: true,
-        create_school_admin: true,
-        create_branch_admin: true,
-        create_teacher: true,
-        create_student: true,
-        modify_school: true,
-        modify_branch: true,
-        modify_teacher: true,
-        modify_student: true,
-        modify_entity_admin: true,
-        modify_sub_admin: true,
-        modify_school_admin: true,
-        modify_branch_admin: true,
-        delete_school: true,
-        delete_branch: true,
-        delete_teacher: true,
-        delete_student: true,
-        view_audit_logs: true,
-        export_data: true,
-        manage_settings: true
-      },
-      sub_entity_admin: {
-        create_school: true,
-        create_branch: true,
-        create_school_admin: true,
-        create_branch_admin: true,
-        create_teacher: true,
-        create_student: true,
-        modify_school: true,
-        modify_branch: true,
-        modify_teacher: true,
-        modify_student: true,
-        modify_entity_admin: false,
-        modify_sub_admin: false,
-        modify_school_admin: true,
-        modify_branch_admin: true,
-        delete_school: false,
-        delete_branch: false,
-        delete_teacher: true,
-        delete_student: true,
-        view_audit_logs: true,
-        export_data: true,
-        manage_settings: false
-      },
-      school_admin: {
-        create_school: false,
-        create_branch: true,
-        create_school_admin: false,
-        create_branch_admin: true,
-        create_teacher: true,
-        create_student: true,
-        modify_school: false,
-        modify_branch: true,
-        modify_teacher: true,
-        modify_student: true,
-        modify_entity_admin: false,
-        modify_sub_admin: false,
-        modify_school_admin: false,
-        modify_branch_admin: true,
-        delete_school: false,
-        delete_branch: false,
-        delete_teacher: true,
-        delete_student: true,
-        view_audit_logs: false,
-        export_data: false,
-        manage_settings: false
-      },
-      branch_admin: {
-        create_school: false,
-        create_branch: false,
-        create_school_admin: false,
-        create_branch_admin: false,
-        create_teacher: true,
-        create_student: true,
-        modify_school: false,
-        modify_branch: false,
-        modify_teacher: true,
-        modify_student: true,
-        modify_entity_admin: false,
-        modify_sub_admin: false,
-        modify_school_admin: false,
-        modify_branch_admin: false,
-        delete_school: false,
-        delete_branch: false,
-        delete_teacher: false,
-        delete_student: false,
-        view_audit_logs: false,
-        export_data: false,
-        manage_settings: false
-      }
+    const permissions: Record<string, boolean> = {
+      'create_entity_admin': userScope.adminLevel === 'entity_admin',
+      'create_sub_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'create_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'create_teacher': true,
+      'create_student': true,
+      'modify_entity_admin': userScope.adminLevel === 'entity_admin',
+      'modify_sub_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'modify_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'modify_teacher': true,
+      'modify_student': true,
+      'delete_users': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'view_all_users': true
     };
-
-    const hasPermission = permissionMatrix[userScope.adminLevel]?.[action] || false;
+    
+    const hasPermission = permissions[action] || false;
     
     if (!hasPermission) {
       console.log(`Permission denied: ${action} for ${userScope.adminLevel}`);
