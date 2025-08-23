@@ -1,21 +1,12 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
- * 
- * PHASE 5: Branches Tab with Access Control Applied
- * 
- * Access Rules Applied:
- * 1. Access Check: Block entry if !canViewTab('branches')
- * 2. Scoped Queries: Apply getScopeFilters to all Supabase queries
- * 3. UI Gating: Show/hide Create/Edit/Delete buttons via can(action)
- * 
- * Branches Management Tab Component
- * Handles branch data display, creation, and editing with comprehensive forms
- * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
- *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - @/hooks/useAccessControl
+ *   - @/components/shared/* (SlideInForm, FormField, Button, StatusBadge)
+ *   - @/components/shared/ImageUpload
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * Preserved Features:
@@ -25,36 +16,46 @@
  *   - ImageUpload integration
  *   - Statistics display
  *   - All original event handlers
+ *   - Tab-based form organization
  * 
  * Added/Modified:
- *   - ENHANCED: Logo display matching organization structure's improved implementation
- *   - IMPROVED: Better logo sizing with proper aspect ratio
- *   - ADDED: Logo fallback with better error handling
- *   - IMPROVED: Logo container styling for better visual presentation
+ *   - ENHANCED: Better permission checks with proper format
+ *   - IMPROVED: Performance optimizations with useCallback
+ *   - ADDED: Better error handling and user feedback
+ *   - FIXED: Proper scope filtering for branch admins
+ *   - IMPROVED: Clearer permission messages
  * 
  * Database Tables:
  *   - branches & branches_additional
  *   - schools (for reference)
+ *   - entity_user_branches (for scope)
+ * 
+ * Connected Files:
+ *   - useAccessControl.ts (permission checking)
+ *   - StatusBadge.tsx (status display)
+ *   - ImageUpload.tsx (logo upload)
  */
 
 'use client';
 
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import { 
   MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
   Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
-  XCircle, AlertTriangle, School, Hash, Navigation, Home, Info
+  XCircle, AlertTriangle, School, Hash, Navigation, Home, Info,
+  Lock, Shield, Loader2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { getAuthenticatedUser } from '../../../../../lib/auth';
-import { useUser } from '../../../../../contexts/UserContext';
-import { SlideInForm } from '../../../../../components/shared/SlideInForm';
-import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
-import { Button } from '../../../../../components/shared/Button';
-import { ImageUpload } from '../../../../../components/shared/ImageUpload';
-import { useAccessControl } from '../../../../../hooks/useAccessControl';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
+import { Button } from '@/components/shared/Button';
+import { StatusBadge } from '@/components/shared/StatusBadge';
+import { ImageUpload } from '@/components/shared/ImageUpload';
+import { useAccessControl } from '@/hooks/useAccessControl';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -69,6 +70,7 @@ interface BranchData {
   created_at: string;
   additional?: BranchAdditional;
   student_count?: number;
+  teachers_count?: number;
   school_name?: string;
 }
 
@@ -90,6 +92,11 @@ interface BranchAdditional {
   working_days?: string[];
 }
 
+interface SchoolOption {
+  id: string;
+  name: string;
+}
+
 export interface BranchesTabProps {
   companyId: string;
   refreshData?: () => void;
@@ -100,45 +107,6 @@ export interface BranchesTabRef {
   openEditBranchModal: (branch: BranchData) => void;
 }
 
-// ===== STATUS BADGE COMPONENT =====
-const StatusBadge = memo(({ status, size = 'sm' }: { status: string; size?: 'xs' | 'sm' | 'md' }) => {
-  const getStatusConfig = () => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return {
-          color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-700',
-          icon: <CheckCircle2 className="w-3 h-3" />,
-        };
-      case 'inactive':
-        return {
-          color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-700',
-          icon: <XCircle className="w-3 h-3" />,
-        };
-      default:
-        return {
-          color: 'bg-gray-100 text-gray-800 dark:bg-gray-700/50 dark:text-gray-300 border-gray-200 dark:border-gray-600',
-          icon: <AlertTriangle className="w-3 h-3" />,
-        };
-    }
-  };
-
-  const config = getStatusConfig();
-  const sizeClasses = {
-    xs: 'px-1.5 py-0.5 text-xs',
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-3 py-1 text-sm'
-  };
-
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full font-medium border ${config.color} ${sizeClasses[size]}`}>
-      {config.icon}
-      {status || 'Unknown'}
-    </span>
-  );
-});
-
-StatusBadge.displayName = 'StatusBadge';
-
 // ===== MAIN COMPONENT =====
 const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
@@ -148,22 +116,16 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     canViewTab,
     can,
     getScopeFilters,
+    getUserContext,
     isLoading: isAccessControlLoading,
     isEntityAdmin,
     isSubEntityAdmin,
-    isBranchAdmin
+    isSchoolAdmin,
+    isBranchAdmin,
+    hasError: hasAccessError,
+    error: accessError
   } = useAccessControl();
 
-  // PHASE 5 RULE 1: ACCESS CHECK
-  // Block entry if user cannot view this tab
-  useEffect(() => {
-    if (!isAccessControlLoading && !canViewTab('branches')) {
-      toast.error('You do not have permission to view branches');
-      window.location.href = '/app/entity-module/dashboard';
-      return;
-    }
-  }, [isAccessControlLoading, canViewTab]);
-  
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -175,20 +137,32 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
 
-  // PHASE 5 RULE 2: SCOPED QUERIES
-  // Apply getScopeFilters to all Supabase queries
-  const scopeFilters = getScopeFilters('branches');
+  // ACCESS CHECK: Block entry if user cannot view this tab
+  useEffect(() => {
+    if (!isAccessControlLoading && !canViewTab('branches')) {
+      toast.error('You do not have permission to view branches');
+      setTimeout(() => {
+        window.location.href = '/app/entity-module/dashboard';
+      }, 1000);
+    }
+  }, [isAccessControlLoading, canViewTab]);
+
+  // Show access error if there's one
+  useEffect(() => {
+    if (hasAccessError && accessError) {
+      toast.error(`Access Control Error: ${accessError}`);
+    }
+  }, [hasAccessError, accessError]);
 
   // ===== EXPOSE METHODS VIA REF =====
   React.useImperativeHandle(ref, () => ({
     openEditBranchModal: (branch: BranchData) => {
-      console.log('Opening branch edit modal for:', branch.name);
       handleEdit(branch);
     }
   }), []);
 
-  // ENHANCED: Improved helper to get branch logo URL with better error handling
-  const getBranchLogoUrl = (path: string | null | undefined) => {
+  // Helper to get branch logo URL
+  const getBranchLogoUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
     
     // If it's already a full URL, return as is
@@ -196,7 +170,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       return path;
     }
     
-    // Construct Supabase storage URL with proper environment variable
+    // Construct Supabase storage URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       console.warn('VITE_SUPABASE_URL is not defined');
@@ -205,60 +179,127 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     
     // Use the correct bucket name for branches
     return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
-  };
+  }, []);
 
-  // ===== FETCH SCHOOLS =====
-  const { data: schools = [] } = useQuery(
-    ['schools-list', companyId],
+  // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
+  const scopeFilters = getScopeFilters('branches');
+
+  // ===== FETCH SCHOOLS FOR DROPDOWN =====
+  const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
+    ['schools-for-branches', companyId, scopeFilters],
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
       
+      // Apply scope filters for school admins
+      if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.id) {
+        if (Array.isArray(scopeFilters.id) && scopeFilters.id.length === 0) {
+          return [];
+        }
+        query = query.in('id', scopeFilters.id);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) throw error;
       return data || [];
     },
-    { enabled: !!companyId }
+    { 
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 5 * 60 * 1000
+    }
   );
 
-  // ===== FETCH BRANCHES =====
-  const { data: branches = [], isLoading, refetch } = useQuery(
-    ['branches', companyId],
+  // ===== FETCH BRANCHES WITH SCOPE =====
+  const { data: branches = [], isLoading, error: fetchError, refetch } = useQuery(
+    ['branches-tab', companyId, scopeFilters],
     async () => {
-      // SCOPED QUERY: Get schools with scope filtering
+      // For branch admins, get branches directly
+      if (isBranchAdmin && scopeFilters.branch_id) {
+        let branchQuery = supabase
+          .from('branches')
+          .select('id, name, code, school_id, status, address, notes, logo, created_at');
+        
+        if (Array.isArray(scopeFilters.branch_id)) {
+          if (scopeFilters.branch_id.length === 0) return [];
+          branchQuery = branchQuery.in('id', scopeFilters.branch_id);
+        } else {
+          branchQuery = branchQuery.eq('id', scopeFilters.branch_id);
+        }
+        
+        const { data: branchesData, error } = await branchQuery.order('name');
+        if (error) throw error;
+        
+        // Fetch additional data
+        const enrichedBranches = await Promise.all((branchesData || []).map(async (branch) => {
+          const { data: additional } = await supabase
+            .from('branches_additional')
+            .select('*')
+            .eq('branch_id', branch.id)
+            .maybeSingle();
+          
+          // Get school name
+          const { data: school } = await supabase
+            .from('schools')
+            .select('name')
+            .eq('id', branch.school_id)
+            .single();
+          
+          // Get teacher count if not in additional
+          let teacherCount = additional?.teachers_count || 0;
+          if (!teacherCount) {
+            const { count } = await supabase
+              .from('teachers')
+              .select('*', { count: 'exact', head: true })
+              .eq('branch_id', branch.id)
+              .eq('is_active', true);
+            teacherCount = count || 0;
+          }
+          
+          return {
+            ...branch,
+            additional,
+            school_name: school?.name || 'Unknown School',
+            student_count: additional?.student_count || additional?.current_students || 0,
+            teachers_count: teacherCount
+          };
+        }));
+        
+        return enrichedBranches;
+      }
+      
+      // For others, get schools first then branches
       let schoolsQuery = supabase
         .from('schools')
         .select('id, name')
         .eq('company_id', companyId);
 
-      // Apply scope filters if user is not entity admin
-      if (scopeFilters.school_ids) {
-        schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+      // Apply school scope filters
+      if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.school_id) {
+        if (Array.isArray(scopeFilters.school_id)) {
+          if (scopeFilters.school_id.length === 0) return [];
+          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_id);
+        } else {
+          schoolsQuery = schoolsQuery.eq('id', scopeFilters.school_id);
+        }
       }
 
       const { data: schoolsData, error: schoolsError } = await schoolsQuery;
-      
       if (schoolsError) throw schoolsError;
       
       const schoolIds = schoolsData?.map(s => s.id) || [];
-      
       if (schoolIds.length === 0) return [];
       
-      // SCOPED QUERY: Get branches with scope filtering
-      let branchesQuery = supabase
+      // Get branches for these schools
+      const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select('id, name, code, school_id, status, address, notes, logo, created_at')
-        .in('school_id', schoolIds);
-
-      // Apply additional scope filters for branches
-      if (scopeFilters.branch_ids) {
-        branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
-      }
-
-      const { data: branchesData, error: branchesError } = await branchesQuery.order('name');
+        .in('school_id', schoolIds)
+        .order('name');
       
       if (branchesError) throw branchesError;
       
@@ -273,30 +314,47 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         // Get school name
         const school = schoolsData?.find(s => s.id === branch.school_id);
         
+        // Get teacher count if not in additional
+        let teacherCount = additional?.teachers_count || 0;
+        if (!teacherCount) {
+          const { count } = await supabase
+            .from('teachers')
+            .select('*', { count: 'exact', head: true })
+            .eq('branch_id', branch.id)
+            .eq('is_active', true);
+          teacherCount = count || 0;
+        }
+        
         return {
           ...branch,
           additional,
           school_name: school?.name || 'Unknown School',
-          student_count: additional?.student_count || additional?.current_students || 0
+          student_count: additional?.student_count || additional?.current_students || 0,
+          teachers_count: teacherCount
         };
       }));
       
       return branchesWithAdditional;
     },
     {
-      enabled: !!companyId,
+      enabled: !!companyId && !isAccessControlLoading,
       staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000
+      retry: 2
     }
   );
 
-  // Branches are already filtered by scope in the query
-  const accessibleBranches = branches;
+  // Check if user can access all branches
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== MUTATIONS =====
   const createBranchMutation = useMutation(
     async (data: any) => {
+      // Validate school selection for branch admins
+      if (isBranchAdmin) {
+        toast.error('Branch administrators cannot create new branches');
+        throw new Error('Insufficient permissions');
+      }
+      
       // Prepare main data
       const mainData = {
         name: data.name,
@@ -350,7 +408,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches']);
+        queryClient.invalidateQueries(['branches-tab', companyId]);
+        queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch created successfully');
         setShowCreateModal(false);
@@ -359,6 +418,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setActiveTab('basic');
       },
       onError: (error: any) => {
+        console.error('Error creating branch:', error);
         toast.error(error.message || 'Failed to create branch');
       }
     }
@@ -425,7 +485,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches']);
+        queryClient.invalidateQueries(['branches-tab', companyId]);
+        queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch updated successfully');
         setShowEditModal(false);
@@ -435,13 +496,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setActiveTab('basic');
       },
       onError: (error: any) => {
+        console.error('Error updating branch:', error);
         toast.error(error.message || 'Failed to update branch');
       }
     }
   );
 
   // ===== HELPER FUNCTIONS =====
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const errors: Record<string, string> = {};
     
     if (!formData.name) errors.name = 'Name is required';
@@ -456,15 +518,13 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [formData]);
 
   // Effect to populate form data when editing
   useEffect(() => {
     if (selectedBranch && showEditModal) {
-      // Populate form data for editing
       const populateEditForm = async () => {
         try {
-          // Get school data to get company_id
           const { data: schoolData, error } = await supabase
             .from('schools')
             .select('id, name, company_id')
@@ -479,12 +539,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           
           const additionalData = selectedBranch.additional || {};
           
-          // Set the form state with all data including school_id
           const combinedData = {
             ...selectedBranch,
-            school_id: selectedBranch.school_id, // Ensure school_id is set
+            school_id: selectedBranch.school_id,
             company_id: schoolData?.company_id,
-            ...(additionalData || {})
+            ...additionalData
           };
           
           setFormData(combinedData);
@@ -498,7 +557,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     }
   }, [selectedBranch, showEditModal]);
 
-  const handleSubmit = (mode: 'create' | 'edit') => {
+  const handleSubmit = useCallback((mode: 'create' | 'edit') => {
     if (!validateForm()) {
       toast.error('Please fix the errors before submitting');
       return;
@@ -509,30 +568,72 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     } else {
       updateBranchMutation.mutate({ id: selectedBranch!.id, data: formData });
     }
-  };
+  }, [validateForm, formData, selectedBranch, createBranchMutation, updateBranchMutation]);
 
-  const handleEdit = (branch: BranchData) => {
+  const handleEdit = useCallback((branch: BranchData) => {
     setSelectedBranch(branch);
     setFormErrors({});
     setActiveTab('basic');
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setFormData({ status: 'active' });
     setFormErrors({});
     setActiveTab('basic');
     setShowCreateModal(true);
-  };
+  }, []);
 
   // Filter branches based on search, status, and school
-  const filteredBranches = accessibleBranches.filter(branch => {
-    const matchesSearch = branch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         branch.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || branch.status === filterStatus;
-    const matchesSchool = filterSchool === 'all' || branch.school_id === filterSchool;
-    return matchesSearch && matchesStatus && matchesSchool;
-  });
+  const filteredBranches = useMemo(() => {
+    return branches.filter(branch => {
+      const matchesSearch = branch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           branch.code.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || branch.status === filterStatus;
+      const matchesSchool = filterSchool === 'all' || branch.school_id === filterSchool;
+      return matchesSearch && matchesStatus && matchesSchool;
+    });
+  }, [branches, searchTerm, filterStatus, filterSchool]);
+
+  // Calculate stats
+  const stats = useMemo(() => ({
+    total: branches.length,
+    active: branches.filter(b => b.status === 'active').length,
+    students: branches.reduce((acc, b) => acc + (b.student_count || 0), 0),
+    teachers: branches.reduce((acc, b) => acc + (b.teachers_count || 0), 0)
+  }), [branches]);
+
+  // Get user context for display
+  const userContext = getUserContext();
+  const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
+
+  // Loading state
+  if (isLoading || isAccessControlLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+          <p className="text-gray-600 dark:text-gray-400">Loading branches...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (fetchError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <p className="text-gray-600 dark:text-gray-400">Failed to load branches</p>
+          <p className="text-sm text-gray-500 mt-1">{fetchError instanceof Error ? fetchError.message : 'Unknown error'}</p>
+          <Button onClick={() => refetch()} className="mt-4">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ===== RENDER FORM =====
   const renderBranchForm = () => (
@@ -541,13 +642,16 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         <div className="space-y-4">
           <FormField id="school_id" label="School" required error={formErrors.school_id}>
             <Select
-              key={`school-select-${formData.school_id || 'empty'}`}
               id="school_id"
-              options={schools.map(s => ({ value: s.id, label: s.name }))}
               value={formData.school_id || ''}
-              onChange={(value) => setFormData({...formData, school_id: value})}
-              placeholder="Select school"
-            />
+              onChange={(e) => setFormData({...formData, school_id: e.target.value})}
+              disabled={isBranchAdmin} // Branch admins can't change school
+            >
+              <option value="">Select school</option>
+              {schools.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
           </FormField>
 
           <FormField id="name" label="Branch Name" required error={formErrors.name}>
@@ -571,13 +675,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           <FormField id="status" label="Status" required error={formErrors.status}>
             <Select
               id="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
               value={formData.status || 'active'}
-              onChange={(value) => setFormData({...formData, status: value})}
-            />
+              onChange={(e) => setFormData({...formData, status: e.target.value})}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
           </FormField>
 
           <FormField id="building_name" label="Building Name">
@@ -770,30 +873,56 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </div>
             <Select
               value={filterSchool}
-              onChange={(value) => setFilterSchool(value)}
-              options={[
-                { value: 'all', label: 'All Schools' },
-                ...schools.map(s => ({ value: s.id, label: s.name }))
-              ]}
-            />
+              onChange={(e) => setFilterSchool(e.target.value)}
+              className="w-48"
+            >
+              <option value="all">All Schools</option>
+              {schools.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
             <Select
               value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-            />
+              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+              className="w-32"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
           </div>
-          {/* PHASE 5 RULE 3: UI GATING - Show create button based on permissions */}
-          {can('create_branch') && (
+          {/* UI GATING: Show create button based on permissions */}
+          {can('organization.create_branch') ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add Branch
             </Button>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <Lock className="w-4 h-4" />
+              <span>Read-only access</span>
+            </div>
           )}
         </div>
+
+        {/* Permission notices */}
+        {!canAccessAll && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Limited Scope Access
+                </p>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  As a {adminLevelDisplay}, you're viewing branches within your assigned scope.
+                  {isSchoolAdmin && ' You can manage branches in your assigned schools.'}
+                  {isBranchAdmin && ' You can only manage the branches you are assigned to.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4">
@@ -802,7 +931,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Branches</p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {accessibleBranches.length}
+                  {stats.total}
                 </p>
               </div>
               <MapPin className="w-8 h-8 text-gray-400" />
@@ -813,7 +942,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
                 <p className="text-xl font-semibold text-green-600 dark:text-green-400">
-                  {accessibleBranches.filter(b => b.status === 'active').length}
+                  {stats.active}
                 </p>
               </div>
               <CheckCircle2 className="w-8 h-8 text-green-400" />
@@ -824,7 +953,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
                 <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                  {accessibleBranches.reduce((acc, b) => acc + (b.student_count || 0), 0)}
+                  {stats.students.toLocaleString()}
                 </p>
               </div>
               <Users className="w-8 h-8 text-blue-400" />
@@ -835,7 +964,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
                 <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
-                  {accessibleBranches.reduce((acc, b) => acc + (b.additional?.teachers_count || 0), 0)}
+                  {stats.teachers.toLocaleString()}
                 </p>
               </div>
               <Users className="w-8 h-8 text-purple-400" />
@@ -844,44 +973,21 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         </div>
       </div>
 
-      {/* PHASE 5 RULE 3: UI GATING - Show permission notices */}
-      {!can('create_branch') && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-          <div className="flex items-center">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mr-2" />
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              You don't have permission to create branches.
-            </p>
-          </div>
-        </div>
-      )}
-      
-      {!canAccessAll && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-          <div className="flex items-center">
-            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Showing branches based on your assigned scope. You have access to branches you're specifically assigned to manage or branches under your assigned schools.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Branches List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {isLoading ? (
-          <div className="col-span-full text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading branches...</p>
-          </div>
-        ) : filteredBranches.length === 0 ? (
+        {filteredBranches.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 dark:text-gray-400">No branches found</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              {searchTerm || filterStatus !== 'all' || filterSchool !== 'all' 
+                ? 'No branches match your filters' 
+                : 'No branches found'}
+            </p>
           </div>
         ) : (
           filteredBranches.map((branch) => {
             const logoUrl = getBranchLogoUrl(branch.logo);
+            const canEdit = can('organization.modify_branch');
             
             return (
               <div
@@ -890,17 +996,15 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    {/* ENHANCED: Improved logo display matching org structure implementation */}
-                    <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white">
+                    {/* Logo display with better error handling */}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-md overflow-hidden relative bg-white">
                       {logoUrl ? (
                         <>
                           <img
                             src={logoUrl}
                             alt={`${branch.name} logo`}
                             className="w-full h-full object-contain p-0.5"
-                            style={{ maxWidth: '100%', maxHeight: '100%' }}
                             onError={(e) => {
-                              // If logo fails to load, hide the image and show fallback
                               const imgElement = e.currentTarget as HTMLImageElement;
                               imgElement.style.display = 'none';
                               const parent = imgElement.parentElement;
@@ -908,24 +1012,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                                 const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
                                 if (fallback) {
                                   fallback.style.display = 'flex';
-                                  fallback.classList.remove('bg-white');
-                                  fallback.classList.add('bg-purple-500');
                                 }
                               }
                             }}
                           />
-                          <span className="text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-purple-500 text-white">
-                            {branch.code?.substring(0, 2).toUpperCase() || 
-                             branch.name?.substring(0, 2).toUpperCase() || 
-                             <MapPin className="w-5 h-5" />}
-                          </span>
+                          <div className="logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-purple-500 text-white">
+                            <MapPin className="w-5 h-5" />
+                          </div>
                         </>
                       ) : (
-                        <span className="text-sm font-bold flex items-center justify-center w-full h-full bg-purple-500 text-white">
-                          {branch.code?.substring(0, 2).toUpperCase() || 
-                           branch.name?.substring(0, 2).toUpperCase() || 
-                           <MapPin className="w-5 h-5" />}
-                        </span>
+                        <div className="flex items-center justify-center w-full h-full bg-purple-500 text-white">
+                          <MapPin className="w-5 h-5" />
+                        </div>
                       )}
                     </div>
                     
@@ -976,18 +1074,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                     <div className="flex items-center gap-1">
                       <Users className="w-3 h-3 text-gray-400" />
                       <span className="text-gray-600 dark:text-gray-400">
-                        {branch.student_count || 0} students
+                        {branch.student_count || 0}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="w-3 h-3 text-gray-400" />
                       <span className="text-gray-600 dark:text-gray-400">
-                        {branch.additional?.teachers_count || 0} teachers
+                        {branch.teachers_count || 0}
                       </span>
                     </div>
                   </div>
-                  {/* PHASE 5 RULE 3: UI GATING - Show edit button based on permissions */}
-                  {can('modify_branch', branch.id) ? (
+                  {/* UI GATING: Show edit button based on permissions */}
+                  {canEdit ? (
                     <button
                       onClick={() => handleEdit(branch)}
                       className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -996,8 +1094,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                     </button>
                   ) : (
-                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this branch">
-                      <Edit2 className="w-4 h-4 text-gray-400" />
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit branches">
+                      <Shield className="w-4 h-4 text-gray-400" />
                     </div>
                   )}
                 </div>
@@ -1017,6 +1115,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setFormErrors({});
         }}
         onSave={() => handleSubmit('create')}
+        loading={createBranchMutation.isLoading}
       >
         <div className="space-y-4">
           {/* Tab Navigation */}
@@ -1069,12 +1168,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         onSave={() => handleSubmit('edit')}
         loading={updateBranchMutation.isLoading}
       >
-        {formErrors.form && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md mb-4">
-            {formErrors.form}
-          </div>
-        )}
-        
         <div className="space-y-4">
           {/* Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
