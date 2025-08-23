@@ -679,16 +679,15 @@ export default function OrganizationManagement() {
           </div>
 
           <div className="p-6">
-            <Suspense
-              fallback={
+            {/* Structure Tab - FIXED: Pass complete organization data with schools */}
+            {activeTab === 'structure' && accessibleTabs.includes('structure') && (
+              <Suspense fallback={
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
                 </div>
-              }
-            >
-              {/* Structure Tab - FIXED: Pass complete organization data with schools */}
-              <TabsContent value="structure">
-                {accessibleTabs.includes('structure') && userCompanyId && organizationData && !isLoadingOrgData ? (
+              }>
+                {userCompanyId && organizationData && !isLoadingOrgData ? (
                   <OrganizationStructureTab
                     companyData={organizationData} // Pass complete data with schools
                     companyId={userCompanyId}
@@ -719,59 +718,79 @@ export default function OrganizationManagement() {
                     <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
                   </div>
                 )}
-              </TabsContent>
+              </Suspense>
+            )}
 
-              {/* Schools Tab */}
-              <TabsContent value="schools">
-                {accessibleTabs.includes('schools') && userCompanyId && (
-                  <SchoolsTab
-                    ref={schoolsTabRef}
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Schools Tab */}
+            {activeTab === 'schools' && accessibleTabs.includes('schools') && userCompanyId && (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              }>
+                <SchoolsTab
+                  ref={schoolsTabRef}
+                  companyId={userCompanyId}
+                  refreshData={handleRefreshStats}
+                />
+              </Suspense>
+            )}
 
-              {/* Branches Tab */}
-              <TabsContent value="branches">
-                {accessibleTabs.includes('branches') && userCompanyId && (
-                  <BranchesTab
-                    ref={branchesTabRef}
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Branches Tab */}
+            {activeTab === 'branches' && accessibleTabs.includes('branches') && userCompanyId && (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              }>
+                <BranchesTab
+                  ref={branchesTabRef}
+                  companyId={userCompanyId}
+                  refreshData={handleRefreshStats}
+                />
+              </Suspense>
+            )}
 
-              {/* Admins Tab */}
-              <TabsContent value="admins">
-                {accessibleTabs.includes('admins') && userCompanyId && (
-                  <AdminsTab
-                    companyId={userCompanyId}
-                  />
-                )}
-              </TabsContent>
+            {/* Admins Tab */}
+            {activeTab === 'admins' && accessibleTabs.includes('admins') && userCompanyId && (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              }>
+                <AdminsTab
+                  companyId={userCompanyId}
+                />
+              </Suspense>
+            )}
 
-              {/* Teachers Tab */}
-              <TabsContent value="teachers">
-                {accessibleTabs.includes('teachers') && userCompanyId && (
-                  <TeachersTab
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
+            {/* Teachers Tab */}
+            {activeTab === 'teachers' && accessibleTabs.includes('teachers') && userCompanyId && (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              }>
+                <TeachersTab
+                  companyId={userCompanyId}
+                  refreshData={handleRefreshStats}
+                />
+              </Suspense>
+            )}
 
-              {/* Students Tab */}
-              <TabsContent value="students">
-                {accessibleTabs.includes('students') && userCompanyId && (
-                  <StudentsTab
-                    companyId={userCompanyId}
-                    refreshData={handleRefreshStats}
-                  />
-                )}
-              </TabsContent>
-            </Suspense>
+            {/* Students Tab */}
+            {activeTab === 'students' && accessibleTabs.includes('students') && userCompanyId && (
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              }>
+                <StudentsTab
+                  companyId={userCompanyId}
+                  refreshData={handleRefreshStats}
+                />
+              </Suspense>
+            )}
           </div>
         </Tabs>
       </div>
