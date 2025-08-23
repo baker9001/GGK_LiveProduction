@@ -94,7 +94,11 @@ export function AdminAuditLogsPanel({
       if (filters.actorId) serviceFilters.actor_id = filters.actorId;
       if (filters.targetId) serviceFilters.target_id = filters.targetId;
 
-      const logs = await auditService.getAuditLogs(serviceFilters);
+      const response = await auditService.getAuditLogs(serviceFilters);
+      
+      // Ensure response has the expected structure
+      const logs = Array.isArray(response) ? response : (response?.logs || []);
+      const total = Array.isArray(response) ? response.length : (response?.total || logs.length);
       
       // Filter by search term on client side (for name/email search)
       if (filters.search) {
@@ -107,7 +111,7 @@ export function AdminAuditLogsPanel({
         return { logs: filteredLogs, total: filteredLogs.length };
       }
       
-      return { logs: logs, total: logs.length };
+      return { logs: logs, total: total };
     },
     {
       keepPreviousData: true,
