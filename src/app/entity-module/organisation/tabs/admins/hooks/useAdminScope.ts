@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scopeService } from '../services/scopeService';
 import { EntityAdminScope } from '../types/admin.types';
 import { toast } from '@/components/shared/Toast';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Hook to fetch an admin's assigned scopes.
