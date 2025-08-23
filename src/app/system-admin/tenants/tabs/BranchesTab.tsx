@@ -211,32 +211,12 @@ export default function BranchesTab() {
       working_days: [],
     });
     setSchools([]);
-  };
-
-  const fetchBranches = async () => {
-    try {
-      // If filtering by companies, first get the school IDs for those companies
-      let schoolIdsToFilter: string[] = [];
-      if (filters.company_ids.length > 0) {
-        const { data: schoolsData, error: schoolsError } = await supabase
-          .from('schools')
-          .select('id')
-          .in('company_id', filters.company_ids);
-        
-        if (schoolsError) throw schoolsError;
-        schoolIdsToFilter = schoolsData.map(school => school.id);
-        
-        // If no schools found for the selected companies, return empty results
-        if (schoolIdsToFilter.length === 0) {
-          setBranches([]);
-          return;
-        }
-      }
 
       let query = supabase
         .from('branches')
         .select(`
           id, name, code, school_id, status, address, notes, logo, created_at,
+          additional:branches_additional (*),
           additional:branches_additional (*),
           schools (
             name,
@@ -248,18 +228,38 @@ export default function BranchesTab() {
           )
         `)
 
+      // Apply filters
       if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
       }
 
-      // Apply school filter - either from direct school filter or from company filter
-      const finalSchoolIds = filters.school_ids.length > 0 ? filters.school_ids : schoolIdsToFilter;
+      if (filters.schools.length > 0) {
+        query = query.in('school_id', filters.schools);
       if (finalSchoolIds.length > 0) {
         query = query.in('school_id', finalSchoolIds);
       }
 
       if (filters.status.length > 0) {
         query = query.in('status', filters.status);
+      }
+
+      // If companies are selected, we need to filter by schools that belong to those companies
+      if (filters.companies.length > 0) {
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('id')
+          .in('company_id', filters.companies);
+        
+        if (schoolsError) throw schoolsError;
+        const schoolIds = schoolsData.map(school => school.id);
+        
+        if (schoolIds.length > 0) {
+          query = query.in('school_id', schoolIds);
+        } else {
+          // No schools found for selected companies, return empty result
+          setBranches([]);
+          return;
+        }
       }
 
       const { data, error } = await query;
