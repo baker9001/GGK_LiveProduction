@@ -432,19 +432,6 @@ export default function CompaniesTab() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Bulk Delete Button - Shows when items are selected */}
-          {selectedCompanies.length > 0 && (
-            <Button
-              variant="destructive"
-              leftIcon={<Trash2 className="h-4 w-4" />}
-              onClick={() => {
-                const companiesToProcess = companies.filter(c => selectedCompanies.includes(c.id));
-                handleDelete(companiesToProcess);
-              }}
-            >
-              Delete Selected ({selectedCompanies.length})
-            </Button>
-          )}
           <Button
             onClick={() => {
               setEditingCompany(null);
