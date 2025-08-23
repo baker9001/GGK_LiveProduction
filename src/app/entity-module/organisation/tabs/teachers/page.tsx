@@ -111,20 +111,21 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           throw new Error('Company ID is required');
         }
 
-        // Base query with explicit relationship to avoid ambiguity
+        // FIXED: Base query without 'name' column (doesn't exist in teachers table)
         let query = supabase
           .from('teachers')
           .select(`
             id,
             user_id,
             teacher_code,
-            name,
             specialization,
             qualification,
             experience_years,
+            bio,
             company_id,
             school_id,
             branch_id,
+            hire_date,
             created_at,
             updated_at,
             users!teachers_user_id_fkey (
@@ -177,11 +178,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           return [];
         }
 
-        // Transform and enrich the data
+        // FIXED: Transform and enrich data - name derived from users table
         return teachersData.map(teacher => ({
           ...teacher,
-          name: teacher.name || 
-                teacher.users?.raw_user_meta_data?.name || 
+          name: teacher.users?.raw_user_meta_data?.name || 
                 teacher.users?.email?.split('@')[0] || 
                 'Unknown Teacher',
           email: teacher.users?.email || '',
