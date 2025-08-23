@@ -99,12 +99,15 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
       setIsLoading(true);
       setError(null);
       
-      // Check connection first in WebContainer
-      if (typeof window !== 'undefined' && window.location.hostname.includes('webcontainer')) {
-        const isConnected = await checkSupabaseConnection();
-        if (!isConnected) {
-          throw new Error('Unable to establish database connection');
-        }
+      // Check connection first
+      const isConnected = await checkSupabaseConnection();
+      if (!isConnected) {
+        console.warn('Supabase connection failed, using offline mode');
+        setPermissions(permissionService.getMinimalPermissions());
+        setAdminLevel('entity_admin');
+        setError('Working in offline mode. Some features may be limited.');
+        setIsLoading(false);
+        return;
       }
       
       // Get user's admin record with retry logic
@@ -166,20 +169,25 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
       console.error('Error fetching permissions:', error);
       
       // Handle specific error types
-      if (error?.message?.includes('Failed to fetch') || error?.message?.includes('TypeError')) {
-        setError('Connection error. Please check your internet connection.');
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('TypeError') || 
+          error?.message?.includes('NetworkError') ||
+          error?.name === 'TypeError') {
+        console.warn('Network error detected, falling back to offline mode');
+        setPermissions(permissionService.getMinimalPermissions());
+        setAdminLevel('entity_admin');
+        setError('Working in offline mode. Please check your internet connection.');
       } else if (error?.code === 'PGRST116') {
         // Table doesn't exist or user doesn't have access
         setPermissions(permissionService.getMinimalPermissions());
         setAdminLevel(null);
         setError(null); // This is expected for non-admin users
       } else {
+        console.warn('Unknown error, falling back to minimal permissions');
+        setPermissions(permissionService.getMinimalPermissions());
+        setAdminLevel(null);
         setError(error?.message || 'Failed to load permissions');
       }
-      
-      // Set minimal permissions on error
-      setPermissions(permissionService.getMinimalPermissions());
-      setAdminLevel(null);
     } finally {
       setIsLoading(false);
     }
