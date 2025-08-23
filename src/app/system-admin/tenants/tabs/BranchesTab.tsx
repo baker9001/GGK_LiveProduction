@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, ImageOff } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
@@ -116,6 +116,66 @@ export default function BranchesTab() {
     school_ids: [],
     status: []
   });
+
+  // ===== CORRECTED LOGO HELPER FUNCTIONS =====
+  
+  // Get logo URL - handles both old and new path formats
+  const getLogoUrl = (path: string | null) => {
+    if (!path) return null;
+    
+    // If path is already a full URL, return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    
+    // Get public URL from Supabase
+    const { data } = supabase.storage
+      .from('branch-logos')
+      .getPublicUrl(path);
+    
+    return data?.publicUrl || null;
+  };
+
+  // Delete logo from storage - handles both old and new formats
+  const deleteLogoFromStorage = async (path: string | null): Promise<void> => {
+    if (!path) return;
+    
+    try {
+      // Try to delete with the stored path
+      const { error } = await supabase.storage
+        .from('branch-logos')
+        .remove([path]);
+      
+      if (error) {
+        console.warn(`Failed to delete logo at: ${path}`, error);
+        
+        // If path has 'branches/' prefix, try without it
+        if (path.startsWith('branches/')) {
+          const fileNameOnly = path.replace('branches/', '');
+          const { error: retryError } = await supabase.storage
+            .from('branch-logos')
+            .remove([fileNameOnly]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${fileNameOnly}`, retryError);
+          }
+        } 
+        // If path doesn't have prefix, try with it (for old files)
+        else {
+          const withPrefix = `branches/${path}`;
+          const { error: retryError } = await supabase.storage
+            .from('branch-logos')
+            .remove([withPrefix]);
+          
+          if (retryError) {
+            console.error(`Also failed to delete at: ${withPrefix}`, retryError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting logo:', error);
+    }
+  };
 
   const fetchBranches = React.useCallback(async () => {
     try {
@@ -353,12 +413,19 @@ export default function BranchesTab() {
     }
   };
 
+  // CORRECTED handleDelete function with logo deletion
   const handleDelete = async (branches: Branch[]) => {
     if (!confirm(`Are you sure you want to delete ${branches.length} branch(es)?`)) {
       return;
     }
 
     try {
+      // Delete logos from storage first
+      for (const branch of branches) {
+        await deleteLogoFromStorage(branch.logo);
+      }
+
+      // Then delete branches from database
       const { error } = await supabase
         .from('branches')
         .delete()
@@ -466,6 +533,30 @@ export default function BranchesTab() {
   };
 
   const columns = [
+    {
+      id: 'logo',
+      header: 'Logo',
+      enableSorting: false,
+      cell: (row: Branch) => (
+        <div className="w-10 h-10 flex items-center justify-center">
+          {row.logo ? (
+            <img
+              src={getLogoUrl(row.logo)}
+              alt={`${row.name} logo`}
+              className="w-10 h-10 object-contain rounded-md"
+              onError={(e) => {
+                console.error('Failed to load logo:', row.logo);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
+              <ImageOff className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </div>
+          )}
+        </div>
+      ),
+    },
     {
       id: 'name',
       header: 'Name',
