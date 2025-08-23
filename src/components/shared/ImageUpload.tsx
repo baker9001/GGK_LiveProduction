@@ -25,12 +25,12 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const [showRemoveConfirmation, setShowRemoveConfirmation] = useState(false);
   const [hasError, setHasError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useUser(); // Get user from context
+  const { user } = useUser();
 
   // Define public buckets that don't require authentication
   const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos'].includes(bucket);
 
-  // Check authentication status on mount - Updated to use custom auth
+  // Check authentication status on mount
   useEffect(() => {
     checkAuth();
   }, [user]);
@@ -73,7 +73,6 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Show loading toast
     const loadingToastId = toast.loading('Uploading image...');
 
     try {
@@ -101,16 +100,14 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).slice(2)}_${Date.now()}.${fileExt}`;
       
-      // Determine upload path based on bucket type
-      // FIXED: Removed subfolder paths for logo buckets to match deletion logic
+      // FIXED: Use flat structure for all buckets except avatars
       let uploadPath = fileName;
       
       // Only use subfolder for avatars (user-specific isolation)
       if (bucket === 'avatars' && userId !== 'anonymous') {
         uploadPath = `${userId}/${fileName}`;
       }
-      // All other buckets use flat structure (no subfolders)
-      // This includes: company-logos, school-logos, subject-logos, branch-logos, logos
+      // All logo buckets use flat structure (no subfolders)
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -124,7 +121,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         console.error('Storage upload error:', error);
         toast.dismiss(loadingToastId);
         
-        // Provide more specific error messages
+        // Handle specific error cases
         if (error.message?.includes('row level security')) {
           toast.error("Storage permissions error. Please contact administrator.");
         } else if (error.message?.includes('bucket')) {
@@ -144,7 +141,6 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             toast.error("Failed to upload image. Please try again.");
             return;
           } else {
-            // Success on retry
             toast.dismiss(loadingToastId);
             toast.success('Image uploaded successfully!');
             onChange(retryData.path);
@@ -156,16 +152,9 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         return;
       }
 
-      // Get public URL for the uploaded file
-      const { data: urlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(data.path);
-
       // Success!
       toast.dismiss(loadingToastId);
       toast.success('Image uploaded successfully!');
-      
-      // Return the file path
       onChange(data.path);
       
       console.log('File uploaded successfully:', data.path);
@@ -173,12 +162,10 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       console.error('Error uploading file:', error);
       toast.dismiss(loadingToastId);
       
-      // Show user-friendly error message
       const errorMessage = error instanceof Error ? error.message : 'Error uploading file';
       toast.error(errorMessage);
     } finally {
       setUploading(false);
-      // Clear input value to allow uploading the same file again
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -187,33 +174,44 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
   const handleRemove = async () => {
     if (!value) return;
-    
-    // Show the confirmation dialog
     setShowRemoveConfirmation(true);
   };
 
   const confirmRemove = async () => {
-    // Close the confirmation dialog
     setShowRemoveConfirmation(false);
-
-    // Immediately update the UI to show removal in progress
     onChange(null);
 
     try {
       if (value) {
+        // Try to remove with the stored path
         const { error } = await supabase.storage
           .from(bucket)
           .remove([value]);
 
         if (error) {
           console.error('Storage remove error:', error);
-          // Even if storage deletion fails, we've already cleared the UI
-          // Use a non-blocking toast that doesn't interfere with form
+          
+          // If it fails and path has a subfolder, try without it
+          if (value.includes('/')) {
+            const fileName = value.split('/').pop();
+            if (fileName) {
+              const { error: retryError } = await supabase.storage
+                .from(bucket)
+                .remove([fileName]);
+              
+              if (!retryError) {
+                setTimeout(() => {
+                  toast.success('Image removed successfully');
+                }, 200);
+                return;
+              }
+            }
+          }
+          
           setTimeout(() => {
             toast.info('Image removed from form (storage cleanup may have failed)');
           }, 200);
         } else {
-          // Success - show confirmation after delay
           setTimeout(() => {
             toast.success('Image removed successfully');
           }, 200);
@@ -221,14 +219,30 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       }
     } catch (error) {
       console.error('Error removing file:', error);
-      // Use a non-blocking toast that doesn't interfere with form
       setTimeout(() => {
         toast.info('Image removed from form (storage cleanup failed)');
       }, 200);
     }
   };
 
-  // Check if user has authentication
+  // Generate public URL with proper handling
+  const getPublicUrl = (path: string | null) => {
+    if (!path) return null;
+    
+    // If already a full URL, return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    
+    // Get public URL from Supabase
+    const { data } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
+    
+    return data?.publicUrl || null;
+  };
+
+  const displayUrl = publicUrl || getPublicUrl(value);
   const hasAuth = isAuthenticated || isPublicBucket;
 
   // Show auth warning if not authenticated and not a public bucket
@@ -273,7 +287,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         disabled={uploading}
       />
 
-      {value && publicUrl ? (
+      {value && displayUrl ? (
         <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 group">
           {hasError ? (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
@@ -284,11 +298,11 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
             </div>
           ) : (
             <img
-              src={publicUrl}
+              src={displayUrl}
               alt="Uploaded image"
               className="w-full h-full object-contain bg-white dark:bg-gray-700"
               onError={() => {
-                console.error('Image load error for:', publicUrl);
+                console.error('Image load error for:', displayUrl);
                 setHasError(true);
                 toast.warning('Failed to load image preview');
               }}
@@ -341,14 +355,12 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         </Button>
       )}
       
-      {/* File format helper text */}
       {!value && hasAuth && (
         <p className="text-xs text-gray-500 dark:text-gray-400">
           PNG, JPG, JPEG or SVG • Max 2MB
         </p>
       )}
       
-      {/* Confirmation Dialog for removing image */}
       <ConfirmationDialog
         isOpen={showRemoveConfirmation}
         title="Remove Image"
