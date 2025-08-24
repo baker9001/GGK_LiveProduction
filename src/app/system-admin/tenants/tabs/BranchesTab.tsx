@@ -1,6 +1,13 @@
-///home/project/src/app/system-admin/tenants/tabs/BranchesTab.tsx
+/**
+ * File: /home/project/src/app/system-admin/tenants/tabs/BranchesTab.tsx
+ * 
+ * FIXED: Resolved database field mapping errors
+ * - Properly separates main branch fields from additional fields
+ * - Excludes non-database fields (company_name, school_name, region_name) from DB operations
+ * - Maintains all original functionality including logo handling
+ */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, ImageOff } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '@/components/shared/DataTable';
@@ -90,7 +97,6 @@ export default function BranchesTab() {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState('basic');
-  const formRef = useRef<HTMLFormElement>(null);
   const [formState, setFormState] = useState<FormState>({
     name: '',
     code: '',
@@ -459,8 +465,8 @@ export default function BranchesTab() {
     setFormState(prev => ({ ...prev, school_id: schoolId }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // FIXED handleSubmit function - properly excludes non-database fields
+  const handleSubmit = async () => {
     setFormErrors({});
 
     const errors: Record<string, string> = {};
@@ -477,25 +483,37 @@ export default function BranchesTab() {
     }
 
     try {
-      // Separate main branch data from additional data
-      const { 
-        name, code, school_id, status, logo, address, notes, // Main branch fields
-        company_id, additional, company_name, school_name, region_name, // Exclude computed/non-DB fields
-        ...additionalFields // All other fields go to additional
-      } = formState;
-
+      // Main branch data - only fields that exist in branches table
       const mainBranchData = {
-        name: name.trim(),
-        code: code.trim(),
-        school_id: school_id,
-        status: status,
-        logo: logo || null,
-        address: address || null,
-        notes: notes || null,
+        name: formState.name.trim(),
+        code: formState.code?.trim() || null,
+        school_id: formState.school_id,
+        status: formState.status,
+        logo: formState.logo || null,
+        address: formState.address || null,
+        notes: formState.notes || null,
+      };
+
+      // Additional data - only fields that exist in branches_additional table
+      const additionalData: any = {
+        student_capacity: formState.student_capacity || null,
+        current_students: formState.current_students || null,
+        student_count: formState.student_count || null,
+        teachers_count: formState.teachers_count || null,
+        active_teachers_count: formState.active_teachers_count || null,
+        branch_head_name: formState.branch_head_name || null,
+        branch_head_email: formState.branch_head_email || null,
+        branch_head_phone: formState.branch_head_phone || null,
+        building_name: formState.building_name || null,
+        floor_details: formState.floor_details || null,
+        opening_time: formState.opening_time || null,
+        closing_time: formState.closing_time || null,
+        working_days: formState.working_days || null
       };
 
       let branchId;
       if (editingBranch) {
+        // Update existing branch
         const { data, error } = await supabase
           .from('branches')
           .update(mainBranchData)
@@ -503,6 +521,7 @@ export default function BranchesTab() {
         if (error) throw error;
         branchId = editingBranch.id;
       } else {
+        // Create new branch
         const { data, error } = await supabase
           .from('branches')
           .insert([mainBranchData])
@@ -512,14 +531,26 @@ export default function BranchesTab() {
         branchId = data.id;
       }
 
-      // Handle additional data (upsert)
+      // Add branch_id to additional data
+      additionalData.branch_id = branchId;
+
+      // Remove any null/undefined values from additionalData to avoid issues
+      Object.keys(additionalData).forEach(key => {
+        if (additionalData[key] === undefined) {
+          delete additionalData[key];
+        }
+      });
+
+      // Upsert additional data (insert or update)
       const { error: additionalError } = await supabase
         .from('branches_additional')
-        .upsert({ ...additionalFields, branch_id: branchId }, { onConflict: 'branch_id' });
+        .upsert(additionalData, { onConflict: 'branch_id' });
 
       if (additionalError) {
         console.error('Error saving additional branch data:', additionalError);
-        toast.error('Failed to save additional branch data.');
+        // Don't throw here - the main branch was saved successfully
+        // Just notify the user about the additional data issue
+        toast.warning('Branch saved but some additional data could not be saved.');
       }
 
       await fetchBranches();
@@ -532,6 +563,7 @@ export default function BranchesTab() {
       setFormErrors({
         form: 'Failed to save branch. Please try again.'
       });
+      toast.error('Failed to save branch');
     }
   };
 
@@ -718,12 +750,10 @@ export default function BranchesTab() {
           resetFormState();
           setFormErrors({});
         }}
-        onSave={() => {
-          formRef.current?.requestSubmit();
-        }}
+        onSave={handleSubmit}
         loading={false}
       >
-        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
               {formErrors.form}
@@ -742,7 +772,7 @@ export default function BranchesTab() {
             isEditing={!!editingBranch}
             onCompanyChange={handleCompanyChange}
           />
-        </form>
+        </div>
       </SlideInForm>
     </div>
   );
