@@ -154,21 +154,21 @@ export function BranchFormContent({
               label="Company" 
               required 
               error={formErrors.company_id}
-              helpText="Select a company first to load schools"
+              description="Select a company first to load schools"
             >
               <Select
                 id="company_id"
-                name="company_id"
                 value={formData.company_id || ''}
-                onChange={(e) => handleCompanyChange(e.target.value)}
-                className="w-full"
+                onChange={(value) => handleCompanyChange(value)}
+                options={[
+                  { value: '', label: 'Select company' },
+                  ...(companies || []).map(company => ({
+                    value: company.id,
+                    label: `${company.name}${company.region_name ? ` (${company.region_name})` : ''}`
+                  }))
+                ]}
+                placeholder="Select company"
               >
-                <option value="">Select company</option>
-                {(companies || []).map(company => (
-                  <option key={company.id} value={company.id}>
-                    {company.name} {company.region_name ? `(${company.region_name})` : ''}
-                  </option>
-                ))}
               </Select>
             </FormField>
 
@@ -178,22 +178,22 @@ export function BranchFormContent({
               label="School" 
               required 
               error={formErrors.school_id}
-              helpText={!formData.company_id ? "Please select a company first" : undefined}
+              description={!formData.company_id ? "Please select a company first" : undefined}
             >
               <Select
                 id="school_id"
-                name="school_id"
                 value={formData.school_id || ''}
-                onChange={(e) => updateFormData('school_id', e.target.value)}
+                onChange={(value) => updateFormData('school_id', value)}
                 disabled={!formData.company_id}
-                className="w-full"
+                options={[
+                  { value: '', label: 'Select school' },
+                  ...schools.map(school => ({
+                    value: school.id,
+                    label: school.name
+                  }))
+                ]}
+                placeholder="Select school"
               >
-                <option value="">Select school</option>
-                {schools.map(school => (
-                  <option key={school.id} value={school.id}>
-                    {school.name}
-                  </option>
-                ))}
               </Select>
             </FormField>
 
