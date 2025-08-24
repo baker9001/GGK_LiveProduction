@@ -1,3 +1,5 @@
+///home/project/src/app/system-admin/tenants/tabs/BranchesTab.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, ImageOff } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
