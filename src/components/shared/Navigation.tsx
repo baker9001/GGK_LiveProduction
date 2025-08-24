@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { GraduationCap, X, Menu, Moon, Sun } from 'lucide-react';
+import { X, Menu, Moon, Sun } from 'lucide-react';
 import { Button } from './Button';
 
 const NAV_ITEMS = [
@@ -46,7 +46,11 @@ export function Navigation() {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
-              <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
+              <img 
+                src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/GGK_Icon_48x48.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dHS19JY29uXzQ4eDQ4LnN2ZyIsImlhdCI6MTc1NjA2MDg3NCwiZXhwIjo0ODc4MTI0ODc0fQ.bmq5NJ4OU8RyzRjZsNf9hve_QeCnig5kZCMJ32VwiNg"
+                alt="GGK Learning Logo"
+                className="h-8 w-8"
+              />
               <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">GGK</span>
             </Link>
             <div className="hidden md:flex ml-10 space-x-8">
