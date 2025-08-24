@@ -14,7 +14,6 @@ import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
-import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { getLogoUrl, deleteLogoFromStorage } from '../../../../lib/logoHelpers';
 
 const companySchema = z.object({
