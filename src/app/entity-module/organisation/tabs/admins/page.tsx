@@ -140,20 +140,37 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
           return [];
         }
         
-      // SCOPED QUERY: Apply scope filters to admin queries
-      const adminFilters: any = {};
-      
-      // For non-entity admins, apply scope-based filtering
-      if (!isEntityAdmin && !isSubEntityAdmin) {
-        // School admins can only see admins in their assigned schools
+        // SCOPED QUERY: Apply scope filters to admin queries
+        const adminFilters: any = {};
+        
+        // For non-entity admins, apply scope-based filtering
+        if (!isEntityAdmin && !isSubEntityAdmin) {
+          // School admins can only see admins in their assigned schools
           if (scopeFilters && (scopeFilters.school_ids || scopeFilters.branch_ids)) {
-        if (scopeFilters.school_ids || scopeFilters.branch_ids) {
-          adminFilters.scope_filter = scopeFilters;
+            if (scopeFilters.school_ids || scopeFilters.branch_ids) {
+              adminFilters.scope_filter = scopeFilters;
+            }
+          }
         }
+        
+        // CRASH FIX 6: Add null checks for adminService
+        if (!adminService || !adminService.listAdmins) {
+          console.error('adminService.listAdmins is not available');
+          return [];
+        }
+        
+        const adminList = await adminService.listAdmins(companyId, adminFilters);
+        
+        if (!Array.isArray(adminList)) {
+          console.warn('adminService.listAdmins did not return an array:', adminList);
+          return [];
+        }
+        
+        return adminList;
+      } catch (error) {
+        console.error('Error fetching admins:', error);
+        return [];
       }
-      
-      const adminList = await adminService.listAdmins(companyId, adminFilters);
-      return adminList;
     },
     {
       enabled: !!companyId && viewMode === 'hierarchy',
@@ -163,37 +180,6 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
 
   // PHASE 5 RULE 3: UI GATING
   // Show/hide buttons based on permissions
-  const canCreateAdmin = can('create_admin');
-  const canViewAuditLogs = can('view_audit_logs');
-
-  // Handle admin creation
-  const handleCreateAdmin = () => {
-    setEditingAdmin(null);
-    setShowCreateAdminModal(true);
-  };
-
-  // Handle admin editing
-  const handleEditAdmin = (admin: EntityUser) => {
-    console.log('=== ADMIN EDIT HANDLER ===');
-    console.log('Admin being edited:', admin);
-    console.log('Admin user_id:', admin.user_id);
-    console.log('==========================');
-    
-    setEditingAdmin(admin);
-    setShowCreateAdminModal(true);
-  };
-
-  // Handle admin details view
-  const handleViewAdminDetails = (admin: EntityUser) => {
-    setSelectedAdminForDetails(admin);
-    // TODO: Open admin details panel/modal
-    console.log('View admin details:', admin);
-  };
-
-  // Handle successful admin creation/update
-  const handleAdminSuccess = () => {
-    setShowCreateAdminModal(false);
-    setEditingAdmin(null);
   // CRASH FIX 12: Add null checks for permission functions
   const canCreateAdmin = React.useMemo(() => {
     try {
@@ -213,7 +199,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
     }
   }, [can]);
 
-  // Handle modal close
+  // Handle admin creation
   const handleCreateAdmin = React.useCallback(() => {
     // CRASH FIX 13: Add error boundary for admin creation
     try {
@@ -222,15 +208,15 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         return;
       }
       
-    setShowCreateAdminModal(false);
-    setEditingAdmin(null);
+      setEditingAdmin(null);
+      setShowCreateAdminModal(true);
     } catch (error) {
       console.error('Error in handleCreateAdmin:', error);
       toast.error('Failed to open admin creation form');
     }
   }, [canCreateAdmin]);
 
-  return (
+  // Handle admin editing
   const handleEditAdmin = React.useCallback((admin: EntityUser) => {
     // CRASH FIX 14: Add validation for admin object
     try {
@@ -246,20 +232,20 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         return;
       }
       
-      {/* Header and Action Button */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Management</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">Manage administrators, their roles, and access within your organization.</p>
-          
-          {/* Show scope limitation notice for non-entity admins */}
+      console.log('=== ADMIN EDIT HANDLER ===');
+      console.log('Admin being edited:', admin);
+      console.log('Admin user_id:', admin.user_id);
+      console.log('==========================');
+      
+      setEditingAdmin(admin);
+      setShowCreateAdminModal(true);
     } catch (error) {
       console.error('Error in handleEditAdmin:', error);
       toast.error('Failed to open admin edit form');
     }
   }, []);
-            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+
+  // Handle admin details view
   const handleViewAdminDetails = React.useCallback((admin: EntityUser) => {
     // CRASH FIX 15: Add validation for admin details view
     try {
@@ -269,22 +255,21 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         return;
       }
       
-              </p>
-            </div>
-          )}
+      setSelectedAdminForDetails(admin);
+      // TODO: Open admin details panel/modal
+      console.log('View admin details:', admin);
     } catch (error) {
       console.error('Error in handleViewAdminDetails:', error);
       toast.error('Failed to view administrator details');
     }
   }, []);
-        
-        // CRASH FIX 6: Add null checks for adminService
+
+  // Handle successful admin creation/update
   const handleAdminSuccess = React.useCallback(() => {
     // CRASH FIX 16: Add error handling for success callback
     try {
-          console.error('adminService.listAdmins is not available');
-          return [];
-        }
+      setShowCreateAdminModal(false);
+      setEditingAdmin(null);
     } catch (error) {
       console.error('Error in handleAdminSuccess:', error);
       // Still close the modal even if there's an error
@@ -292,13 +277,13 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       setEditingAdmin(null);
     }
   }, []);
-        const adminList = await adminService.listAdmins(companyId, adminFilters);
-        
+
+  // Handle modal close
   const handleModalClose = React.useCallback(() => {
     // CRASH FIX 17: Add error handling for modal close
     try {
-        if (!Array.isArray(adminList)) {
-          console.warn('adminService.listAdmins did not return an array:', adminList);
+      setShowCreateAdminModal(false);
+      setEditingAdmin(null);
     } catch (error) {
       console.error('Error in handleModalClose:', error);
       // Force close the modal
@@ -348,7 +333,24 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       </div>
     );
   }
-        }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header and Action Button */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Management</h1>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">Manage administrators, their roles, and access within your organization.</p>
+          
+          {/* Show scope limitation notice for non-entity admins */}
+          {(!isEntityAdmin && !isSubEntityAdmin) && (
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                You can only view administrators within your assigned scope.
+              </p>
+            </div>
+          )}
+        </div>
         
         {canCreateAdmin && (
           <Button
@@ -361,10 +363,11 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       </div>
 
       {/* View Mode Toggles */}
+      {/* CRASH FIX 21: Add error boundary wrapper for view mode toggles */}
       <div className="flex space-x-3 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <Button
           variant={viewMode === 'list' ? 'default' : 'ghost'}
-          onClick={() => setViewMode('list')}
+          onClick={() => handleViewModeChange('list')}
           className="flex-1"
           leftIcon={<Users className="h-4 w-4" />}
         >
@@ -372,28 +375,28 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         </Button>
         <Button
           variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
-          onClick={() => setViewMode('hierarchy')}
+          onClick={() => handleViewModeChange('hierarchy')}
           className="flex-1"
           leftIcon={<Shield className="h-4 w-4" />}
         >
           Hierarchy View
         </Button>
         {/* PHASE 5 RULE 3: UI GATING - Show audit logs tab based on permissions */}
-      {/* CRASH FIX 21: Add error boundary wrapper for view mode toggles */}
-      <div className="flex space-x-3 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <Button
-          variant={viewMode === 'audit' ? 'default' : 'ghost'}
-          onClick={() => handleViewModeChange('list')}
-          className="flex-1"
-          leftIcon={<Eye className="h-4 w-4" />}
-        >
-          Audit Logs
-        </Button>
+        {canViewAuditLogs && (
+          <Button
+            variant={viewMode === 'audit' ? 'default' : 'ghost'}
+            onClick={() => handleViewModeChange('audit')}
+            className="flex-1"
+            leftIcon={<Eye className="h-4 w-4" />}
+          >
+            Audit Logs
+          </Button>
         )}
       </div>
-          onClick={() => handleViewModeChange('hierarchy')}
+
       {/* Conditional Rendering of Views */}
-      {viewMode === 'list' && (
+      {/* CRASH FIX 22: Add error boundaries for conditional rendering */}
+      {viewMode === 'list' && companyId && (
         <AdminListTable
           companyId={companyId}
           onCreateAdmin={handleCreateAdmin}
@@ -401,43 +404,24 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
           onViewDetails={handleViewAdminDetails}
         />
       )}
-          onClick={() => handleViewModeChange('audit')}
-      {viewMode === 'hierarchy' && (
+
+      {viewMode === 'hierarchy' && companyId && (
         <AdminHierarchyTree
-          admins={admins}
+          // CRASH FIX 23: Add null check for admins array
+          admins={Array.isArray(admins) ? admins : []}
           companyId={companyId}
           onNodeClick={handleViewAdminDetails}
         />
       )}
       
       {/* PHASE 5 RULE 3: UI GATING - Show audit logs based on permissions */}
-      {/* CRASH FIX 22: Add error boundaries for conditional rendering */}
-      {viewMode === 'list' && companyId && (
+      {viewMode === 'audit' && canViewAuditLogs && companyId && (
         <AdminAuditLogsPanel
           companyId={companyId}
         />
       )}
 
       {/* Admin Creation/Edit Modal - FIXED: Now passing user_id */}
-      <AdminCreationForm
-        isOpen={showCreateAdminModal}
-      {viewMode === 'hierarchy' && companyId && (
-        // CRASH FIX 23: Add null check for admins array
-        onSuccess={handleAdminSuccess}
-          admins={Array.isArray(admins) ? admins : []}
-        initialData={editingAdmin ? {
-          id: editingAdmin.id,
-          user_id: editingAdmin.user_id,  // CRITICAL FIX: Now passing user_id
-          name: editingAdmin.name,
-          email: editingAdmin.email,
-          admin_level: editingAdmin.admin_level,
-      {viewMode === 'audit' && canViewAuditLogs && companyId && (
-          is_active: editingAdmin.is_active,
-          created_at: editingAdmin.created_at,
-          updated_at: editingAdmin.updated_at,
-          permissions: editingAdmin.metadata?.permissions,
-          assigned_schools: editingAdmin.assigned_schools,
-      } catch (error) {
       {/* CRASH FIX 24: Add error boundary for modal rendering */}
       {companyId && (
         <AdminCreationForm
