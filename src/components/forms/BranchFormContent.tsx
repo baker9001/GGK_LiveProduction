@@ -164,7 +164,7 @@ export function BranchFormContent({
                 className="w-full"
               >
                 <option value="">Select company</option>
-                {companies.map(company => (
+                {(companies || []).map(company => (
                   <option key={company.id} value={company.id}>
                     {company.name} {company.region_name ? `(${company.region_name})` : ''}
                   </option>
