@@ -33,6 +33,7 @@ import { Button } from '../../../../components/shared/Button';
 import { ImageUpload } from '../../../../components/shared/ImageUpload';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
@@ -1737,15 +1738,37 @@ export default function CompaniesTab() {
           </FormField>
 
           <FormField id="status" label="Status" required error={formErrors.status}>
-            <Select
-              id="status"
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Company Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {(editingCompany?.status || 'active') === 'active' 
+                    ? 'Company is currently active and operational' 
+                    : 'Company is currently inactive'}
+                </p>
+              </div>
+              <ToggleSwitch
+                checked={(editingCompany?.status || 'active') === 'active'}
+                onChange={(checked) => {
+                  const statusInput = document.querySelector('input[name="status"]') as HTMLInputElement;
+                  if (statusInput) {
+                    statusInput.value = checked ? 'active' : 'inactive';
+                  }
+                }}
+                label="Active Status"
+                activeLabel="Active"
+                inactiveLabel="Inactive"
+                showStateLabel={true}
+                disabled={false}
+              />
+            </div>
+            <input
+              type="hidden"
               name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              value={formState.status}
-              onChange={(value) => setFormState(prev => ({ ...prev, status: value as 'active' | 'inactive' }))}
+              defaultValue={editingCompany?.status || 'active'}
+            />
             />
           </FormField>
         </form>
