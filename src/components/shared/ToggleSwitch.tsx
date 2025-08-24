@@ -143,6 +143,7 @@ export function ToggleSwitch({
           aria-label={label || `Toggle ${checked ? activeLabel : inactiveLabel}`}
           aria-disabled={isDisabled}
           onClick={handleClick}
+          onClick={handleClick}
           onKeyDown={handleKeyDown}
           disabled={isDisabled}
           className={cn(
