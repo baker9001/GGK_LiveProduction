@@ -14,6 +14,7 @@ import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { getLogoUrl, deleteLogoFromStorage } from '../../../../lib/logoHelpers';
 
 const companySchema = z.object({
@@ -73,10 +74,22 @@ export default function CompaniesTab() {
     country_ids: [],
     status: []
   });
+  
+  // Local state for company status toggle
+  const [companyStatus, setCompanyStatus] = useState<'active' | 'inactive'>('active');
 
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [companiesToDelete, setCompaniesToDelete] = useState<Company[]>([]);
+  
+  // Initialize company status when editing company changes
+  React.useEffect(() => {
+    if (editingCompany) {
+      setCompanyStatus(editingCompany.status);
+    } else {
+      setCompanyStatus('active');
+    }
+  }, [editingCompany]);
 
   // Fetch regions with React Query
   const { data: regions = [] } = useQuery<Region[]>(
@@ -610,18 +623,19 @@ export default function CompaniesTab() {
             <input
               type="hidden"
               name="status"
-              defaultValue={editingCompany?.status || 'active'}
+              value={companyStatus}
+              readOnly
             />
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
               <ToggleSwitch
-                checked={editingCompany?.status === 'active' || (!editingCompany && true)}
+                checked={companyStatus === 'active'}
                 onChange={(checked) => {
-                  const input = document.querySelector('input[name="status"]') as HTMLInputElement;
-                  if (input) input.value = checked ? 'active' : 'inactive';
+                  const newStatus = checked ? 'active' : 'inactive';
+                  setCompanyStatus(newStatus);
                 }}
                 label="Company Status"
                 description={
-                  editingCompany?.status === 'active' || (!editingCompany && true)
+                  companyStatus === 'active'
                     ? 'Company is currently active and operational'
                     : 'Company is currently inactive'
                 }
