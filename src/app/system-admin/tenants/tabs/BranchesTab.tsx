@@ -4,6 +4,7 @@
  * FIXED: Resolved database field mapping errors
  * - Properly separates main branch fields from additional fields
  * - Excludes non-database fields (company_name, school_name, region_name) from DB operations
+ * - Fixed code field to use empty string instead of null (code column is NOT NULL in DB)
  * - Maintains all original functionality including logo handling
  */
 
@@ -486,7 +487,7 @@ export default function BranchesTab() {
       // Main branch data - only fields that exist in branches table
       const mainBranchData = {
         name: formState.name.trim(),
-        code: formState.code?.trim() || null,
+        code: formState.code?.trim() || '',  // Use empty string instead of null (code is NOT NULL in DB)
         school_id: formState.school_id,
         status: formState.status,
         logo: formState.logo || null,
