@@ -1769,7 +1769,6 @@ export default function CompaniesTab() {
               name="status"
               defaultValue={editingCompany?.status || 'active'}
             />
-            />
           </FormField>
         </form>
       </SlideInForm>
