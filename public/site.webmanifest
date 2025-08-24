@@ -1,0 +1,33 @@
+{
+  "name": "GGK Learning System",
+  "short_name": "GGK",
+  "description": "GGK Learning Management System - Comprehensive educational platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#8CC63F",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/GGK_Icon_48x48.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dHS19JY29uXzQ4eDQ4LnN2ZyIsImlhdCI6MTc1NjA2MDg3NCwiZXhwIjo0ODc4MTI0ODc0fQ.bmq5NJ4OU8RyzRjZsNf9hve_QeCnig5kZCMJ32VwiNg",
+      "sizes": "48x48",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/GGK_Icon_48x48.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dHS19JY29uXzQ4eDQ4LnN2ZyIsImlhdCI6MTc1NjA2MDg3NCwiZXhwIjo0ODc4MTI0ODc0fQ.bmq5NJ4OU8RyzRjZsNf9hve_QeCnig5kZCMJ32VwiNg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/GGK_Icon_48x48.svg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dHS19JY29uXzQ4eDQ4LnN2ZyIsImlhdCI6MTc1NjA2MDg3NCwiZXhwIjo0ODc4MTI0ODc0fQ.bmq5NJ4OU8RyzRjZsNf9hve_QeCnig5kZCMJ32VwiNg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity", "business"],
+  "lang": "en",
+  "dir": "ltr"
+}
