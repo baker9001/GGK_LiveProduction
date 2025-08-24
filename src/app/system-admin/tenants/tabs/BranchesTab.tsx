@@ -478,7 +478,7 @@ export default function BranchesTab() {
       // Separate main branch data from additional data
       const { 
         name, code, school_id, status, logo, address, notes, // Main branch fields
-        company_id, additional, // Exclude company_id and additional from additional fields
+        company_id, additional, company_name, school_name, region_name, // Exclude computed/non-DB fields
         ...additionalFields // All other fields go to additional
       } = formState;
 
