@@ -9,9 +9,14 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       'crypto': 'crypto-browserify',
+      'buffer': 'buffer',
+      'stream': 'stream-browserify',
     },
   },
+  define: {
+    global: 'globalThis',
+  },
   optimizeDeps: {
-    include: ["pdfjs-dist", "react", "react-dom"]
+    include: ["pdfjs-dist", "react", "react-dom", "buffer"]
   },
 });
