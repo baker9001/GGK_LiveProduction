@@ -158,6 +158,17 @@ interface FilterState {
   status: string[];
 }
 
+interface FormState {
+  name: string;
+  code: string;
+  region_id: string;
+  country_id: string;
+  logo: string;
+  address: string;
+  notes: string;
+  status: 'active' | 'inactive';
+}
+
 interface Company {
   id: string;
   name: string;
@@ -318,6 +329,18 @@ export default function CompaniesTab() {
 
   // Local state for company status toggle
   const [companyStatus, setCompanyStatus] = useState<'active' | 'inactive'>('active');
+  
+  // Form state for controlled inputs
+  const [formState, setFormState] = useState<FormState>({
+    name: '',
+    code: '',
+    region_id: '',
+    country_id: '',
+    logo: '',
+    address: '',
+    notes: '',
+    status: 'active'
+  });
 
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -364,8 +387,28 @@ export default function CompaniesTab() {
   React.useEffect(() => {
     if (editingCompany) {
       setCompanyStatus(editingCompany.status);
+      setFormState({
+        name: editingCompany.name,
+        code: editingCompany.code || '',
+        region_id: editingCompany.region_id,
+        country_id: editingCompany.country_id,
+        logo: editingCompany.logo || '',
+        address: editingCompany.address || '',
+        notes: editingCompany.notes || '',
+        status: editingCompany.status
+      });
     } else {
       setCompanyStatus('active');
+      setFormState({
+        name: '',
+        code: '',
+        region_id: '',
+        country_id: '',
+        logo: '',
+        address: '',
+        notes: '',
+        status: 'active'
+      });
     }
   }, [editingCompany]);
 
@@ -389,13 +432,39 @@ export default function CompaniesTab() {
     }
   );
 
-  // Fetch countries
-  const { data: countries = [] } = useQuery<Country[]>(
-    ['countries'],
+  // Fetch countries for filter
+  const { data: filterCountries = [] } = useQuery<Country[]>(
+    ['filter-countries', filters.region_ids],
     async () => {
+      let query = supabase
+        .from('countries')
+        .select('id, name, region_id, status')
+        .eq('status', 'active')
+        .order('name');
+
+      if (filters.region_ids.length > 0) {
+        query = query.in('region_id', filters.region_ids);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      staleTime: 5 * 60 * 1000,
+    }
+  );
+
+  // Fetch countries for form based on selected region
+  const { data: formCountries = [] } = useQuery<Country[]>(
+    ['form-countries', formState.region_id],
+    async () => {
+      if (!formState.region_id) return [];
+
       const { data, error } = await supabase
         .from('countries')
         .select('id, name, region_id, status')
+        .eq('region_id', formState.region_id)
         .eq('status', 'active')
         .order('name');
 
@@ -403,7 +472,8 @@ export default function CompaniesTab() {
       return data || [];
     },
     {
-      staleTime: 10 * 60 * 1000,
+      enabled: !!formState.region_id,
+      staleTime: 5 * 60 * 1000,
     }
   );
 
