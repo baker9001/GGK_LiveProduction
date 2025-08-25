@@ -54,7 +54,9 @@ import {
   Loader2,
   RefreshCw,
   Shield,
-  Printer
+  Printer,
+  User,
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -207,6 +209,8 @@ export default function UsersTab() {
   const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [emailExistsError, setEmailExistsError] = useState<string | null>(null);
+  const [isValidatingEmail, setIsValidatingEmail] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [generatePassword, setGeneratePassword] = useState(true);
@@ -245,6 +249,51 @@ export default function UsersTab() {
     newPassword: '',
     sendEmail: false
   });
+
+  // Email validation function
+  const validateEmailAvailability = async (email: string) => {
+    if (!email || email.trim() === '') {
+      setEmailExistsError(null);
+      return;
+    }
+
+    // Skip validation if email format is invalid
+    try {
+      z.string().email().parse(email);
+    } catch {
+      setEmailExistsError(null);
+      return;
+    }
+
+    setIsValidatingEmail(true);
+    try {
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Check admin_users table
+      let query = supabase
+        .from('admin_users')
+        .select('id, email')
+        .eq('email', normalizedEmail);
+      
+      // Exclude current user when editing
+      if (editingUser?.id) {
+        query = query.neq('id', editingUser.id);
+      }
+      
+      const { data, error } = await query.maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      setEmailExistsError(data ? 'An administrator with this email already exists' : null);
+    } catch (error) {
+      console.error('Email validation error:', error);
+      setEmailExistsError('Unable to verify email availability. Please try again.');
+    } finally {
+      setIsValidatingEmail(false);
+    }
+  };
 
   // ===== QUERIES =====
   
@@ -337,8 +386,13 @@ export default function UsersTab() {
   // Create/update user mutation (NO API)
   const userMutation = useMutation(
     async (formData: FormData) => {
-      const name = formData.get('name') as string;
+      // Check for email duplication before submitting
       const email = formData.get('email') as string;
+      if (emailExistsError) {
+        throw new Error('Email address is already in use. Please choose a different email.');
+      }
+      
+      const name = formData.get('name') as string;
       const password = formData.get('password') as string | null;
       const role_id = formData.get('role_id') as string;
       const status = formData.get('status') as 'active' | 'inactive';
@@ -517,6 +571,8 @@ export default function UsersTab() {
           }
         }
         setFormErrors({});
+        setEmailExistsError(null);
+        setShowPassword(false);
       },
       onError: (error: any) => {
         if (error instanceof z.ZodError) {
@@ -826,6 +882,13 @@ export default function UsersTab() {
   
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Check for email validation errors
+    if (emailExistsError) {
+      toast.error('Please fix the email duplication error before submitting');
+      return;
+    }
+    
     setFormErrors({});
     userMutation.mutate(new FormData(e.currentTarget));
   };
@@ -1258,6 +1321,8 @@ export default function UsersTab() {
           setIsFormOpen(false);
           setEditingUser(null);
           setFormErrors({});
+          setEmailExistsError(null);
+          setShowPassword(false);
         }}
         onSave={() => {
           const form = document.querySelector('form#user-form') as HTMLFormElement;
@@ -1286,17 +1351,28 @@ export default function UsersTab() {
             id="email" 
             label="Email" 
             required 
-            error={formErrors.email}
+            error={formErrors.email || emailExistsError || (isValidatingEmail ? 'Checking email availability...' : '')}
             helpText={editingUser ? "Changing email will require re-verification" : "Verification email will be sent"}
           >
             <Input
               type="email"
               id="email"
               name="email"
-              placeholder="Enter email"
+              placeholder="Enter email address"
               value={formState.email}
-              onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+              onChange={(e) => {
+                setFormState({ ...formState, email: e.target.value });
+                setEmailExistsError(null);
+              }}
+              onBlur={(e) => validateEmailAvailability(e.target.value)}
+              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
             />
+            {isValidatingEmail && (
+              <div className="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-400">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 mr-2"></div>
+                Checking email availability...
+              </div>
+            )}
           </FormField>
 
           {!editingUser && (
@@ -1356,6 +1432,7 @@ export default function UsersTab() {
                           value={formState.password}
                           onChange={(e) => setFormState({ ...formState, password: e.target.value })}
                           autoComplete="new-password"
+                          leftIcon={<Shield className="h-4 w-4 text-gray-400" />}
                           className={`pr-10 ${
                             formState.password && 
                             passwordRequirements.every(req => req.test(formState.password))
@@ -1365,10 +1442,15 @@ export default function UsersTab() {
                         />
                         <button
                           type="button"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                           onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          tabIndex={-1}
                         >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                          )}
                         </button>
                       </div>
                       <PasswordRequirementsChecker password={formState.password} />
@@ -1424,6 +1506,18 @@ export default function UsersTab() {
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>Note:</strong> To change the user's password, use the password reset option from the table actions.
               </p>
+            </div>
+          )}
+          
+          {/* Email duplication warning */}
+          {emailExistsError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3">
+              <div className="flex items-center">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" />
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {emailExistsError}
+                </p>
+              </div>
             </div>
           )}
         </form>
