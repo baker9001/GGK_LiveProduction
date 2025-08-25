@@ -7,7 +7,7 @@ import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
 import { supabase } from '../../lib/supabase';
 import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
 export default function LandingPage() {
   const navigate = useNavigate();

@@ -34,7 +34,7 @@ import {
   type UserRole 
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
 interface LoginResponse {
   success: boolean;

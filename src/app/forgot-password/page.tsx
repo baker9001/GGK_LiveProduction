@@ -16,7 +16,7 @@ import {
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
 interface PasswordStrength {
   score: number;

@@ -13,7 +13,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
 // ============= TYPE DEFINITIONS =============
 
