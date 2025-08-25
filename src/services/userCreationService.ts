@@ -24,7 +24,6 @@ export interface BaseUserPayload {
   name: string;
   password: string;
   phone?: string;
-  phone?: string;
   company_id: string;
   is_active?: boolean;
   metadata?: Record<string, any>;
@@ -106,6 +105,31 @@ function getUserTypes(userType: UserType): string[] {
   return typeMap[userType] || ['user'];
 }
 
+// Safe columns that exist in users table (for queries)
+export const SAFE_USER_COLUMNS = [
+  'id',
+  'email',
+  'user_type',
+  'is_active',
+  'email_verified',
+  'created_at',
+  'updated_at',
+  'last_sign_in_at',
+  'last_login_at',
+  'raw_user_meta_data',
+  'raw_app_meta_data',
+  'password_hash',
+  'password_updated_at',
+  'requires_password_change',
+  'failed_login_attempts',
+  'locked_until',
+  'verification_token',
+  'verification_sent_at',
+  'verified_at',
+  'user_types',
+  'primary_type'
+].join(', ');
+
 // ============= MAIN USER CREATION SERVICE =============
 
 export const userCreationService = {
@@ -180,10 +204,15 @@ export const userCreationService = {
 
   /**
    * Step 1: Create user in users table
+   * IMPORTANT: Phone is NOT stored in users table - only in entity-specific tables
    */
   async createUserInUsersTable(payload: CreateUserPayload): Promise<string> {
     const hashedPassword = await hashPassword(payload.password);
     const userTypes = getUserTypes(payload.user_type);
+    
+    // Create clean metadata without phone
+    const cleanMetadata = { ...payload.metadata };
+    delete cleanMetadata.phone; // Ensure phone is never in users table metadata
     
     const userData = {
       email: payload.email.toLowerCase(),
@@ -198,8 +227,7 @@ export const userCreationService = {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
         created_via: 'entity_module',
-        // Explicitly exclude phone from users table metadata
-        ...payload.metadata
+        ...cleanMetadata // Use cleaned metadata without phone
       },
       raw_app_meta_data: {
         provider: 'email',
@@ -224,6 +252,7 @@ export const userCreationService = {
 
   /**
    * Step 2a: Create admin user in entity_users table
+   * Phone IS stored here for entity users
    */
   async createAdminUser(userId: string, payload: AdminUserPayload): Promise<string> {
     // Get default permissions based on admin level
@@ -238,8 +267,7 @@ export const userCreationService = {
       company_id: payload.company_id,
       email: payload.email.toLowerCase(),
       name: sanitizeString(payload.name),
-      phone: payload.phone || null,
-      phone: payload.phone || null,
+      phone: payload.phone || null, // Phone stored in entity_users
       admin_level: payload.admin_level,
       permissions: finalPermissions,
       is_active: payload.is_active !== false,
@@ -269,11 +297,15 @@ export const userCreationService = {
 
   /**
    * Step 2b: Create teacher user in teachers table
+   * Phone IS stored here for teachers
    */
   async createTeacherUser(userId: string, payload: TeacherUserPayload): Promise<string> {
-    const teacherData = {
+    const teacherData: any = {
       user_id: userId,
       company_id: payload.company_id,
+      email: payload.email.toLowerCase(),
+      name: sanitizeString(payload.name),
+      phone: payload.phone || null, // Phone stored in teachers table
       teacher_code: payload.teacher_code,
       specialization: payload.specialization || [],
       qualification: payload.qualification || null,
@@ -286,10 +318,10 @@ export const userCreationService = {
 
     // Add school/branch if provided
     if (payload.school_id) {
-      (teacherData as any).school_id = payload.school_id;
+      teacherData.school_id = payload.school_id;
     }
     if (payload.branch_id) {
-      (teacherData as any).branch_id = payload.branch_id;
+      teacherData.branch_id = payload.branch_id;
     }
 
     const { data, error } = await supabase
@@ -307,10 +339,15 @@ export const userCreationService = {
 
   /**
    * Step 2c: Create student user in students table
+   * Phone IS stored here for students
    */
   async createStudentUser(userId: string, payload: StudentUserPayload): Promise<string> {
-    const studentData = {
+    const studentData: any = {
       user_id: userId,
+      company_id: payload.company_id,
+      email: payload.email.toLowerCase(),
+      name: sanitizeString(payload.name),
+      phone: payload.phone || null, // Phone stored in students table
       student_code: payload.student_code,
       enrollment_number: payload.enrollment_number,
       grade_level: payload.grade_level || null,
@@ -325,10 +362,10 @@ export const userCreationService = {
 
     // Add school/branch if provided
     if (payload.school_id) {
-      (studentData as any).school_id = payload.school_id;
+      studentData.school_id = payload.school_id;
     }
     if (payload.branch_id) {
-      (studentData as any).branch_id = payload.branch_id;
+      studentData.branch_id = payload.branch_id;
     }
 
     const { data, error } = await supabase
@@ -406,6 +443,7 @@ export const userCreationService = {
 
   /**
    * Verify user password for login
+   * IMPORTANT: Only selects columns that exist in users table
    */
   async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
     const { data: user, error } = await supabase
@@ -436,6 +474,24 @@ export const userCreationService = {
     }
 
     return { isValid, userId: isValid ? user.id : undefined };
+  },
+
+  /**
+   * Fetch user safely with only existing columns
+   */
+  async getUserById(userId: string): Promise<any | null> {
+    const { data, error } = await supabase
+      .from('users')
+      .select(SAFE_USER_COLUMNS)
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    }
+
+    return data;
   },
 
   /**
@@ -584,7 +640,7 @@ export const userCreationService = {
           manage_school_settings: false,
           manage_branch_settings: true,
           view_audit_logs: false,
-          export_data: true
+          export_data: false
         }
       }
     };
