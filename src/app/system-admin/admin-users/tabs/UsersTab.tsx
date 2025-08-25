@@ -460,7 +460,7 @@ export default function UsersTab() {
           .from('users')
           .select('id')
           .eq('email', validatedData.email)
-          .single();
+          .maybeSingle();
         
         if (existingUser) {
           throw new Error('Email already exists');
