@@ -78,6 +78,16 @@ function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/form-validation" element={<FormValidationPage />} />
               
+              {/* Password Change Route - Protected */}
+              <Route
+                path="/app/settings/change-password"
+                element={
+                  <ProtectedRoute>
+                    <ResetPasswordPage />
+                  </ProtectedRoute>
+                }
+              />
+              
               {/* Entity Module - Only ENTITY_ADMIN and SSA */}
               <Route
                 path="/app/entity-module/*"
