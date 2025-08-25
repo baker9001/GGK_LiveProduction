@@ -744,11 +744,8 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Update phone in users table if changed
-          const currentPhone = editingAdmin.phone || editingAdmin.users?.phone;
-          if (phone !== currentPhone) {
-            userUpdates.phone = phone;
-          }
+          // Always update phone in users table
+          userUpdates.phone = phone;
 
           const { error: userError } = await supabase
             .from('users')
@@ -1306,13 +1303,15 @@ export default function CompaniesTab() {
     e.preventDefault();
     setAdminFormErrors({});
     
-    // Use state values directly instead of FormData
+    // Use state values directly
     const formData = new FormData();
     formData.append('name', adminFormState.name);
     formData.append('email', adminFormState.email);
-    formData.append('phone', adminFormState.phone?.trim() || '');
+    formData.append('phone', adminFormState.phone || ''); // Ensure phone is passed
     formData.append('position', adminFormState.position || '');
     formData.append('password', adminFormState.password || '');
+    
+    console.log('Submitting admin form with phone:', adminFormState.phone); // Debug log
     
     tenantAdminMutation.mutate(formData);
   };
@@ -1451,9 +1450,9 @@ export default function CompaniesTab() {
   React.useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
-        name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
-        email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || editingAdmin.users?.phone || '',
+        name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.name || editingAdmin.users?.email?.split('@')[0] || '',
+        email: editingAdmin.users?.email || editingAdmin.email || '',
+        phone: editingAdmin.phone || '', // Phone is stored in entity_users
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -2417,7 +2416,7 @@ export default function CompaniesTab() {
                               <div className="flex items-center gap-3">
                                 <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  {admin.phone || admin.users?.phone || '-'}
+                                  {admin.phone || '-'}
                                 </span>
                               </div>
                             </div>
