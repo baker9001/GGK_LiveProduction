@@ -321,12 +321,18 @@ export function AdminCreationForm({
 
     setIsValidatingEmail(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('entity_users')
         .select('id')
         .eq('email', formData.email.toLowerCase())
-        .eq('company_id', companyId)
-        .neq('id', isEditing ? initialData?.id : '');
+        .eq('company_id', companyId);
+      
+      // Only add the neq filter when editing and we have a valid ID
+      if (isEditing && initialData?.id) {
+        query = query.neq('id', initialData.id);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
       setEmailExistsError(data && data.length > 0 ? 'An administrator with this email already exists' : null);
