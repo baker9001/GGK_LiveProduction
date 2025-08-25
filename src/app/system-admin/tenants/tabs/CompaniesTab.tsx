@@ -790,6 +790,7 @@ export default function CompaniesTab() {
             const entityUserData = {
               user_id: existingUser.id,
               company_id: companyId,
+              email: existingUser.email, // Add email since your DB requires it
               position: position,
               phone: phone,
               department: null,
@@ -884,6 +885,7 @@ export default function CompaniesTab() {
           const entityUserData = {
             user_id: newUser.id,
             company_id: companyId,
+            email: newUser.email, // Add email since your DB requires it
             position: position,
             phone: phone,
             department: null,
