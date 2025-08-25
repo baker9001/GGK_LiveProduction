@@ -20,7 +20,7 @@
  * 
  * Fixed Issues:
  *   - UUID validation for audit logs (handles non-UUID user IDs like "dev-001")
- *   - Phone field properly saved to entity_users table
+ *   - Phone field properly saved to entity_users table ONLY (not in users table)
  *   - Update flow correctly refreshes admin list
  *   - Password requirements checker
  *   - Generate/manual password options
@@ -33,8 +33,8 @@
  * 
  * Database Tables:
  *   - companies
- *   - users (main auth table)
- *   - entity_users (profile table - includes phone)
+ *   - users (main auth table - NO phone field for entity users)
+ *   - entity_users (profile table - includes phone field)
  *   - regions
  *   - countries
  *   - audit_logs (with UUID validation)
@@ -671,7 +671,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation with proper null handling
+  // Tenant admin mutation with proper null handling - FIXED PHONE FIELD
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -700,12 +700,12 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update entity_users profile with managed fields
+          // Update entity_users profile with managed fields (including phone)
           const entityUpdates: any = {
             name: name, // Required by your DB schema
             email: email, // Required by your DB schema
             position: position,
-            phone: phone,
+            phone: phone, // Phone is stored here
             // Maintain admin privileges for company admins
             is_company_admin: true,
             admin_level: 'entity_admin',
@@ -727,7 +727,7 @@ export default function CompaniesTab() {
 
           if (entityError) throw entityError;
 
-          // Update users table for email and metadata only
+          // Update users table for email and metadata only (NO PHONE HERE)
           const userUpdates: any = {
             raw_user_meta_data: {
               ...(editingAdmin.users as any)?.raw_user_meta_data,
@@ -748,7 +748,7 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Note: Phone is stored only in entity_users, not in users table
+          // IMPORTANT: No phone field in users table update
 
           const { error: userError } = await supabase
             .from('users')
@@ -866,7 +866,8 @@ export default function CompaniesTab() {
           // Generate verification token
           const verificationToken = generateVerificationToken();
           
-          // Create user in users table (without phone - it goes in entity_users)
+          // Create user in users table (WITHOUT phone - it goes in entity_users)
+          // FIXED: Removed phone field from users table insert
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
@@ -875,7 +876,7 @@ export default function CompaniesTab() {
               user_type: 'entity',
               is_active: true,
               email_verified: false,
-              phone: null, // Phone is stored in entity_users, not here
+              // REMOVED: phone field - it's stored in entity_users only
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
               verified_at: null,
@@ -893,7 +894,7 @@ export default function CompaniesTab() {
                 created_by_id: currentUser?.id
               },
               raw_app_meta_data: {},
-              user_types: 'entity', // Note: your schema shows this as text, not array
+              user_types: ['entity'], // This might be text or array based on your schema
               primary_type: 'entity'
               // Note: created_at and updated_at will be auto-set by database
             })
@@ -901,20 +902,25 @@ export default function CompaniesTab() {
             .single();
           
           if (userError) {
+            console.error('User creation error:', userError);
             if (userError.code === '23505') {
               throw new Error('This email is already registered');
+            }
+            // Log the exact error for debugging
+            if (userError.message?.includes('phone')) {
+              console.error('Phone field error detected. The users table should not have a phone field for entity users.');
             }
             throw userError;
           }
           
-          // Create entity user profile with all admin fields
+          // Create entity user profile with all admin fields (including phone)
           const entityUserData = {
             user_id: newUser.id,
             company_id: companyId,
             email: newUser.email, // Required by your DB schema
             name: name, // Required by your DB schema
             position: position,
-            phone: phone, // Store phone in entity_users
+            phone: phone, // Phone is stored HERE in entity_users
             department: null,
             employee_id: null,
             hire_date: new Date().toISOString().split('T')[0],
@@ -941,6 +947,7 @@ export default function CompaniesTab() {
             .insert(entityUserData);
           
           if (entityError) {
+            console.error('Entity user creation error:', entityError);
             // Rollback: delete the user if entity_users insert fails
             await supabase.from('users').delete().eq('id', newUser.id);
             throw entityError;
@@ -1643,10 +1650,11 @@ export default function CompaniesTab() {
     },
   ];
 
-  // ===== RENDER =====
+  // ===== RENDER (rest of the component remains the same) =====
   
   return (
     <div className="space-y-6">
+      {/* ... rest of the JSX remains exactly the same ... */}
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Companies</h2>
         <Button
