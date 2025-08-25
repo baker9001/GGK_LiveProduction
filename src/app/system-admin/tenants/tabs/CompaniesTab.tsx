@@ -45,7 +45,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Key,
-  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2
+  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, User
 } from 'lucide-react';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -809,14 +809,16 @@ export default function CompaniesTab() {
               is_company_admin: true,
               admin_level: 'entity_admin', // Set as entity admin
               can_create_admins: true, // Entity admin can create other admins
-              can_manage_schools: true, // Entity admin can manage schools (fixed typo)
-              can_manage_branches: true, // Entity admin can manage branches (fixed typo)
+              can_manage_schools: true, // Entity admin can manage schools
+              can_manage_branches: true, // Entity admin can manage branches
               is_active: true,
               employee_status: 'active',
               department_id: null,
+              created_by: currentUser?.id || null, // Store who created this admin
               permissions: {}, // Can be expanded with specific permissions
               metadata: {
-                created_by: currentUser?.email,
+                created_by: currentUser?.raw_user_meta_data?.name || currentUser?.email || 'System Admin',
+                created_by_id: currentUser?.id,
                 created_at: new Date().toISOString()
               }
               // Note: created_at and updated_at will be auto-set by database
@@ -915,14 +917,16 @@ export default function CompaniesTab() {
             is_company_admin: true,
             admin_level: 'entity_admin', // Set as entity admin
             can_create_admins: true, // Entity admin can create other admins
-            can_manage_schools: true, // Entity admin can manage schools (fixed typo)
-            can_manage_branches: true, // Entity admin can manage branches (fixed typo)
+            can_manage_schools: true, // Entity admin can manage schools
+            can_manage_branches: true, // Entity admin can manage branches
             is_active: true,
             employee_status: 'active',
             department_id: null,
+            created_by: currentUser?.id || null, // Store who created this admin
             permissions: {}, // Can be expanded with specific permissions
             metadata: {
-              created_by: currentUser?.email,
+              created_by: currentUser?.raw_user_meta_data?.name || currentUser?.email || 'System Admin',
+              created_by_id: currentUser?.id,
               created_at: new Date().toISOString()
             }
             // Note: created_at and updated_at will be auto-set by database
@@ -2415,7 +2419,7 @@ export default function CompaniesTab() {
                               <div className="flex items-center gap-3">
                                 <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  {admin.phone ? `+965 ${admin.phone}` : '-'}
+                                  {admin.phone || '-'}
                                 </span>
                               </div>
                             </div>
@@ -2450,7 +2454,14 @@ export default function CompaniesTab() {
                               <div className="flex items-center gap-3">
                                 <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  Hire Date: {admin.hire_date ? new Date(admin.hire_date).toLocaleDateString() : '-'}
+                                  Created: {admin.created_at ? new Date(admin.created_at).toLocaleDateString() : '-'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                  Created by: {admin.metadata?.created_by || 'System Admin'}
                                 </span>
                               </div>
                             </div>
