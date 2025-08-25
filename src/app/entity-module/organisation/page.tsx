@@ -232,7 +232,7 @@ export default function OrganizationManagement() {
           .from('entity_users')
           .select('company_id')
           .eq('user_id', authenticatedUser.id)
-          .single();
+          .maybeSingle();
 
         if (!entityUserError && entityUserData?.company_id) {
           setUserCompanyId(entityUserData.company_id);
