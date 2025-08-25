@@ -723,7 +723,7 @@ export default function CompaniesTab() {
 
           if (entityError) throw entityError;
 
-          // Update users table if email/phone/name changed
+          // Update users table for email and metadata only
           const userUpdates: any = {
             raw_user_meta_data: {
               ...(editingAdmin.users as any)?.raw_user_meta_data,
@@ -744,8 +744,7 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Always update phone in users table
-          userUpdates.phone = phone;
+          // Note: Phone is stored only in entity_users, not in users table
 
           const { error: userError } = await supabase
             .from('users')
@@ -803,7 +802,7 @@ export default function CompaniesTab() {
               email: existingUser.email, // Required by your DB schema
               name: name, // Required by your DB schema
               position: position,
-              phone: phone,
+              phone: phone, // Store phone in entity_users
               department: null,
               employee_id: null,
               hire_date: new Date().toISOString().split('T')[0],
@@ -861,7 +860,7 @@ export default function CompaniesTab() {
           // Generate verification token
           const verificationToken = generateVerificationToken();
           
-          // Create user in users table
+          // Create user in users table (without phone - it goes in entity_users)
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
@@ -870,7 +869,7 @@ export default function CompaniesTab() {
               user_type: 'entity',
               is_active: true,
               email_verified: false,
-              phone: phone,
+              phone: null, // Phone is stored in entity_users, not here
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
               verified_at: null,
@@ -909,7 +908,7 @@ export default function CompaniesTab() {
             email: newUser.email, // Required by your DB schema
             name: name, // Required by your DB schema
             position: position,
-            phone: phone,
+            phone: phone, // Store phone in entity_users
             department: null,
             employee_id: null,
             hire_date: new Date().toISOString().split('T')[0],
@@ -2416,7 +2415,7 @@ export default function CompaniesTab() {
                               <div className="flex items-center gap-3">
                                 <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                                  {admin.phone || '-'}
+                                  {admin.phone ? `+965 ${admin.phone}` : '-'}
                                 </span>
                               </div>
                             </div>
