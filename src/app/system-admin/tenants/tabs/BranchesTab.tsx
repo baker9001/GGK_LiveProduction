@@ -754,26 +754,24 @@ export default function BranchesTab() {
         onSave={handleSubmit}
         loading={false}
       >
-        <div className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
-              {formErrors.form}
-            </div>
-          )}
+        {formErrors.form && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+            {formErrors.form}
+          </div>
+        )}
 
-          <BranchFormContent
-            formData={formState}
-            setFormData={setFormState}
-            formErrors={formErrors}
-            setFormErrors={setFormErrors}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            schools={schools}
-            companies={companies}
-            isEditing={!!editingBranch}
-            onCompanyChange={handleCompanyChange}
-          />
-        </div>
+        <BranchFormContent
+          formData={formState}
+          setFormData={setFormState}
+          formErrors={formErrors}
+          setFormErrors={setFormErrors}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          schools={schools}
+          companies={companies}
+          isEditing={!!editingBranch}
+          onCompanyChange={handleCompanyChange}
+        />
       </SlideInForm>
     </div>
   );
