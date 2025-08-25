@@ -1249,10 +1249,10 @@ export default function CompaniesTab() {
     setEmailError(null);
 
     try {
-      // Build the query to check for existing email - only select columns that exist
+      // Build the query to check for existing email
       let query = supabase
         .from('users')
-        .select('id, email') // Removed 'phone' as it doesn't exist in users table
+        .select('id, email')
         .eq('email', email);
 
       // Only exclude current user when editing (not when creating new)
