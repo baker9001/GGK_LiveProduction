@@ -64,7 +64,6 @@ import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
 import { getLogoUrl, deleteLogoFromStorage } from '../../../../lib/logoHelpers';
-import { countryCodes } from '../../../../components/shared/PhoneInput';
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -433,6 +432,24 @@ export default function CompaniesTab() {
     }
   );
 
+  // Fetch all countries (for backward compatibility)
+  const { data: countries = [] } = useQuery<Country[]>(
+    ['countries'],
+    async () => {
+      const { data, error } = await supabase
+        .from('countries')
+        .select('id, name, region_id, status')
+        .eq('status', 'active')
+        .order('name');
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      staleTime: 10 * 60 * 1000,
+    }
+  );
+
   // Fetch countries for filter
   const { data: filterCountries = [] } = useQuery<Country[]>(
     ['filter-countries', filters.region_ids],
@@ -443,7 +460,7 @@ export default function CompaniesTab() {
         .eq('status', 'active')
         .order('name');
 
-      if (filters.region_ids.length > 0) {
+      if (filters.region_ids && filters.region_ids.length > 0) {
         query = query.in('region_id', filters.region_ids);
       }
 
@@ -453,6 +470,7 @@ export default function CompaniesTab() {
     },
     {
       staleTime: 5 * 60 * 1000,
+      keepPreviousData: true
     }
   );
 
@@ -564,16 +582,16 @@ export default function CompaniesTab() {
   
   // Company mutation with proper null handling
   const companyMutation = useMutation(
-    async (formData: FormData) => {
+    async (formData: FormState) => {
       const data = {
-        name: formData.get('name') as string,
-        code: (formData.get('code') as string)?.trim() || null,
-        region_id: formData.get('region_id') as string,
-        country_id: formData.get('country_id') as string,
-        logo: (formData.get('logo') as string)?.trim() || null,
-        address: (formData.get('address') as string)?.trim() || null,
-        notes: (formData.get('notes') as string)?.trim() || null,
-        status: formData.get('status') as 'active' | 'inactive'
+        name: formData.name.trim(),
+        code: formData.code.trim() || null,
+        region_id: formData.region_id,
+        country_id: formData.country_id,
+        logo: formData.logo.trim() || null,
+        address: formData.address.trim() || null,
+        notes: formData.notes.trim() || null,
+        status: formData.status
       };
 
       // Validate with zod
@@ -1224,10 +1242,27 @@ export default function CompaniesTab() {
     }
   };
 
+  const handleRegionChange = (regionId: string) => {
+    setFormState(prev => ({
+      ...prev,
+      region_id: regionId,
+      country_id: '' // Reset country when region changes
+    }));
+  };
+
+  const handleCountryChange = (countryId: string) => {
+    setFormState(prev => ({
+      ...prev,
+      country_id: countryId
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    companyMutation.mutate(formData);
+    setFormErrors({});
+    // Update company status in formState before submitting
+    const submitData = { ...formState, status: companyStatus };
+    companyMutation.mutate(submitData);
   };
 
   const handleAdminSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -1537,7 +1572,7 @@ export default function CompaniesTab() {
             label="Region"
             options={regions.map(r => ({ value: r.id, label: r.name }))}
             selectedValues={filters.region_ids}
-            onChange={(values) => setFilters({ ...filters, region_ids: values })}
+            onChange={(values) => setFilters({ ...filters, region_ids: values, country_ids: [] })}
             placeholder="Select regions..."
           />
 
@@ -1549,6 +1584,7 @@ export default function CompaniesTab() {
             selectedValues={filters.country_ids}
             onChange={(values) => setFilters({ ...filters, country_ids: values })}
             placeholder="Select countries..."
+            disabled={filters.region_ids.length === 0}
           />
 
           <SearchableMultiSelect
@@ -1607,6 +1643,25 @@ export default function CompaniesTab() {
             >
               <UserPlus className="h-4 w-4" />
             </button>
+            
+            <button
+              onClick={() => {
+                setEditingCompany(company);
+                setIsFormOpen(true);
+              }}
+              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              title="Edit Company"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            
+            <button
+              onClick={() => handleDelete([company])}
+              className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              title="Delete Company"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         )}
         emptyMessage="No companies found"
@@ -1623,12 +1678,12 @@ export default function CompaniesTab() {
           setFormErrors({});
         }}
         onSave={() => {
-          const form = document.querySelector('form') as HTMLFormElement;
+          const form = document.getElementById('company-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
         loading={companyMutation.isLoading}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="company-form" onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
@@ -1640,7 +1695,8 @@ export default function CompaniesTab() {
               id="name"
               name="name"
               placeholder="Enter company name"
-              defaultValue={editingCompany?.name}
+              value={formState.name}
+              onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
             />
           </FormField>
 
@@ -1649,7 +1705,8 @@ export default function CompaniesTab() {
               id="code"
               name="code"
               placeholder="Enter company code"
-              defaultValue={editingCompany?.code || ''}
+              value={formState.code}
+              onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
             />
           </FormField>
 
@@ -1661,7 +1718,8 @@ export default function CompaniesTab() {
                 value: region.id,
                 label: region.name
               }))}
-              defaultValue={editingCompany?.region_id || ''}
+              value={formState.region_id}
+              onChange={(value) => handleRegionChange(value)}
             />
           </FormField>
 
@@ -1669,29 +1727,24 @@ export default function CompaniesTab() {
             <Select
               id="country_id"
               name="country_id"
-              options={formCountries.map(country => ({
+              options={(formCountries || []).map(country => ({
                 value: country.id,
                 label: country.name
               }))}
-              defaultValue={editingCompany?.country_id || ''}
+              value={formState.country_id}
+              onChange={(value) => handleCountryChange(value)}
+              disabled={!formState.region_id}
             />
           </FormField>
 
           <FormField id="logo" label="Company Logo">
-            <input
-              type="hidden"
-              name="logo"
-              defaultValue={editingCompany?.logo || ''}
-            />
+            <input type="hidden" name="logo" value={formState.logo} />
             <ImageUpload
               id="logo"
               bucket="company-logos"
-              value={editingCompany?.logo}
-              publicUrl={editingCompany?.logo ? getLogoUrl('company-logos', editingCompany.logo) : null}
-              onChange={(path) => {
-                const input = document.querySelector('input[name="logo"]') as HTMLInputElement;
-                if (input) input.value = path || '';
-              }}
+              value={formState.logo}
+              publicUrl={formState.logo ? getLogoUrl('company-logos', formState.logo) : null}
+              onChange={(path) => setFormState(prev => ({ ...prev, logo: path || '' }))}
             />
           </FormField>
 
@@ -1700,7 +1753,8 @@ export default function CompaniesTab() {
               id="address"
               name="address"
               placeholder="Enter company address"
-              defaultValue={editingCompany?.address || ''}
+              value={formState.address}
+              onChange={(e) => setFormState(prev => ({ ...prev, address: e.target.value }))}
               rows={3}
             />
           </FormField>
@@ -1710,7 +1764,8 @@ export default function CompaniesTab() {
               id="notes"
               name="notes"
               placeholder="Enter company notes"
-              defaultValue={editingCompany?.notes || ''}
+              value={formState.notes}
+              onChange={(e) => setFormState(prev => ({ ...prev, notes: e.target.value }))}
               rows={3}
             />
           </FormField>
@@ -1728,6 +1783,7 @@ export default function CompaniesTab() {
                 onChange={(checked) => {
                   const newStatus = checked ? 'active' : 'inactive';
                   setCompanyStatus(newStatus);
+                  setFormState(prev => ({ ...prev, status: newStatus }));
                 }}
                 label="Company Status"
                 description={
