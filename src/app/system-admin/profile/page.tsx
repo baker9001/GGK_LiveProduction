@@ -65,13 +65,15 @@ export default function ProfilePage() {
           throw new Error('This email is already in use');
         }
       }
-
-      const { error } = await supabase
-        .from('admin_users')
+      // Update password in users table (where password_hash column exists)
+      const { error: userUpdateError } = await supabase
+        .from('users')
         .update({
           name: validatedData.name,
           email: validatedData.email,
-          avatar_url: validatedData.avatar_url || null
+          password_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          requires_password_change: false
         })
         .eq('id', user?.id);
 
@@ -143,8 +145,21 @@ export default function ProfilePage() {
 
       // Verify current password
       const isValidPassword = await bcrypt.compare(validatedData.currentPassword, userData.password_hash);
-      if (!isValidPassword) {
-        throw new Error('Current password is incorrect');
+      if (userUpdateError) {
+        throw new Error(`Failed to update password: ${userUpdateError.message}`);
+      }
+
+      // Update admin_users table with timestamp only (no password_hash)
+      const { error: adminUpdateError } = await supabase
+        .from('admin_users')
+        .update({
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (adminUpdateError) {
+        console.warn('Failed to update admin_users timestamp:', adminUpdateError);
+        // Don't throw - password update succeeded
       }
 
       // Hash new password
