@@ -104,6 +104,7 @@ interface AdminUser {
   parent_admin_id?: string | null;
   assigned_schools?: string[];
   assigned_branches?: string[];
+  last_sign_in_at?: string;
 }
 
 // Helper functions
@@ -227,7 +228,8 @@ export const adminService = {
         metadata: data.metadata || {},
         parent_admin_id: data.parent_admin_id || null,
         assigned_schools: assignedSchools,
-        assigned_branches: assignedBranches
+        assigned_branches: assignedBranches,
+        last_sign_in_at: data.users?.last_sign_in_at || undefined
       };
     } catch (error: any) {
       console.error('getAdminById error:', error);
@@ -623,7 +625,8 @@ export const adminService = {
           metadata: admin.metadata || {},
           parent_admin_id: admin.parent_admin_id || null,
           assigned_schools: assignedSchools,
-          assigned_branches: assignedBranches
+          assigned_branches: assignedBranches,
+          last_sign_in_at: admin.users?.last_sign_in_at || undefined
         };
       }));
 

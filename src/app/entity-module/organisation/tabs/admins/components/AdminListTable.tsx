@@ -69,7 +69,7 @@ interface EntityUser {
   updated_at: string;
   assigned_schools?: string[];
   assigned_branches?: string[];
-  last_login_at?: string;
+  last_sign_in_at?: string;
   metadata?: Record<string, any>;
 }
 
@@ -482,10 +482,10 @@ export function AdminListTable({
       enableSorting: true,
       cell: (row: EntityUser) => (
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {row.last_login_at ? (
+          {row.last_sign_in_at ? (
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {new Date(row.last_login_at).toLocaleDateString()}
+              {new Date(row.last_sign_in_at).toLocaleDateString()}
             </div>
           ) : (
             <span className="text-gray-400 dark:text-gray-500">Never</span>
