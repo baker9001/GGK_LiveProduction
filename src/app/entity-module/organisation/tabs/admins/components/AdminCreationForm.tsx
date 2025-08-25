@@ -133,7 +133,7 @@ export function AdminCreationForm({
   const [errors, setErrors] = useState<Record<string, string>>({}); // General form errors
   const [emailExistsError, setEmailExistsError] = useState<string | null>(null); // New state for email duplication
   const [showPassword, setShowPassword] = useState(false);
-  const [isValidatingEmail, setIsValidatingEmail] = useState(false); // New state for email validation in progress
+  const [isValidatingEmail, setIsValidatingEmail] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
   // ===== MUTATIONS =====
@@ -320,38 +320,96 @@ export function AdminCreationForm({
 
   // Email duplication validation on blur
   const handleEmailBlur = useCallback(async () => {
-    if (!formData.email || errors.email) {
-      setEmailExistsError(null); // Clear email error if field is empty or has format error
+    if (!formData.email || formData.email.trim() === '') {
+      setEmailExistsError(null);
+      return;
+    }
+
+    // Skip validation if email format is invalid
+    try {
+      emailSchema.parse(formData.email);
+    } catch {
+      setEmailExistsError(null);
       return;
     }
 
     setIsValidatingEmail(true);
     try {
-      let query = supabase
-        .from('entity_users')
-        .select('id')
-        .eq('email', formData.email.toLowerCase())
-        .eq('company_id', companyId);
+      const normalizedEmail = formData.email.toLowerCase().trim();
       
-      // Apply .neq('id', ...) filter ONLY when editing and initialData.id is a valid non-empty string
-      if (isEditing && initialData?.id && typeof initialData.id === 'string' && initialData.id.trim().length > 0) {
-        query = query.neq('id', initialData.id);
+      // Check in both admin_users and entity_users tables
+      const [adminUsersCheck, entityUsersCheck, usersCheck] = await Promise.all([
+        // Check admin_users table
+        supabase
+          .from('admin_users')
+          .select('id, email')
+          .eq('email', normalizedEmail)
+          .maybeSingle(),
+        
+        // Check entity_users table
+        supabase
+          .from('entity_users')
+          .select('id, email, company_id')
+          .eq('email', normalizedEmail)
+          .eq('company_id', companyId)
+          .maybeSingle(),
+        
+        // Check users table
+        supabase
+          .from('users')
+          .select('id, email')
+          .eq('email', normalizedEmail)
+          .maybeSingle()
+      ]);
+
+      // Check for errors in queries
+      if (adminUsersCheck.error && adminUsersCheck.error.code !== 'PGRST116') {
+        throw adminUsersCheck.error;
+      }
+      if (entityUsersCheck.error && entityUsersCheck.error.code !== 'PGRST116') {
+        throw entityUsersCheck.error;
+      }
+      if (usersCheck.error && usersCheck.error.code !== 'PGRST116') {
+        throw usersCheck.error;
       }
       
-      const { data, error } = await query;
+      // If editing, exclude the current user from duplication check
+      let isDuplicate = false;
+      
+      if (adminUsersCheck.data) {
+        if (!isEditing || adminUsersCheck.data.id !== initialData?.id) {
+          isDuplicate = true;
+        }
+      }
+      
+      if (entityUsersCheck.data) {
+        if (!isEditing || entityUsersCheck.data.id !== initialData?.id) {
+          isDuplicate = true;
+        }
+      }
+      
+      if (usersCheck.data) {
+        if (!isEditing || usersCheck.data.id !== initialData?.user_id) {
+          isDuplicate = true;
+        }
+      }
 
-      if (error) throw error;
-      setEmailExistsError(data && data.length > 0 ? 'An administrator with this email already exists' : null);
+      setEmailExistsError(isDuplicate ? 'An administrator with this email already exists in the system' : null);
     } catch (error) {
       console.error('Email validation error:', error);
+      setEmailExistsError('Unable to verify email availability. Please try again.');
     } finally {
       setIsValidatingEmail(false);
     }
-  }, [formData.email, companyId, isEditing, initialData, errors.email]);
+  }, [formData.email, companyId, isEditing, initialData]);
 
   const handleSubmit = useCallback(async () => {
-    setIsValidatingEmail(true); // Indicate that validation is in progress
-    await handleEmailBlur(); // Re-run email validation on submit attempt to catch last-minute changes
+    // Re-run email validation on submit to catch last-minute changes
+    setIsValidatingEmail(true);
+    await handleEmailBlur();
+    
+    // Wait a moment for the validation to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Validate all required fields
     const newErrors: Record<string, string> = {};
@@ -386,8 +444,12 @@ export function AdminCreationForm({
     
     if (Object.keys(newErrors).length > 0 || emailExistsError) { // Include emailExistsError in overall validation check
       setErrors(newErrors);
-      toast.error('Please fix the validation errors');
-      setIsValidatingEmail(false); // Reset validation state
+      if (emailExistsError) {
+        toast.error('Email address is already in use. Please choose a different email.');
+      } else {
+        toast.error('Please fix the validation errors');
+      }
+      setIsValidatingEmail(false);
       return;
     }
     
@@ -503,21 +565,27 @@ export function AdminCreationForm({
             id="email"
             label="Email Address"
             required
-            error={errors.email || emailExistsError}
+            error={errors.email || emailExistsError || (isValidatingEmail ? 'Checking email availability...' : '')}
           >
             <Input
               id="email"
               type="email"
               value={formData.email}
-              onChange={(e) => { // Clear emailExistsError on change
+              onChange={(e) => {
                 handleFieldChange('email', e.target.value);
-                setEmailExistsError(null); // Clear error immediately on change
+                setEmailExistsError(null);
               }}
               onBlur={handleEmailBlur}
               placeholder="admin@example.com"
               disabled={!canModifyThisAdmin}
               leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
             />
+            {isValidatingEmail && (
+              <div className="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-400">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 mr-2"></div>
+                Checking email availability...
+              </div>
+            )}
           </FormField>
 
           <FormField
