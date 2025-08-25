@@ -126,8 +126,10 @@ export function AdminCreationForm({
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedSchoolForBranches, setSelectedSchoolForBranches] = useState<string>('');
   
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({}); // General form errors
+  const [emailExistsError, setEmailExistsError] = useState<string | null>(null); // New state for email duplication
   const [showPassword, setShowPassword] = useState(false);
+  const [isValidatingEmail, setIsValidatingEmail] = useState(false); // New state for email validation in progress
   const [isValidating, setIsValidating] = useState(false);
 
   // ===== MUTATIONS =====
@@ -293,7 +295,7 @@ export function AdminCreationForm({
     setFormData(prev => ({ ...prev, [field]: value }));
     
     // Clear error for this field
-    if (errors[field]) {
+    if (errors[field] || (field === 'email' && emailExistsError)) {
       setErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors[field];
@@ -308,11 +310,37 @@ export function AdminCreationForm({
         setErrors(prev => ({ ...prev, [field]: error }));
       }
     }
-  }, [errors, isValidating, validateField]);
+  }, [errors, isValidating, validateField, emailExistsError]);
+
+  // Email duplication validation on blur
+  const handleEmailBlur = useCallback(async () => {
+    if (!formData.email || errors.email) {
+      setEmailExistsError(null); // Clear email error if field is empty or has format error
+      return;
+    }
+
+    setIsValidatingEmail(true);
+    try {
+      const { data, error } = await supabase
+        .from('entity_users')
+        .select('id')
+        .eq('email', formData.email.toLowerCase())
+        .eq('company_id', companyId)
+        .neq('id', isEditing ? initialData?.id : '');
+
+      if (error) throw error;
+      setEmailExistsError(data && data.length > 0 ? 'An administrator with this email already exists' : null);
+    } catch (error) {
+      console.error('Email validation error:', error);
+    } finally {
+      setIsValidatingEmail(false);
+    }
+  }, [formData.email, companyId, isEditing, initialData, errors.email]);
 
   const handleSubmit = useCallback(async () => {
-    setIsValidating(true);
-    
+    setIsValidatingEmail(true); // Indicate that validation is in progress
+    await handleEmailBlur(); // Re-run email validation on submit attempt to catch last-minute changes
+
     // Validate all required fields
     const newErrors: Record<string, string> = {};
     
@@ -344,9 +372,10 @@ export function AdminCreationForm({
       newErrors.branches = 'At least one branch must be assigned to a Branch Administrator';
     }
     
-    if (Object.keys(newErrors).length > 0) {
+    if (Object.keys(newErrors).length > 0 || emailExistsError) { // Include emailExistsError in overall validation check
       setErrors(newErrors);
       toast.error('Please fix the validation errors');
+      setIsValidatingEmail(false); // Reset validation state
       return;
     }
     
@@ -415,7 +444,9 @@ export function AdminCreationForm({
     createAdminMutation,
     updateAdminMutation,
     onSuccess,
-    onClose
+    onClose,
+    emailExistsError,
+    handleEmailBlur
   ]);
 
   // ===== RENDER =====
@@ -458,19 +489,23 @@ export function AdminCreationForm({
             id="email"
             label="Email Address"
             required
-            error={errors.email}
+            error={errors.email || emailExistsError}
           >
             <Input
               id="email"
               type="email"
               value={formData.email}
-              onChange={(e) => handleFieldChange('email', e.target.value)}
+              onChange={(e) => { // Clear emailExistsError on change
+                handleFieldChange('email', e.target.value);
+                setEmailExistsError(null); // Clear error immediately on change
+              }}
+              onBlur={handleEmailBlur}
               placeholder="admin@example.com"
               disabled={!canModifyThisAdmin}
               leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
-          
+
           <FormField
             id="password"
             label={isEditing ? "New Password (leave blank to keep current)" : "Password"}
