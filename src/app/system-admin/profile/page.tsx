@@ -136,7 +136,7 @@ export default function ProfilePage() {
 
       // Get current user data to verify current password
       const { data: userData, error: fetchError } = await supabase
-        .from('admin_users')
+        .from('users')
         .select('password_hash')
         .eq('id', user?.id)
         .single();
@@ -151,7 +151,7 @@ export default function ProfilePage() {
 
       // Update admin_users table with timestamp only (no password_hash)
       const { error: adminUpdateError } = await supabase
-        .from('admin_users')
+        .from('users')
         .update({
           updated_at: new Date().toISOString()
         })
@@ -167,7 +167,7 @@ export default function ProfilePage() {
       const hashedPassword = await bcrypt.hash(validatedData.newPassword, salt);
 
       const { error } = await supabase
-        .from('admin_users')
+        .from('users')
         .update({ password_hash: hashedPassword })
         .eq('id', user?.id);
 
