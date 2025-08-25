@@ -64,6 +64,7 @@ import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
 import { getLogoUrl, deleteLogoFromStorage } from '../../../../lib/logoHelpers';
+import { countryCodes } from '../../../../components/shared/PhoneInput';
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -1542,7 +1543,7 @@ export default function CompaniesTab() {
 
           <SearchableMultiSelect
             label="Country"
-            options={countries
+            options={filterCountries
               .filter(c => filters.region_ids.length === 0 || filters.region_ids.includes(c.region_id))
               .map(c => ({ value: c.id, label: c.name }))}
             selectedValues={filters.country_ids}
@@ -1668,7 +1669,7 @@ export default function CompaniesTab() {
             <Select
               id="country_id"
               name="country_id"
-              options={countries.map(country => ({
+              options={formCountries.map(country => ({
                 value: country.id,
                 label: country.name
               }))}
