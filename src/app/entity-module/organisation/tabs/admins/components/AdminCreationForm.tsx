@@ -1,28 +1,15 @@
+// Path: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
+
 /**
- * File: /src/app/entity-module/organisation/tabs/admins/components/AdminCreationForm.tsx
- * 
- * REIMPLEMENTED: Admin Creation/Edit Form - Fixed Version
+ * FIXED VERSION - Phone field handling based on user type
  * 
  * Fixed Issues:
- * 1. ✅ Removed duplicated tabs
- * 2. ✅ Removed permissions section (permissions are pre-determined by admin level)
- * 3. ✅ Improved scope assignment with proper school/branch filtering
- * 4. ✅ Maintained all existing functionality
- * 
- * Dependencies:
- *   - @/components/shared/* (SlideInForm, FormField, Input, Select, ToggleSwitch)
- *   - @/contexts/UserContext
- *   - ../hooks/useAdminMutations
- *   - ../types/admin.types
- *   - ../services/permissionService
- *   - External: react, zod, lucide-react, @tanstack/react-query
- * 
- * Database Tables:
- *   - entity_users (id, user_id, name, email, admin_level, permissions, is_active, company_id, metadata)
- *   - users (id, email, password_hash, user_type, is_active)
- *   - entity_admin_scope (user_id, scope_type, scope_id, permissions)
- *   - schools (id, name, company_id, status)
- *   - branches (id, name, school_id, status)
+ * 1. ✅ Phone stored in correct table based on user type:
+ *    - Entity users: entity_users.phone
+ *    - Teachers: teachers.phone
+ *    - Students: students.phone
+ * 2. ✅ Password always goes to users.password_hash
+ * 3. ✅ Email duplication check doesn't query non-existent columns
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -71,6 +58,22 @@ function calculatePasswordStrength(password: string): number {
   return Math.min(strength, 100);
 }
 
+/**
+ * Determines which table stores phone number based on user type
+ */
+function getPhoneTableForUserType(userType: string): string {
+  switch (userType) {
+    case 'entity':
+      return 'entity_users';
+    case 'teacher':
+      return 'teachers';
+    case 'student':
+      return 'students';
+    default:
+      return 'entity_users'; // Default for admins
+  }
+}
+
 // ===== INTERFACES =====
 interface AdminFormData {
   name: string;
@@ -79,6 +82,7 @@ interface AdminFormData {
   phone?: string;
   admin_level: AdminLevel;
   is_active: boolean;
+  user_type?: string; // Added to track user type
 }
 
 interface AdminCreationFormProps {
@@ -101,6 +105,7 @@ interface AdminCreationFormProps {
     assigned_schools?: string[];
     assigned_branches?: string[];
     metadata?: Record<string, any>;
+    user_type?: string; // Track the user type
   };
 }
 
@@ -123,15 +128,16 @@ export function AdminCreationForm({
     password: '',
     phone: '',
     admin_level: 'branch_admin',
-    is_active: true
+    is_active: true,
+    user_type: 'entity' // Default to entity for admins
   });
   
   const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedSchoolForBranches, setSelectedSchoolForBranches] = useState<string>('');
   
-  const [errors, setErrors] = useState<Record<string, string>>({}); // General form errors
-  const [emailExistsError, setEmailExistsError] = useState<string | null>(null); // New state for email duplication
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [emailExistsError, setEmailExistsError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isValidatingEmail, setIsValidatingEmail] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -140,6 +146,24 @@ export function AdminCreationForm({
   const createAdminMutation = useCreateAdmin();
   const updateAdminMutation = useUpdateAdmin();
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
+
+  // ===== FETCH USER TYPE (for existing user) =====
+  const { data: userData } = useQuery(
+    ['user-type', initialData?.user_id],
+    async () => {
+      if (!initialData?.user_id) return null;
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('user_type')
+        .eq('id', initialData.user_id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    { enabled: !!initialData?.user_id && isOpen }
+  );
 
   // ===== FETCH SCHOOLS =====
   const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
@@ -178,6 +202,10 @@ export function AdminCreationForm({
   );
 
   // ===== COMPUTED VALUES =====
+  const phoneTableName = useMemo(() => {
+    return getPhoneTableForUserType(formData.user_type || 'entity');
+  }, [formData.user_type]);
+
   const isSelfEdit = useMemo(() => {
     return isEditing && initialData?.user_id === user?.id;
   }, [isEditing, initialData, user]);
@@ -233,21 +261,21 @@ export function AdminCreationForm({
     if (isOpen) {
       if (initialData) {
         // Edit mode: populate form with existing data
+        const userType = userData?.user_type || initialData.user_type || 'entity';
         setFormData({
           name: initialData.name,
           email: initialData.email,
           password: '', // Always start with empty password for security
           phone: initialData.phone || '',
           admin_level: initialData.admin_level,
-          is_active: initialData.is_active
+          is_active: initialData.is_active,
+          user_type: userType
         });
         setSelectedSchools(initialData.assigned_schools || []);
         setSelectedBranches(initialData.assigned_branches || []);
         
         // If editing a branch admin with assigned branches, set the school filter
         if (initialData.admin_level === 'branch_admin' && initialData.assigned_branches?.length) {
-          // You might need to fetch the school ID for the branches
-          // For now, we'll leave it empty and let the user select
           setSelectedSchoolForBranches('');
         }
       } else {
@@ -259,17 +287,19 @@ export function AdminCreationForm({
           password: '',
           phone: '',
           admin_level: defaultLevel,
-          is_active: true
+          is_active: true,
+          user_type: 'entity' // Admins are entity users by default
         });
         setSelectedSchools([]);
         setSelectedBranches([]);
         setSelectedSchoolForBranches('');
       }
       setErrors({});
+      setEmailExistsError(null);
       setShowPassword(false);
       setIsValidating(false);
     }
-  }, [isOpen, initialData, availableAdminLevels]);
+  }, [isOpen, initialData, availableAdminLevels, userData]);
 
   // ===== VALIDATION =====
   const validateField = useCallback((field: string, value: any): string | undefined => {
@@ -307,6 +337,9 @@ export function AdminCreationForm({
         delete newErrors[field];
         return newErrors;
       });
+      if (field === 'email') {
+        setEmailExistsError(null);
+      }
     }
     
     // Real-time validation for better UX
@@ -318,7 +351,7 @@ export function AdminCreationForm({
     }
   }, [errors, isValidating, validateField, emailExistsError]);
 
-  // Email duplication validation on blur
+  // Email duplication validation - checks all relevant tables
   const handleEmailBlur = useCallback(async () => {
     if (!formData.email || formData.email.trim() === '') {
       setEmailExistsError(null);
@@ -337,78 +370,88 @@ export function AdminCreationForm({
     try {
       const normalizedEmail = formData.email.toLowerCase().trim();
       
-      // Check in both admin_users and entity_users tables
-      const [adminUsersCheck, entityUsersCheck, usersCheck] = await Promise.all([
-        // Check admin_users table
+      // Check in relevant tables
+      const checks = await Promise.all([
+        // Check users table (only email column exists here)
         supabase
-          .from('admin_users')
+          .from('users')
           .select('id, email')
           .eq('email', normalizedEmail)
           .maybeSingle(),
         
-        // Check entity_users table
-        supabase
+        // Check entity_users if dealing with entity user
+        formData.user_type === 'entity' ? supabase
           .from('entity_users')
-          .select('id, email, company_id')
+          .select('id, email, user_id')
           .eq('email', normalizedEmail)
           .eq('company_id', companyId)
-          .maybeSingle(),
+          .maybeSingle() : Promise.resolve({ data: null, error: null }),
         
-        // Check users table
+        // Check teachers table if needed
+        formData.user_type === 'teacher' ? supabase
+          .from('teachers')
+          .select('id, email, user_id')
+          .eq('email', normalizedEmail)
+          .maybeSingle() : Promise.resolve({ data: null, error: null }),
+        
+        // Check students table if needed
+        formData.user_type === 'student' ? supabase
+          .from('students')
+          .select('id, email, user_id')
+          .eq('email', normalizedEmail)
+          .maybeSingle() : Promise.resolve({ data: null, error: null }),
+          
+        // Always check admin_users for backward compatibility
         supabase
-          .from('users')
+          .from('admin_users')
           .select('id, email')
           .eq('email', normalizedEmail)
           .maybeSingle()
       ]);
 
-      // Check for errors in queries
-      if (adminUsersCheck.error && adminUsersCheck.error.code !== 'PGRST116') {
-        throw adminUsersCheck.error;
-      }
-      if (entityUsersCheck.error && entityUsersCheck.error.code !== 'PGRST116') {
-        throw entityUsersCheck.error;
-      }
-      if (usersCheck.error && usersCheck.error.code !== 'PGRST116') {
-        throw usersCheck.error;
+      // Check for errors
+      for (const check of checks) {
+        if (check.error && check.error.code !== 'PGRST116') {
+          throw check.error;
+        }
       }
       
-      // If editing, exclude the current user from duplication check
+      // Determine if email is duplicate
       let isDuplicate = false;
       
-      if (adminUsersCheck.data) {
-        if (!isEditing || adminUsersCheck.data.id !== initialData?.id) {
-          isDuplicate = true;
-        }
-      }
-      
-      if (entityUsersCheck.data) {
-        if (!isEditing || entityUsersCheck.data.id !== initialData?.id) {
-          isDuplicate = true;
-        }
-      }
-      
-      if (usersCheck.data) {
-        if (!isEditing || usersCheck.data.id !== initialData?.user_id) {
-          isDuplicate = true;
+      for (const check of checks) {
+        if (check.data) {
+          // If editing, exclude current record
+          if (isEditing) {
+            const checkUserId = (check.data as any).user_id || (check.data as any).id;
+            if (checkUserId !== initialData?.user_id && checkUserId !== initialData?.id) {
+              isDuplicate = true;
+              break;
+            }
+          } else {
+            isDuplicate = true;
+            break;
+          }
         }
       }
 
-      setEmailExistsError(isDuplicate ? 'An administrator with this email already exists in the system' : null);
+      setEmailExistsError(isDuplicate ? 'This email address is already registered in the system' : null);
     } catch (error) {
       console.error('Email validation error:', error);
       setEmailExistsError('Unable to verify email availability. Please try again.');
     } finally {
       setIsValidatingEmail(false);
     }
-  }, [formData.email, companyId, isEditing, initialData]);
+  }, [formData.email, formData.user_type, companyId, isEditing, initialData]);
 
   const handleSubmit = useCallback(async () => {
-    // Re-run email validation on submit to catch last-minute changes
-    setIsValidatingEmail(true);
+    // Set validation mode
+    setIsValidating(true);
+    
+    // Re-run email validation on submit
     await handleEmailBlur();
     
-    // Wait a moment for the validation to complete
+    // Wait for validation to complete
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Validate all required fields
@@ -442,14 +485,13 @@ export function AdminCreationForm({
       newErrors.branches = 'At least one branch must be assigned to a Branch Administrator';
     }
     
-    if (Object.keys(newErrors).length > 0 || emailExistsError) { // Include emailExistsError in overall validation check
+    if (Object.keys(newErrors).length > 0 || emailExistsError) {
       setErrors(newErrors);
       if (emailExistsError) {
         toast.error('Email address is already in use. Please choose a different email.');
       } else {
         toast.error('Please fix the validation errors');
       }
-      setIsValidatingEmail(false);
       return;
     }
     
@@ -471,33 +513,36 @@ export function AdminCreationForm({
       
       if (isEditing && initialData) {
         // Update existing admin
+        // Phone will be updated in the correct table based on user type
         await updateAdminMutation.mutateAsync({
           userId: initialData.id,
           updates: {
             name: formData.name,
             email: formData.email,
-            password: formData.password || undefined,
-            phone: formData.phone || undefined,
+            password: formData.password || undefined, // Updates users.password_hash
+            phone: formData.phone || undefined,       // Updates correct table based on user_type
             admin_level: formData.admin_level,
             is_active: formData.is_active,
             permissions,
             assigned_schools: formData.admin_level === 'school_admin' ? selectedSchools : undefined,
-            assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined
+            assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
+            user_type: formData.user_type // Pass user type to mutation
           }
         });
       } else {
-        // Create new admin
+        // Create new admin (always entity user type)
         await createAdminMutation.mutateAsync({
           email: formData.email,
           name: formData.name,
-          password: formData.password,
-          phone: formData.phone || undefined,
+          password: formData.password,              // Creates users.password_hash
+          phone: formData.phone || undefined,       // Creates in entity_users.phone
           admin_level: formData.admin_level,
           company_id: companyId,
           permissions,
           is_active: formData.is_active,
           assigned_schools: formData.admin_level === 'school_admin' ? selectedSchools : undefined,
-          assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined
+          assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
+          user_type: 'entity' // Admins are always entity users
         });
       }
       
@@ -565,7 +610,8 @@ export function AdminCreationForm({
             id="email"
             label="Email Address"
             required
-            error={errors.email || emailExistsError || (isValidatingEmail ? 'Checking email availability...' : '')}
+            error={errors.email || emailExistsError || undefined}
+            helpText={isValidatingEmail ? 'Checking email availability...' : undefined}
           >
             <Input
               id="email"
@@ -592,6 +638,7 @@ export function AdminCreationForm({
             id="phone"
             label="Phone Number"
             error={errors.phone}
+            helpText={`Phone will be stored in ${phoneTableName} table`}
           >
             <PhoneInput
               value={formData.phone}
@@ -606,6 +653,7 @@ export function AdminCreationForm({
             label={isEditing ? "New Password (leave blank to keep current)" : "Password"}
             required={!isEditing}
             error={errors.password}
+            helpText="Password will be securely hashed and stored in users table"
           >
             <div className="relative">
               <Input
@@ -803,6 +851,28 @@ export function AdminCreationForm({
           </div>
         )}
         
+        {/* Data Storage Information */}
+        <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                Data Storage Information
+              </p>
+              <ul className="text-xs text-gray-600 dark:text-gray-400 mt-2 space-y-1">
+                <li>• Authentication data (email, password) → <code>users</code> table</li>
+                <li>• Administrator profile (name, permissions) → <code>entity_users</code> table</li>
+                <li>• Phone number → <code>{phoneTableName}</code> table</li>
+                {isEditing && formData.user_type && formData.user_type !== 'entity' && (
+                  <li className="text-amber-600 dark:text-amber-400">
+                    ⚠ User type: <strong>{formData.user_type}</strong> - Phone stored in <code>{phoneTableName}</code> table
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+        
         {/* Auto-Generated Permissions Notice */}
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
           <div className="flex items-center">
@@ -840,6 +910,18 @@ export function AdminCreationForm({
                   ))}
                 </ul>
               </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Email Exists Error */}
+        {emailExistsError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" />
+              <p className="text-sm text-red-700 dark:text-red-300">
+                {emailExistsError}
+              </p>
             </div>
           </div>
         )}
