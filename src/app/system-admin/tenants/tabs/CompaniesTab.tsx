@@ -698,6 +698,8 @@ export default function CompaniesTab() {
           
           // Update entity_users profile with managed fields
           const entityUpdates: any = {
+            name: name, // Required by your DB schema
+            email: email, // Required by your DB schema
             position: position,
             phone: phone
             // Note: updated_at will be auto-set by database trigger
@@ -790,7 +792,8 @@ export default function CompaniesTab() {
             const entityUserData = {
               user_id: existingUser.id,
               company_id: companyId,
-              email: existingUser.email, // Add email since your DB requires it
+              email: existingUser.email, // Required by your DB schema
+              name: name, // Required by your DB schema
               position: position,
               phone: phone,
               department: null,
@@ -885,7 +888,8 @@ export default function CompaniesTab() {
           const entityUserData = {
             user_id: newUser.id,
             company_id: companyId,
-            email: newUser.email, // Add email since your DB requires it
+            email: newUser.email, // Required by your DB schema
+            name: name, // Required by your DB schema
             position: position,
             phone: phone,
             department: null,
