@@ -39,95 +39,64 @@ export default function LandingPage() {
       }
 
       if (!user) {
-        // Check if admin user already exists
-        const { data: existingAdminUser, error: adminQueryError } = await supabase
+        // Create dev user if it doesn't exist
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash('dev_password', salt);
+
+        // Get SSA role ID
+        const { data: ssaRole, error: roleError } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', 'Super Admin')
+          .single();
+
+        if (roleError || !ssaRole) {
+          throw new Error('Super Admin role not found');
+        }
+
+        // First create user in users table
+        const { data: newUser, error: userInsertError } = await supabase
+          .from('users')
+          .insert([{
+            email: 'bakir.alramadi@gmail.com',
+            password_hash: hashedPassword,
+            user_type: 'system',
+            is_active: true,
+            email_verified: true,
+            raw_user_meta_data: { name: 'Baker R.' }
+          }])
+          .select(`
+            id,
+            email,
+            user_type,
+            raw_user_meta_data
+          `)
+          .single();
+
+        if (userInsertError) throw userInsertError;
+
+        // Then create admin_users entry
+        const { error: adminInsertError } = await supabase
           .from('admin_users')
-          .select('id, name, email, roles!inner(name)')
-          .eq('email', 'bakir.alramadi@gmail.com')
-          .maybeSingle();
-
-        if (adminQueryError) {
-          throw new Error('Failed to check admin user');
-        }
-
-        if (existingAdminUser) {
-          // Admin user exists, use it
-          const roleMapping: Record<string, UserRole> = {
-            'Super Admin': 'SSA',
-            'Support Admin': 'SUPPORT',
-            'Viewer': 'VIEWER'
-          };
-
-          const userRole = roleMapping[existingAdminUser.roles?.name] || 'SSA';
-
-          const authenticatedUser: User = {
-            id: existingAdminUser.id,
-            name: existingAdminUser.name || 'Baker R.',
-            email: existingAdminUser.email,
-            role: userRole
-          };
-
-          setAuthenticatedUser(authenticatedUser);
-        } else {
-          // Create dev user if it doesn't exist
-          const salt = await bcrypt.genSalt(10);
-          const hashedPassword = await bcrypt.hash('dev_password', salt);
-
-          // Get SSA role ID
-          const { data: ssaRole, error: roleError } = await supabase
-            .from('roles')
-            .select('id')
-            .eq('name', 'Super Admin')
-            .single();
-
-          if (roleError || !ssaRole) {
-            throw new Error('Super Admin role not found');
-          }
-
-          // First create user in users table
-          const { data: newUser, error: userInsertError } = await supabase
-            .from('users')
-            .insert([{
-              email: 'bakir.alramadi@gmail.com',
-              password_hash: hashedPassword,
-              user_type: 'system',
-              is_active: true,
-              email_verified: true,
-              raw_user_meta_data: { name: 'Baker R.' }
-            }])
-            .select(`
-              id,
-              email,
-              user_type,
-              raw_user_meta_data
-            `)
-            .single();
-
-          if (userInsertError) throw userInsertError;
-
-          // Then create admin_users entry
-          const { error: adminInsertError } = await supabase
-            .from('admin_users')
-            .insert([{
-              id: newUser.id,
-              name: 'Baker R.',
-              email: 'bakir.alramadi@gmail.com',
-              role_id: ssaRole.id,
-              status: 'active'
-            }]);
-
-          if (adminInsertError) throw adminInsertError;
-
-          // Create user object for new user
-          const authenticatedUser: User = {
+          .insert([{
             id: newUser.id,
-            name: newUser.raw_user_meta_data?.name || 'Baker R.',
-            email: newUser.email,
-            role: 'SSA'
-          };
+            name: 'Baker R.',
+            email: 'bakir.alramadi@gmail.com',
+            role_id: ssaRole.id,
+            status: 'active'
+          }]);
 
-          setAuthenticatedUser(authenticatedUser);
-        }
+        if (adminInsertError) throw adminInsertError;
+
+        // Create user object for new user
+        const authenticatedUser: User = {
+          id: newUser.id,
+          name: newUser.raw_user_meta_data?.name || 'Baker R.',
+          email: newUser.email,
+          role: 'SSA'
+        };
+
+        setAuthenticatedUser(authenticatedUser);
       } else {
         // Get admin user details for existing user
         const { data: adminUser } = await supabase
