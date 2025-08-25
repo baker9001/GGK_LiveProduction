@@ -210,6 +210,27 @@ export default function SignInPage() {
         return;
       }
       
+      // Update last login time in users table
+      try {
+        const { error: loginUpdateError } = await supabase
+          .from('users')
+          .update({
+            last_login_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+            failed_login_attempts: 0, // Reset failed attempts on successful login
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+        
+        if (loginUpdateError) {
+          console.error('Failed to update last login time:', loginUpdateError);
+          // Don't throw - allow login to continue even if this update fails
+        }
+      } catch (loginTimeError) {
+        console.error('Error updating login time:', loginTimeError);
+        // Don't throw - allow login to continue
+      }
+      
       // Get user profile details based on user type
       let userRole: UserRole = 'VIEWER';
       let userName = user.raw_user_meta_data?.name || user.email.split('@')[0];
