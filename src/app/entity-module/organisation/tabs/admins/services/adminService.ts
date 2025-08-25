@@ -46,6 +46,7 @@ const updateAdminPayloadSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long').regex(/^[a-zA-Z\s'-]+$/, 'Name contains invalid characters').optional(),
   email: z.string().email('Invalid email address').transform(email => email.toLowerCase().trim()).optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase letter').regex(/[a-z]/, 'Password must contain lowercase letter').regex(/[0-9]/, 'Password must contain number').regex(/[^A-Za-z0-9]/, 'Password must contain special character').optional(),
+  phone: z.string().optional(),
   admin_level: z.enum(['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], { errorMap: () => ({ message: 'Invalid admin level' }) }).optional(),
   is_active: z.boolean().optional(),
   permissions: z.record(z.any()).optional(),
@@ -71,6 +72,7 @@ interface UpdateAdminPayload {
   name?: string;
   email?: string;
   password?: string;
+  phone?: string;
   admin_level?: AdminLevel;
   permissions?: AdminPermissions;
   is_active?: boolean;
@@ -416,6 +418,10 @@ export const adminService = {
           }
         }
         updateData.email = validatedPayload.email;
+      }
+
+      if (validatedPayload.phone !== undefined) {
+        updateData.phone = validatedPayload.phone;
       }
 
       if (validatedPayload.admin_level !== undefined) {

@@ -34,6 +34,7 @@ import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
+import { PhoneInput } from '@/components/shared/PhoneInput';
 import { toast } from '@/components/shared/Toast';
 import { supabase } from '@/lib/supabase';
 import { useCreateAdmin, useUpdateAdmin } from '../hooks/useAdminMutations';
@@ -75,6 +76,7 @@ interface AdminFormData {
   name: string;
   email: string;
   password: string;
+  phone?: string;
   admin_level: AdminLevel;
   is_active: boolean;
 }
@@ -89,6 +91,7 @@ interface AdminCreationFormProps {
     user_id: string;
     name: string;
     email: string;
+    phone?: string;
     admin_level: AdminLevel;
     company_id: string;
     is_active: boolean;
@@ -118,6 +121,7 @@ export function AdminCreationForm({
     name: '',
     email: '',
     password: '',
+    phone: '',
     admin_level: 'branch_admin',
     is_active: true
   });
@@ -233,6 +237,7 @@ export function AdminCreationForm({
           name: initialData.name,
           email: initialData.email,
           password: '', // Always start with empty password for security
+          phone: initialData.phone || '',
           admin_level: initialData.admin_level,
           is_active: initialData.is_active
         });
@@ -252,6 +257,7 @@ export function AdminCreationForm({
           name: '',
           email: '',
           password: '',
+          phone: '',
           admin_level: defaultLevel,
           is_active: true
         });
@@ -327,8 +333,8 @@ export function AdminCreationForm({
         .eq('email', formData.email.toLowerCase())
         .eq('company_id', companyId);
       
-      // Only add the neq filter when editing and we have a valid ID
-      if (isEditing && initialData?.id) {
+      // Apply .neq('id', ...) filter ONLY when editing and initialData.id is a valid non-empty string
+      if (isEditing && initialData?.id && typeof initialData.id === 'string' && initialData.id.trim().length > 0) {
         query = query.neq('id', initialData.id);
       }
       
@@ -409,6 +415,7 @@ export function AdminCreationForm({
             name: formData.name,
             email: formData.email,
             password: formData.password || undefined,
+            phone: formData.phone || undefined,
             admin_level: formData.admin_level,
             is_active: formData.is_active,
             permissions,
@@ -422,6 +429,7 @@ export function AdminCreationForm({
           email: formData.email,
           name: formData.name,
           password: formData.password,
+          phone: formData.phone || undefined,
           admin_level: formData.admin_level,
           company_id: companyId,
           permissions,
@@ -509,6 +517,19 @@ export function AdminCreationForm({
               placeholder="admin@example.com"
               disabled={!canModifyThisAdmin}
               leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField
+            id="phone"
+            label="Phone Number"
+            error={errors.phone}
+          >
+            <PhoneInput
+              value={formData.phone}
+              onChange={(value) => handleFieldChange('phone', value)}
+              placeholder="Enter phone number"
+              disabled={!canModifyThisAdmin}
             />
           </FormField>
 

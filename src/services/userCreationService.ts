@@ -24,6 +24,7 @@ export interface BaseUserPayload {
   name: string;
   password: string;
   phone?: string;
+  phone?: string;
   company_id: string;
   is_active?: boolean;
   metadata?: Record<string, any>;
@@ -197,6 +198,7 @@ export const userCreationService = {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
         created_via: 'entity_module',
+        // Explicitly exclude phone from users table metadata
         ...payload.metadata
       },
       raw_app_meta_data: {
@@ -236,6 +238,7 @@ export const userCreationService = {
       company_id: payload.company_id,
       email: payload.email.toLowerCase(),
       name: sanitizeString(payload.name),
+      phone: payload.phone || null,
       phone: payload.phone || null,
       admin_level: payload.admin_level,
       permissions: finalPermissions,
