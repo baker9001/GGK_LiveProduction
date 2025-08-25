@@ -779,10 +779,10 @@ export default function CompaniesTab() {
         } else {
           // ===== CREATE NEW ADMIN =====
           
-          // Check if user already exists - only select columns that exist in users table
+          // Check if user already exists
           const { data: existingUser } = await supabase
             .from('users')
-            .select('id, email, user_type, is_active, raw_user_meta_data')
+            .select('*')
             .eq('email', email.toLowerCase())
             .maybeSingle();
 
