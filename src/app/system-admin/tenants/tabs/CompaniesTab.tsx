@@ -779,10 +779,10 @@ export default function CompaniesTab() {
         } else {
           // ===== CREATE NEW ADMIN =====
           
-          // Check if user already exists
+          // Check if user already exists - only select columns that exist in users table
           const { data: existingUser } = await supabase
             .from('users')
-            .select('*')
+            .select('id, email, user_type, is_active, raw_user_meta_data')
             .eq('email', email.toLowerCase())
             .maybeSingle();
 
@@ -1189,7 +1189,7 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Get user email
+      // Get user email - only select columns that exist
       const { data: user } = await supabase
         .from('users')
         .select('email, raw_user_meta_data')
@@ -1249,10 +1249,10 @@ export default function CompaniesTab() {
     setEmailError(null);
 
     try {
-      // Build the query to check for existing email
+      // Build the query to check for existing email - only select columns that exist
       let query = supabase
         .from('users')
-        .select('id, email')
+        .select('id, email') // Removed 'phone' as it doesn't exist in users table
         .eq('email', email);
 
       // Only exclude current user when editing (not when creating new)
