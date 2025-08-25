@@ -103,7 +103,34 @@ export default function LandingPage() {
           .from('admin_users')
           .select('roles!inner(name)')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
+
+        // If admin user doesn't exist, create it
+        if (!adminUser) {
+          // Get SSA role ID
+          const { data: ssaRole, error: roleError } = await supabase
+            .from('roles')
+            .select('id')
+            .eq('name', 'Super Admin')
+            .single();
+
+          if (roleError || !ssaRole) {
+            throw new Error('Super Admin role not found');
+          }
+
+          // Create admin_users entry for existing user
+          const { error: adminInsertError } = await supabase
+            .from('admin_users')
+            .insert([{
+              id: user.id,
+              name: user.raw_user_meta_data?.name || 'Baker R.',
+              email: user.email,
+              role_id: ssaRole.id,
+              status: 'active'
+            }]);
+
+          if (adminInsertError) throw adminInsertError;
+        }
 
         const roleMapping: Record<string, UserRole> = {
           'Super Admin': 'SSA',
