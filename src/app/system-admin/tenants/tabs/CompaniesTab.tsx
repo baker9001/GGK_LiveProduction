@@ -701,7 +701,18 @@ export default function CompaniesTab() {
             name: name, // Required by your DB schema
             email: email, // Required by your DB schema
             position: position,
-            phone: phone
+            phone: phone,
+            // Maintain admin privileges for company admins
+            is_company_admin: true,
+            admin_level: 'entity_admin',
+            can_create_admins: true,
+            can_manage_schools: true,
+            can_manage_branches: true,
+            metadata: {
+              ...(editingAdmin as any)?.metadata,
+              updated_by: currentUser?.email,
+              updated_at: new Date().toISOString()
+            }
             // Note: updated_at will be auto-set by database trigger
           };
 
@@ -788,7 +799,7 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin
+            // Link existing user to company as admin with all admin fields
             const entityUserData = {
               user_id: existingUser.id,
               company_id: companyId,
@@ -800,8 +811,18 @@ export default function CompaniesTab() {
               employee_id: null,
               hire_date: new Date().toISOString().split('T')[0],
               is_company_admin: true,
+              admin_level: 'entity_admin', // Set as entity admin
+              can_create_admins: true, // Entity admin can create other admins
+              can_manage_schools: true, // Entity admin can manage schools (fixed typo)
+              can_manage_branches: true, // Entity admin can manage branches (fixed typo)
+              is_active: true,
               employee_status: 'active',
-              department_id: null
+              department_id: null,
+              permissions: {}, // Can be expanded with specific permissions
+              metadata: {
+                created_by: currentUser?.email,
+                created_at: new Date().toISOString()
+              }
               // Note: created_at and updated_at will be auto-set by database
             };
             
@@ -870,7 +891,7 @@ export default function CompaniesTab() {
                 created_by_id: currentUser?.id
               },
               raw_app_meta_data: {},
-              user_types: ['entity'],
+              user_types: 'entity', // Note: your schema shows this as text, not array
               primary_type: 'entity'
               // Note: created_at and updated_at will be auto-set by database
             })
@@ -884,7 +905,7 @@ export default function CompaniesTab() {
             throw userError;
           }
           
-          // Create entity user profile
+          // Create entity user profile with all admin fields
           const entityUserData = {
             user_id: newUser.id,
             company_id: companyId,
@@ -896,8 +917,18 @@ export default function CompaniesTab() {
             employee_id: null,
             hire_date: new Date().toISOString().split('T')[0],
             is_company_admin: true,
+            admin_level: 'entity_admin', // Set as entity admin
+            can_create_admins: true, // Entity admin can create other admins
+            can_manage_schools: true, // Entity admin can manage schools (fixed typo)
+            can_manage_branches: true, // Entity admin can manage branches (fixed typo)
+            is_active: true,
             employee_status: 'active',
-            department_id: null
+            department_id: null,
+            permissions: {}, // Can be expanded with specific permissions
+            metadata: {
+              created_by: currentUser?.email,
+              created_at: new Date().toISOString()
+            }
             // Note: created_at and updated_at will be auto-set by database
           };
           
