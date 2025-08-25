@@ -1,12 +1,13 @@
 // /home/project/src/app/reset-password/page.tsx
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
 import bcrypt from 'bcryptjs';
+import { getCurrentUser } from '../../lib/auth';
 
 interface PasswordStrength {
   score: number;
@@ -38,6 +39,7 @@ function calculatePasswordStrength(password: string): PasswordStrength {
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const token = searchParams.get('token');
   
   const [password, setPassword] = useState('');
@@ -51,16 +53,37 @@ export default function ResetPasswordPage() {
   const [tokenValid, setTokenValid] = useState(false);
   const [tokenData, setTokenData] = useState<any>(null);
   
+  // New state for first-login password change
+  const [isFirstLoginChange, setIsFirstLoginChange] = useState(false);
+  const [userIdToProcess, setUserIdToProcess] = useState<string | null>(null);
+  const [userTypeToProcess, setUserTypeToProcess] = useState<string | null>(null);
+  
   const passwordStrength = calculatePasswordStrength(password);
 
   useEffect(() => {
     if (token) {
       checkResetToken();
     } else {
-      setError('No reset token provided');
+      // Check if this is a first-login password change
+      const currentUser = getCurrentUser();
+      if (currentUser && location.pathname === '/app/settings/change-password') {
+        setIsFirstLoginChange(true);
+        setUserIdToProcess(currentUser.id);
+        setUserTypeToProcess(currentUser.userType || 'user');
+        setTokenValid(true);
+        setCheckingToken(false);
+      } else {
+        setError('No reset token provided');
+        setCheckingToken(false);
+      }
+    }
+  }, [token, location.pathname]);
+
+  useEffect(() => {
+    if (isFirstLoginChange) {
       setCheckingToken(false);
     }
-  }, [token]);
+  }, [isFirstLoginChange]);
 
   const checkResetToken = async () => {
     try {
@@ -78,6 +101,8 @@ export default function ResetPasswordPage() {
         setTokenValid(false);
       } else {
         setTokenData(data);
+        setUserIdToProcess(data.user_id);
+        setUserTypeToProcess(data.user_type);
         setTokenValid(true);
       }
     } catch (err) {
@@ -115,31 +140,50 @@ export default function ResetPasswordPage() {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      // Update password based on user type
-      if (tokenData.user_type === 'admin') {
-        const { error: updateError } = await supabase
-          .from('admin_users')
-          .update({ password_hash: hashedPassword })
-          .eq('id', tokenData.user_id);
+      // Always update the users table first
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({
+          password_hash: hashedPassword,
+          password_updated_at: new Date().toISOString(),
+          requires_password_change: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userIdToProcess);
 
-        if (updateError) throw updateError;
-      } else {
-        // For regular users, you'd need to update the users table
-        // Since you're using bcrypt, you'd need a password_hash column in users table
-        throw new Error('Password reset for regular users not implemented yet');
+      if (userUpdateError) {
+        throw new Error(`Failed to update password: ${userUpdateError.message}`);
       }
 
-      // Mark token as used
-      const { error: tokenError } = await supabase
-        .from('password_reset_tokens')
-        .update({ 
-          used: true, 
-          used_at: new Date().toISOString() 
-        })
-        .eq('id', tokenData.id);
+      // Also update admin_users table if this is an admin user
+      if (userTypeToProcess === 'admin' || userTypeToProcess === 'system') {
+        const { error: updateError } = await supabase
+          .from('admin_users')
+          .update({ 
+            password_hash: hashedPassword,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userIdToProcess);
 
-      if (tokenError) {
-        console.error('Failed to mark token as used:', tokenError);
+        if (updateError) {
+          console.error('Failed to update admin_users table:', updateError);
+          // Don't throw - the main password update succeeded
+        }
+      }
+
+      // Mark token as used (only if this was a token-based reset)
+      if (tokenData && tokenData.id) {
+        const { error: tokenError } = await supabase
+          .from('password_reset_tokens')
+          .update({ 
+            used: true, 
+            used_at: new Date().toISOString() 
+          })
+          .eq('id', tokenData.id);
+
+        if (tokenError) {
+          console.error('Failed to mark token as used:', tokenError);
+        }
       }
       
       setSuccess(true);
@@ -259,10 +303,12 @@ export default function ResetPasswordPage() {
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-          Reset your password
+          {isFirstLoginChange ? 'Change your password' : 'Reset your password'}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-          Enter your new password below
+          {isFirstLoginChange 
+            ? 'Please set a new password for your account' 
+            : 'Enter your new password below'}
         </p>
       </div>
 
