@@ -375,6 +375,10 @@ export default function CompaniesTab() {
     newPassword: '',
     sendEmail: false
   });
+  
+  // Email validation state
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // View/Manage Admins state
   const [isViewAdminsOpen, setIsViewAdminsOpen] = useState(false);
@@ -1228,6 +1232,65 @@ export default function CompaniesTab() {
     setAdminFormErrors({});
     setGeneratePassword(true);
     setShowPassword(false);
+    setEmailError(null);
+  };
+
+  // Email validation function
+  const handleEmailBlur = async () => {
+    const email = adminFormState.email.trim().toLowerCase();
+    
+    // Skip validation if email is empty or invalid format
+    if (!email || !email.includes('@')) {
+      setEmailError(null);
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    setEmailError(null);
+
+    try {
+      // Build the query to check for existing email
+      let query = supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', email);
+
+      // Only exclude current user when editing (not when creating new)
+      if (editingAdmin && editingAdmin.user_id) {
+        query = query.neq('id', editingAdmin.user_id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error checking email:', error);
+        setEmailError('Error validating email. Please try again.');
+        return;
+      }
+
+      // Check if email exists
+      if (data && data.length > 0) {
+        if (editingAdmin) {
+          setEmailError('This email is already in use by another user.');
+        } else {
+          setEmailError('This email is already registered. The existing user will be linked to this company.');
+        }
+        setAdminFormErrors(prev => ({ ...prev, email: 'Email already exists' }));
+      } else {
+        setEmailError(null);
+        // Clear any previous email error
+        setAdminFormErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.email;
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      console.error('Email validation error:', error);
+      setEmailError('Error validating email.');
+    } finally {
+      setIsCheckingEmail(false);
+    }
   };
 
   const fetchCompanyAdmins = async (companyId: string) => {
@@ -1302,9 +1365,21 @@ export default function CompaniesTab() {
     companyMutation.mutate(submitData);
   };
 
-  const handleAdminSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAdminSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAdminFormErrors({});
+    
+    // Prevent submission if email validation is in progress or has errors
+    if (isCheckingEmail) {
+      toast.error('Please wait for email validation to complete');
+      return;
+    }
+    
+    if (emailError && editingAdmin) {
+      // For editing, email duplication is an error
+      toast.error('Please fix the email error before submitting');
+      return;
+    }
     
     // Use state values directly
     const formData = new FormData();
@@ -1461,6 +1536,7 @@ export default function CompaniesTab() {
         confirmPassword: ''
       });
       setGeneratePassword(false);
+      setEmailError(null); // Clear any email validation errors
     } else {
       resetAdminForm();
     }
@@ -1852,6 +1928,8 @@ export default function CompaniesTab() {
           setEditingAdmin(null);
           resetAdminForm();
           setReturnToViewAfterAdd(false);
+          setEmailError(null);
+          setIsCheckingEmail(false);
         }}
         onSave={() => {
           const form = document.querySelector('form#admin-form') as HTMLFormElement;
@@ -1884,17 +1962,38 @@ export default function CompaniesTab() {
               id="tenant-email" 
               label="Email Address" 
               required 
-              error={adminFormErrors.email}
-              helpText={editingAdmin ? "Changing email will require re-verification" : "Verification email will be sent"}
+              error={adminFormErrors.email || emailError}
+              helpText={
+                isCheckingEmail ? "Checking email..." : 
+                editingAdmin ? "Changing email will require re-verification" : 
+                emailError ? null : "Verification email will be sent"
+              }
             >
-              <Input
-                id="tenant-email"
-                name="email"
-                type="email"
-                value={adminFormState.email}
-                onChange={(e) => setAdminFormState(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="admin@company.com"
-              />
+              <div className="relative">
+                <Input
+                  id="tenant-email"
+                  name="email"
+                  type="email"
+                  value={adminFormState.email}
+                  onChange={(e) => {
+                    setAdminFormState(prev => ({ ...prev, email: e.target.value }));
+                    setEmailError(null); // Clear error on change
+                    setAdminFormErrors(prev => {
+                      const newErrors = { ...prev };
+                      delete newErrors.email;
+                      return newErrors;
+                    });
+                  }}
+                  onBlur={handleEmailBlur}
+                  placeholder="admin@company.com"
+                  className={emailError ? 'border-red-500 focus:border-red-500' : ''}
+                />
+                {isCheckingEmail && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+              </div>
             </FormField>
 
             <FormField id="tenant-phone" label="Phone Number" error={adminFormErrors.phone}>
