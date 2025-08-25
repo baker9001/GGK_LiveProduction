@@ -1189,7 +1189,7 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Get user email - only select columns that exist
+      // Get user email
       const { data: user } = await supabase
         .from('users')
         .select('email, raw_user_meta_data')
