@@ -73,6 +73,12 @@ const buttonVariants = cva(
           'hover:from-amber-600 hover:to-amber-700 hover:shadow-xl hover:shadow-amber-500/30 hover:-translate-y-0.5',
           'before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
+        report: cn(
+          'bg-white dark:bg-gray-800 text-[#8CC63F] border-2 border-[#8CC63F] shadow-sm',
+          'hover:bg-[#8CC63F]/5 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#7AB635]',
+          'dark:border-[#8CC63F] dark:text-[#8CC63F] dark:hover:bg-[#8CC63F]/10',
+          'before:absolute before:inset-0 before:bg-gradient-to-r before:from-[#8CC63F]/5 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
+        ),
       },
       size: {
         default: 'h-10 px-5 py-2.5',
