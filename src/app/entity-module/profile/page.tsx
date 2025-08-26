@@ -525,17 +525,17 @@ export default function ModernProfilePage() {
         {/* Tabs Navigation */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] inline-flex items-center justify-center gap-2">
-              <Home className="h-4 w-4 flex-shrink-0" />
-              <span>Overview</span>
+            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Home className="h-4 w-4 inline-block flex-shrink-0" />
+              <span className="inline-block">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] inline-flex items-center justify-center gap-2">
-              <Lock className="h-4 w-4 flex-shrink-0" />
-              <span>Security</span>
+            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Lock className="h-4 w-4 inline-block flex-shrink-0" />
+              <span className="inline-block">Security</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] inline-flex items-center justify-center gap-2">
-              <Activity className="h-4 w-4 flex-shrink-0" />
-              <span>Activity</span>
+            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Activity className="h-4 w-4 inline-block flex-shrink-0" />
+              <span className="inline-block">Activity</span>
             </TabsTrigger>
           </TabsList>
 
