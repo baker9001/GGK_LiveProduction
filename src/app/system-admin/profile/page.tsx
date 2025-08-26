@@ -1,664 +1,592 @@
-// Path: /src/app/system-admin/profile/page.tsx
+/**
+ * File: /src/app/system-admin/profile/page.tsx
+ * System Admin Profile Management Page
+ * 
+ * Features:
+ * - Real user data from database (no mock data)
+ * - Profile picture upload functionality
+ * - Basic information editing
+ * - Security settings
+ * - Account activity tracking
+ * - FIXED: Uses correct table name 'entity_admin_audit_log' instead of 'admin_audit_log'
+ */
 
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { z } from 'zod';
-import { User, Mail, Shield, Calendar, Edit2, Save, X, Eye, EyeOff, Key, Clock, MapPin } from 'lucide-react';
-import { useUser } from '../../../contexts/UserContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
-import { setAuthenticatedUser } from '../../../lib/auth';
-import { Button } from '../../../components/shared/Button';
-import { FormField, Input } from '../../../components/shared/FormField';
-import { StatusBadge } from '../../../components/shared/StatusBadge';
-import { ImageUpload } from '../../../components/shared/ImageUpload';
+import { useUser } from '../../../contexts/UserContext';
 import { toast } from '../../../components/shared/Toast';
-import bcrypt from 'bcryptjs';
+import { ImageUpload } from '../../../components/shared/ImageUpload';
+import { Button } from '../../../components/shared/Button';
+import { FormField, Input, Textarea } from '../../../components/shared/FormField';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
+import { getPublicUrl } from '../../../lib/storageHelpers';
+import {
+  User as UserIcon,
+  Mail,
+  Briefcase,
+  Calendar,
+  Clock,
+  Edit,
+  Lock,
+  AlertCircle,
+  Loader2,
+  Shield,
+  Phone,
+  Info,
+  Save,
+  X,
+  Activity
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-const profileSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  avatar_url: z.string().optional(),
-});
-
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string()
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
+interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url?: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_sign_in_at?: string;
+  role?: string;
+  phone?: string;
+  bio?: string;
+  admin_role?: string;
+}
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useUser();
+  const { user: currentUser } = useUser();
   const queryClient = useQueryClient();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
 
-  const [profileData, setProfileData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    avatar_url: user?.avatar_url || ''
-  });
+  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<UserProfile>>({});
 
-  // Profile update mutation
-  const profileMutation = useMutation(
-    async (formData: typeof profileData) => {
-      const validatedData = profileSchema.parse(formData);
-
-      // Check if email is being changed and if it already exists
-      if (validatedData.email !== user?.email) {
-        const { data: existingUser, error: queryError } = await supabase
-          .from('admin_users')
-          .select('id')
-          .eq('email', validatedData.email)
-          .neq('id', user?.id)
-          .maybeSingle();
-
-        if (queryError) {
-          throw new Error('Failed to check email availability');
-        }
-
-        if (existingUser) {
-          throw new Error('This email is already in use');
-        }
+  // Fetch user profile data from actual database
+  const {
+    data: userProfile,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<UserProfile>(
+    ['systemAdminProfile', currentUser?.id],
+    async () => {
+      if (!currentUser?.id) {
+        throw new Error('User not authenticated');
       }
 
-      // Update admin_users table
-      const { error } = await supabase
+      // Fetch from 'users' table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          email,
+          is_active,
+          created_at,
+          last_sign_in_at,
+          raw_user_meta_data
+        `)
+        .eq('id', currentUser.id)
+        .single();
+
+      if (userError) throw userError;
+
+      // Fetch admin role from admin_users table
+      let admin_role: string | undefined;
+      let phone: string | undefined;
+
+      const { data: adminUserData, error: adminUserError } = await supabase
         .from('admin_users')
-        .update({
-          name: validatedData.name,
-          email: validatedData.email,
-          avatar_url: validatedData.avatar_url,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user?.id);
+        .select(`
+          id,
+          name,
+          email,
+          roles!inner(name)
+        `)
+        .eq('id', currentUser.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (adminUserError) {
+        console.warn('Could not fetch admin user data:', adminUserError.message);
+      } else if (adminUserData) {
+        admin_role = adminUserData.roles?.name || currentUser.role;
+      } else {
+        admin_role = currentUser.role;
+      }
 
-      // Return the updated user data
-      return validatedData;
+      const profile: UserProfile = {
+        id: userData.id,
+        email: userData.email,
+        name: userData.raw_user_meta_data?.name || userData.email.split('@')[0],
+        avatar_url: userData.raw_user_meta_data?.avatar_url || null,
+        is_active: userData.is_active,
+        created_at: userData.created_at,
+        last_sign_in_at: userData.last_sign_in_at || undefined,
+        role: currentUser.role,
+        phone: userData.raw_user_meta_data?.phone || undefined,
+        bio: userData.raw_user_meta_data?.bio || undefined,
+        admin_role: admin_role,
+      };
+      return profile;
     },
     {
-      onSuccess: (data) => {
-        // Update local user context with new data
-        if (user) {
-          const updatedUser = {
-            ...user,
-            name: data.name,
-            email: data.email,
-            avatar_url: data.avatar_url
-          };
-          setAuthenticatedUser(updatedUser);
-          refreshUser();
-        }
-        
-        setIsEditing(false);
-        toast.success('Profile updated successfully');
+      enabled: !!currentUser?.id,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      onError: (err) => {
+        console.error('Error fetching user profile:', err);
+        toast.error('Failed to load user profile data.');
       },
-      onError: (error) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else if (error instanceof Error) {
-          if (error.message.includes('email')) {
-            setFormErrors({ email: error.message });
-          } else {
-            setFormErrors({ form: error.message });
-          }
-        } else {
-          console.error('Error updating profile:', error);
-          setFormErrors({ form: 'Failed to update profile. Please try again.' });
-          toast.error('Failed to update profile');
-        }
-      }
     }
   );
 
-  // Password change mutation - FIXED
-  const passwordMutation = useMutation(
-    async (formData: FormData) => {
-      const data = {
-        currentPassword: formData.get('currentPassword') as string,
-        newPassword: formData.get('newPassword') as string,
-        confirmPassword: formData.get('confirmPassword') as string,
-      };
+  // Fetch recent activity from CORRECT audit table
+  const { data: recentActivity = [] } = useQuery(
+    ['recentActivity', currentUser?.id],
+    async () => {
+      if (!currentUser?.id) return [];
 
-      const validatedData = passwordSchema.parse(data);
-
-      // Get current user data to verify current password
-      const { data: userData, error: fetchError } = await supabase
-        .from('users')
-        .select('password_hash')
-        .eq('id', user?.id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Verify current password
-      const isValidPassword = await bcrypt.compare(validatedData.currentPassword, userData.password_hash);
-      
-      if (!isValidPassword) {
-        throw new Error('Current password is incorrect');
-      }
-
-      // Hash new password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(validatedData.newPassword, salt);
-
-      // Update password in users table (where password_hash column exists)
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          password_hash: hashedPassword,
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user?.id);
+      // FIXED: Use correct table name 'entity_admin_audit_log' instead of 'admin_audit_log'
+      const { data, error } = await supabase
+        .from('entity_admin_audit_log')
+        .select('*')
+        .eq('actor_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
 
       if (error) {
-        throw new Error(`Failed to update password: ${error.message}`);
+        console.warn('Could not fetch recent activity:', error.message);
+        return [];
       }
 
-      // Update admin_users table with timestamp only (no password_hash here)
-      const { error: adminUpdateError } = await supabase
-        .from('admin_users')
-        .update({
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user?.id);
+      return data || [];
+    },
+    {
+      enabled: !!currentUser?.id,
+      staleTime: 2 * 60 * 1000, // 2 minutes
+    }
+  );
 
-      if (adminUpdateError) {
-        console.warn('Failed to update admin_users timestamp:', adminUpdateError);
-        // Don't throw - password update succeeded
+  // Mutation for updating user profile
+  const updateProfileMutation = useMutation(
+    async (updates: Partial<UserProfile>) => {
+      if (!currentUser?.id) throw new Error('User not authenticated');
+
+      // Fetch current raw_user_meta_data
+      const { data: currentData, error: metaError } = await supabase
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (metaError) throw metaError;
+
+      const newMetaData = { ...currentData.raw_user_meta_data };
+      const updatePayload: any = {};
+
+      // Update fields in raw_user_meta_data
+      if (updates.name !== undefined) newMetaData.name = updates.name;
+      if (updates.avatar_url !== undefined) newMetaData.avatar_url = updates.avatar_url;
+      if (updates.phone !== undefined) newMetaData.phone = updates.phone;
+      if (updates.bio !== undefined) newMetaData.bio = updates.bio;
+      
+      updatePayload.raw_user_meta_data = newMetaData;
+      updatePayload.updated_at = new Date().toISOString();
+
+      // Update email if changed
+      if (updates.email !== undefined && updates.email !== userProfile?.email) {
+        updatePayload.email = updates.email;
       }
 
-      return true;
+      // Update users table
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update(updatePayload)
+        .eq('id', currentUser.id);
+
+      if (userUpdateError) throw userUpdateError;
+
+      // Also update admin_users table if name or email changed
+      if (updates.name || updates.email) {
+        const adminUpdates: any = {};
+        if (updates.name) adminUpdates.name = updates.name;
+        if (updates.email) adminUpdates.email = updates.email;
+        adminUpdates.updated_at = new Date().toISOString();
+
+        const { error: adminUpdateError } = await supabase
+          .from('admin_users')
+          .update(adminUpdates)
+          .eq('id', currentUser.id);
+
+        if (adminUpdateError) {
+          console.warn('Failed to update admin_users data:', adminUpdateError.message);
+        }
+      }
     },
     {
       onSuccess: () => {
-        setIsChangingPassword(false);
-        setFormErrors({});
-        toast.success('Password updated successfully');
+        queryClient.invalidateQueries(['systemAdminProfile', currentUser?.id]);
+        toast.success('Profile updated successfully!');
+        setIsEditingBasicInfo(false);
       },
-      onError: (error) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else if (error instanceof Error) {
-          if (error.message.includes('password')) {
-            setFormErrors({ currentPassword: error.message });
-          } else {
-            setFormErrors({ form: error.message });
-          }
-        } else {
-          console.error('Error updating password:', error);
-          setFormErrors({ form: 'Failed to update password. Please try again.' });
-          toast.error('Failed to update password');
-        }
-      }
+      onError: (err: any) => {
+        console.error('Error updating profile:', err);
+        toast.error(err.message || 'Failed to update profile.');
+      },
     }
   );
 
-  if (!user) {
+  // Handle avatar upload/delete
+  const handleAvatarChange = async (newPath: string | null) => {
+    await updateProfileMutation.mutateAsync({ avatar_url: newPath });
+  };
+
+  // Handle basic info edit
+  const handleEditBasicInfo = () => {
+    setIsEditingBasicInfo(true);
+    setEditFormData({
+      name: userProfile?.name,
+      email: userProfile?.email,
+      phone: userProfile?.phone,
+      bio: userProfile?.bio,
+    });
+  };
+
+  const handleSaveBasicInfo = async () => {
+    if (!editFormData.name?.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!editFormData.email?.trim()) {
+      toast.error('Email is required');
+      return;
+    }
+    
+    await updateProfileMutation.mutateAsync(editFormData);
+  };
+
+  const handleCancelEditBasicInfo = () => {
+    setIsEditingBasicInfo(false);
+    setEditFormData({});
+  };
+
+  if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <p className="text-gray-500 dark:text-gray-400">User not found</p>
+          <Loader2 className="h-12 w-12 animate-spin text-[#8CC63F] mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading profile...</p>
         </div>
       </div>
     );
   }
 
-  const getAvatarUrl = (path: string | null) => {
-    if (!path) return null;
-    return supabase.storage
-      .from('avatars')
-      .getPublicUrl(path).data.publicUrl;
-  };
+  if (isError || !userProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md max-w-md">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Error Loading Profile
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {error?.message || 'Could not load user profile data. Please try again.'}
+          </p>
+          <Button onClick={() => refetch()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
-  const handleProfileUpdate = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    profileMutation.mutate(profileData);
-  };
-
-  const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    passwordMutation.mutate(new FormData(e.currentTarget));
-  };
-
-  const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'SSA': return 'Super System Administrator';
-      case 'SUPPORT': return 'Support Administrator';
-      case 'VIEWER': return 'Viewer';
-      default: return role;
-    }
-  };
-
-  const getRoleBadgeStatus = (role: string) => {
-    switch (role) {
-      case 'SSA': return 'active';
-      case 'SUPPORT': return 'active';
-      case 'VIEWER': return 'inactive';
-      default: return 'inactive';
-    }
-  };
+  const memberSinceYear = new Date(userProfile.created_at).getFullYear();
+  const accountCreatedDate = new Date(userProfile.created_at).toLocaleDateString();
+  const lastLoginTime = userProfile.last_sign_in_at
+    ? new Date(userProfile.last_sign_in_at).toLocaleString()
+    : 'Never';
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 space-y-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">Manage your account information and security settings</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
+        <p className="text-gray-600 dark:text-gray-400">Manage your account information and security settings</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Overview Card */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-            <div className="p-6">
-              <div className="text-center">
-                {/* Avatar */}
-                <div className="mx-auto w-24 h-24 mb-4 flex items-center justify-center">
-                  {profileData.avatar_url ? (
-                    <img
-                      src={getAvatarUrl(profileData.avatar_url)}
-                      alt="Profile Avatar"
-                      className="w-24 h-24 rounded-full object-cover border-4 border-white dark:border-gray-700 shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <span className="text-2xl font-bold text-white">
-                        {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Avatar Upload */}
-                {isEditing && (
-                  <div className="mb-4 flex justify-center">
-                    <ImageUpload
-                      id="avatar"
-                      bucket="avatars"
-                      value={profileData.avatar_url}
-                      publicUrl={profileData.avatar_url ? getAvatarUrl(profileData.avatar_url) : null}
-                      onChange={(path) => {
-                        setProfileData(prev => ({ ...prev, avatar_url: path || '' }));
-                      }}
-                      className="w-24 h-24"
-                    />
-                  </div>
-                )}
-                
-                {/* User Info */}
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-                  {user.name}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-3">{user.email}</p>
-                
-                {/* Role Badge */}
-                <div className="flex justify-center mb-4">
-                  <StatusBadge 
-                    status={getRoleBadgeStatus(user.role)} 
-                    className="px-3 py-1"
-                  >
-                    {getRoleDisplayName(user.role)}
-                  </StatusBadge>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-1">
-                      <Clock className="h-4 w-4 text-gray-400 dark:text-gray-500 mr-1" />
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Member since</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {new Date().getFullYear()}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center mb-1">
-                      <Shield className="h-4 w-4 text-gray-400 dark:text-gray-500 mr-1" />
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Security</p>
-                    <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                      Active
-                    </p>
-                  </div>
-                </div>
+        {/* Left Column: Profile Summary & Avatar */}
+        <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center space-y-4">
+          {/* Profile Picture */}
+          <div className="relative w-32 h-32 mx-auto">
+            {userProfile.avatar_url ? (
+              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#8CC63F] shadow-lg">
+                <img
+                  src={getPublicUrl('user-avatars', userProfile.avatar_url)}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-full h-full bg-[#8CC63F] text-white flex items-center justify-center text-4xl font-bold">
+                          ${userProfile.name.charAt(0).toUpperCase()}
+                        </div>
+                      `;
+                    }
+                  }}
+                />
               </div>
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-[#8CC63F] text-white flex items-center justify-center text-4xl font-bold border-4 border-[#8CC63F] shadow-lg">
+                {userProfile.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            
+            {/* Upload overlay */}
+            <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center group cursor-pointer">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <ImageUpload
+                  id="profile-picture"
+                  bucket="user-avatars"
+                  value={userProfile.avatar_url}
+                  publicUrl={userProfile.avatar_url ? getPublicUrl('user-avatars', userProfile.avatar_url) : null}
+                  onChange={handleAvatarChange}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {userProfile.name}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              {userProfile.email}
+            </p>
+          </div>
+
+          <StatusBadge status={userProfile.is_active ? 'active' : 'inactive'} size="md" />
+
+          <div className="flex items-center justify-center gap-4 text-gray-600 dark:text-gray-400 text-sm">
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              <span>Member since {memberSinceYear}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Shield className="h-4 w-4" />
+              <span>Security: Active</span>
             </div>
           </div>
         </div>
 
-        {/* Profile Information */}
+        {/* Right Column: Basic Info, Security, Activity */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Basic Information Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <div className="flex items-center">
-                <User className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Basic Information</h2>
+          {/* Basic Information */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <UserIcon className="h-5 w-5 text-[#8CC63F]" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Basic Information
+                </h3>
               </div>
-              {!isEditing && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                  leftIcon={<Edit2 className="h-4 w-4" />}
-                >
-                  Edit
+              {!isEditingBasicInfo ? (
+                <Button variant="outline" size="sm" onClick={handleEditBasicInfo}>
+                  <Edit className="h-4 w-4 mr-2" /> Edit
                 </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancelEditBasicInfo}>
+                    <X className="h-4 w-4 mr-2" /> Cancel
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={handleSaveBasicInfo} 
+                    loading={updateProfileMutation.isPending}
+                    loadingText="Saving..."
+                  >
+                    <Save className="h-4 w-4 mr-2" /> Save
+                  </Button>
+                </div>
               )}
             </div>
 
-            <div className="p-6">
-              {isEditing ? (
-                <form onSubmit={handleProfileUpdate} className="space-y-4">
-                  {formErrors.form && (
-                    <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-                      {formErrors.form}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <FormField label="Full Name" id="full-name">
+                {isEditingBasicInfo ? (
+                  <Input
+                    id="full-name"
+                    value={editFormData.name || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    placeholder="Enter your full name"
+                    leftIcon={<UserIcon className="h-4 w-4 text-gray-400" />}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-900 dark:text-white">{userProfile.name}</span>
+                  </div>
+                )}
+              </FormField>
+
+              <FormField label="Email Address" id="email-address">
+                {isEditingBasicInfo ? (
+                  <Input
+                    id="email-address"
+                    type="email"
+                    value={editFormData.email || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                    placeholder="Enter your email"
+                    leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-900 dark:text-white">{userProfile.email}</span>
+                  </div>
+                )}
+              </FormField>
+
+              <FormField label="Role" id="role">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-900 dark:text-white">
+                    {userProfile.admin_role || userProfile.role || 'System User'}
+                  </span>
+                </div>
+              </FormField>
+
+              <FormField label="Phone Number" id="phone-number">
+                {isEditingBasicInfo ? (
+                  <Input
+                    id="phone-number"
+                    type="tel"
+                    value={editFormData.phone || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    placeholder="Enter your phone number"
+                    leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-900 dark:text-white">
+                      {userProfile.phone || <span className="italic text-gray-500">Not provided</span>}
+                    </span>
+                  </div>
+                )}
+              </FormField>
+
+              <div className="md:col-span-2">
+                <FormField label="Bio" id="bio">
+                  {isEditingBasicInfo ? (
+                    <Textarea
+                      id="bio"
+                      value={editFormData.bio || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, bio: e.target.value })}
+                      placeholder="Tell us about yourself..."
+                      rows={3}
+                    />
+                  ) : (
+                    <div className="text-gray-900 dark:text-white">
+                      {userProfile.bio || <span className="italic text-gray-500">No bio provided</span>}
                     </div>
                   )}
-
-                  <FormField
-                    id="name"
-                    label="Full Name"
-                    required
-                    error={formErrors.name}
-                  >
-                    <Input
-                      id="name"
-                      value={profileData.name}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Enter your full name"
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="email"
-                    label="Email Address"
-                    required
-                    error={formErrors.email}
-                  >
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profileData.email}
-                      onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="Enter your email address"
-                    />
-                  </FormField>
-
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setIsEditing(false);
-                        setProfileData({
-                          name: user.name,
-                          email: user.email,
-                          avatar_url: user.avatar_url || ''
-                        });
-                        setFormErrors({});
-                      }}
-                      disabled={profileMutation.isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={profileMutation.isLoading}
-                      leftIcon={<Save className="h-4 w-4" />}
-                    >
-                      {profileMutation.isLoading ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Full Name
-                    </label>
-                    <p className="text-gray-900 dark:text-white">{user.name}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Email Address
-                    </label>
-                    <p className="text-gray-900 dark:text-white">{user.email}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Role
-                    </label>
-                    <p className="text-gray-900 dark:text-white">{getRoleDisplayName(user.role)}</p>
-                  </div>
-                </div>
-              )}
+                </FormField>
+              </div>
             </div>
           </div>
 
-          {/* Security Settings Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <div className="flex items-center">
-                <Shield className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Security Settings</h2>
+          {/* Security Settings */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-[#8CC63F]" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Security Settings
+                </h3>
               </div>
-              {!isChangingPassword && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsChangingPassword(true)}
-                  leftIcon={<Key className="h-4 w-4" />}
-                >
-                  Change Password
-                </Button>
-              )}
+              <Button variant="outline" size="sm" onClick={() => navigate('/app/settings/change-password')}>
+                <Lock className="h-4 w-4 mr-2" /> Change Password
+              </Button>
             </div>
 
-            <div className="p-6">
-              {isChangingPassword ? (
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  {formErrors.form && (
-                    <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-                      {formErrors.form}
-                    </div>
-                  )}
-
-                  <FormField
-                    id="currentPassword"
-                    label="Current Password"
-                    required
-                    error={formErrors.currentPassword}
-                  >
-                    <div className="relative">
-                      <Input
-                        id="currentPassword"
-                        name="currentPassword"
-                        type={showCurrentPassword ? "text" : "password"}
-                        placeholder="Enter your current password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      >
-                        {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormField>
-
-                  <FormField
-                    id="newPassword"
-                    label="New Password"
-                    required
-                    error={formErrors.newPassword}
-                  >
-                    <div className="relative">
-                      <Input
-                        id="newPassword"
-                        name="newPassword"
-                        type={showNewPassword ? "text" : "password"}
-                        placeholder="Enter your new password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                      >
-                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormField>
-
-                  <FormField
-                    id="confirmPassword"
-                    label="Confirm New Password"
-                    required
-                    error={formErrors.confirmPassword}
-                  >
-                    <div className="relative">
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your new password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </FormField>
-
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setIsChangingPassword(false);
-                        setFormErrors({});
-                        setShowCurrentPassword(false);
-                        setShowNewPassword(false);
-                        setShowConfirmPassword(false);
-                      }}
-                      disabled={passwordMutation.isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={passwordMutation.isLoading}
-                      leftIcon={<Save className="h-4 w-4" />}
-                    >
-                      {passwordMutation.isLoading ? 'Updating...' : 'Update Password'}
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Password
-                    </label>
-                    <p className="text-gray-900 dark:text-white">••••••••••••</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      Last updated: Never
-                    </p>
-                  </div>
-                  
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <div className="flex items-start">
-                      <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-                      <div>
-                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-                          Security Recommendations
-                        </h4>
-                        <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                          <li>• Use a strong password with at least 8 characters</li>
-                          <li>• Include uppercase, lowercase, numbers, and symbols</li>
-                          <li>• Change your password regularly</li>
-                          <li>• Don't reuse passwords from other accounts</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+            <div className="mt-6">
+              <FormField label="Password" id="password-display">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-900 dark:text-white">••••••••••</span>
                 </div>
-              )}
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Last updated: Never</p>
+              </FormField>
+
+              <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+                    Security Recommendations
+                  </h4>
+                </div>
+                <ul className="list-disc list-inside text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                  <li>Use a strong password with at least 8 characters</li>
+                  <li>Include uppercase, lowercase, numbers, and symbols</li>
+                  <li>Change your password regularly</li>
+                  <li>Don't reuse passwords from other accounts</li>
+                </ul>
+              </div>
             </div>
           </div>
 
-          {/* Account Activity Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-200 dark:border-gray-700 transition-colors duration-200">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center">
-                <Calendar className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account Activity</h2>
-              </div>
+          {/* Account Activity */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center gap-2 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <Activity className="h-5 w-5 text-[#8CC63F]" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Account Activity
+              </h3>
             </div>
 
-            <div className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Last Login</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Today at 2:30 PM</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <FormField label="Last Login" id="last-login">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-900 dark:text-white">{lastLoginTime}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Location</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Unknown</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Location: Unknown</p>
+                </div>
+              </FormField>
+
+              <FormField label="Account Created" id="account-created">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-900 dark:text-white">{accountCreatedDate}</span>
+                  </div>
+                  <div className="mt-2">
+                    <StatusBadge status={userProfile.is_active ? 'active' : 'inactive'} size="sm" />
                   </div>
                 </div>
-                
-                <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Account Created</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">January 1, 2025</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Status</p>
-                    <StatusBadge status="active" className="text-xs">
-                      Active
-                    </StatusBadge>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">Total Sessions</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">This month</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">24</p>
-                  </div>
+              </FormField>
+            </div>
+
+            {/* Recent Activity */}
+            {recentActivity.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Recent Activity</h4>
+                <div className="space-y-2">
+                  {recentActivity.slice(0, 3).map((activity: any, index: number) => (
+                    <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="w-2 h-2 bg-[#8CC63F] rounded-full"></div>
+                      <span>{activity.action_type.replace(/_/g, ' ')}</span>
+                      <span className="text-xs">
+                        {new Date(activity.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
