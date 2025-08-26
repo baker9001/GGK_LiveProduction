@@ -88,7 +88,8 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
           'company-logos': 'companies',
           'school-logos': 'schools',
           'branch-logos': 'branches',
-          'subject-logos': 'subjects'
+          'subject-logos': 'subjects',
+          'avatars': 'users'
         };
 
         const expectedSubfolder = bucketToSubfolder[bucket];
