@@ -62,6 +62,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getPublicUrl } from '../../../lib/storageHelpers';
+import { cn } from '../../../lib/utils';
 
 // Enhanced type definitions
 interface UserProfile {
@@ -853,10 +854,110 @@ export default function SystemAdminProfilePage() {
                     </div>
                   </div>
                 </div>
-          </div>
 
-          {/* Main Content Area */}
-          <div className="lg:col-span-3">
+                {/* System Status Overview */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="bg-gradient-to-r from-[#8CC63F]/10 to-green-500/10 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#8CC63F] rounded-xl flex items-center justify-center">
+                        <Activity className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                          System Overview
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Your administrative dashboard and system status
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <Monitor className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded-full">
+                            ACTIVE
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">98.9%</div>
+                        <div className="text-sm text-blue-700 dark:text-blue-300">System Uptime</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl p-4 border border-green-200 dark:border-green-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <Shield className="h-6 w-6 text-green-600 dark:text-green-400" />
+                          <span className="text-xs font-medium text-green-700 dark:text-green-300 bg-green-200 dark:bg-green-800 px-2 py-1 rounded-full">
+                            SECURE
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">100%</div>
+                        <div className="text-sm text-green-700 dark:text-green-300">Security Score</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4 border border-purple-200 dark:border-purple-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <UserIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                          <span className="text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-200 dark:bg-purple-800 px-2 py-1 rounded-full">
+                            ADMIN
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                          {profileStats?.permissionsCount || 15}
+                        </div>
+                        <div className="text-sm text-purple-700 dark:text-purple-300">Permissions</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl p-4 border border-orange-200 dark:border-orange-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <Smartphone className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                          <span className="text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-200 dark:bg-orange-800 px-2 py-1 rounded-full">
+                            ONLINE
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                          {profileStats?.totalLogins || 247}
+                        </div>
+                        <div className="text-sm text-orange-700 dark:text-orange-300">Total Logins</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <Button
+                    variant="outline"
+                    className="h-24 flex-col gap-2 hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-300 transform hover:scale-105"
+                    onClick={() => setActiveTab('security')}
+                  >
+                    <Lock className="h-6 w-6" />
+                    <span className="font-medium">Security Settings</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="h-24 flex-col gap-2 hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all duration-300 transform hover:scale-105"
+                    onClick={() => setActiveTab('activity')}
+                  >
+                    <Activity className="h-6 w-6" />
+                    <span className="font-medium">View Activity</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="h-24 flex-col gap-2 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all duration-300 transform hover:scale-105"
+                    onClick={() => setActiveTab('preferences')}
+                  >
+                    <Settings className="h-6 w-6" />
+                    <span className="font-medium">Preferences</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Security Tab */}
             {activeTab === 'security' && (
               <div className="space-y-6">
@@ -1185,112 +1286,6 @@ export default function SystemAdminProfilePage() {
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Default Overview Content */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                {/* System Status Overview */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <div className="bg-gradient-to-r from-[#8CC63F]/10 to-green-500/10 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#8CC63F] rounded-xl flex items-center justify-center">
-                        <Activity className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                          System Overview
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Your administrative dashboard and system status
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <Monitor className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded-full">
-                            ACTIVE
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">98.9%</div>
-                        <div className="text-sm text-blue-700 dark:text-blue-300">System Uptime</div>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl p-4 border border-green-200 dark:border-green-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <Shield className="h-6 w-6 text-green-600 dark:text-green-400" />
-                          <span className="text-xs font-medium text-green-700 dark:text-green-300 bg-green-200 dark:bg-green-800 px-2 py-1 rounded-full">
-                            SECURE
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">100%</div>
-                        <div className="text-sm text-green-700 dark:text-green-300">Security Score</div>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4 border border-purple-200 dark:border-purple-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <UserIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                          <span className="text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-200 dark:bg-purple-800 px-2 py-1 rounded-full">
-                            ADMIN
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                          {profileStats?.permissionsCount || 15}
-                        </div>
-                        <div className="text-sm text-purple-700 dark:text-purple-300">Permissions</div>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl p-4 border border-orange-200 dark:border-orange-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <Smartphone className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                          <span className="text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-200 dark:bg-orange-800 px-2 py-1 rounded-full">
-                            ONLINE
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                          {profileStats?.totalLogins || 247}
-                        </div>
-                        <div className="text-sm text-orange-700 dark:text-orange-300">Total Logins</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <Button
-                    variant="outline"
-                    className="h-24 flex-col gap-2 hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-300 transform hover:scale-105"
-                    onClick={() => setActiveTab('security')}
-                  >
-                    <Lock className="h-6 w-6" />
-                    <span className="font-medium">Security Settings</span>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="h-24 flex-col gap-2 hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all duration-300 transform hover:scale-105"
-                    onClick={() => setActiveTab('activity')}
-                  >
-                    <Activity className="h-6 w-6" />
-                    <span className="font-medium">View Activity</span>
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="h-24 flex-col gap-2 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all duration-300 transform hover:scale-105"
-                    onClick={() => setActiveTab('preferences')}
-                  >
-                    <Settings className="h-6 w-6" />
-                    <span className="font-medium">Preferences</span>
-                  </Button>
                 </div>
               </div>
             )}
