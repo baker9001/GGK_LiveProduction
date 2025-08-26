@@ -1,14 +1,15 @@
 /**
  * File: /src/app/entity-module/page.tsx
  * 
- * Updated Entity Module Page with proper routing for organisation sub-routes
+ * Updated Entity Module Page with proper routing for organisation sub-routes and profile page
  */
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
-import { Building2, Network, Settings, BarChart3, Users } from 'lucide-react';
+import { Building2, Network, Settings, BarChart3, Users, User } from 'lucide-react';
 import OrganisationRouter from './organisation'; // Import the router instead of the page directly
+import ProfilePage from './profile/page'; // Import the profile page
 
 interface EntityModulePageProps {
   moduleKey?: string;
@@ -54,6 +55,22 @@ function DashboardPage() {
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Create and manage organizational hierarchies, departments, and business units.
+          </p>
+          <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+            Available
+          </div>
+        </div>
+
+        {/* Profile Management */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <User className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Profile Management
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Manage your personal profile, security settings, and account preferences.
           </p>
           <div className="text-sm text-green-600 dark:text-green-400 font-medium">
             Available
@@ -177,6 +194,7 @@ export default function EntityModulePage({ moduleKey }: EntityModulePageProps) {
         <Route path="/" element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="organisation/*" element={<OrganisationRouter />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="relationships" element={<RelationshipsPage />} />
         <Route path="configuration" element={<ConfigurationPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
