@@ -2,79 +2,100 @@
  * File: /src/app/entity-module/profile/page.tsx
  * 
  * Entity Module Profile Page
- * Allows users to view and edit their profile information
+ * Displays user profile information with correct field sources as specified
+ * 
+ * Field Sources:
+ * - Header: entity_users.name, entity_users.position, users.email, users.is_active, entity_users.admin_level
+ * - Personal: entity_users.name, entity_users.position, entity_users.department, entity_users.phone
+ * - Account: users.email, entity_users.company_id, entity_users.hire_date, entity_users.employee_id, users.created_at, users.last_login_at
+ * - Assignments: entity_users.assigned_schools, entity_users.assigned_branches
+ * - Security: users.email_verified, users.password_updated_at
+ * - Avatar: entity_users.metadata (JSON field for image URL)
  */
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building2, 
-  Calendar, 
-  Shield, 
-  Edit2, 
-  Save, 
-  X,
-  Camera,
-  Loader2,
-  CheckCircle,
-  AlertCircle
+  User, Mail, Phone, Building2, Calendar, Shield, 
+  Edit2, Save, X, Camera, MapPin, School, Clock,
+  CheckCircle, XCircle, Key, Briefcase, Hash,
+  AlertCircle, Loader2
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
 import { FormField, Input, Textarea } from '../../../components/shared/FormField';
-import { ImageUpload } from '../../../components/shared/ImageUpload';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
+import { ImageUpload } from '../../../components/shared/ImageUpload';
 import { toast } from '../../../components/shared/Toast';
-import { getAuthenticatedUser } from '../../../lib/auth';
+import { cn } from '../../../lib/utils';
 
 interface ProfileData {
+  // From entity_users table
   id: string;
   user_id: string;
   name: string;
-  email: string;
-  phone?: string;
+  email: string; // Also in users table
   position?: string;
   department?: string;
+  phone?: string;
   employee_id?: string;
-  admin_level?: string;
+  hire_date?: string;
   company_id: string;
+  admin_level: string;
+  assigned_schools?: string[];
+  assigned_branches?: string[];
+  metadata?: {
+    avatar_url?: string;
+    bio?: string;
+    [key: string]: any;
+  };
+  
+  // From users table
+  user_email: string;
   is_active: boolean;
+  email_verified: boolean;
   created_at: string;
-  updated_at: string;
-  avatar_url?: string;
-  company_name?: string;
   last_login_at?: string;
+  password_updated_at?: string;
+  
+  // Joined data
+  company_name?: string;
+  school_names?: string[];
+  branch_names?: string[];
 }
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useUser();
+  const { user } = useUser();
   const queryClient = useQueryClient();
-  const authenticatedUser = getAuthenticatedUser();
-  
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<Partial<ProfileData>>({});
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [editData, setEditData] = useState<Partial<ProfileData>>({});
 
-  // Fetch user profile data
-  const { 
-    data: profileData, 
-    isLoading, 
-    error: fetchError 
-  } = useQuery(
-    ['user-profile', user?.id],
+  // Fetch profile data
+  const { data: profileData, isLoading, error } = useQuery(
+    ['profile', user?.id],
     async () => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      // Fetch entity user data
+      // Fetch entity user data with related information
       const { data: entityUser, error: entityError } = await supabase
         .from('entity_users')
         .select(`
-          *,
-          companies (
+          id,
+          user_id,
+          name,
+          email,
+          position,
+          department,
+          phone,
+          employee_id,
+          hire_date,
+          company_id,
+          admin_level,
+          assigned_schools,
+          assigned_branches,
+          metadata,
+          companies!entity_users_company_id_fkey (
             id,
             name
           )
@@ -84,21 +105,53 @@ export default function ProfilePage() {
 
       if (entityError) throw entityError;
 
-      // Fetch user data from users table for email and other auth info
+      // Fetch user account data
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('email, last_login_at, raw_user_meta_data')
+        .select(`
+          email,
+          is_active,
+          email_verified,
+          created_at,
+          last_login_at,
+          password_updated_at
+        `)
         .eq('id', user.id)
         .single();
 
       if (userError) throw userError;
 
+      // Fetch school names if assigned
+      let schoolNames: string[] = [];
+      if (entityUser.assigned_schools && entityUser.assigned_schools.length > 0) {
+        const { data: schools } = await supabase
+          .from('schools')
+          .select('name')
+          .in('id', entityUser.assigned_schools);
+        schoolNames = schools?.map(s => s.name) || [];
+      }
+
+      // Fetch branch names if assigned
+      let branchNames: string[] = [];
+      if (entityUser.assigned_branches && entityUser.assigned_branches.length > 0) {
+        const { data: branches } = await supabase
+          .from('branches')
+          .select('name')
+          .in('id', entityUser.assigned_branches);
+        branchNames = branches?.map(b => b.name) || [];
+      }
+
       return {
         ...entityUser,
-        email: userData.email,
+        user_email: userData.email,
+        is_active: userData.is_active,
+        email_verified: userData.email_verified,
+        created_at: userData.created_at,
         last_login_at: userData.last_login_at,
-        avatar_url: userData.raw_user_meta_data?.avatar_url,
-        company_name: entityUser.companies?.name || 'Unknown Company'
+        password_updated_at: userData.password_updated_at,
+        company_name: entityUser.companies?.name,
+        school_names: schoolNames,
+        branch_names: branchNames
       } as ProfileData;
     },
     {
@@ -107,63 +160,55 @@ export default function ProfilePage() {
     }
   );
 
-  // Initialize form data when profile data loads
-  useEffect(() => {
-    if (profileData && !isEditing) {
-      setFormData({
-        name: profileData.name || '',
-        phone: profileData.phone || '',
-        position: profileData.position || '',
-        department: profileData.department || '',
-        avatar_url: profileData.avatar_url || ''
-      });
-    }
-  }, [profileData, isEditing]);
-
   // Update profile mutation
   const updateProfileMutation = useMutation(
-    async (updatedData: Partial<ProfileData>) => {
+    async (updates: Partial<ProfileData>) => {
       if (!user?.id || !profileData) throw new Error('User not authenticated');
 
+      // Prepare entity_users updates
+      const entityUpdates: any = {};
+      if (updates.name !== undefined) entityUpdates.name = updates.name;
+      if (updates.position !== undefined) entityUpdates.position = updates.position;
+      if (updates.department !== undefined) entityUpdates.department = updates.department;
+      if (updates.phone !== undefined) entityUpdates.phone = updates.phone;
+      if (updates.metadata !== undefined) entityUpdates.metadata = updates.metadata;
+
       // Update entity_users table
-      const { error: entityError } = await supabase
-        .from('entity_users')
-        .update({
-          name: updatedData.name,
-          phone: updatedData.phone,
-          position: updatedData.position,
-          department: updatedData.department,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+      if (Object.keys(entityUpdates).length > 0) {
+        entityUpdates.updated_at = new Date().toISOString();
+        
+        const { error: entityError } = await supabase
+          .from('entity_users')
+          .update(entityUpdates)
+          .eq('user_id', user.id);
 
-      if (entityError) throw entityError;
+        if (entityError) throw entityError;
+      }
 
-      // Update users table metadata if avatar changed
-      if (updatedData.avatar_url !== profileData.avatar_url) {
+      // Prepare users table updates (email only)
+      const userUpdates: any = {};
+      if (updates.user_email !== undefined && updates.user_email !== profileData.user_email) {
+        userUpdates.email = updates.user_email;
+        userUpdates.updated_at = new Date().toISOString();
+      }
+
+      // Update users table if needed
+      if (Object.keys(userUpdates).length > 0) {
         const { error: userError } = await supabase
           .from('users')
-          .update({
-            raw_user_meta_data: {
-              ...profileData,
-              avatar_url: updatedData.avatar_url,
-              name: updatedData.name
-            },
-            updated_at: new Date().toISOString()
-          })
+          .update(userUpdates)
           .eq('id', user.id);
 
         if (userError) throw userError;
       }
 
-      return { ...profileData, ...updatedData };
+      return { ...profileData, ...updates };
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['user-profile']);
-        refreshUser();
+        queryClient.invalidateQueries(['profile', user?.id]);
         setIsEditing(false);
-        setFormErrors({});
+        setEditData({});
         toast.success('Profile updated successfully');
       },
       onError: (error: any) => {
@@ -173,398 +218,469 @@ export default function ProfilePage() {
     }
   );
 
-  const handleSave = () => {
-    // Basic validation
-    const errors: Record<string, string> = {};
-    
-    if (!formData.name?.trim()) {
-      errors.name = 'Name is required';
-    }
-    
-    if (formData.phone && !/^\+?[\d\s\-\(\)]+$/.test(formData.phone)) {
-      errors.phone = 'Please enter a valid phone number';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-
-    updateProfileMutation.mutate(formData);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setFormErrors({});
-    // Reset form data to original values
-    if (profileData) {
-      setFormData({
-        name: profileData.name || '',
-        phone: profileData.phone || '',
-        position: profileData.position || '',
-        department: profileData.department || '',
-        avatar_url: profileData.avatar_url || ''
+  // Initialize edit data when entering edit mode
+  useEffect(() => {
+    if (isEditing && profileData) {
+      setEditData({
+        name: profileData.name,
+        position: profileData.position,
+        department: profileData.department,
+        phone: profileData.phone,
+        user_email: profileData.user_email,
+        metadata: profileData.metadata
       });
     }
+  }, [isEditing, profileData]);
+
+  // Handle avatar update
+  const handleAvatarUpdate = (avatarPath: string | null) => {
+    const updatedMetadata = {
+      ...(profileData?.metadata || {}),
+      avatar_url: avatarPath
+    };
+    
+    updateProfileMutation.mutate({
+      metadata: updatedMetadata
+    });
   };
 
-  const handleAvatarChange = (path: string | null) => {
-    setFormData(prev => ({ ...prev, avatar_url: path || '' }));
+  // Handle save changes
+  const handleSave = () => {
+    updateProfileMutation.mutate(editData);
   };
 
-  // Get avatar URL for display
-  const getAvatarUrl = (path: string | null) => {
-    if (!path) return null;
-    
-    if (path.startsWith('http')) {
-      return path;
-    }
-    
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(path);
-    
-    return data?.publicUrl || null;
+  // Handle cancel edit
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditData({});
+  };
+
+  // Get admin level display
+  const getAdminLevelConfig = (level: string) => {
+    const configs = {
+      entity_admin: { label: 'Entity Administrator', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+      sub_entity_admin: { label: 'Sub-Entity Administrator', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+      school_admin: { label: 'School Administrator', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+      branch_admin: { label: 'Branch Administrator', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
+    };
+    return configs[level as keyof typeof configs] || { label: level, color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' };
+  };
+
+  // Get avatar URL from metadata
+  const getAvatarUrl = () => {
+    return profileData?.metadata?.avatar_url || null;
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F] mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Loading profile...</p>
         </div>
       </div>
     );
   }
 
-  if (fetchError) {
+  if (error || !profileData) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Failed to load profile</p>
-          <p className="text-sm text-gray-500 mt-1">
-            {fetchError instanceof Error ? fetchError.message : 'Unknown error'}
+          <p className="text-sm text-gray-500 mt-2">
+            {error instanceof Error ? error.message : 'Unknown error'}
           </p>
         </div>
       </div>
     );
   }
 
-  if (!profileData) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <User className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Profile not found</p>
-        </div>
-      </div>
-    );
-  }
+  const adminLevelConfig = getAdminLevelConfig(profileData.admin_level);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              {/* Avatar Display */}
-              <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                {formData.avatar_url ? (
-                  <img
-                    src={getAvatarUrl(formData.avatar_url)}
-                    alt="Profile avatar"
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Hide broken image and show fallback
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <User className="w-10 h-10 text-gray-400" />
-                )}
-              </div>
-              
-              {/* Edit Avatar Button */}
-              {isEditing && (
-                <div className="absolute -bottom-2 -right-2">
-                  <div className="bg-white dark:bg-gray-800 rounded-full p-1 shadow-md border border-gray-200 dark:border-gray-600">
-                    <Camera className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+      {/* Header Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-white shadow-lg">
+                  {getAvatarUrl() ? (
+                    <img
+                      src={getAvatarUrl()}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          const fallback = parent.querySelector('.avatar-fallback') as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div className={cn(
+                    "w-full h-full flex items-center justify-center bg-white text-[#8CC63F]",
+                    getAvatarUrl() ? "avatar-fallback hidden" : ""
+                  )}>
+                    <User className="w-8 h-8" />
                   </div>
                 </div>
-              )}
-            </div>
-            
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {profileData.name || 'User Profile'}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                {profileData.email}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <StatusBadge 
-                  status={profileData.is_active ? 'active' : 'inactive'} 
-                  size="sm" 
-                />
-                {profileData.admin_level && (
-                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
-                    {profileData.admin_level.replace('_', ' ')}
-                  </span>
+                {isEditing && (
+                  <div className="absolute -bottom-2 -right-2">
+                    <ImageUpload
+                      id="avatar"
+                      bucket="avatars"
+                      value={getAvatarUrl()}
+                      onChange={handleAvatarUpdate}
+                      className="w-8 h-8"
+                    />
+                  </div>
                 )}
               </div>
+
+              {/* Header Info */}
+              <div className="text-white">
+                <h1 className="text-2xl font-bold">{profileData.name}</h1>
+                <p className="text-white/90">{profileData.position || 'No position assigned'}</p>
+                <p className="text-white/80 text-sm">{profileData.user_email}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <StatusBadge 
+                    status={profileData.is_active ? 'active' : 'inactive'} 
+                    size="xs"
+                  />
+                  <span className={cn(
+                    'px-2 py-1 rounded-full text-xs font-medium',
+                    'bg-white/20 text-white border border-white/30'
+                  )}>
+                    {adminLevelConfig.label}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="flex gap-2">
-            {isEditing ? (
-              <>
+
+            {/* Edit Button */}
+            <div className="flex gap-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancel}
+                    className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSave}
+                    loading={updateProfileMutation.isPending}
+                    className="bg-white text-[#8CC63F] hover:bg-white/90"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </>
+              ) : (
                 <Button
                   variant="outline"
-                  onClick={handleCancel}
-                  disabled={updateProfileMutation.isPending}
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                  className="bg-white/10 border-white/30 text-white hover:bg-white/20"
                 >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancel
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Edit Profile
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  loading={updateProfileMutation.isPending}
-                  loadingText="Saving..."
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => setIsEditing(true)}>
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit Profile
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Profile Information */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Personal Information */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <User className="w-5 h-5 mr-2 text-blue-500" />
-            Personal Information
-          </h2>
-          
+          <div className="flex items-center gap-2 mb-4">
+            <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Personal Information
+            </h2>
+          </div>
+
           <div className="space-y-4">
-            {isEditing ? (
-              <>
-                <FormField
-                  id="avatar"
-                  label="Profile Picture"
-                >
-                  <ImageUpload
-                    id="avatar"
-                    bucket="avatars"
-                    value={formData.avatar_url}
-                    publicUrl={formData.avatar_url ? getAvatarUrl(formData.avatar_url) : null}
-                    onChange={handleAvatarChange}
-                  />
-                </FormField>
+            {/* Full Name - entity_users.name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Full Name
+              </label>
+              {isEditing ? (
+                <Input
+                  value={editData.name || ''}
+                  onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                  placeholder="Enter your full name"
+                />
+              ) : (
+                <p className="text-gray-900 dark:text-white">{profileData.name}</p>
+              )}
+            </div>
 
-                <FormField
-                  id="name"
-                  label="Full Name"
-                  required
-                  error={formErrors.name}
-                >
-                  <Input
-                    id="name"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Enter your full name"
-                    leftIcon={<User className="h-4 w-4 text-gray-400" />}
-                  />
-                </FormField>
+            {/* Position - entity_users.position */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Position
+              </label>
+              {isEditing ? (
+                <Input
+                  value={editData.position || ''}
+                  onChange={(e) => setEditData({ ...editData, position: e.target.value })}
+                  placeholder="Enter your position/title"
+                />
+              ) : (
+                <p className="text-gray-900 dark:text-white">
+                  {profileData.position || 'No position assigned'}
+                </p>
+              )}
+            </div>
 
-                <FormField
-                  id="phone"
-                  label="Phone Number"
-                  error={formErrors.phone}
-                >
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={formData.phone || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="Enter your phone number"
-                    leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
-                  />
-                </FormField>
+            {/* Department - entity_users.department */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Department
+              </label>
+              {isEditing ? (
+                <Input
+                  value={editData.department || ''}
+                  onChange={(e) => setEditData({ ...editData, department: e.target.value })}
+                  placeholder="Enter your department"
+                />
+              ) : (
+                <p className="text-gray-900 dark:text-white">
+                  {profileData.department || 'No department assigned'}
+                </p>
+              )}
+            </div>
 
-                <FormField
-                  id="position"
-                  label="Position"
-                >
-                  <Input
-                    id="position"
-                    value={formData.position || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
-                    placeholder="Enter your position"
-                    leftIcon={<Shield className="h-4 w-4 text-gray-400" />}
-                  />
-                </FormField>
-
-                <FormField
-                  id="department"
-                  label="Department"
-                >
-                  <Input
-                    id="department"
-                    value={formData.department || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                    placeholder="Enter your department"
-                    leftIcon={<Building2 className="h-4 w-4 text-gray-400" />}
-                  />
-                </FormField>
-              </>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Full Name</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {profileData.name || 'Not provided'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {profileData.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  {profileData.phone && (
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Phone</p>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {profileData.phone}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {profileData.position && (
-                    <div className="flex items-center gap-3">
-                      <Shield className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Position</p>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {profileData.position}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {profileData.department && (
-                    <div className="flex items-center gap-3">
-                      <Building2 className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Department</p>
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {profileData.department}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+            {/* Phone - entity_users.phone */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Phone
+              </label>
+              {isEditing ? (
+                <Input
+                  value={editData.phone || ''}
+                  onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                  placeholder="Enter your phone number"
+                  leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
+                />
+              ) : (
+                <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                  {profileData.phone || 'No phone number'}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Account Information */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Shield className="w-5 h-5 mr-2 text-green-500" />
-            Account Information
-          </h2>
-          
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Building2 className="w-4 h-4 text-gray-400" />
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Company</p>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {profileData.company_name}
-                </p>
-              </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Account Information
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            {/* Email - users.email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Email
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Mail className="h-4 w-4 text-gray-400" />
+                {profileData.user_email}
+                {profileData.email_verified ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" title="Email verified" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-500" title="Email not verified" />
+                )}
+              </p>
             </div>
 
-            {profileData.employee_id && (
-              <div className="flex items-center gap-3">
-                <User className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Employee ID</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {profileData.employee_id}
-                  </p>
+            {/* Company - entity_users.company_id */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Company
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-gray-400" />
+                {profileData.company_name || 'Unknown Company'}
+              </p>
+            </div>
+
+            {/* Hire Date - entity_users.hire_date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Hire Date
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                {profileData.hire_date 
+                  ? new Date(profileData.hire_date).toLocaleDateString()
+                  : 'Not specified'
+                }
+              </p>
+            </div>
+
+            {/* Employee ID - entity_users.employee_id */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Employee ID
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Hash className="h-4 w-4 text-gray-400" />
+                {profileData.employee_id || 'Not assigned'}
+              </p>
+            </div>
+
+            {/* Member Since - users.created_at */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Member Since
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                {new Date(profileData.created_at).toLocaleDateString()}
+              </p>
+            </div>
+
+            {/* Last Login - users.last_login_at */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Last Login
+              </label>
+              <p className="text-gray-900 dark:text-white flex items-center gap-2">
+                <Clock className="h-4 w-4 text-gray-400" />
+                {profileData.last_login_at 
+                  ? new Date(profileData.last_login_at).toLocaleString()
+                  : 'Never logged in'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Assignments Section */}
+      {(profileData.school_names?.length || profileData.branch_names?.length) && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Assignments
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Assigned Schools - entity_users.assigned_schools */}
+            {profileData.school_names && profileData.school_names.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Assigned Schools
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {profileData.school_names.map((schoolName, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-sm"
+                    >
+                      <School className="w-3 h-3" />
+                      {schoolName}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
 
-            <div className="flex items-center gap-3">
-              <Calendar className="w-4 h-4 text-gray-400" />
+            {/* Assigned Branches - entity_users.assigned_branches */}
+            {profileData.branch_names && profileData.branch_names.length > 0 && (
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Member Since</p>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {new Date(profileData.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-
-            {profileData.last_login_at && (
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Last Login</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {new Date(profileData.last_login_at).toLocaleString()}
-                  </p>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Assigned Branches
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {profileData.branch_names.map((branchName, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      {branchName}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Security Section */}
+      {/* Security Settings */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-          <Shield className="w-5 h-5 mr-2 text-red-500" />
-          Security Settings
-        </h2>
-        
+        <div className="flex items-center gap-2 mb-4">
+          <Key className="h-5 w-5 text-red-600 dark:text-red-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Security Settings
+          </h2>
+        </div>
+
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          {/* Email Verified - users.email_verified */}
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">Password</h3>
+              <p className="font-medium text-gray-900 dark:text-white">Email Verification</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Your email address verification status
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {profileData.email_verified ? (
+                <>
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-green-600 dark:text-green-400 font-medium">Verified</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  <span className="text-red-600 dark:text-red-400 font-medium">Not Verified</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Password Section */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">Password</p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Change your account password
+                {profileData.password_updated_at && (
+                  <span className="block text-xs mt-1">
+                    Last updated: {new Date(profileData.password_updated_at).toLocaleDateString()}
+                  </span>
+                )}
               </p>
             </div>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => {
                 // Navigate to password change page
                 window.location.href = '/app/settings/change-password';
