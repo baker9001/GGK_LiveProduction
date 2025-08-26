@@ -5,27 +5,11 @@
  *   - ../types/admin.types
  *   - ./scopeService
  * 
- * Preserved Features:
- *   - All permission checking methods
- *   - Scope-based permission merging
- *   - Tab access validation
- *   - Permission differences tracking
- *   - Validation methods
- * 
- * Added/Modified:
- *   - FIXED: Entity admin now has modify_entity_admin = true
- *   - FIXED: Sub-entity admin can modify other sub-entity admins
- *   - FIXED: Proper permission hierarchy for all levels
- *   - Better permission merging logic
- * 
- * Database Tables:
- *   - entity_users
- *   - entity_admin_scope
- * 
- * Connected Files:
- *   - AdminCreationForm.tsx
- *   - PermissionContext.tsx
- *   - adminService.ts
+ * Updated: Corrected permissions for School Admin and Branch Admin
+ * - School Admin: Full access to assigned schools
+ * - Branch Admin: Full access to assigned branches
+ * - Entity Admin: Full access to everything
+ * - Sub-Entity Admin: Can create/edit users lower than their level
  */
 
 import { supabase } from '@/lib/supabase';
@@ -176,7 +160,7 @@ export const permissionService = {
   },
 
   /**
-   * Entity Admin - Full permissions including ability to modify other entity admins
+   * Entity Admin - Full permissions for everything in their entity
    */
   getEntityAdminPermissions(): AdminPermissions {
     return {
@@ -187,7 +171,7 @@ export const permissionService = {
         create_branch_admin: true,
         create_teacher: true,
         create_student: true,
-        modify_entity_admin: true, // FIXED: Entity admins CAN modify other entity admins
+        modify_entity_admin: true, // Can modify other entity admins
         modify_sub_admin: true,
         modify_school_admin: true,
         modify_branch_admin: true,
@@ -218,21 +202,21 @@ export const permissionService = {
   },
 
   /**
-   * Sub-Entity Admin - Can manage all except entity admins
+   * Sub-Entity Admin - Full access to all tabs, can create/edit users lower than their level
    */
   getSubEntityAdminPermissions(): AdminPermissions {
     return {
       users: {
         create_entity_admin: false, // Cannot create entity admins
-        create_sub_admin: true,
-        create_school_admin: true,
-        create_branch_admin: true,
+        create_sub_admin: false, // Cannot create other sub-entity admins
+        create_school_admin: true, // Can create school admins (lower level)
+        create_branch_admin: true, // Can create branch admins (lower level)
         create_teacher: true,
         create_student: true,
         modify_entity_admin: false, // Cannot modify entity admins
-        modify_sub_admin: true, // Can modify other sub-entity admins
-        modify_school_admin: true,
-        modify_branch_admin: true,
+        modify_sub_admin: false, // Cannot modify other sub-entity admins
+        modify_school_admin: true, // Can modify school admins (lower level)
+        modify_branch_admin: true, // Can modify branch admins (lower level)
         modify_teacher: true,
         modify_student: true,
         delete_users: true,
@@ -260,7 +244,7 @@ export const permissionService = {
   },
 
   /**
-   * School Admin - School and branch level permissions
+   * School Admin - Full access to their assigned schools
    */
   getSchoolAdminPermissions(): AdminPermissions {
     return {
@@ -281,13 +265,13 @@ export const permissionService = {
         view_all_users: true, // Can view users in their scope
       },
       organization: {
-        create_school: false,
-        modify_school: false, // Cannot modify schools
-        delete_school: false,
+        create_school: false, // Cannot create new schools
+        modify_school: true, // UPDATED: Can modify their assigned schools
+        delete_school: false, // Cannot delete schools
         create_branch: true, // Can create branches in their schools
         modify_branch: true,
-        delete_branch: false,
-        view_all_schools: false, // Only assigned schools
+        delete_branch: true, // Can delete branches in their schools
+        view_all_schools: true, // Can view their assigned schools
         view_all_branches: true, // Branches in their schools
         manage_departments: true,
       },
@@ -302,7 +286,7 @@ export const permissionService = {
   },
 
   /**
-   * Branch Admin - Branch-level permissions only
+   * Branch Admin - Full access to their assigned branches
    */
   getBranchAdminPermissions(): AdminPermissions {
     return {
@@ -320,17 +304,17 @@ export const permissionService = {
         modify_teacher: true, // Can modify teachers
         modify_student: true, // Can modify students
         delete_users: false,
-        view_all_users: false, // Limited to their branch
+        view_all_users: true, // Can view users in their branch
       },
       organization: {
         create_school: false,
         modify_school: false,
         delete_school: false,
-        create_branch: false,
-        modify_branch: true, // Can modify their own branch
-        delete_branch: false,
+        create_branch: false, // Cannot create new branches
+        modify_branch: true, // UPDATED: Can modify their assigned branches
+        delete_branch: false, // Cannot delete branches
         view_all_schools: false,
-        view_all_branches: false, // Only their branch
+        view_all_branches: true, // Can view their assigned branches
         manage_departments: false,
       },
       settings: {
