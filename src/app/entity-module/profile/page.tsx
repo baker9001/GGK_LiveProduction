@@ -20,6 +20,7 @@
  *   - Field headers with background
  *   - Horizontal layout for better space usage
  *   - Coming soon labels for non-functional features
+ *   - Fixed tab icon and text spacing with gap-2
  * 
  * Database Tables:
  *   - entity_users (primary profile data)
@@ -218,7 +219,7 @@ export default function ModernProfilePage() {
         name: profileData.name,
         position: profileData.position,
         department: profileData.department,
-        phone: profileData.phone // This will properly fetch from entity_users table
+        phone: profileData.phone
       });
     }
   }, [isEditing, profileData]);
@@ -522,20 +523,20 @@ export default function ModernProfilePage() {
           </div>
         )}
 
-        {/* Tabs Navigation */}
+        {/* Tabs Navigation - FIXED SPACING */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
-              <Home className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block ml-2">Overview</span>
+            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Home className="h-4 w-4 flex-shrink-0" />
+              <span>Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
-              <Lock className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block ml-2">Security</span>
+            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Lock className="h-4 w-4 flex-shrink-0" />
+              <span>Security</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
-              <Activity className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block ml-2">Activity</span>
+            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+              <Activity className="h-4 w-4 flex-shrink-0" />
+              <span>Activity</span>
             </TabsTrigger>
           </TabsList>
 
