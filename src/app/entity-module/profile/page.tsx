@@ -443,10 +443,11 @@ export default function ModernProfilePage() {
             <div className="flex items-center gap-4 flex-shrink-0">
               {/* Status Badges */}
               <div className="flex items-center gap-2">
-                <StatusBadge 
-                  status={profileData.is_active ? 'Active' : 'Inactive'} 
-                  size="sm"
-                />
+                {profileData.is_active && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-xs font-medium">
+                    Active
+                  </span>
+                )}
                 {profileData.email_verified && (
                   <span className="inline-flex items-center px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-xs font-medium">
                     <CheckCircle className="h-3 w-3 mr-1" />
@@ -523,17 +524,17 @@ export default function ModernProfilePage() {
 
         {/* Tabs Navigation */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-white dark:bg-gray-800 inline-flex h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] flex items-center justify-center">
-              <Home className="h-4 w-4 mr-2 flex-shrink-0" />
+          <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
+            <TabsTrigger value="overview" className="min-w-[120px] inline-flex items-center justify-center gap-2">
+              <Home className="h-4 w-4 flex-shrink-0" />
               <span>Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] flex items-center justify-center">
-              <Lock className="h-4 w-4 mr-2 flex-shrink-0" />
+            <TabsTrigger value="security" className="min-w-[120px] inline-flex items-center justify-center gap-2">
+              <Lock className="h-4 w-4 flex-shrink-0" />
               <span>Security</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] flex items-center justify-center">
-              <Activity className="h-4 w-4 mr-2 flex-shrink-0" />
+            <TabsTrigger value="activity" className="min-w-[120px] inline-flex items-center justify-center gap-2">
+              <Activity className="h-4 w-4 flex-shrink-0" />
               <span>Activity</span>
             </TabsTrigger>
           </TabsList>
