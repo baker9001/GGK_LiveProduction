@@ -1,5 +1,3 @@
-// /home/project/src/components/layout/AdminLayout.tsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -85,6 +83,20 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
   // Get navigation items
   const navigationItems = getSubmenusForModule(moduleKey);
+
+  // Generate the profile path based on the current module
+  const getProfilePath = () => {
+    // Map module keys to their profile paths
+    const profilePaths: Record<string, string> = {
+      'entity-module': '/app/entity-module/profile',
+      'system-admin': '/app/system-admin/profile',
+      'teacher-module': '/app/teacher-module/profile',
+      'student-module': '/app/student-module/profile',
+      // Add other modules as needed
+    };
+    
+    return profilePaths[moduleKey] || '/app/entity-module/profile'; // Default to entity module profile
+  };
 
   // Handle dark mode
   useEffect(() => {
@@ -389,7 +401,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                         <p className="text-xs text-gray-500">{user?.email || 'user@example.com'}</p>
                       </div>
                       <Link 
-                        to="/app/system-admin/profile" 
+                        to={getProfilePath()}
                         className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                         onClick={() => setIsProfileDropdownOpen(false)}
                       >
