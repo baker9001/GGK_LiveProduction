@@ -525,17 +525,17 @@ export default function ModernProfilePage() {
         {/* Tabs Navigation */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
               <Home className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block">Overview</span>
+              <span className="inline-block ml-2">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
               <Lock className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block">Security</span>
+              <span className="inline-block ml-2">Security</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center">
               <Activity className="h-4 w-4 inline-block flex-shrink-0" />
-              <span className="inline-block">Activity</span>
+              <span className="inline-block ml-2">Activity</span>
             </TabsTrigger>
           </TabsList>
 
