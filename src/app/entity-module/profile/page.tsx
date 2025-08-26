@@ -363,12 +363,13 @@ export default function ModernProfilePage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Header Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6 flex-1">
-              {/* Avatar with upload/remove options */}
-              <div className="relative group">
-                <div className="h-20 w-20 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative cursor-pointer" onClick={handleAvatarClick}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+          <div className="flex items-center justify-between gap-6">
+            {/* Left Section - Avatar and Basic Info */}
+            <div className="flex items-center gap-4 flex-1">
+              {/* Avatar */}
+              <div className="relative group flex-shrink-0">
+                <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative cursor-pointer" onClick={handleAvatarClick}>
                   {getAvatarUrl() ? (
                     <img
                       src={getAvatarUrl()}
@@ -377,19 +378,17 @@ export default function ModernProfilePage() {
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-[#8CC63F] to-[#7AB635]">
-                      <span className="text-xl font-bold text-white">
+                      <span className="text-lg font-bold text-white">
                         {getInitials(profileData.name)}
                       </span>
                     </div>
                   )}
                   
-                  {/* Upload Overlay */}
                   <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Camera className="h-5 w-5 text-white" />
+                    <Camera className="h-4 w-4 text-white" />
                   </div>
                 </div>
                 
-                {/* Remove Photo Button */}
                 {getAvatarUrl() && isEditing && (
                   <button
                     onClick={(e) => {
@@ -398,7 +397,7 @@ export default function ModernProfilePage() {
                     }}
                     className="absolute -bottom-1 -right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-2.5 w-2.5" />
                   </button>
                 )}
                 
@@ -411,57 +410,57 @@ export default function ModernProfilePage() {
                 />
               </div>
 
-              {/* User Info - Expanded */}
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {profileData.name}
-                    </h2>
-                    <p className="text-gray-600 dark:text-gray-400 mt-0.5">
-                      {profileData.user_email}
-                    </p>
-                  </div>
-                  
-                  {/* Status badges moved to right side of name */}
-                  <div className="flex items-center gap-3 ml-6">
-                    <StatusBadge 
-                      status={profileData.is_active ? 'Active' : 'Inactive'} 
-                      size="sm"
-                    />
-                    {profileData.email_verified && (
-                      <span className="inline-flex items-center px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-xs font-medium">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Verified
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Additional info in header */}
-                <div className="flex items-center gap-6 mt-3 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center gap-1">
-                    <Briefcase className="h-3.5 w-3.5" />
-                    <span>{profileData.position || 'No position'}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Building2 className="h-3.5 w-3.5" />
-                    <span>{profileData.company_name || 'BSK'}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Shield className="h-3.5 w-3.5" />
-                    <span>{getAdminLevelLabel(profileData.admin_level)}</span>
-                  </div>
-                </div>
+              {/* Name and Email */}
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate">
+                  {profileData.name}
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                  {profileData.user_email}
+                </p>
               </div>
             </div>
 
-            {/* Edit/Save Buttons */}
-            <div className="ml-6">
+            {/* Center Section - Key Information */}
+            <div className="flex items-center gap-6 flex-1">
+              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                <Briefcase className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{profileData.position || 'Position'}</span>
+              </div>
+              
+              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                <Building2 className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{profileData.company_name || 'BSK'}</span>
+              </div>
+              
+              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+                <Shield className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{getAdminLevelLabel(profileData.admin_level)}</span>
+              </div>
+            </div>
+
+            {/* Right Section - Status and Actions */}
+            <div className="flex items-center gap-4 flex-shrink-0">
+              {/* Status Badges */}
+              <div className="flex items-center gap-2">
+                <StatusBadge 
+                  status={profileData.is_active ? 'Active' : 'Inactive'} 
+                  size="sm"
+                />
+                {profileData.email_verified && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-xs font-medium">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Verified
+                  </span>
+                )}
+              </div>
+
+              {/* Edit/Save Buttons */}
               {!isEditing ? (
                 <Button
                   onClick={() => setIsEditing(true)}
                   className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                  size="sm"
                 >
                   Edit Profile
                 </Button>
@@ -473,6 +472,7 @@ export default function ModernProfilePage() {
                       setEditData({});
                     }}
                     variant="outline"
+                    size="sm"
                     title="Cancel (Esc)"
                   >
                     Cancel
@@ -481,10 +481,10 @@ export default function ModernProfilePage() {
                     onClick={handleSave}
                     loading={updateProfileMutation.isPending}
                     className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                    size="sm"
                     title="Save (Enter)"
                   >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
+                    Save
                   </Button>
                 </div>
               )}
