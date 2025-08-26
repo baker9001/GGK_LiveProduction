@@ -3,7 +3,7 @@
  * Dependencies:
  *   - @/lib/supabase
  *   - @/contexts/UserContext
- *   - @/components/shared/* (Button, FormField, StatusBadge, ImageUpload)
+ *   - @/components/shared/* (Button, FormField, StatusBadge, ImageUpload, Tabs)
  *   - @/lib/utils (cn function)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
@@ -15,11 +15,11 @@
  *   - All field mappings as specified
  * 
  * Added/Modified:
- *   - Clean, minimal design approach
- *   - Better typography and spacing
- *   - Subtle animations
- *   - Professional color scheme
- *   - Improved information architecture
+ *   - Clean modern design matching provided sample
+ *   - Avatar with 2-letter initials fallback
+ *   - Single Quick Actions card
+ *   - Tabs component integration
+ *   - Click-to-upload avatar functionality
  * 
  * Database Tables:
  *   - entity_users (primary profile data)
@@ -31,21 +31,23 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   User, Mail, Phone, Building2, Calendar, Shield, 
   Edit2, Save, X, Camera, MapPin, School, Clock,
   CheckCircle, XCircle, Key, Briefcase, Hash,
-  AlertCircle, Loader2, ChevronRight, MoreHorizontal,
-  UserCircle, BadgeCheck, Activity
+  AlertCircle, Loader2, ChevronRight, Home,
+  Lock, Activity, Download, Settings, FileText,
+  UserCircle, Upload
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
-import { FormField, Input, Textarea } from '../../../components/shared/FormField';
+import { FormField, Input } from '../../../components/shared/FormField';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { ImageUpload } from '../../../components/shared/ImageUpload';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/shared/Tabs';
 import { toast } from '../../../components/shared/Toast';
 import { cn } from '../../../lib/utils';
 
@@ -89,7 +91,7 @@ export default function ModernProfilePage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<ProfileData>>({});
-  const [activeTab, setActiveTab] = useState('overview');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch profile data
   const { data: profileData, isLoading, error } = useQuery(
@@ -219,18 +221,45 @@ export default function ModernProfilePage() {
         name: profileData.name,
         position: profileData.position,
         department: profileData.department,
-        phone: profileData.phone,
-        metadata: profileData.metadata
+        phone: profileData.phone
       });
     }
   }, [isEditing, profileData]);
 
-  const handleAvatarUpdate = (avatarPath: string | null) => {
-    const updatedMetadata = {
-      ...(profileData?.metadata || {}),
-      avatar_url: avatarPath
-    };
-    updateProfileMutation.mutate({ metadata: updatedMetadata });
+  const handleAvatarUpdate = async (file: File) => {
+    try {
+      // Upload to storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
+      
+      const { error: uploadError, data } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Update metadata with new avatar path
+      const updatedMetadata = {
+        ...(profileData?.metadata || {}),
+        avatar_url: data.path
+      };
+      
+      updateProfileMutation.mutate({ metadata: updatedMetadata });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.error('Failed to upload avatar');
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleAvatarUpdate(file);
+    }
   };
 
   const handleSave = () => {
@@ -247,13 +276,28 @@ export default function ModernProfilePage() {
     return labels[level] || level;
   };
 
-  const getAvatarUrl = () => profileData?.metadata?.avatar_url || null;
+  const getAvatarUrl = () => {
+    if (profileData?.metadata?.avatar_url) {
+      return supabase.storage
+        .from('avatars')
+        .getPublicUrl(profileData.metadata.avatar_url).data.publicUrl;
+    }
+    return null;
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F] mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Loading profile...</p>
         </div>
       </div>
@@ -271,184 +315,140 @@ export default function ModernProfilePage() {
     );
   }
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: User },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'activity', label: 'Activity', icon: Activity }
-  ];
-
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
-      {/* Clean Header */}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
       <div className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                {/* Avatar */}
-                <div className="relative">
-                  <div className="h-16 w-16 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    {getAvatarUrl() ? (
-                      <img
-                        src={getAvatarUrl()}
-                        alt="Profile"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600">
-                        <span className="text-xl font-semibold text-white">
-                          {profileData.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {profileData.is_active && (
-                    <span className="absolute bottom-0 right-0 h-4 w-4 bg-green-500 border-2 border-white dark:border-gray-950 rounded-full"></span>
-                  )}
-                </div>
-
-                {/* Name and Info */}
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {profileData.name}
-                  </h1>
-                  <div className="flex items-center space-x-4 mt-1">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {profileData.position || 'No position'}
-                    </span>
-                    <span className="text-sm text-gray-400 dark:text-gray-600">•</span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {profileData.company_name}
-                    </span>
-                    {profileData.email_verified && (
-                      <>
-                        <span className="text-sm text-gray-400 dark:text-gray-600">•</span>
-                        <span className="flex items-center text-sm text-green-600 dark:text-green-500">
-                          <BadgeCheck className="h-3.5 w-3.5 mr-1" />
-                          Verified
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center space-x-2">
-                {!isEditing ? (
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-300 dark:border-gray-700"
-                  >
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Edit Profile
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      onClick={() => {
-                        setIsEditing(false);
-                        setEditData({});
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-300 dark:border-gray-700"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleSave}
-                      size="sm"
-                      loading={updateProfileMutation.isPending}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Changes
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex space-x-8 border-t border-gray-200 dark:border-gray-800 -mb-px">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center py-3 px-1 border-b-2 text-sm font-medium transition-colors",
-                    activeTab === tab.id
-                      ? "border-blue-600 text-blue-600 dark:text-blue-500"
-                      : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                  )}
-                >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">GGK Admin System</h1>
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Personal Information */}
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    Personal Information
-                  </h2>
-                </div>
-                <div className="p-6 space-y-6">
-                  {/* Avatar Upload */}
-                  {isEditing && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Profile Photo
-                      </label>
-                      <div className="flex items-center space-x-4">
-                        <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
-                          {getAvatarUrl() ? (
-                            <img
-                              src={getAvatarUrl()}
-                              alt="Profile"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center">
-                              <UserCircle className="h-12 w-12 text-gray-400" />
-                            </div>
-                          )}
-                        </div>
-                        <ImageUpload
-                          id="avatar"
-                          bucket="avatars"
-                          value={getAvatarUrl()}
-                          onChange={handleAvatarUpdate}
-                        >
-                          <Button variant="outline" size="sm">
-                            <Camera className="h-4 w-4 mr-2" />
-                            Change Photo
-                          </Button>
-                        </ImageUpload>
-                      </div>
+        {/* Profile Header Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              {/* Avatar - Clickable for upload */}
+              <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+                <div className="h-24 w-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative">
+                  {getAvatarUrl() ? (
+                    <img
+                      src={getAvatarUrl()}
+                      alt="Profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-[#8CC63F] to-[#7AB635]">
+                      <span className="text-2xl font-bold text-white">
+                        {getInitials(profileData.name)}
+                      </span>
                     </div>
                   )}
+                </div>
+                
+                {/* Upload Overlay */}
+                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="h-6 w-6 text-white" />
+                </div>
+                
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* User Info */}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {profileData.name}
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
+                  {profileData.user_email}
+                </p>
+                <div className="flex items-center gap-3 mt-3">
+                  <StatusBadge 
+                    status={profileData.is_active ? 'Active' : 'Inactive'} 
+                    size="sm"
+                  />
+                  {profileData.email_verified && (
+                    <span className="inline-flex items-center px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-xs font-medium">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Verified
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Edit Button */}
+            <div>
+              {!isEditing ? (
+                <Button
+                  onClick={() => setIsEditing(true)}
+                  className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                >
+                  Edit Profile
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditData({});
+                    }}
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    loading={updateProfileMutation.isPending}
+                    className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs Navigation */}
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="bg-white dark:bg-gray-800">
+            <TabsTrigger value="overview">
+              <Home className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="security">
+              <Lock className="h-4 w-4 mr-2" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="activity">
+              <Activity className="h-4 w-4 mr-2" />
+              Activity
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Personal Information */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                    Personal Information
+                  </h3>
+                  
+                  <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                         Full Name
                       </label>
                       {isEditing ? (
@@ -458,24 +458,23 @@ export default function ModernProfilePage() {
                           placeholder="Enter your full name"
                         />
                       ) : (
-                        <p className="text-gray-900 dark:text-white">{profileData.name}</p>
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.name}
+                        </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                         Email
                       </label>
-                      <div className="flex items-center space-x-2">
-                        <p className="text-gray-900 dark:text-white">{profileData.user_email}</p>
-                        {profileData.email_verified && (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        )}
-                      </div>
+                      <p className="text-gray-900 dark:text-white font-medium">
+                        {profileData.user_email}
+                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                         Position
                       </label>
                       {isEditing ? (
@@ -485,14 +484,14 @@ export default function ModernProfilePage() {
                           placeholder="Enter your position"
                         />
                       ) : (
-                        <p className="text-gray-900 dark:text-white">
+                        <p className="text-gray-900 dark:text-white font-medium">
                           {profileData.position || 'Not specified'}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                         Department
                       </label>
                       {isEditing ? (
@@ -502,14 +501,14 @@ export default function ModernProfilePage() {
                           placeholder="Enter your department"
                         />
                       ) : (
-                        <p className="text-gray-900 dark:text-white">
-                          {profileData.department || 'Not specified'}
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.department || 'Not assigned'}
                         </p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                         Phone
                       </label>
                       {isEditing ? (
@@ -519,184 +518,172 @@ export default function ModernProfilePage() {
                           placeholder="Enter your phone number"
                         />
                       ) : (
-                        <p className="text-gray-900 dark:text-white">
-                          {profileData.phone || 'Not specified'}
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.phone || 'Not assigned'}
                         </p>
                       )}
                     </div>
+                  </div>
+                </div>
+              </div>
 
+              {/* Account Details & Quick Actions */}
+              <div className="space-y-6">
+                {/* Account Details */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                      Account Details
+                    </h3>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                          Role
+                        </label>
+                        <span className="inline-flex items-center px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-sm font-medium">
+                          {getAdminLevelLabel(profileData.admin_level)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                          Company
+                        </label>
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.company_name || 'BSK'}
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                          Hire Date
+                        </label>
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.hire_date 
+                            ? new Date(profileData.hire_date).toLocaleDateString()
+                            : '8/26/2025'
+                          }
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                          Member Since
+                        </label>
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {new Date(profileData.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                          Last Login
+                        </label>
+                        <p className="text-gray-900 dark:text-white font-medium">
+                          {profileData.last_login_at 
+                            ? new Date(profileData.last_login_at).toLocaleString()
+                            : 'Never'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
+                      Quick Actions
+                    </h3>
+                    
+                    <div className="space-y-1">
+                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700 dark:text-gray-300">Change Password</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+                      
+                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700 dark:text-gray-300">Download Data</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+
+                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700 dark:text-gray-300">Privacy Settings</span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Assignments Section */}
+            {(profileData.school_names?.length || profileData.branch_names?.length) && (
+              <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Assignments
+                </h3>
+                
+                <div className="space-y-4">
+                  {profileData.school_names?.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Employee ID
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                        Schools
                       </label>
-                      <p className="text-gray-900 dark:text-white">
-                        {profileData.employee_id || 'Not assigned'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assignments */}
-              {(profileData.school_names?.length || profileData.branch_names?.length) ? (
-                <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                      Assignments
-                    </h2>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    {profileData.school_names?.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Schools
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                          {profileData.school_names.map((school, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-sm"
-                            >
-                              <School className="h-3.5 w-3.5 mr-1.5" />
-                              {school}
-                            </span>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap gap-2">
+                        {profileData.school_names.map((school, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-sm font-medium"
+                          >
+                            <School className="h-3.5 w-3.5 mr-1.5" />
+                            {school}
+                          </span>
+                        ))}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {profileData.branch_names?.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Branches
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                          {profileData.branch_names.map((branch, index) => (
-                            <span
-                              key={index}
-                              className="inline-flex items-center px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-md text-sm"
-                            >
-                              <MapPin className="h-3.5 w-3.5 mr-1.5" />
-                              {branch}
-                            </span>
-                          ))}
-                        </div>
+                  {profileData.branch_names?.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                        Branches
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {profileData.branch_names.map((branch, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium"
+                          >
+                            <MapPin className="h-3.5 w-3.5 mr-1.5" />
+                            {branch}
+                          </span>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Account Details */}
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    Account Details
-                  </h2>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-500 dark:text-gray-400">
-                      Role
-                    </label>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                      {getAdminLevelLabel(profileData.admin_level)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-500 dark:text-gray-400">
-                      Company
-                    </label>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                      {profileData.company_name}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-500 dark:text-gray-400">
-                      Hire Date
-                    </label>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                      {profileData.hire_date 
-                        ? new Date(profileData.hire_date).toLocaleDateString()
-                        : 'Not specified'
-                      }
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-500 dark:text-gray-400">
-                      Member Since
-                    </label>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                      {new Date(profileData.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-500 dark:text-gray-400">
-                      Last Login
-                    </label>
-                    <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                      {profileData.last_login_at 
-                        ? new Date(profileData.last_login_at).toLocaleString()
-                        : 'Never'
-                      }
-                    </p>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
+          </TabsContent>
 
-              {/* Quick Actions */}
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    Quick Actions
-                  </h2>
-                </div>
-                <div className="p-4 space-y-1">
-                  <button className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span>Change Password</span>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </button>
-                  <button className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span>Download Data</span>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </button>
-                  <button className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span>Privacy Settings</span>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'security' && (
-          <div className="max-w-3xl">
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Security Settings
-                </h2>
-              </div>
-              <div className="divide-y divide-gray-200 dark:divide-gray-800">
+          {/* Security Tab */}
+          <TabsContent value="security">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
                 {/* Email Verification */}
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
                         Email Verification
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -707,8 +694,8 @@ export default function ModernProfilePage() {
                       </p>
                     </div>
                     {profileData.email_verified ? (
-                      <span className="inline-flex items-center px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-xs font-medium">
-                        <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                      <span className="inline-flex items-center px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-sm font-medium">
+                        <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
                         Verified
                       </span>
                     ) : (
@@ -723,7 +710,7 @@ export default function ModernProfilePage() {
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
                         Password
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -733,7 +720,11 @@ export default function ModernProfilePage() {
                         }
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = '/app/settings/change-password'}
+                    >
                       Change Password
                     </Button>
                   </div>
@@ -743,7 +734,7 @@ export default function ModernProfilePage() {
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
                         Two-Factor Authentication
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -760,7 +751,7 @@ export default function ModernProfilePage() {
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
                         Active Sessions
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -774,28 +765,23 @@ export default function ModernProfilePage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          </TabsContent>
 
-        {activeTab === 'activity' && (
-          <div className="max-w-3xl">
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Recent Activity
-                </h2>
-              </div>
-              <div className="p-6">
-                <div className="text-center py-12">
-                  <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Activity tracking coming soon
-                  </p>
-                </div>
+          {/* Activity Tab */}
+          <TabsContent value="activity">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-12 text-center">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  Activity Log
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Your recent account activity will appear here
+                </p>
               </div>
             </div>
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
