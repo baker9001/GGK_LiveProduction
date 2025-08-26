@@ -565,7 +565,7 @@ export default function ModernProfilePage() {
                             value={editData.name || ''}
                             onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                             placeholder="Enter your full name"
-                            className="border-0 p-0 h-auto text-base"
+                            className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                           />
                         ) : (
                           <p className="text-gray-900 dark:text-white">
@@ -603,7 +603,7 @@ export default function ModernProfilePage() {
                               value={editData.position || ''}
                               onChange={(e) => setEditData({ ...editData, position: e.target.value })}
                               placeholder="Your position"
-                              className="border-0 p-0 h-auto text-base"
+                              className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                             />
                           ) : (
                             <p className="text-gray-900 dark:text-white">
@@ -625,7 +625,7 @@ export default function ModernProfilePage() {
                               value={editData.department || ''}
                               onChange={(e) => setEditData({ ...editData, department: e.target.value })}
                               placeholder="Your department"
-                              className="border-0 p-0 h-auto text-base"
+                              className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                             />
                           ) : (
                             <p className="text-gray-900 dark:text-white">
