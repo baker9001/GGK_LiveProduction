@@ -20,7 +20,8 @@
  *   - Field headers with background
  *   - Horizontal layout for better space usage
  *   - Coming soon labels for non-functional features
- *   - Fixed tab icon and text spacing with gap-2
+ *   - FIXED: Tab icon and text spacing with proper left alignment
+ *   - FIXED: Removed stray "0" at bottom of page
  * 
  * Database Tables:
  *   - entity_users (primary profile data)
@@ -523,18 +524,18 @@ export default function ModernProfilePage() {
           </div>
         )}
 
-        {/* Tabs Navigation - FIXED SPACING */}
+        {/* Tabs Navigation - PROPERLY FIXED SPACING AND ALIGNMENT */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
               <Home className="h-4 w-4 flex-shrink-0" />
               <span>Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
               <Lock className="h-4 w-4 flex-shrink-0" />
               <span>Security</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-center gap-2">
+            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
               <Activity className="h-4 w-4 flex-shrink-0" />
               <span>Activity</span>
             </TabsTrigger>
@@ -805,15 +806,16 @@ export default function ModernProfilePage() {
               </div>
             </div>
 
-            {/* Assignments Section */}
-            {(profileData.school_names?.length || profileData.branch_names?.length) && (
+            {/* Assignments Section - FIXED to prevent rendering "0" */}
+            {((profileData.school_names && profileData.school_names.length > 0) || 
+              (profileData.branch_names && profileData.branch_names.length > 0)) ? (
               <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Assignments
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {profileData.school_names?.length > 0 && (
+                  {profileData.school_names && profileData.school_names.length > 0 && (
                     <div>
                       <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
                         <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
@@ -834,7 +836,7 @@ export default function ModernProfilePage() {
                     </div>
                   )}
 
-                  {profileData.branch_names?.length > 0 && (
+                  {profileData.branch_names && profileData.branch_names.length > 0 && (
                     <div>
                       <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
                         <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
@@ -856,7 +858,7 @@ export default function ModernProfilePage() {
                   )}
                 </div>
               </div>
-            )}
+            ) : null}
           </TabsContent>
 
           {/* Security Tab */}
