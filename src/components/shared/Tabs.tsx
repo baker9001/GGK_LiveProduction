@@ -164,7 +164,7 @@ export function TabsTrigger({
     >
       {renderStatusIcon()}
       <span className={cn(
-        'transition-all duration-200',
+        'transition-all duration-200 ml-2',
         isActive && 'font-bold tracking-wide drop-shadow-sm'
       )}>
         {children}
