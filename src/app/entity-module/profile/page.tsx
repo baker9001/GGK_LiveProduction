@@ -218,10 +218,31 @@ export default function ModernProfilePage() {
         name: profileData.name,
         position: profileData.position,
         department: profileData.department,
-        phone: profileData.phone
+        phone: profileData.phone // This will properly fetch from entity_users table
       });
     }
   }, [isEditing, profileData]);
+
+  // Add keyboard shortcuts for save and cancel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditing) return;
+      
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        // Ctrl/Cmd + Enter to save
+        e.preventDefault();
+        handleSave();
+      } else if (e.key === 'Escape') {
+        // Escape to cancel
+        e.preventDefault();
+        setIsEditing(false);
+        setEditData({});
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isEditing, editData]);
 
   const handleAvatarUpdate = async (file: File) => {
     try {
@@ -341,11 +362,6 @@ export default function ModernProfilePage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
-              {/* QR Code Placeholder */}
-              <div className="h-24 w-24 bg-gray-100 dark:bg-gray-700 rounded-lg p-2 flex items-center justify-center">
-                <QrCode className="h-20 w-20 text-gray-400" />
-              </div>
-
               {/* Avatar with upload/remove options */}
               <div className="relative group">
                 <div className="h-24 w-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative cursor-pointer" onClick={handleAvatarClick}>
@@ -431,6 +447,7 @@ export default function ModernProfilePage() {
                       setEditData({});
                     }}
                     variant="outline"
+                    title="Cancel (Esc)"
                   >
                     Cancel
                   </Button>
@@ -438,6 +455,7 @@ export default function ModernProfilePage() {
                     onClick={handleSave}
                     loading={updateProfileMutation.isPending}
                     className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                    title="Save (Ctrl+Enter)"
                   >
                     <Save className="h-4 w-4 mr-2" />
                     Save Changes
