@@ -39,8 +39,8 @@ import {
   User, Mail, Phone, Building2, Calendar, Shield, 
   Edit2, Save, X, Camera, MapPin, School, Clock,
   CheckCircle, XCircle, Key, Briefcase, Hash,
-  AlertCircle, Loader2, ChevronRight, Home,
-  Lock, Activity, Download, Settings, FileText,
+  AlertCircle, Loader2, ChevronRight,
+  Activity, Download, Settings, FileText,
   UserCircle, Upload, QrCode, Trash2, Info
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
@@ -527,17 +527,14 @@ export default function ModernProfilePage() {
         {/* Tabs Navigation - PROPERLY FIXED SPACING AND ALIGNMENT */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
-              <Home className="h-4 w-4 flex-shrink-0" />
-              <span>Overview</span>
+            <TabsTrigger value="overview" className="min-w-[120px] px-3">
+              Overview
             </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
-              <Lock className="h-4 w-4 flex-shrink-0" />
-              <span>Security</span>
+            <TabsTrigger value="security" className="min-w-[120px] px-3">
+              Security
             </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] !inline-flex !flex-row items-center justify-start gap-2 px-3">
-              <Activity className="h-4 w-4 flex-shrink-0" />
-              <span>Activity</span>
+            <TabsTrigger value="activity" className="min-w-[120px] px-3">
+              Activity
             </TabsTrigger>
           </TabsList>
 
