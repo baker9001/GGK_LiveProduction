@@ -11,10 +11,12 @@ export default defineConfig({
       'crypto': 'crypto-browserify',
       'buffer': 'buffer',
       'stream': 'stream-browserify',
+      'process': 'process/browser',
     },
   },
   define: {
     global: 'globalThis',
+    'process.env': {},
   },
   optimizeDeps: {
     include: ["pdfjs-dist", "react", "react-dom", "buffer"]
