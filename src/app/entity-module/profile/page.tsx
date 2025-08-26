@@ -15,11 +15,11 @@
  *   - All field mappings as specified
  * 
  * Added/Modified:
- *   - Clean modern design matching provided sample
- *   - Avatar with 2-letter initials fallback
- *   - Single Quick Actions card
- *   - Tabs component integration
- *   - Click-to-upload avatar functionality
+ *   - QR code display placeholder
+ *   - Remove profile picture option
+ *   - Field headers with background
+ *   - Horizontal layout for better space usage
+ *   - Coming soon labels for non-functional features
  * 
  * Database Tables:
  *   - entity_users (primary profile data)
@@ -39,12 +39,13 @@ import {
   CheckCircle, XCircle, Key, Briefcase, Hash,
   AlertCircle, Loader2, ChevronRight, Home,
   Lock, Activity, Download, Settings, FileText,
-  UserCircle, Upload
+  UserCircle, Upload, QrCode, Trash2, Info
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
 import { FormField, Input } from '../../../components/shared/FormField';
+import { PhoneInput } from '../../../components/shared/PhoneInput';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { ImageUpload } from '../../../components/shared/ImageUpload';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/shared/Tabs';
@@ -52,7 +53,6 @@ import { toast } from '../../../components/shared/Toast';
 import { cn } from '../../../lib/utils';
 
 interface ProfileData {
-  // From entity_users table
   id: string;
   user_id: string;
   name: string;
@@ -71,16 +71,12 @@ interface ProfileData {
     bio?: string;
     [key: string]: any;
   };
-  
-  // From users table
   user_email: string;
   is_active: boolean;
   email_verified: boolean;
   created_at: string;
   last_login_at?: string;
   password_updated_at?: string;
-  
-  // Joined data
   company_name?: string;
   school_names?: string[];
   branch_names?: string[];
@@ -92,6 +88,7 @@ export default function ModernProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<ProfileData>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
 
   // Fetch profile data
   const { data: profileData, isLoading, error } = useQuery(
@@ -228,7 +225,6 @@ export default function ModernProfilePage() {
 
   const handleAvatarUpdate = async (file: File) => {
     try {
-      // Upload to storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
       
@@ -238,7 +234,6 @@ export default function ModernProfilePage() {
 
       if (uploadError) throw uploadError;
 
-      // Update metadata with new avatar path
       const updatedMetadata = {
         ...(profileData?.metadata || {}),
         avatar_url: data.path
@@ -248,6 +243,30 @@ export default function ModernProfilePage() {
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error('Failed to upload avatar');
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      // Remove from storage if exists
+      if (profileData?.metadata?.avatar_url) {
+        await supabase.storage
+          .from('avatars')
+          .remove([profileData.metadata.avatar_url]);
+      }
+
+      // Update metadata to remove avatar_url
+      const updatedMetadata = {
+        ...(profileData?.metadata || {}),
+        avatar_url: null
+      };
+      
+      updateProfileMutation.mutate({ metadata: updatedMetadata });
+      setShowRemovePhotoConfirm(false);
+      toast.success('Profile photo removed');
+    } catch (error) {
+      console.error('Error removing avatar:', error);
+      toast.error('Failed to remove profile photo');
     }
   };
 
@@ -317,21 +336,19 @@ export default function ModernProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">GGK Admin System</h1>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Header Card */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
-              {/* Avatar - Clickable for upload */}
-              <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
-                <div className="h-24 w-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative">
+              {/* QR Code Placeholder */}
+              <div className="h-24 w-24 bg-gray-100 dark:bg-gray-700 rounded-lg p-2 flex items-center justify-center">
+                <QrCode className="h-20 w-20 text-gray-400" />
+              </div>
+
+              {/* Avatar with upload/remove options */}
+              <div className="relative group">
+                <div className="h-24 w-24 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative cursor-pointer" onClick={handleAvatarClick}>
                   {getAvatarUrl() ? (
                     <img
                       src={getAvatarUrl()}
@@ -345,14 +362,26 @@ export default function ModernProfilePage() {
                       </span>
                     </div>
                   )}
+                  
+                  {/* Upload Overlay */}
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="h-6 w-6 text-white" />
+                  </div>
                 </div>
                 
-                {/* Upload Overlay */}
-                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Camera className="h-6 w-6 text-white" />
-                </div>
+                {/* Remove Photo Button */}
+                {getAvatarUrl() && isEditing && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowRemovePhotoConfirm(true);
+                    }}
+                    className="absolute -bottom-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
                 
-                {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -385,7 +414,7 @@ export default function ModernProfilePage() {
               </div>
             </div>
 
-            {/* Edit Button */}
+            {/* Edit/Save Buttons */}
             <div>
               {!isEditing ? (
                 <Button
@@ -419,6 +448,35 @@ export default function ModernProfilePage() {
           </div>
         </div>
 
+        {/* Remove Photo Confirmation Dialog */}
+        {showRemovePhotoConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Remove Profile Photo?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                This will remove your current profile photo and show your initials instead.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRemovePhotoConfirm(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRemovePhoto}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs Navigation */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-white dark:bg-gray-800">
@@ -446,88 +504,118 @@ export default function ModernProfilePage() {
                     Personal Information
                   </h3>
                   
-                  <div className="space-y-6">
+                  <div className="space-y-5">
+                    {/* Full Name */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Full Name
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          value={editData.name || ''}
-                          onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                          placeholder="Enter your full name"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.name}
-                        </p>
-                      )}
+                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          Full Name
+                        </label>
+                      </div>
+                      <div className="px-3 py-2">
+                        {isEditing ? (
+                          <Input
+                            value={editData.name || ''}
+                            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                            placeholder="Enter your full name"
+                            className="border-0 p-0 h-auto text-base"
+                          />
+                        ) : (
+                          <p className="text-gray-900 dark:text-white">
+                            {profileData.name}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
+                    {/* Email */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Email
-                      </label>
-                      <p className="text-gray-900 dark:text-white font-medium">
-                        {profileData.user_email}
-                      </p>
+                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          Email
+                        </label>
+                      </div>
+                      <div className="px-3 py-2">
+                        <p className="text-gray-900 dark:text-white">
+                          {profileData.user_email}
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Position
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          value={editData.position || ''}
-                          onChange={(e) => setEditData({ ...editData, position: e.target.value })}
-                          placeholder="Enter your position"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.position || 'Not specified'}
-                        </p>
-                      )}
+                    {/* Position and Department - Side by side */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                            Position
+                          </label>
+                        </div>
+                        <div className="px-3 py-2">
+                          {isEditing ? (
+                            <Input
+                              value={editData.position || ''}
+                              onChange={(e) => setEditData({ ...editData, position: e.target.value })}
+                              placeholder="Your position"
+                              className="border-0 p-0 h-auto text-base"
+                            />
+                          ) : (
+                            <p className="text-gray-900 dark:text-white">
+                              {profileData.position || 'Not specified'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                            Department
+                          </label>
+                        </div>
+                        <div className="px-3 py-2">
+                          {isEditing ? (
+                            <Input
+                              value={editData.department || ''}
+                              onChange={(e) => setEditData({ ...editData, department: e.target.value })}
+                              placeholder="Your department"
+                              className="border-0 p-0 h-auto text-base"
+                            />
+                          ) : (
+                            <p className="text-gray-900 dark:text-white">
+                              {profileData.department || 'Not assigned'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Phone */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Department
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          value={editData.department || ''}
-                          onChange={(e) => setEditData({ ...editData, department: e.target.value })}
-                          placeholder="Enter your department"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.department || 'Not assigned'}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Phone
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          value={editData.phone || ''}
-                          onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                          placeholder="Enter your phone number"
-                        />
-                      ) : (
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.phone || 'Not assigned'}
-                        </p>
-                      )}
+                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          Phone
+                        </label>
+                      </div>
+                      <div className="px-3 py-2">
+                        {isEditing ? (
+                          <PhoneInput
+                            value={editData.phone || ''}
+                            onChange={(value) => setEditData({ ...editData, phone: value })}
+                            placeholder="Enter phone number"
+                            className="w-full"
+                          />
+                        ) : (
+                          <p className="text-gray-900 dark:text-white">
+                            {profileData.phone || 'Not assigned'}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Account Details & Quick Actions */}
+              {/* Right Side - Account Details & Quick Actions */}
               <div className="space-y-6">
                 {/* Account Details */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
@@ -536,56 +624,83 @@ export default function ModernProfilePage() {
                       Account Details
                     </h3>
                     
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          Role
-                        </label>
-                        <span className="inline-flex items-center px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-sm font-medium">
-                          {getAdminLevelLabel(profileData.admin_level)}
-                        </span>
+                    <div className="space-y-5">
+                      {/* Role and Company - Side by side */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Role
+                            </label>
+                          </div>
+                          <div className="px-3 py-2">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-xs font-medium">
+                              {getAdminLevelLabel(profileData.admin_level)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Company
+                            </label>
+                          </div>
+                          <div className="px-3 py-2">
+                            <p className="text-gray-900 dark:text-white">
+                              {profileData.company_name || 'BSK'}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          Company
-                        </label>
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.company_name || 'BSK'}
-                        </p>
+                      {/* Hire Date and Member Since - Side by side */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Hire Date
+                            </label>
+                          </div>
+                          <div className="px-3 py-2">
+                            <p className="text-gray-900 dark:text-white">
+                              {profileData.hire_date 
+                                ? new Date(profileData.hire_date).toLocaleDateString()
+                                : '8/25/2025'
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Member Since
+                            </label>
+                          </div>
+                          <div className="px-3 py-2">
+                            <p className="text-gray-900 dark:text-white">
+                              {new Date(profileData.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
+                      {/* Last Login */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          Hire Date
-                        </label>
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.hire_date 
-                            ? new Date(profileData.hire_date).toLocaleDateString()
-                            : '8/26/2025'
-                          }
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          Member Since
-                        </label>
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {new Date(profileData.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          Last Login
-                        </label>
-                        <p className="text-gray-900 dark:text-white font-medium">
-                          {profileData.last_login_at 
-                            ? new Date(profileData.last_login_at).toLocaleString()
-                            : 'Never'
-                          }
-                        </p>
+                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
+                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                            Last Login
+                          </label>
+                        </div>
+                        <div className="px-3 py-2">
+                          <p className="text-gray-900 dark:text-white">
+                            {profileData.last_login_at 
+                              ? new Date(profileData.last_login_at).toLocaleString()
+                              : 'Never'
+                            }
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -599,23 +714,42 @@ export default function ModernProfilePage() {
                     </h3>
                     
                     <div className="space-y-1">
-                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                      <button 
+                        onClick={() => window.location.href = '/app/settings/change-password'}
+                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-gray-700 dark:text-gray-300">Change Password</span>
                           <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
                       
-                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                      <button 
+                        onClick={() => toast.info('Download feature coming soon!')}
+                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-700 dark:text-gray-300">Download Data</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-700 dark:text-gray-300">Download Data</span>
+                            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
+                              Coming Soon
+                            </span>
+                          </div>
                           <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
 
-                      <button className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                      <button 
+                        onClick={() => toast.info('Privacy settings coming soon!')}
+                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-700 dark:text-gray-300">Privacy Settings</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-700 dark:text-gray-300">Privacy Settings</span>
+                            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
+                              Coming Soon
+                            </span>
+                          </div>
                           <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </button>
@@ -632,13 +766,15 @@ export default function ModernProfilePage() {
                   Assignments
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {profileData.school_names?.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Schools
-                      </label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
+                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          Schools ({profileData.school_names.length})
+                        </label>
+                      </div>
+                      <div className="flex flex-wrap gap-2 px-3">
                         {profileData.school_names.map((school, index) => (
                           <span
                             key={index}
@@ -654,10 +790,12 @@ export default function ModernProfilePage() {
 
                   {profileData.branch_names?.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-                        Branches
-                      </label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
+                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                          Branches ({profileData.branch_names.length})
+                        </label>
+                      </div>
+                      <div className="flex flex-wrap gap-2 px-3">
                         {profileData.branch_names.map((branch, index) => (
                           <span
                             key={index}
@@ -699,7 +837,11 @@ export default function ModernProfilePage() {
                         Verified
                       </span>
                     ) : (
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => toast.info('Email verification coming soon!')}
+                      >
                         Verify Email
                       </Button>
                     )}
@@ -741,7 +883,7 @@ export default function ModernProfilePage() {
                         Add an extra layer of security to your account
                       </p>
                     </div>
-                    <span className="text-sm text-gray-400 dark:text-gray-600">
+                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md text-sm">
                       Coming Soon
                     </span>
                   </div>
@@ -758,7 +900,11 @@ export default function ModernProfilePage() {
                         Manage and review your active login sessions
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => toast.info('Session management coming soon!')}
+                    >
                       View Sessions
                     </Button>
                   </div>
@@ -775,9 +921,13 @@ export default function ModernProfilePage() {
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                   Activity Log
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                   Your recent account activity will appear here
                 </p>
+                <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md text-sm">
+                  <Info className="h-3.5 w-3.5 mr-1.5" />
+                  Coming Soon
+                </span>
               </div>
             </div>
           </TabsContent>
