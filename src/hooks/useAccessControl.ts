@@ -123,7 +123,7 @@ export function useAccessControl(): UseAccessControlResult {
                 status
               )
             `)
-            .eq('user_id', entityUser.id); // FIXED: Use entity_users.id not user.id
+            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
 
           if (!schoolError && schoolAssignments) {
             assignedSchools = schoolAssignments
@@ -175,7 +175,7 @@ export function useAccessControl(): UseAccessControlResult {
                 )
               )
             `)
-            .eq('user_id', entityUser.id); // FIXED: Use entity_users.id not user.id
+            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
 
           if (!branchError && branchAssignments) {
             assignedBranches = branchAssignments
