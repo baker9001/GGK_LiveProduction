@@ -1,5 +1,12 @@
 /**
  * File: /src/app/entity-module/organisation/page.tsx
+ * 
+ * FIXED VERSION - School Admin can now see Schools tab
+ * 
+ * Fix Applied:
+ * - Changed from using permissionService.canAccessTab() to canViewTab() from useAccessControl
+ * - This ensures School Admins can properly see the Schools tab
+ * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
@@ -7,28 +14,7 @@
  *   - @/contexts/PermissionContext
  *   - @/hooks/useAccessControl
  *   - @/app/entity-module/organisation/tabs/* (all tab components)
- *   - @/app/entity-module/organisation/tabs/admins/services/permissionService
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
- * 
- * Preserved Features:
- *   - All 6 tabs (Structure, Schools, Branches, Admins, Teachers, Students)
- *   - Statistics cards with real-time data
- *   - Tab navigation with permission checking
- *   - Lazy loading of tab components
- *   - Company data fetching
- *   - Error handling and loading states
- * 
- * Added/Modified:
- *   - Unified green color (#8CC63F) for all active tabs
- *   - Removed flashing dots animation
- *   - Consistent hover and active states
- * 
- * Database Tables:
- *   - companies, schools, branches, entity_users, teachers, students
- * 
- * Connected Files:
- *   - All tab components in ./tabs/*
- *   - Permission service and contexts
  */
 
 'use client';
@@ -43,7 +29,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { usePermissions } from '@/contexts/PermissionContext';
-import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
@@ -158,54 +143,70 @@ export default function OrganizationManagement() {
   const schoolsTabRef = useRef<SchoolsTabRef>(null);
   const branchesTabRef = useRef<BranchesTabRef>(null);
 
-  // Get accessible tabs based on user permissions
+  // FIX: Get accessible tabs using canViewTab from useAccessControl
   const accessibleTabs = useMemo(() => {
-    // Wait for permissions to be loaded
-    if (!permissions || isAccessControlLoading) return [];
+    // Wait for access control to be loaded
+    if (isAccessControlLoading) return [];
     
     const tabs = [];
     
-    // IMPORTANT: Check Structure tab FIRST to ensure it's the default when available
+    // Check each tab using canViewTab from useAccessControl
     // Structure tab - only for entity_admin and sub_entity_admin
-    if ((isEntityAdmin || isSubEntityAdmin) && canViewTab('structure')) {
+    if (canViewTab('structure')) {
       tabs.push('structure');
     }
     
-    // Schools tab
-    if (permissionService.canAccessTab('schools', permissions)) {
+    // Schools tab - entity, sub-entity, and school admins
+    if (canViewTab('schools')) {
       tabs.push('schools');
     }
     
-    // Branches tab
-    if (permissionService.canAccessTab('branches', permissions)) {
+    // Branches tab - all admin levels
+    if (canViewTab('branches')) {
       tabs.push('branches');
     }
     
-    // Admins tab
-    if (permissionService.canAccessTab('admins', permissions)) {
+    // Admins tab - entity, sub-entity, and school admins
+    if (canViewTab('admins')) {
       tabs.push('admins');
     }
     
-    // Teachers tab
-    if (permissionService.canAccessTab('teachers', permissions)) {
+    // Teachers tab - all admin levels
+    if (canViewTab('teachers')) {
       tabs.push('teachers');
     }
     
-    // Students tab
-    if (permissionService.canAccessTab('students', permissions)) {
+    // Students tab - all admin levels
+    if (canViewTab('students')) {
       tabs.push('students');
     }
     
-    console.log('Accessible tabs calculated:', {
+    // Debug logging to help diagnose issues
+    console.log('Tab Access Debug:', {
+      adminLevel: getUserContext()?.adminLevel,
       isEntityAdmin,
       isSubEntityAdmin,
+      isSchoolAdmin,
+      isBranchAdmin,
       canViewStructure: canViewTab('structure'),
-      tabs,
-      permissions: !!permissions
+      canViewSchools: canViewTab('schools'),
+      canViewBranches: canViewTab('branches'),
+      canViewAdmins: canViewTab('admins'),
+      canViewTeachers: canViewTab('teachers'),
+      canViewStudents: canViewTab('students'),
+      resultingTabs: tabs
     });
     
     return tabs;
-  }, [permissions, isEntityAdmin, isSubEntityAdmin, canViewTab, isAccessControlLoading]);
+  }, [
+    canViewTab, 
+    isEntityAdmin, 
+    isSubEntityAdmin, 
+    isSchoolAdmin, 
+    isBranchAdmin, 
+    isAccessControlLoading,
+    getUserContext
+  ]);
 
   // Set default active tab to the first accessible tab
   useEffect(() => {
@@ -506,7 +507,7 @@ export default function OrganizationManagement() {
           <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 text-left">
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Your Role:</h3>
             <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-              <div>Admin Level: {adminLevel || 'None'}</div>
+              <div>Admin Level: {adminLevel || getUserContext()?.adminLevel || 'None'}</div>
               <div>Company: {companyData?.name || 'Not assigned'}</div>
             </div>
           </div>
