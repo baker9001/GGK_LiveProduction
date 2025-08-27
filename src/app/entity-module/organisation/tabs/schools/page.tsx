@@ -1,34 +1,27 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
+ * 
+ * FIXED VERSION - School Admins now only see their assigned schools
+ * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/lib/auth
  *   - @/contexts/UserContext
  *   - @/hooks/useAccessControl
- *   - @/components/shared/* (SlideInForm, FormField, Button)
+ *   - @/components/shared/* (SlideInForm, FormField, Button, StatusBadge)
  *   - @/components/forms/SchoolFormContent
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * FIXED: Changed permission checks from 'organization.modify_school' to 'modify_school'
- * This matches the permission format in useAccessControl hook
- * 
- * Preserved Features:
- *   - All original school management functionality
- *   - Search and filter capabilities
- *   - School creation and editing forms
- *   - SchoolFormContent integration
- *   - Statistics display
- *   - All original event handlers
- *   - Branch deactivation confirmation
+ * Fixed Issues:
+ *   - School Admins now only see schools they are assigned to
+ *   - Proper scope filtering based on entity_admin_scope table
+ *   - Branch Admins cannot see schools tab
  * 
  * Database Tables:
  *   - schools & schools_additional
+ *   - entity_admin_scope (for assigned schools)
  *   - branches (for deactivation check)
  *   - companies (for reference)
- * 
- * Connected Files:
- *   - useAccessControl.ts (permission checking)
- *   - SchoolFormContent.tsx (form component)
  */
 
 'use client';
@@ -46,7 +39,7 @@ import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
-import { FormField, Input, Select } from '@/components/shared/FormField';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
@@ -145,7 +138,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   useEffect(() => {
     if (!isAccessControlLoading && !canViewTab('schools')) {
       toast.error('You do not have permission to view schools');
-      // Use a slight delay to ensure the error message is shown
       setTimeout(() => {
         window.location.href = '/app/entity-module/dashboard';
       }, 1000);
@@ -182,37 +174,54 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
       return null;
     }
     
-    // Use the correct bucket name for schools
     return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
   }, []);
 
-  // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
+  // Get user context and scope filters
+  const userContext = getUserContext();
   const scopeFilters = getScopeFilters('schools');
 
-  // ===== FETCH SCHOOLS WITH SCOPE =====
+  // ===== FETCH SCHOOLS WITH PROPER SCOPE FILTERING =====
   const { data: schools = [], isLoading, error: fetchError, refetch } = useQuery(
-    ['schools-tab', companyId, scopeFilters],
+    ['schools-tab', companyId, userContext?.schoolIds],
     async () => {
+      // Debug logging
+      console.log('Fetching schools with context:', {
+        isSchoolAdmin,
+        userContext,
+        assignedSchoolIds: userContext?.schoolIds,
+        scopeFilters
+      });
+
       let schoolsQuery = supabase
         .from('schools')
         .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
         .eq('company_id', companyId);
 
-      // Apply scope filters based on user's admin level
-      if (!isEntityAdmin && !isSubEntityAdmin) {
-        // For school and branch admins, filter by assigned schools
-        if (scopeFilters.id && Array.isArray(scopeFilters.id)) {
-          if (scopeFilters.id.length === 0) {
-            // No schools assigned, return empty array
-            return [];
-          }
-          schoolsQuery = schoolsQuery.in('id', scopeFilters.id);
-        }
+      // Apply scope filtering for School Admins
+      if (isSchoolAdmin && userContext?.schoolIds && userContext.schoolIds.length > 0) {
+        console.log('Applying school admin filter for schools:', userContext.schoolIds);
+        // School Admin: Only show assigned schools
+        schoolsQuery = schoolsQuery.in('id', userContext.schoolIds);
+      } else if (isSchoolAdmin && (!userContext?.schoolIds || userContext.schoolIds.length === 0)) {
+        console.log('School Admin with no assigned schools');
+        // School Admin with no assigned schools - return empty
+        return [];
+      } else if (isBranchAdmin) {
+        console.log('Branch Admin - no school access');
+        // Branch Admin: No access to schools tab (shouldn't reach here due to canViewTab check)
+        return [];
       }
+      // Entity and Sub-Entity Admins see all schools in the company (no additional filtering needed)
 
       const { data: schoolsData, error: schoolsError } = await schoolsQuery.order('name');
       
-      if (schoolsError) throw schoolsError;
+      if (schoolsError) {
+        console.error('Error fetching schools:', schoolsError);
+        throw schoolsError;
+      }
+
+      console.log('Fetched schools:', schoolsData?.length || 0);
       
       // Fetch additional data for each school
       const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
@@ -259,26 +268,31 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     }
   );
 
-  // Check if user can access all schools
-  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
+  // Check if user can create/modify schools
+  const canCreateSchool = can('create_school');
+  const canModifySchool = can('modify_school');
+  const canDeleteSchool = can('delete_school');
 
   // ===== FETCH BRANCHES FOR DEACTIVATION CHECK =====
   const { data: branches = [] } = useQuery(
     ['branches-for-schools', companyId],
     async () => {
-      // Get all schools for this company first
-      const { data: schoolsData, error: schoolsError } = await supabase
-        .from('schools')
-        .select('id')
-        .eq('company_id', companyId);
+      // Get schools based on user's scope
+      let schoolIds: string[] = [];
       
-      if (schoolsError) throw schoolsError;
-      
-      const schoolIds = schoolsData?.map(s => s.id) || [];
+      if (isSchoolAdmin && userContext?.schoolIds) {
+        schoolIds = userContext.schoolIds;
+      } else if (isEntityAdmin || isSubEntityAdmin) {
+        const { data: schoolsData } = await supabase
+          .from('schools')
+          .select('id')
+          .eq('company_id', companyId);
+        schoolIds = schoolsData?.map(s => s.id) || [];
+      }
       
       if (schoolIds.length === 0) return [];
       
-      // Then get all branches for these schools
+      // Get branches for these schools
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select('id, name, school_id, status')
@@ -297,6 +311,11 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   // ===== MUTATIONS =====
   const createSchoolMutation = useMutation(
     async ({ data }: { data: any }) => {
+      // School Admins cannot create schools
+      if (isSchoolAdmin) {
+        throw new Error('School Administrators cannot create new schools');
+      }
+
       // Prepare main data
       const mainData = {
         name: data.name,
@@ -371,6 +390,11 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
 
   const updateSchoolMutation = useMutation(
     async ({ id, data, deactivateAssociatedBranches = false }: { id: string; data: any; deactivateAssociatedBranches?: boolean }) => {
+      // Check if School Admin is trying to modify a school they're not assigned to
+      if (isSchoolAdmin && userContext?.schoolIds && !userContext.schoolIds.includes(id)) {
+        throw new Error('You can only modify schools you are assigned to');
+      }
+
       // If deactivating school and we need to deactivate branches
       if (data.status === 'inactive' && deactivateAssociatedBranches) {
         // First deactivate all active branches for this school
@@ -533,6 +557,12 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   }, []);
 
   const handleEdit = useCallback((school: SchoolData) => {
+    // Check if School Admin can edit this school
+    if (isSchoolAdmin && userContext?.schoolIds && !userContext.schoolIds.includes(school.id)) {
+      toast.error('You can only edit schools you are assigned to');
+      return;
+    }
+
     const combinedData = {
       ...school,
       ...(school.additional || {})
@@ -541,13 +571,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
     setSelectedSchool(school);
     setActiveTab('basic');
     setShowEditModal(true);
-  }, []);
+  }, [isSchoolAdmin, userContext]);
 
   const handleCreate = useCallback(() => {
+    if (!canCreateSchool) {
+      toast.error('You do not have permission to create schools');
+      return;
+    }
     setFormData({ status: 'active', company_id: companyId });
     setActiveTab('basic');
     setShowCreateModal(true);
-  }, [companyId]);
+  }, [companyId, canCreateSchool]);
 
   // Filter schools based on search and status
   const displayedSchools = schools.filter(school => {
@@ -560,10 +594,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
   // Calculate stats
   const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
   const totalTeachers = schools.reduce((sum, school) => sum + (school.teachers_count || 0), 0);
-
-  // Get user context for display
-  const userContext = getUserContext();
-  const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
 
   // Loading state
   if (isLoading || isAccessControlLoading) {
@@ -619,8 +649,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          {/* FIXED: Changed from 'organization.create_school' to 'create_school' */}
-          {can('create_school') ? (
+          {canCreateSchool ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
               Add School
@@ -628,24 +657,39 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           ) : (
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <Lock className="w-4 h-4" />
-              <span>Read-only access</span>
+              <span>{isSchoolAdmin ? 'Cannot create schools' : 'Read-only access'}</span>
             </div>
           )}
         </div>
 
         {/* Permission notices */}
-        {!canAccessAll && (
+        {isSchoolAdmin && userContext?.schoolIds && userContext.schoolIds.length > 0 && (
           <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  Limited Scope Access
+                  Assigned Schools Only
                 </p>
                 <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                  As a {adminLevelDisplay}, you're viewing schools within your assigned scope.
-                  {isSchoolAdmin && ' You can manage the schools you are assigned to.'}
-                  {isBranchAdmin && ' You can view schools that contain your assigned branches.'}
+                  As a School Administrator, you're viewing and can manage only the schools assigned to you.
+                  You have access to {userContext.schoolIds.length} school{userContext.schoolIds.length > 1 ? 's' : ''}.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isSchoolAdmin && (!userContext?.schoolIds || userContext.schoolIds.length === 0) && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  No Schools Assigned
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                  You haven't been assigned to any schools yet. Please contact your administrator to assign you to schools.
                 </p>
               </div>
             </div>
@@ -657,7 +701,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Schools</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {isSchoolAdmin ? 'Assigned Schools' : 'Total Schools'}
+                </p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
                   {schools.length}
                 </p>
@@ -707,14 +753,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
           <div className="col-span-full text-center py-8">
             <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-600 dark:text-gray-400">
-              {searchTerm || filterStatus !== 'all' ? 'No schools match your filters' : 'No schools found'}
+              {searchTerm || filterStatus !== 'all' 
+                ? 'No schools match your filters' 
+                : isSchoolAdmin 
+                  ? 'No assigned schools found' 
+                  : 'No schools found'}
             </p>
           </div>
         ) : (
           displayedSchools.map((school) => {
             const logoUrl = getSchoolLogoUrl(school.logo);
-            // FIXED: Changed from 'organization.modify_school' to 'modify_school'
-            const canEdit = can('modify_school');
+            const canEdit = canModifySchool && (!isSchoolAdmin || (userContext?.schoolIds?.includes(school.id)));
             
             return (
               <div
@@ -732,7 +781,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                             alt={`${school.name} logo`}
                             className="w-full h-full object-contain p-0.5"
                             onError={(e) => {
-                              // If logo fails to load, hide the image and show fallback
                               const imgElement = e.currentTarget as HTMLImageElement;
                               imgElement.style.display = 'none';
                               const parent = imgElement.parentElement;
@@ -811,7 +859,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       </span>
                     </div>
                   </div>
-                  {/* UI GATING: Show edit button based on permissions */}
                   {canEdit ? (
                     <button
                       onClick={() => handleEdit(school)}
@@ -821,7 +868,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
                       <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                     </button>
                   ) : (
-                    <div className="p-1.5 opacity-50" title="You don't have permission to edit schools">
+                    <div className="p-1.5 opacity-50" title="You don't have permission to edit this school">
                       <Shield className="w-4 h-4 text-gray-400" />
                     </div>
                   )}
