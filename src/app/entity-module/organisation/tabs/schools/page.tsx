@@ -15,7 +15,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/shared/Button';
-import { FormField, Input, Select, TextArea } from '@/components/shared/FormField';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Modal } from '@/components/shared/Modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
@@ -891,7 +891,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               </FormField>
 
               <FormField label="Description">
-                <TextArea
+                <Textarea
                   value={formData.description || ''}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Enter school description"
@@ -910,7 +910,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               </FormField>
 
               <FormField label="Address">
-                <TextArea
+                <Textarea
                   value={formData.address || ''}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="Enter school address"
