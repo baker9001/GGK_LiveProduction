@@ -227,7 +227,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               created_at
             )
           `)
-          .eq('user_id', entityUser.id);  // Use entity_users.id
+          .eq('entity_user_id', entityUser.id);  // FIXED: entity_user_id not user_id  // Use entity_users.id
         
         if (assignedSchoolsError) {
           console.error('Error fetching assigned schools:', assignedSchoolsError);
@@ -296,7 +296,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               school_id
             )
           `)
-          .eq('user_id', entityUser.id);  // Use entity_users.id
+          .eq('entity_user_id', entityUser.id);  // FIXED: entity_user_id not user_id  // Use entity_users.id
         
         if (assignedBranchesError) {
           console.error('Error fetching assigned branches:', assignedBranchesError);
