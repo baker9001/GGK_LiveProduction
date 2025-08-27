@@ -2,8 +2,8 @@
  * File: /src/hooks/useAccessControl.ts
  * 
  * COMPLETE VERSION: Updated with corrected permissions
- * - School Admin can now fully manage their assigned schools
- * - Branch Admin can now fully manage their assigned branches
+ * - School Admin can now access Admins tab to manage Branch Admins
+ * - Branch Admin can fully manage their assigned branches
  * - Sub-Entity Admin can create/edit users lower than their level
  * - All users can edit their own profiles
  * 
@@ -342,7 +342,7 @@ export function useAccessControl(): UseAccessControlResult {
     return allowedTypes ? allowedTypes.includes(type) : false;
   }, [userScope]);
 
-  // Tab access check - FIXED: Aligned with hierarchy table
+  // Tab access check - UPDATED: School Admin can now access Admins tab
   const canViewTab = useCallback((tabName: string, adminLevel?: AdminLevel): boolean => {
     const level = adminLevel || userScope?.adminLevel;
     
@@ -352,7 +352,7 @@ export function useAccessControl(): UseAccessControlResult {
       'structure': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
       'schools': ['entity_admin', 'sub_entity_admin', 'school_admin'], // school_admin can see schools
       'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all can see branches
-      'admins': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
+      'admins': ['entity_admin', 'sub_entity_admin', 'school_admin'], // UPDATED: School admin can now access to manage branch admins
       'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all levels
       'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'] // all levels
     };
@@ -384,11 +384,11 @@ export function useAccessControl(): UseAccessControlResult {
     
     const permissions: Record<string, boolean> = {
       // User management permissions - UPDATED
-      'create_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'create_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can create branch admins
       'create_entity_admin': userScope.adminLevel === 'entity_admin',
       'create_sub_admin': userScope.adminLevel === 'entity_admin', // Only entity admin can create sub-entity admins
       'create_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can create branch admins
       'create_teacher': true,
       'create_student': true,
       
@@ -396,7 +396,7 @@ export function useAccessControl(): UseAccessControlResult {
       'modify_entity_admin': userScope.adminLevel === 'entity_admin',
       'modify_sub_admin': userScope.adminLevel === 'entity_admin', // Only entity admin can modify sub-entity admins
       'modify_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can modify branch admins
       'modify_teacher': true,
       'modify_student': true,
       
@@ -409,8 +409,8 @@ export function useAccessControl(): UseAccessControlResult {
       
       // View permissions
       'view_all_users': true,
-      'view_admins': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'view_audit_logs': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'view_admins': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can view admins
+      'view_audit_logs': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can view audit logs
       
       // Organization management permissions - UPDATED
       'create_school': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
@@ -431,7 +431,7 @@ export function useAccessControl(): UseAccessControlResult {
       'export_data': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       
       // Edit permissions (for UI buttons)
-      'edit_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      'edit_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can edit branch admins
       'edit_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'edit_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
       'edit_teacher': true,
@@ -457,9 +457,13 @@ export function useAccessControl(): UseAccessControlResult {
       }
       
       // School admin can only modify branch admins and below
-      if (userScope.adminLevel === 'school_admin' && 
-          ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(targetAdminLevel)) {
-        return false;
+      if (userScope.adminLevel === 'school_admin') {
+        // Cannot modify entity, sub-entity, or other school admins
+        if (['entity_admin', 'sub_entity_admin', 'school_admin'].includes(targetAdminLevel)) {
+          return false;
+        }
+        // Can modify branch admins
+        return targetAdminLevel === 'branch_admin';
       }
       
       // Branch admin cannot modify any admin
