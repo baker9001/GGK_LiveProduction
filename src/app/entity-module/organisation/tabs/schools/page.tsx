@@ -395,37 +395,48 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     // Create school mutation
     const createSchoolMutation = useMutation(
       async (data: any) => {
-        // Separate basic and additional fields
-        const { 
-          name, code, description, status, address, notes, logo,
-          ...additionalFields 
-        } = data;
+        // List of fields that belong to the main schools table
+        const schoolFields = ['name', 'code', 'description', 'status', 'address', 'notes', 'logo'];
+        
+        // List of fields that belong to schools_additional table
+        const additionalFieldsList = [
+          'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+          'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+          'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+          'campus_postal_code', 'latitude', 'longitude', 'established_date',
+          'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+          'has_sports_facilities', 'has_cafeteria'
+        ];
+        
+        // Separate the fields
+        const schoolData: any = { company_id: companyId };
+        const additionalData: any = {};
+        
+        Object.keys(data).forEach(key => {
+          if (schoolFields.includes(key)) {
+            schoolData[key] = data[key];
+          } else if (additionalFieldsList.includes(key)) {
+            additionalData[key] = data[key];
+          }
+          // Ignore other fields
+        });
         
         // Create school with basic fields
         const { data: newSchool, error: schoolError } = await supabase
           .from('schools')
-          .insert([{ 
-            name, 
-            code, 
-            description, 
-            status, 
-            address, 
-            notes, 
-            logo,
-            company_id: companyId 
-          }])
+          .insert([schoolData])
           .select()
           .single();
         
         if (schoolError) throw schoolError;
         
         // Create additional data record if there are additional fields
-        if (Object.keys(additionalFields).length > 0) {
+        if (Object.keys(additionalData).length > 0) {
           const { error: additionalError } = await supabase
             .from('schools_additional')
             .insert([{ 
               school_id: newSchool.id,
-              additional: additionalFields 
+              ...additionalData 
             }]);
           
           if (additionalError && additionalError.code !== '23505') {
@@ -457,34 +468,48 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         data: any; 
         deactivateAssociatedBranches?: boolean 
       }) => {
-        // Separate basic and additional fields
-        const { 
-          name, code, description, status, address, notes, logo,
-          ...additionalFields 
-        } = data;
+        // List of fields that belong to the main schools table
+        const schoolFields = ['name', 'code', 'description', 'status', 'address', 'notes', 'logo', 'company_id'];
         
-        // Update school with basic fields
-        const { error: schoolError } = await supabase
-          .from('schools')
-          .update({ 
-            name, 
-            code, 
-            description, 
-            status, 
-            address, 
-            notes, 
-            logo 
-          })
-          .eq('id', id);
+        // List of fields that belong to schools_additional table
+        const additionalFieldsList = [
+          'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+          'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+          'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+          'campus_postal_code', 'latitude', 'longitude', 'established_date',
+          'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+          'has_sports_facilities', 'has_cafeteria'
+        ];
         
-        if (schoolError) throw schoolError;
+        // Separate the fields
+        const schoolData: any = {};
+        const additionalData: any = {};
+        
+        Object.keys(data).forEach(key => {
+          if (schoolFields.includes(key)) {
+            schoolData[key] = data[key];
+          } else if (additionalFieldsList.includes(key)) {
+            additionalData[key] = data[key];
+          }
+          // Ignore other fields like 'additional', 'branch_count', etc.
+        });
+        
+        // Update school main data if there are fields to update
+        if (Object.keys(schoolData).length > 0) {
+          const { error: schoolError } = await supabase
+            .from('schools')
+            .update(schoolData)
+            .eq('id', id);
+          
+          if (schoolError) throw schoolError;
+        }
         
         // Update or create additional data if there are additional fields
-        if (Object.keys(additionalFields).length > 0) {
+        if (Object.keys(additionalData).length > 0) {
           // First try to update
           const { error: updateError } = await supabase
             .from('schools_additional')
-            .update({ additional: additionalFields })
+            .update(additionalData)
             .eq('school_id', id);
           
           // If no rows were updated (PGRST116), insert instead
@@ -493,7 +518,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
               .from('schools_additional')
               .insert([{ 
                 school_id: id,
-                additional: additionalFields 
+                ...additionalData 
               }]);
             
             if (insertError && insertError.code !== '23505') {
@@ -505,7 +530,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         }
         
         // Deactivate branches if school is being deactivated
-        if (deactivateAssociatedBranches && status === 'inactive') {
+        if (deactivateAssociatedBranches && schoolData.status === 'inactive') {
           const { error: branchError } = await supabase
             .from('branches')
             .update({ status: 'inactive' })
@@ -647,10 +672,19 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     }, [selectedSchool, formData, updateSchoolMutation]);
 
     const handleEdit = useCallback((school: SchoolData) => {
+      // Combine the school data with its additional data
       const combinedData = {
-        ...school,
-        ...(school.additional || {})
+        ...school
       };
+      
+      // If there's additional data, spread it directly (not nested)
+      if (school.additional && typeof school.additional === 'object') {
+        Object.assign(combinedData, school.additional);
+      }
+      
+      // Remove the 'additional' property itself as it's not a real field
+      delete combinedData.additional;
+      
       setFormData(combinedData);
       setSelectedSchool(school);
       setActiveTab('basic');
