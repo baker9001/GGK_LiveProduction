@@ -1,18 +1,17 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/admins/components/AdminListTable.tsx
  * 
- * COMPLETE CORRECTED VERSION - ALL FIXES APPLIED
+ * COMPLETE VERSION WITH SCOPE FILTERING FOR SCHOOL ADMINS
  * 
- * Fixes Applied:
- * ✅ Fixed import path for DataTable - using @/ alias
- * ✅ Fixed all DataTable prop mismatches
- * ✅ Added safe helper functions for name/email handling
- * ✅ Fixed charAt() error with defensive coding
- * ✅ Corrected pagination object structure
- * ✅ Added missing pagination functions
+ * Updates Applied:
+ * ✅ School Admins now only see Branch Admins within their assigned schools
+ * ✅ Branch Admins only see themselves
+ * ✅ Sub-Entity Admins cannot see Entity Admins
+ * ✅ Proper scope-based filtering implemented
  * 
  * Dependencies:
  *   - @/components/shared/* (UI components)
+ *   - @/hooks/useAccessControl (For scope filtering)
  *   - ../services/adminService (Admin data service)
  *   - ../hooks/useAdminMutations (Mutation hooks)
  *   - ../types/admin.types (Type definitions)
@@ -41,7 +40,8 @@ import {
   MoreHorizontal,
   UserPlus,
   Settings,
-  Users
+  Users,
+  Info
 } from 'lucide-react';
 import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
@@ -51,15 +51,19 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 import { adminService } from '../services/adminService';
 import { useDeleteAdmin, useRestoreAdmin } from '../hooks/useAdminMutations';
 import { AdminLevel } from '../types/admin.types';
 import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionContext';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { toast } from 'react-hot-toast';
 
 // Entity User interface for the table
 interface EntityUser {
   id: string;
+  user_id?: string; // Added user_id field
   email: string;
   name: string;
   admin_level: AdminLevel;
@@ -98,13 +102,16 @@ export function AdminListTable({
 }: AdminListTableProps) {
   const { user } = useUser();
   const { permissions, adminLevel: currentUserAdminLevel } = usePermissions();
-
-  // DEBUG: Log current user information
-  console.log('=== CURRENT USER DEBUG ===');
-  console.log('Current user from useUser():', user);
-  console.log('Current user ID:', user?.id);
-  console.log('Current user email:', user?.email);
-  console.log('========================');
+  
+  // Get access control for scope filtering
+  const {
+    getScopeFilters,
+    isSchoolAdmin,
+    isBranchAdmin,
+    getUserContext,
+    isEntityAdmin,
+    isSubEntityAdmin
+  } = useAccessControl();
 
   // Filter state
   const [filters, setFilters] = useState<AdminFilters>({
@@ -127,7 +134,7 @@ export function AdminListTable({
   const [adminsToDelete, setAdminsToDelete] = useState<EntityUser[]>([]);
   const [deleteAction, setDeleteAction] = useState<'delete' | 'restore'>('delete');
 
-  // Fetch administrators with React Query
+  // Fetch administrators with React Query - WITH SCOPE FILTERING
   const { 
     data: admins = [], 
     isLoading, 
@@ -135,21 +142,72 @@ export function AdminListTable({
     error,
     refetch 
   } = useQuery(
-    ['admins', companyId, filters, page, rowsPerPage],
+    ['admins', companyId, filters, page, rowsPerPage, currentUserAdminLevel],
     async () => {
       // Build filter object for adminService
       const serviceFilters: any = {};
 
       if (filters.search) serviceFilters.search = filters.search;
-      if (filters.admin_level.length > 0) serviceFilters.admin_level = filters.admin_level; // Pass array for OR condition
-      if (filters.is_active.length > 0) serviceFilters.is_active = filters.is_active; // Pass array for OR condition
+      if (filters.admin_level.length > 0) serviceFilters.admin_level = filters.admin_level;
+      if (filters.is_active.length > 0) serviceFilters.is_active = filters.is_active;
       if (filters.created_after) serviceFilters.created_after = filters.created_after;
       if (filters.created_before) serviceFilters.created_before = filters.created_before;
 
-      const adminList = await adminService.listAdmins(companyId, serviceFilters);
+      // Get user context for scope filtering
+      const userContext = getUserContext();
       
-      // TODO: Implement server-side pagination in adminService
-      // For now, handle pagination client-side
+      // Fetch all admins first
+      let adminList = await adminService.listAdmins(companyId, serviceFilters);
+      
+      // Apply scope-based filtering for School Admins
+      if (isSchoolAdmin && userContext?.schoolIds && userContext.schoolIds.length > 0) {
+        // School Admin: Filter to show only Branch Admins in their assigned schools
+        
+        // First, get all branches in the school admin's schools
+        const { data: branchesInSchools, error: branchError } = await supabase
+          .from('branches')
+          .select('id')
+          .in('school_id', userContext.schoolIds)
+          .eq('status', 'active');
+        
+        if (branchError) {
+          console.error('Error fetching branches for school admin:', branchError);
+        }
+        
+        const branchIds = branchesInSchools?.map(b => b.id) || [];
+        
+        // Then, get scope assignments for these branches
+        if (branchIds.length > 0) {
+          const { data: branchScopes, error: scopeError } = await supabase
+            .from('entity_admin_scope')
+            .select('user_id')
+            .eq('scope_type', 'branch')
+            .in('scope_id', branchIds)
+            .eq('is_active', true);
+          
+          if (scopeError) {
+            console.error('Error fetching branch scopes:', scopeError);
+          }
+          
+          const branchAdminUserIds = branchScopes?.map(s => s.user_id) || [];
+          
+          // Filter admin list to:
+          // 1. Branch Admins assigned to branches in the school admin's schools
+          // 2. The school admin themselves (to see their own record)
+          adminList = adminList.filter(admin => 
+            (admin.admin_level === 'branch_admin' && branchAdminUserIds.includes(admin.id)) ||
+            admin.id === user?.id
+          );
+        } else {
+          // If no branches in assigned schools, only show the school admin themselves
+          adminList = adminList.filter(admin => admin.id === user?.id);
+        }
+      } else if (isBranchAdmin) {
+        // Branch Admin: Should only see themselves in the admin list
+        adminList = adminList.filter(admin => admin.id === user?.id);
+      }
+      
+      // Handle pagination client-side
       const startIndex = (page - 1) * rowsPerPage;
       const endIndex = startIndex + rowsPerPage;
       
@@ -160,7 +218,7 @@ export function AdminListTable({
     },
     {
       keepPreviousData: true,
-      staleTime: 2 * 60 * 1000, // 2 minutes
+      staleTime: 2 * 60 * 1000,
       enabled: !!companyId
     }
   );
@@ -181,6 +239,16 @@ export function AdminListTable({
       return false;
     }
     
+    // School Admins can only interact with Branch Admins
+    if (currentUserAdminLevel === 'school_admin') {
+      return targetAdmin.admin_level === 'branch_admin';
+    }
+    
+    // Branch Admins cannot interact with any admins
+    if (currentUserAdminLevel === 'branch_admin') {
+      return false;
+    }
+    
     // Other admin levels can interact with same or lower levels
     const levelHierarchy = {
       'entity_admin': 4,
@@ -192,7 +260,7 @@ export function AdminListTable({
     const currentLevel = levelHierarchy[currentUserAdminLevel || 'branch_admin'];
     const targetLevel = levelHierarchy[targetAdmin.admin_level];
     
-    return currentLevel >= targetLevel;
+    return currentLevel > targetLevel;
   };
 
   // Helper function to get admin level config
@@ -257,32 +325,41 @@ export function AdminListTable({
     return 'Unknown User';
   };
 
-  // Filter admins based on local filters
+  // Additional filtering based on user level
   const filteredAdmins = useMemo(() => {
     let adminList = admins?.data || [];
     
-    // CRITICAL: Filter out Entity Admins if current user is Sub-Entity Admin
+    // Filter out Entity Admins if current user is Sub-Entity Admin
     if (currentUserAdminLevel === 'sub_entity_admin') {
       adminList = adminList.filter(admin => admin.admin_level !== 'entity_admin');
     }
     
-    // Apply additional filtering based on user's scope access
-    // For non-entity admins, they should only see admins within their scope
-    if (currentUserAdminLevel !== 'entity_admin') {
-      // TODO: Implement scope-based admin filtering
-      // This would require checking if the admin being viewed has overlapping scopes
-      // with the current user's assigned scopes
+    // School Admins should only see Branch Admins and themselves
+    if (currentUserAdminLevel === 'school_admin') {
+      adminList = adminList.filter(admin => 
+        admin.admin_level === 'branch_admin' || 
+        admin.id === user?.id ||
+        admin.user_id === user?.id
+      );
+    }
+    
+    // Branch Admins should only see themselves
+    if (currentUserAdminLevel === 'branch_admin') {
+      adminList = adminList.filter(admin => 
+        admin.id === user?.id || 
+        admin.user_id === user?.id
+      );
     }
     
     return adminList;
-  }, [admins]);
+  }, [admins, currentUserAdminLevel, user]);
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
-    const allAdmins = admins?.data || [];
+    const allAdmins = filteredAdmins || [];
     
     return {
-      total: admins?.total || 0,
+      total: allAdmins.length,
       active: allAdmins.filter(a => a.is_active).length,
       inactive: allAdmins.filter(a => !a.is_active).length,
       byLevel: {
@@ -292,7 +369,7 @@ export function AdminListTable({
         branch_admin: allAdmins.filter(a => a.admin_level === 'branch_admin').length,
       }
     };
-  }, [admins]);
+  }, [filteredAdmins]);
 
   // Handle bulk delete
   const handleBulkDelete = () => {
@@ -300,13 +377,10 @@ export function AdminListTable({
     
     // Check if user is trying to deactivate their own account
     const selfDeactivationAttempt = adminsToProcess.some(admin => 
-      admin.is_active && admin.user_id === user?.id
+      admin.is_active && (admin.user_id === user?.id || admin.id === user?.id)
     );
     
     if (selfDeactivationAttempt) {
-      console.log('=== SELF DEACTIVATION BLOCKED ===');
-      console.log('Current user ID:', user?.id);
-      console.log('Admins to process:', adminsToProcess.map(a => ({ id: a.id, user_id: a.user_id, email: a.email })));
       toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
       return;
     }
@@ -347,7 +421,7 @@ export function AdminListTable({
     setAdminsToDelete([]);
   };
 
-  // TODO: Export to CSV functionality
+  // Export to CSV functionality
   const handleExportCSV = () => {
     console.log('TODO: Export admin list to CSV');
     // Implementation would convert admins to CSV format and trigger download
@@ -460,7 +534,11 @@ export function AdminListTable({
               ) : null}
             </div>
           ) : (
-            <span className="text-gray-500 dark:text-gray-400">Full Access</span>
+            <span className="text-gray-500 dark:text-gray-400">
+              {row.admin_level === 'entity_admin' || row.admin_level === 'sub_entity_admin' 
+                ? 'Full Access' 
+                : 'No Scope Assigned'}
+            </span>
           )}
         </div>
       ),
@@ -517,21 +595,8 @@ export function AdminListTable({
     // Handle single or bulk delete
     const admin = admins[0];
     if (admin) {
-      // DEBUG: Log comparison values for self-deactivation check
-      console.log('=== DEACTIVATION DEBUG ===');
-      console.log('Admin to deactivate:', admin);
-      console.log('Admin user_id:', admin.user_id);
-      console.log('Admin id:', admin.id);
-      console.log('Current user id:', user?.id);
-      console.log('Is admin active?', admin.is_active);
-      console.log('Comparison admin.user_id === user?.id:', admin.user_id === user?.id);
-      console.log('Comparison admin.id === user?.id:', admin.id === user?.id);
-      console.log('Should prevent self-deactivation?', admin.is_active && admin.user_id === user?.id);
-      console.log('========================');
-
       // Prevent self-deactivation
-      if (admin.is_active && admin.user_id === user?.id) {
-        console.log('🚫 BLOCKING SELF-DEACTIVATION ATTEMPT');
+      if (admin.is_active && (admin.user_id === user?.id || admin.id === user?.id)) {
         toast.error('You cannot deactivate your own account. Please ask another administrator to do this.');
         return;
       }
@@ -544,21 +609,10 @@ export function AdminListTable({
 
   const renderRowActions = (row: EntityUser) => (
     <div className="flex items-center gap-1">
-      {/* DEBUG: Log row data for each rendered row */}
-      {console.log('=== ROW RENDER DEBUG ===', {
-        rowId: row.id,
-        rowUserId: row.user_id,
-        rowEmail: row.email,
-        currentUserId: user?.id,
-        isCurrentUser: row.user_id === user?.id,
-        shouldDisableDeactivate: row.is_active && row.user_id === user?.id,
-        buttonWillBeDisabled: row.is_active && row.user_id === user?.id
-      })}
-
       {/* Check if user can interact with this admin */}
       {(() => {
         const canInteract = canInteractWithAdmin(row);
-        const isSelfEdit = row.user_id === user?.id;
+        const isSelfEdit = row.user_id === user?.id || row.id === user?.id;
         
         return (
           <>
@@ -578,17 +632,15 @@ export function AdminListTable({
               size="sm"
               leftIcon={<Edit2 className="h-4 w-4" />}
               onClick={() => handleEditAdmin(row)}
-              disabled={!canInteract || isSelfEdit}
+              disabled={!canInteract}
               title={
                 !canInteract 
                   ? "You don't have permission to edit this admin level"
-                  : isSelfEdit 
-                    ? "You cannot edit your own profile for security reasons"
-                    : undefined
+                  : undefined
               }
               className={cn(
                 "text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
-                (!canInteract || isSelfEdit) && "opacity-50 cursor-not-allowed"
+                !canInteract && "opacity-50 cursor-not-allowed"
               )}
             >
               Edit
@@ -598,8 +650,8 @@ export function AdminListTable({
               size="sm"
               leftIcon={row.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
               onClick={() => handleDeleteAdmin([row])}
-              disabled={row.is_active && row.user_id === user?.id}
-              title={row.is_active && row.user_id === user?.id ? "You cannot deactivate your own account for security reasons" : undefined}
+              disabled={row.is_active && isSelfEdit}
+              title={row.is_active && isSelfEdit ? "You cannot deactivate your own account for security reasons" : undefined}
               className={row.is_active 
                 ? "text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 : "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
@@ -618,8 +670,52 @@ export function AdminListTable({
     setSelectedAdmins(selectedIds as string[]);
   };
 
+  // Get available admin levels for filters based on user's level
+  const availableAdminLevels = useMemo(() => {
+    if (currentUserAdminLevel === 'entity_admin') {
+      return [
+        { value: 'entity_admin', label: 'Entity Admin' },
+        { value: 'sub_entity_admin', label: 'Sub Admin' },
+        { value: 'school_admin', label: 'School Admin' },
+        { value: 'branch_admin', label: 'Branch Admin' }
+      ];
+    } else if (currentUserAdminLevel === 'sub_entity_admin') {
+      return [
+        { value: 'sub_entity_admin', label: 'Sub Admin' },
+        { value: 'school_admin', label: 'School Admin' },
+        { value: 'branch_admin', label: 'Branch Admin' }
+      ];
+    } else if (currentUserAdminLevel === 'school_admin') {
+      return [
+        { value: 'school_admin', label: 'School Admin' },
+        { value: 'branch_admin', label: 'Branch Admin' }
+      ];
+    } else {
+      return [
+        { value: 'branch_admin', label: 'Branch Admin' }
+      ];
+    }
+  }, [currentUserAdminLevel]);
+
   return (
     <div className={cn("space-y-6", className)}>
+      {/* Scope Notice for School Admins */}
+      {isSchoolAdmin && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                Limited Admin View
+              </p>
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                As a School Administrator, you can only view and manage Branch Administrators within your assigned schools.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
@@ -646,39 +742,58 @@ export function AdminListTable({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Entity</p>
-              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                {summaryStats.byLevel.entity_admin}
-              </p>
+        {/* Only show relevant admin type stats based on user level */}
+        {(isEntityAdmin || isSubEntityAdmin) && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Entity</p>
+                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                  {summaryStats.byLevel.entity_admin}
+                </p>
+              </div>
+              <Crown className="h-6 w-6 text-purple-400" />
             </div>
-            <Crown className="h-6 w-6 text-purple-400" />
           </div>
-        </div>
+        )}
+
+        {(isEntityAdmin || isSubEntityAdmin) && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Sub Admin</p>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                  {summaryStats.byLevel.sub_entity_admin}
+                </p>
+              </div>
+              <Shield className="h-6 w-6 text-blue-400" />
+            </div>
+          </div>
+        )}
+
+        {(isEntityAdmin || isSubEntityAdmin || isSchoolAdmin) && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">School</p>
+                <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                  {summaryStats.byLevel.school_admin}
+                </p>
+              </div>
+              <School className="h-6 w-6 text-green-400" />
+            </div>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Sub Admin</p>
-              <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                {summaryStats.byLevel.sub_entity_admin}
+              <p className="text-xs text-gray-500 dark:text-gray-400">Branch</p>
+              <p className="text-xl font-bold text-orange-600 dark:text-orange-400">
+                {summaryStats.byLevel.branch_admin}
               </p>
             </div>
-            <Shield className="h-6 w-6 text-blue-400" />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">School</p>
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                {summaryStats.byLevel.school_admin}
-              </p>
-            </div>
-            <School className="h-6 w-6 text-green-400" />
+            <MapPin className="h-6 w-6 text-orange-400" />
           </div>
         </div>
       </div>
@@ -718,12 +833,7 @@ export function AdminListTable({
           {/* Admin Level Filter */}
           <FormField label="Admin Level">
             <SearchableMultiSelect
-              options={[
-                { value: 'entity_admin', label: 'Entity Admin' },
-                { value: 'sub_entity_admin', label: 'Sub Admin' },
-                { value: 'school_admin', label: 'School Admin' },
-                { value: 'branch_admin', label: 'Branch Admin' }
-              ]}
+              options={availableAdminLevels}
               selectedValues={filters.admin_level}
               onChange={(values) => {
                 setFilters(prev => ({ ...prev, admin_level: values as AdminLevel[] }));
@@ -813,7 +923,7 @@ export function AdminListTable({
       {/* Actions Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {/* Removed duplicate Add Administrator button */}
+          {/* Empty left side - Add Administrator button moved to parent component */}
         </div>
 
         <div className="flex items-center gap-2">
@@ -838,32 +948,36 @@ export function AdminListTable({
         </div>
       </div>
 
-      {/* Data Table - WITH CORRECTED PROPS */}
+      {/* Data Table */}
       <DataTable
         columns={columns}
         data={filteredAdmins}
         keyField="id"
-        loading={isLoading}  // Fixed: was isLoading
+        loading={isLoading}
         isFetching={isFetching}
         onEdit={handleEditAdmin}
         onDelete={handleDeleteAdmin}
         renderActions={renderRowActions}
-        onSelectionChange={handleSelectionChange}  // Fixed: was multiple wrong props
+        onSelectionChange={handleSelectionChange}
         pagination={{
-          page: page,  // Fixed: was currentPage
+          page: page,
           rowsPerPage: rowsPerPage,
-          totalCount: admins?.total || 0,  // Fixed: was totalRows
+          totalCount: admins?.total || 0,
           totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
-          goToPage: setPage,  // Fixed: was onPageChange
-          nextPage: () => setPage(prev => Math.min(prev + 1, Math.ceil((admins?.total || 0) / rowsPerPage))),  // Added
-          previousPage: () => setPage(prev => Math.max(prev - 1, 1)),  // Added
-          changeRowsPerPage: (rows: number) => {  // Fixed: was onRowsPerPageChange
+          goToPage: setPage,
+          nextPage: () => setPage(prev => Math.min(prev + 1, Math.ceil((admins?.total || 0) / rowsPerPage))),
+          previousPage: () => setPage(prev => Math.max(prev - 1, 1)),
+          changeRowsPerPage: (rows: number) => {
             setRowsPerPage(rows);
             setPage(1);
           },
-          ariaLabel: "Administrators pagination"  // Added for accessibility
+          ariaLabel: "Administrators pagination"
         }}
-        emptyMessage="No administrators found"
+        emptyMessage={
+          isSchoolAdmin 
+            ? "No branch administrators found in your assigned schools"
+            : "No administrators found"
+        }
         caption="List of administrators with their roles and permissions"
         ariaLabel="Administrators data table"
       />
@@ -883,7 +997,6 @@ export function AdminListTable({
         onConfirm={confirmAction}
         onCancel={cancelAction}
       />
-
     </div>
   );
 }
