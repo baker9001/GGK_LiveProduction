@@ -19,7 +19,6 @@ import { FormField, Input, Select, TextArea } from '@/components/shared/FormFiel
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Modal } from '@/components/shared/Modal';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
-import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { useUser } from '@/contexts/UserContext';
@@ -853,18 +852,20 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
         ))}
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Dialog */}
       {(showCreateModal || showEditModal) && (
-        <Modal
-          isOpen={showCreateModal || showEditModal}
-          onClose={() => {
+        <Dialog open={showCreateModal || showEditModal} onOpenChange={(open) => {
+          if (!open) {
             setShowCreateModal(false);
             setShowEditModal(false);
             setSelectedSchool(null);
             setFormData({});
-          }}
-          title={selectedSchool ? 'Edit School' : 'Create New School'}
-        >
+          }
+        }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selectedSchool ? 'Edit School' : 'Create New School'}</DialogTitle>
+            </DialogHeader>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
@@ -1044,7 +1045,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(({ companyId
               )}
             </Button>
           </div>
-        </Modal>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Deactivation Confirmation Dialog */}
