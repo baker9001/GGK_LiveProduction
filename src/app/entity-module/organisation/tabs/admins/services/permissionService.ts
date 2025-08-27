@@ -5,8 +5,8 @@
  *   - ../types/admin.types
  *   - ./scopeService
  * 
- * Updated: Corrected permissions for School Admin and Branch Admin
- * - School Admin: Full access to assigned schools
+ * Updated: School Admin can now access Admins tab to manage Branch Admins
+ * - School Admin: Full access to assigned schools and can create/edit branch admins
  * - Branch Admin: Full access to assigned branches
  * - Entity Admin: Full access to everything
  * - Sub-Entity Admin: Can create/edit users lower than their level
@@ -244,7 +244,7 @@ export const permissionService = {
   },
 
   /**
-   * School Admin - Full access to their assigned schools
+   * School Admin - Full access to their assigned schools, can create/edit branch admins
    */
   getSchoolAdminPermissions(): AdminPermissions {
     return {
@@ -252,13 +252,13 @@ export const permissionService = {
         create_entity_admin: false,
         create_sub_admin: false,
         create_school_admin: false, // Cannot create same level
-        create_branch_admin: true, // Can create branch admins
+        create_branch_admin: true, // Can create branch admins (lower level)
         create_teacher: true,
         create_student: true,
         modify_entity_admin: false,
         modify_sub_admin: false,
         modify_school_admin: false, // Cannot modify same or higher level
-        modify_branch_admin: true, // Can modify branch admins
+        modify_branch_admin: true, // Can modify branch admins (lower level)
         modify_teacher: true,
         modify_student: true,
         delete_users: false, // Limited delete permissions
@@ -266,7 +266,7 @@ export const permissionService = {
       },
       organization: {
         create_school: false, // Cannot create new schools
-        modify_school: true, // UPDATED: Can modify their assigned schools
+        modify_school: true, // Can modify their assigned schools
         delete_school: false, // Cannot delete schools
         create_branch: true, // Can create branches in their schools
         modify_branch: true,
@@ -286,7 +286,7 @@ export const permissionService = {
   },
 
   /**
-   * Branch Admin - Full access to their assigned branches
+   * Branch Admin - Full access to their assigned branches only
    */
   getBranchAdminPermissions(): AdminPermissions {
     return {
@@ -311,7 +311,7 @@ export const permissionService = {
         modify_school: false,
         delete_school: false,
         create_branch: false, // Cannot create new branches
-        modify_branch: true, // UPDATED: Can modify their assigned branches
+        modify_branch: true, // Can modify their assigned branches
         delete_branch: false, // Cannot delete branches
         view_all_schools: false,
         view_all_branches: true, // Can view their assigned branches
@@ -378,6 +378,7 @@ export const permissionService = {
 
   /**
    * Check if user can access a specific tab based on their permissions
+   * UPDATED: School Admin can now access Admins tab to manage Branch Admins
    */
   canAccessTab(tabId: string, permissions: AdminPermissions): boolean {
     switch (tabId) {
@@ -403,16 +404,16 @@ export const permissionService = {
                permissions.organization.delete_branch;
                
       case 'admins':
-        // Admins tab requires ability to view or manage any type of admin
+        // UPDATED: School admins can access to manage branch admins
         return permissions.users.view_all_users ||
                permissions.users.create_entity_admin ||
                permissions.users.create_sub_admin ||
                permissions.users.create_school_admin ||
-               permissions.users.create_branch_admin ||
+               permissions.users.create_branch_admin || // School admin can create branch admins
                permissions.users.modify_entity_admin ||
                permissions.users.modify_sub_admin ||
                permissions.users.modify_school_admin ||
-               permissions.users.modify_branch_admin;
+               permissions.users.modify_branch_admin; // School admin can modify branch admins
                
       case 'teachers':
         // Teachers tab requires any teacher-related permission
