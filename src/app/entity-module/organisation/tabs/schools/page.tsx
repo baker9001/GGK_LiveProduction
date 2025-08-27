@@ -425,7 +425,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             .from('schools_additional')
             .insert([{ 
               school_id: newSchool.id,
-              ...additionalFields 
+              additional: additionalFields 
             }]);
           
           if (additionalError && additionalError.code !== '23505') {
@@ -484,7 +484,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
           // First try to update
           const { error: updateError } = await supabase
             .from('schools_additional')
-            .update(additionalFields)
+            .update({ additional: additionalFields })
             .eq('school_id', id);
           
           // If no rows were updated (PGRST116), insert instead
@@ -493,7 +493,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
               .from('schools_additional')
               .insert([{ 
                 school_id: id,
-                ...additionalFields 
+                additional: additionalFields 
               }]);
             
             if (insertError && insertError.code !== '23505') {
