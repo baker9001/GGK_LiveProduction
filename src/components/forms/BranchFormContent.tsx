@@ -1,9 +1,9 @@
 /**
  * File: /src/components/forms/BranchFormContent.tsx
  * 
- * FIXED: Added Company dropdown before School dropdown
- * - Company must be selected first to load schools
- * - Schools are filtered based on selected company
+ * FIXED: Removed Company dropdown - company is auto-determined from user context
+ * - Schools are automatically filtered based on user's company
+ * - No manual company selection needed
  */
 
 'use client';
@@ -21,8 +21,7 @@ interface BranchFormData {
   // Main branch fields
   name: string;
   code: string;
-  company_id: string;  // Added company_id
-  school_id: string;
+  school_id: string;  // No company_id needed - handled by parent
   status: 'active' | 'inactive';
   address: string;
   notes: string;
@@ -51,9 +50,9 @@ interface BranchFormContentProps {
   activeTab: 'basic' | 'additional' | 'contact';
   setActiveTab: (tab: 'basic' | 'additional' | 'contact') => void;
   schools: Array<{ id: string; name: string }>;
-  companies: Array<{ id: string; name: string; region_name?: string }>;
   isEditing?: boolean;
-  onCompanyChange?: (companyId: string) => void;
+  isLoadingSchools?: boolean;
+  schoolsError?: Error | null;
 }
 
 // ===== MAIN COMPONENT =====
@@ -65,9 +64,9 @@ export function BranchFormContent({
   activeTab,
   setActiveTab,
   schools,
-  companies,
   isEditing = false,
-  onCompanyChange
+  isLoadingSchools = false,
+  schoolsError = null
 }: BranchFormContentProps) {
   
   const updateFormData = (field: string, value: any) => {
@@ -81,16 +80,6 @@ export function BranchFormContent({
     }
   };
 
-  const handleCompanyChange = (companyId: string) => {
-    updateFormData('company_id', companyId);
-    // Reset school when company changes
-    updateFormData('school_id', '');
-    // Call the parent's company change handler to fetch schools
-    if (onCompanyChange) {
-      onCompanyChange(companyId);
-    }
-  };
-
   // Get logo URL helper
   const getLogoUrl = (path: string | null) => {
     if (!path) return null;
@@ -100,9 +89,14 @@ export function BranchFormContent({
       return path;
     }
     
-    // Get public URL from Supabase (assuming supabase is available via import)
-    // For now, return null if not a full URL
-    return null;
+    // Get public URL from Supabase
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      console.warn('VITE_SUPABASE_URL is not defined');
+      return null;
+    }
+    
+    return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
   };
 
   return (
@@ -148,55 +142,47 @@ export function BranchFormContent({
       <div className="min-h-[400px]">
         {activeTab === 'basic' && (
           <div className="space-y-4">
-            {/* Company Dropdown - ADDED */}
-            <FormField 
-              id="company_id" 
-              label="Company" 
-              required 
-              error={formErrors.company_id}
-              description="Select a company first to load schools"
-            >
-              <Select
-                id="company_id"
-                value={formData.company_id || ''}
-                onChange={(value) => handleCompanyChange(value)}
-                options={[
-                  { value: '', label: 'Select company' },
-                  ...(companies || []).map(company => ({
-                    value: company.id,
-                    label: `${company.name}${company.region_name ? ` (${company.region_name})` : ''}`
-                  }))
-                ]}
-                placeholder="Select company"
-              >
-              </Select>
-            </FormField>
-
-            {/* School Dropdown - Now depends on Company */}
+            {/* School Dropdown - Auto-filtered by user's company */}
             <FormField 
               id="school_id" 
               label="School" 
               required 
               error={formErrors.school_id}
-              description={!formData.company_id ? "Please select a company first" : undefined}
             >
-              <Select
-                id="school_id"
-                value={formData.school_id || ''}
-                onChange={(value) => updateFormData('school_id', value)}
-                disabled={!formData.company_id}
-                options={[
-                  { value: '', label: 'Select school' },
-                  ...schools.map(school => ({
-                    value: school.id,
-                    label: school.name
-                  }))
-                ]}
-                placeholder="Select school"
-              >
-              </Select>
+              {isLoadingSchools ? (
+                <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+                  Loading schools for your company...
+                </div>
+              ) : schoolsError ? (
+                <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+                  Failed to load schools. Please refresh the page.
+                </div>
+              ) : schools.length === 0 ? (
+                <div className="space-y-2">
+                  <Select id="school_id" disabled>
+                    <option value="">No schools available</option>
+                  </Select>
+                  <div className="p-2 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded">
+                    No schools found. Schools must be created first.
+                  </div>
+                </div>
+              ) : (
+                <Select
+                  id="school_id"
+                  value={formData.school_id || ''}
+                  onChange={(e) => updateFormData('school_id', e.target.value)}
+                >
+                  <option value="">Select school</option>
+                  {schools.map(school => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </FormField>
 
+            {/* Rest of the fields remain the same... */}
             {/* Branch Name */}
             <FormField id="name" label="Branch Name" required error={formErrors.name}>
               <Input
@@ -297,6 +283,7 @@ export function BranchFormContent({
           </div>
         )}
 
+        {/* Additional and Contact tabs remain the same */}
         {activeTab === 'additional' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
