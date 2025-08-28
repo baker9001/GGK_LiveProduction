@@ -183,36 +183,48 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const scopeFilters = getScopeFilters('branches');
 
   // ===== FETCH SCHOOLS FOR DROPDOWN - Now filtered by user's company =====
-  const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
-    ['schools-for-branches', companyId, scopeFilters],
+  const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
+    ['schools-for-branches', companyId],
     async () => {
-      // Use the companyId prop which should be the user's company
+      console.log('Fetching schools for company:', companyId);
+      
+      if (!companyId) {
+        console.error('No companyId provided');
+        return [];
+      }
+      
+      // Simple query without status filter (schools might not have status field)
       let query = supabase
         .from('schools')
-        .select(`
-          id, name, code, company_id,
-          companies (id, name)
-        `)
+        .select('id, name, code, company_id')
         .eq('company_id', companyId)
-        .eq('status', 'active')
         .order('name');
       
-      // Apply scope filters for school admins
-      if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.id) {
-        if (Array.isArray(scopeFilters.id) && scopeFilters.id.length === 0) {
-          return [];
+      // Apply scope filters for school admins (if they have limited access)
+      if (isSchoolAdmin && scopeFilters.school_id) {
+        if (Array.isArray(scopeFilters.school_id)) {
+          if (scopeFilters.school_id.length === 0) return [];
+          query = query.in('id', scopeFilters.school_id);
+        } else {
+          query = query.eq('id', scopeFilters.school_id);
         }
-        query = query.in('id', scopeFilters.id);
       }
       
       const { data, error } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching schools:', error);
+        toast.error('Failed to load schools: ' + error.message);
+        throw error;
+      }
+      
+      console.log(`Found ${data?.length || 0} schools for company ${companyId}:`, data);
       return data || [];
     },
     { 
       enabled: !!companyId && !isAccessControlLoading,
-      staleTime: 5 * 60 * 1000
+      staleTime: 5 * 60 * 1000,
+      retry: 1
     }
   );
 
@@ -628,18 +640,49 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     <>
       {activeTab === 'basic' && (
         <div className="space-y-4">
+          {/* Show loading state for schools */}
+          {isLoadingSchools && (
+            <div className="p-2 text-sm text-gray-600 dark:text-gray-400">
+              Loading schools...
+            </div>
+          )}
+          
+  {/* Show school dropdown */}
           <FormField id="school_id" label="School" required error={formErrors.school_id}>
-            <Select
-              id="school_id"
-              value={formData.school_id || ''}
-              onChange={(e) => setFormData({...formData, school_id: e.target.value})}
-              disabled={isBranchAdmin} // Branch admins can't change school
-            >
-              <option value="">Select school</option>
-              {schools.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </Select>
+            {!companyId ? (
+              <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+                Error: No company ID provided. Please contact support.
+              </div>
+            ) : isLoadingSchools ? (
+              <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+                Loading schools...
+              </div>
+            ) : schoolsError ? (
+              <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
+                Failed to load schools. Please refresh the page.
+              </div>
+            ) : schools.length === 0 ? (
+              <div className="space-y-2">
+                <Select id="school_id" disabled>
+                  <option value="">No schools available</option>
+                </Select>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No schools found for this company. Please ensure schools are created first.
+                </p>
+              </div>
+            ) : (
+              <Select
+                id="school_id"
+                value={formData.school_id || ''}
+                onChange={(e) => setFormData({...formData, school_id: e.target.value})}
+                disabled={isBranchAdmin}
+              >
+                <option value="">Select school</option>
+                {schools.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </Select>
+            )}
           </FormField>
 
           <FormField id="name" label="Branch Name" required error={formErrors.name}>
