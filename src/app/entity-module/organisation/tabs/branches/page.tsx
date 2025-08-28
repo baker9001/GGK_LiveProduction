@@ -124,6 +124,33 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     error: accessError
   } = useAccessControl();
 
+  // Get user context early for company ID
+  const userContext = getUserContext();
+  
+  // AUTO-SELECT USER'S COMPANY - Must be defined before any usage
+  const companyId = useMemo(() => {
+    // First try to get from user context (most reliable)
+    if (userContext?.companyId) {
+      console.log('Using company ID from user context:', userContext.companyId);
+      return userContext.companyId;
+    }
+    
+    // Fallback to user object
+    if (user?.company_id) {
+      console.log('Using company ID from user object:', user.company_id);
+      return user.company_id;
+    }
+    
+    // Last resort - use prop (for backward compatibility)
+    if (propCompanyId) {
+      console.log('Using company ID from prop:', propCompanyId);
+      return propCompanyId;
+    }
+    
+    console.error('No company ID found in user context, user object, or props');
+    return null;
+  }, [userContext, user, propCompanyId]);
+
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -603,33 +630,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     teachers: branches.reduce((acc, b) => acc + (b.teachers_count || 0), 0)
   }), [branches]);
 
-  // Get user context for display and company ID
-  const userContext = getUserContext();
+  // Get admin level display text
   const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
-  
-  // AUTO-SELECT USER'S COMPANY - prioritize user context over prop
-  const companyId = useMemo(() => {
-    // First try to get from user context (most reliable)
-    if (userContext?.companyId) {
-      console.log('Using company ID from user context:', userContext.companyId);
-      return userContext.companyId;
-    }
-    
-    // Fallback to user object
-    if (user?.company_id) {
-      console.log('Using company ID from user object:', user.company_id);
-      return user.company_id;
-    }
-    
-    // Last resort - use prop (for backward compatibility)
-    if (propCompanyId) {
-      console.log('Using company ID from prop:', propCompanyId);
-      return propCompanyId;
-    }
-    
-    console.error('No company ID found in user context, user object, or props');
-    return null;
-  }, [userContext, user, propCompanyId]);
 
   // Loading state
   if (isLoading || isAccessControlLoading) {
