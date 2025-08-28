@@ -106,7 +106,7 @@ export interface BranchesTabRef {
 }
 
 // ===== MAIN COMPONENT =====
-const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId, refreshData }, ref) => {
+const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ companyId: propCompanyId, refreshData }, ref) => {
   const queryClient = useQueryClient();
   const { user } = useUser();
   const authenticatedUser = getAuthenticatedUser();
@@ -182,18 +182,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
   const scopeFilters = getScopeFilters('branches');
 
-  // ===== FETCH SCHOOLS FOR DROPDOWN - Now filtered by user's company =====
+  // ===== FETCH SCHOOLS FOR DROPDOWN - Auto-filtered by user's company =====
   const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
     ['schools-for-branches', companyId],
     async () => {
-      console.log('Fetching schools for company:', companyId);
+      console.log('Fetching schools for user company:', companyId);
       
       if (!companyId) {
-        console.error('No companyId provided');
+        console.error('No company ID available for user');
         return [];
       }
       
-      // Simple query without status filter (schools might not have status field)
+      // Fetch schools for the user's company
       let query = supabase
         .from('schools')
         .select('id, name, code, company_id')
@@ -218,7 +218,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         throw error;
       }
       
-      console.log(`Found ${data?.length || 0} schools for company ${companyId}:`, data);
+      console.log(`Found ${data?.length || 0} schools for user's company (${companyId}):`, data);
       return data || [];
     },
     { 
@@ -603,9 +603,33 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     teachers: branches.reduce((acc, b) => acc + (b.teachers_count || 0), 0)
   }), [branches]);
 
-  // Get user context for display
+  // Get user context for display and company ID
   const userContext = getUserContext();
   const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
+  
+  // AUTO-SELECT USER'S COMPANY - prioritize user context over prop
+  const companyId = useMemo(() => {
+    // First try to get from user context (most reliable)
+    if (userContext?.companyId) {
+      console.log('Using company ID from user context:', userContext.companyId);
+      return userContext.companyId;
+    }
+    
+    // Fallback to user object
+    if (user?.company_id) {
+      console.log('Using company ID from user object:', user.company_id);
+      return user.company_id;
+    }
+    
+    // Last resort - use prop (for backward compatibility)
+    if (propCompanyId) {
+      console.log('Using company ID from prop:', propCompanyId);
+      return propCompanyId;
+    }
+    
+    console.error('No company ID found in user context, user object, or props');
+    return null;
+  }, [userContext, user, propCompanyId]);
 
   // Loading state
   if (isLoading || isAccessControlLoading) {
@@ -647,28 +671,33 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </div>
           )}
           
-  {/* Show school dropdown */}
+            {/* Show school dropdown with better error states */}
           <FormField id="school_id" label="School" required error={formErrors.school_id}>
             {!companyId ? (
               <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
-                Error: No company ID provided. Please contact support.
+                <strong>Configuration Error:</strong> Unable to determine your company. 
+                <br />Please ensure you're logged in properly or contact support.
               </div>
             ) : isLoadingSchools ? (
               <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
-                Loading schools...
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading schools for your company...
+                </div>
               </div>
             ) : schoolsError ? (
               <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
-                Failed to load schools. Please refresh the page.
+                Failed to load schools. Please refresh the page or contact support.
               </div>
             ) : schools.length === 0 ? (
               <div className="space-y-2">
                 <Select id="school_id" disabled>
                   <option value="">No schools available</option>
                 </Select>
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  No schools found for this company. Please ensure schools are created first.
-                </p>
+                <div className="p-2 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded">
+                  <strong>Note:</strong> No schools found for your company. 
+                  Schools must be created before you can add branches.
+                </div>
               </div>
             ) : (
               <Select
