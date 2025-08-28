@@ -9,8 +9,10 @@
  *   - @/components/shared/ImageUpload
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * FIXED: Changed permission checks from 'organization.modify_branch' to 'modify_branch'
- * This matches the permission format in useAccessControl hook
+ * FIXED ISSUES:
+ * 1. Removed duplicate tab navigation in modals
+ * 2. Auto-populate company from user context (no manual selection needed)
+ * 3. Changed permission checks from 'organization.modify_branch' to 'modify_branch'
  * 
  * Preserved Features:
  *   - All original branch management functionality
@@ -52,7 +54,6 @@ import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ImageUpload } from '@/components/shared/ImageUpload';
 import { useAccessControl } from '@/hooks/useAccessControl';
-import { BranchFormContent } from '@/components/forms/BranchFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -181,10 +182,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
   const scopeFilters = getScopeFilters('branches');
 
-  // ===== FETCH SCHOOLS FOR DROPDOWN =====
+  // ===== FETCH SCHOOLS FOR DROPDOWN - Now filtered by user's company =====
   const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
     ['schools-for-branches', companyId, scopeFilters],
     async () => {
+      // Use the companyId prop which should be the user's company
       let query = supabase
         .from('schools')
         .select(`
@@ -533,51 +535,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // Effect to populate form data when editing
   useEffect(() => {
     if (selectedBranch && showEditModal) {
-      console.log('Populating form for branch:', selectedBranch);
-      const populateEditForm = async () => {
-        try {
-          const { data: schoolData, error } = await supabase
-            .from('schools')
-            .select('id, name, company_id')
-            .eq('id', selectedBranch.school_id)
-            .single();
-          
-          if (error) {
-            console.error('Error fetching school data:', error);
-            toast.error('Failed to load school information');
-            return;
-          }
-          
-          const additionalData = selectedBranch.additional || {};
-          console.log('Additional data:', additionalData);
-          
-          const combinedData = {
-            ...selectedBranch,
-            school_id: selectedBranch.school_id,
-            company_id: schoolData?.company_id,
-            ...additionalData
-          };
-          
-          console.log('Setting form data:', combinedData);
-          setFormData(combinedData);
-        } catch (error) {
-          console.error('Error populating form:', error);
-          toast.error('Failed to load branch data');
-        }
+      const additionalData = selectedBranch.additional || {};
+      const combinedData = {
+        ...selectedBranch,
+        ...additionalData
       };
-      
-      populateEditForm();
+      setFormData(combinedData);
     }
   }, [selectedBranch, showEditModal]);
-
-  // Effect to fetch schools when formData.company_id changes
-  useEffect(() => {
-    if (formData.company_id && schools.length === 0) {
-      console.log('Fetching schools for company:', formData.company_id);
-      // Trigger schools fetch by updating the schools query
-      // This will be handled by the schools query dependency
-    }
-  }, [formData.company_id]);
 
   const handleSubmit = useCallback((mode: 'create' | 'edit') => {
     if (!validateForm()) {
@@ -600,6 +565,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   }, []);
 
   const handleCreate = useCallback(() => {
+    // Auto-set status to active for new branches
     setFormData({ status: 'active' });
     setFormErrors({});
     setActiveTab('basic');
@@ -657,8 +623,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     );
   }
 
-  // ===== RENDER FORM =====
-  const renderBranchForm = () => (
+  // ===== RENDER FORM CONTENT (without duplicate tabs) =====
+  const renderFormContent = () => (
     <>
       {activeTab === 'basic' && (
         <div className="space-y-4">
@@ -913,7 +879,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <option value="inactive">Inactive</option>
             </Select>
           </div>
-          {/* FIXED: Changed from 'organization.create_branch' to 'create_branch' */}
           {can('create_branch') ? (
             <Button onClick={handleCreate}>
               <Plus className="w-4 h-4 mr-2" />
@@ -1009,7 +974,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         ) : (
           filteredBranches.map((branch) => {
             const logoUrl = getBranchLogoUrl(branch.logo);
-            // FIXED: Changed from 'organization.modify_branch' to 'modify_branch'
             const canEdit = can('modify_branch');
             
             return (
@@ -1107,7 +1071,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       </span>
                     </div>
                   </div>
-                  {/* UI GATING: Show edit button based on permissions */}
                   {canEdit ? (
                     <button
                       onClick={() => handleEdit(branch)}
@@ -1128,7 +1091,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         )}
       </div>
 
-      {/* Create Modal */}
+      {/* Create Modal - NO DUPLICATE TABS */}
       <SlideInForm
         title="Create Branch"
         isOpen={showCreateModal}
@@ -1140,9 +1103,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         onSave={() => handleSubmit('create')}
         loading={createBranchMutation.isLoading}
       >
-        {/* Use BranchFormContent component */}
         <div className="space-y-4">
-          {/* Tab Navigation */}
+          {/* Tab Navigation - SINGLE INSTANCE */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
             <button
               onClick={() => setActiveTab('basic')}
@@ -1172,21 +1134,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
           {/* Form Content */}
           <div className="mt-4">
-            <BranchFormContent
-              formData={formData}
-              setFormData={setFormData}
-              formErrors={formErrors}
-              setFormErrors={setFormErrors}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              schools={schools}
-              isEditing={false}
-            />
+            {renderFormContent()}
           </div>
         </div>
       </SlideInForm>
 
-      {/* Edit Modal */}
+      {/* Edit Modal - NO DUPLICATE TABS */}
       <SlideInForm
         key={`edit-${selectedBranch?.id || 'none'}`}
         title="Edit Branch"
@@ -1201,9 +1154,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         onSave={() => handleSubmit('edit')}
         loading={updateBranchMutation.isLoading}
       >
-        {/* Use BranchFormContent component */}
         <div className="space-y-4">
-          {/* Tab Navigation */}
+          {/* Tab Navigation - SINGLE INSTANCE */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
             <button
               onClick={() => setActiveTab('basic')}
@@ -1233,16 +1185,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
           {/* Form Content */}
           <div className="mt-4">
-            <BranchFormContent
-              formData={formData}
-              setFormData={setFormData}
-              formErrors={formErrors}
-              setFormErrors={setFormErrors}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              schools={schools}
-              isEditing={true}
-            />
+            {renderFormContent()}
           </div>
         </div>
       </SlideInForm>
