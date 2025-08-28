@@ -7,31 +7,18 @@
  *   - @/hooks/useAccessControl
  *   - @/components/shared/* (SlideInForm, FormField, Button, StatusBadge)
  *   - @/components/shared/ImageUpload
+ *   - @/components/forms/BranchFormContent
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * FIXED ISSUES:
- * 1. Removed duplicate tab navigation in modals
+ * 1. Uses BranchFormContent component properly (without duplicate tabs)
  * 2. Auto-populate company from user context (no manual selection needed)
  * 3. Changed permission checks from 'organization.modify_branch' to 'modify_branch'
- * 
- * Preserved Features:
- *   - All original branch management functionality
- *   - Search, filter, and status management
- *   - Branch creation and editing forms
- *   - ImageUpload integration
- *   - Statistics display
- *   - All original event handlers
- *   - Tab-based form organization
  * 
  * Database Tables:
  *   - branches & branches_additional
  *   - schools (for reference)
  *   - entity_user_branches (for scope)
- * 
- * Connected Files:
- *   - useAccessControl.ts (permission checking)
- *   - StatusBadge.tsx (status display)
- *   - ImageUpload.tsx (logo upload)
  */
 
 'use client';
@@ -52,8 +39,8 @@ import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { ImageUpload } from '@/components/shared/ImageUpload';
 import { useAccessControl } from '@/hooks/useAccessControl';
+import { BranchFormContent } from '@/components/forms/BranchFormContent';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -661,262 +648,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     );
   }
 
-  // ===== RENDER FORM CONTENT (without duplicate tabs) =====
-  const renderFormContent = () => (
-    <>
-      {activeTab === 'basic' && (
-        <div className="space-y-4">
-          {/* Show loading state for schools */}
-          {isLoadingSchools && (
-            <div className="p-2 text-sm text-gray-600 dark:text-gray-400">
-              Loading schools...
-            </div>
-          )}
-          
-            {/* Show school dropdown with better error states */}
-          <FormField id="school_id" label="School" required error={formErrors.school_id}>
-            {!companyId ? (
-              <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
-                <strong>Configuration Error:</strong> Unable to determine your company. 
-                <br />Please ensure you're logged in properly or contact support.
-              </div>
-            ) : isLoadingSchools ? (
-              <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading schools for your company...
-                </div>
-              </div>
-            ) : schoolsError ? (
-              <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded">
-                Failed to load schools. Please refresh the page or contact support.
-              </div>
-            ) : schools.length === 0 ? (
-              <div className="space-y-2">
-                <Select id="school_id" disabled>
-                  <option value="">No schools available</option>
-                </Select>
-                <div className="p-2 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded">
-                  <strong>Note:</strong> No schools found for your company. 
-                  Schools must be created before you can add branches.
-                </div>
-              </div>
-            ) : (
-              <Select
-                id="school_id"
-                value={formData.school_id || ''}
-                onChange={(e) => setFormData({...formData, school_id: e.target.value})}
-                disabled={isBranchAdmin}
-              >
-                <option value="">Select school</option>
-                {schools.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </Select>
-            )}
-          </FormField>
-
-          <FormField id="name" label="Branch Name" required error={formErrors.name}>
-            <Input
-              id="name"
-              value={formData.name || ''}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="Enter branch name"
-            />
-          </FormField>
-
-          <FormField id="code" label="Branch Code" required error={formErrors.code}>
-            <Input
-              id="code"
-              value={formData.code || ''}
-              onChange={(e) => setFormData({...formData, code: e.target.value})}
-              placeholder="e.g., BR-001"
-            />
-          </FormField>
-
-          <FormField id="status" label="Status" required error={formErrors.status}>
-            <Select
-              id="status"
-              value={formData.status || 'active'}
-              onChange={(e) => setFormData({...formData, status: e.target.value})}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
-          </FormField>
-
-          <FormField id="building_name" label="Building Name">
-            <Input
-              id="building_name"
-              value={formData.building_name || ''}
-              onChange={(e) => setFormData({...formData, building_name: e.target.value})}
-              placeholder="Enter building name"
-            />
-          </FormField>
-
-          <FormField id="floor_details" label="Floor Details">
-            <Input
-              id="floor_details"
-              value={formData.floor_details || ''}
-              onChange={(e) => setFormData({...formData, floor_details: e.target.value})}
-              placeholder="e.g., 2nd Floor, Wing A"
-            />
-          </FormField>
-
-          <FormField id="address" label="Address">
-            <Textarea
-              id="address"
-              value={formData.address || ''}
-              onChange={(e) => setFormData({...formData, address: e.target.value})}
-              placeholder="Enter branch address"
-              rows={3}
-            />
-          </FormField>
-
-          <FormField id="logo" label="Branch Logo">
-            <ImageUpload
-              id="branch-logo"
-              bucket="branch-logos"
-              value={formData.logo}
-              publicUrl={formData.logo ? getBranchLogoUrl(formData.logo) : null}
-              onChange={(path) => setFormData({...formData, logo: path || ''})}
-            />
-          </FormField>
-        </div>
-      )}
-
-      {activeTab === 'additional' && (
-        <div className="space-y-4">
-          <FormField id="student_capacity" label="Student Capacity">
-            <Input
-              id="student_capacity"
-              type="number"
-              value={formData.student_capacity || ''}
-              onChange={(e) => setFormData({...formData, student_capacity: parseInt(e.target.value)})}
-              placeholder="Maximum students"
-            />
-          </FormField>
-
-          <FormField id="current_students" label="Current Students">
-            <Input
-              id="current_students"
-              type="number"
-              value={formData.current_students || ''}
-              onChange={(e) => setFormData({...formData, current_students: parseInt(e.target.value)})}
-              placeholder="Current number of students"
-            />
-          </FormField>
-
-          <FormField id="teachers_count" label="Teachers Count">
-            <Input
-              id="teachers_count"
-              type="number"
-              value={formData.teachers_count || ''}
-              onChange={(e) => setFormData({...formData, teachers_count: parseInt(e.target.value)})}
-              placeholder="Number of teachers"
-            />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField id="opening_time" label="Opening Time">
-              <Input
-                id="opening_time"
-                type="time"
-                value={formData.opening_time || ''}
-                onChange={(e) => setFormData({...formData, opening_time: e.target.value})}
-              />
-            </FormField>
-
-            <FormField id="closing_time" label="Closing Time">
-              <Input
-                id="closing_time"
-                type="time"
-                value={formData.closing_time || ''}
-                onChange={(e) => setFormData({...formData, closing_time: e.target.value})}
-              />
-            </FormField>
-          </div>
-
-          <FormField id="working_days" label="Working Days">
-            <div className="space-y-2">
-              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                <label key={day} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={(formData.working_days || []).includes(day)}
-                    onChange={(e) => {
-                      const current = formData.working_days || [];
-                      if (e.target.checked) {
-                        setFormData({...formData, working_days: [...current, day]});
-                      } else {
-                        setFormData({...formData, working_days: current.filter((d: string) => d !== day)});
-                      }
-                    }}
-                    className="rounded border-gray-300 dark:border-gray-600"
-                  />
-                  <span className="text-sm capitalize">{day}</span>
-                </label>
-              ))}
-            </div>
-          </FormField>
-
-          <FormField id="notes" label="Notes">
-            <Textarea
-              id="notes"
-              value={formData.notes || ''}
-              onChange={(e) => setFormData({...formData, notes: e.target.value})}
-              placeholder="Additional notes"
-              rows={3}
-            />
-          </FormField>
-        </div>
-      )}
-
-      {activeTab === 'contact' && (
-        <div className="space-y-4">
-          <FormField id="branch_head_name" label="Branch Head Name">
-            <Input
-              id="branch_head_name"
-              value={formData.branch_head_name || ''}
-              onChange={(e) => setFormData({...formData, branch_head_name: e.target.value})}
-              placeholder="Enter branch head name"
-            />
-          </FormField>
-
-          <FormField id="branch_head_email" label="Branch Head Email" error={formErrors.branch_head_email}>
-            <Input
-              id="branch_head_email"
-              type="email"
-              value={formData.branch_head_email || ''}
-              onChange={(e) => setFormData({...formData, branch_head_email: e.target.value})}
-              placeholder="branchhead@school.com"
-            />
-          </FormField>
-
-          <FormField id="branch_head_phone" label="Branch Head Phone">
-            <Input
-              id="branch_head_phone"
-              type="tel"
-              value={formData.branch_head_phone || ''}
-              onChange={(e) => setFormData({...formData, branch_head_phone: e.target.value})}
-              placeholder="+1 (555) 123-4567"
-            />
-          </FormField>
-
-          <FormField id="active_teachers_count" label="Active Teachers">
-            <Input
-              id="active_teachers_count"
-              type="number"
-              value={formData.active_teachers_count || ''}
-              onChange={(e) => setFormData({...formData, active_teachers_count: parseInt(e.target.value)})}
-              placeholder="Number of active teachers"
-            />
-          </FormField>
-        </div>
-      )}
-    </>
-  );
-
   // ===== MAIN RENDER =====
   return (
     <div className="space-y-4">
@@ -935,23 +666,23 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </div>
             <Select
               value={filterSchool}
-              onChange={(e) => setFilterSchool(e.target.value)}
+              onChange={(value) => setFilterSchool(value)}
               className="w-48"
-            >
-              <option value="all">All Schools</option>
-              {schools.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </Select>
+              options={[
+                { value: 'all', label: 'All Schools' },
+                ...schools.map(s => ({ value: s.id, label: s.name }))
+              ]}
+            />
             <Select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
               className="w-32"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+            />
           </div>
           {can('create_branch') ? (
             <Button onClick={handleCreate}>
@@ -1165,7 +896,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         )}
       </div>
 
-      {/* Create Modal - NO DUPLICATE TABS */}
+      {/* Create Modal - Using BranchFormContent WITHOUT duplicate tabs */}
       <SlideInForm
         title="Create Branch"
         isOpen={showCreateModal}
@@ -1173,12 +904,13 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setShowCreateModal(false);
           setFormData({});
           setFormErrors({});
+          setActiveTab('basic');
         }}
         onSave={() => handleSubmit('create')}
         loading={createBranchMutation.isLoading}
       >
         <div className="space-y-4">
-          {/* Tab Navigation - SINGLE INSTANCE */}
+          {/* Single Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
             <button
               onClick={() => setActiveTab('basic')}
@@ -1206,14 +938,24 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </button>
           </div>
 
-          {/* Form Content */}
+          {/* Form Content using BranchFormContent component */}
           <div className="mt-4">
-            {renderFormContent()}
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              schools={schools}
+              isLoadingSchools={isLoadingSchools}
+              schoolsError={schoolsError}
+              isBranchAdmin={isBranchAdmin}
+            />
           </div>
         </div>
       </SlideInForm>
 
-      {/* Edit Modal - NO DUPLICATE TABS */}
+      {/* Edit Modal - Using BranchFormContent WITHOUT duplicate tabs */}
       <SlideInForm
         key={`edit-${selectedBranch?.id || 'none'}`}
         title="Edit Branch"
@@ -1229,7 +971,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         loading={updateBranchMutation.isLoading}
       >
         <div className="space-y-4">
-          {/* Tab Navigation - SINGLE INSTANCE */}
+          {/* Single Tab Navigation */}
           <div className="flex space-x-4 border-b dark:border-gray-700">
             <button
               onClick={() => setActiveTab('basic')}
@@ -1257,9 +999,20 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             </button>
           </div>
 
-          {/* Form Content */}
+          {/* Form Content using BranchFormContent component */}
           <div className="mt-4">
-            {renderFormContent()}
+            <BranchFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              schools={schools}
+              isEditing={true}
+              isLoadingSchools={isLoadingSchools}
+              schoolsError={schoolsError}
+              isBranchAdmin={isBranchAdmin}
+            />
           </div>
         </div>
       </SlideInForm>
