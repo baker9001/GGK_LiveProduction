@@ -1,3 +1,9 @@
+/**
+ * File: /src/app/entity-module/configuration/page.tsx
+ * Entity Configuration Management System
+ * Manages Grade Levels, Academic Years, Departments, and Class Sections
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Settings, 
@@ -34,6 +40,187 @@ const ConfigurationPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          {editingItem ? 'Edit Class Section' : 'Add Class Section'}
+        </h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Section Name *
+            </label>
+            <input
+              type="text"
+              value={formData.section_name}
+              onChange={(e) => setFormData({ ...formData, section_name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="e.g., Section A"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Section Code
+            </label>
+            <input
+              type="text"
+              value={formData.section_code}
+              onChange={(e) => setFormData({ ...formData, section_code: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="e.g., SEC-A"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Class Teacher
+            </label>
+            <input
+              type="text"
+              value={formData.class_teacher_name}
+              onChange={(e) => setFormData({ ...formData, class_teacher_name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="Teacher name"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Room Number
+              </label>
+              <input
+                type="text"
+                value={formData.classroom_number}
+                onChange={(e) => setFormData({ ...formData, classroom_number: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="101"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Building
+              </label>
+              <input
+                type="text"
+                value={formData.building}
+                onChange={(e) => setFormData({ ...formData, building: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Main"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Floor
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={formData.floor}
+                onChange={(e) => setFormData({ ...formData, floor: parseInt(e.target.value) || 1 })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Max Capacity *
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.max_capacity}
+                onChange={(e) => setFormData({ ...formData, max_capacity: parseInt(e.target.value) || 30 })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Current Enrollment
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={formData.max_capacity}
+                value={formData.current_enrollment}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 0;
+                  if (value <= formData.max_capacity) {
+                    setFormData({ ...formData, current_enrollment: value });
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          </div>
+
+          {formData.current_enrollment > 0 && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Capacity Usage
+                </span>
+                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  {Math.round((formData.current_enrollment / formData.max_capacity) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all ${
+                    (formData.current_enrollment / formData.max_capacity) > 0.9 
+                      ? 'bg-red-500' 
+                      : (formData.current_enrollment / formData.max_capacity) > 0.7
+                      ? 'bg-yellow-500'
+                      : 'bg-green-500'
+                  }`}
+                  style={{ width: `${Math.min(100, (formData.current_enrollment / formData.max_capacity) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Status
+            </label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+          >
+            {editingItem ? 'Update' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ConfigurationPage;
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="p-6 space-y-6">
         {/* Header Section */}
