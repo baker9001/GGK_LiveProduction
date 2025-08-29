@@ -123,17 +123,17 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'entity-module'
   },
   {
-    id: 'entity-organisation',
-    label: 'Organisation',
-    path: '/app/entity-module/organisation',
-    icon: 'Building2',
-    moduleKey: 'entity-module'
-  },
-  {
     id: 'entity-configuration',
     label: 'Configuration',
     path: '/app/entity-module/configuration',
     icon: 'Settings',
+    moduleKey: 'entity-module'
+  },
+  {
+    id: 'entity-organisation',
+    label: 'Organisation',
+    path: '/app/entity-module/organisation',
+    icon: 'Building2',
     moduleKey: 'entity-module'
   },
   {
