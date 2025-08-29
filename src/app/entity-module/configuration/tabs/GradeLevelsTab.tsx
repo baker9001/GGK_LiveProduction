@@ -294,7 +294,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     isLoading, 
     isFetching 
   } = useQuery(
-    ['grade-levels', companyId, filters, scopeFilters],
+    ['grade-levels', companyId, filters, scopeFilters, branches, departments],
     async () => {
       if (!companyId) return [];
 
@@ -346,13 +346,49 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map(grade => ({
-        ...grade,
-        school_name: grade.schools?.name || 'Unknown School'
-      }));
+      // Fetch relationships for each grade level
+      const gradeLevelsWithRelationships = await Promise.all(
+        (data || []).map(async (grade) => {
+          // Fetch branch associations
+          const { data: branchLinks } = await supabase
+            .from('grade_level_branches')
+            .select('branch_id')
+            .eq('grade_level_id', grade.id)
+            .eq('is_active', true);
+
+          // Fetch department associations
+          const { data: deptLinks } = await supabase
+            .from('grade_level_departments')
+            .select('department_id')
+            .eq('grade_level_id', grade.id);
+
+          const assignedBranches = branchLinks?.map(bl => bl.branch_id) || [];
+          const departmentAssociations = deptLinks?.map(dl => dl.department_id) || [];
+
+          // Map IDs to names
+          const branchNames = assignedBranches
+            .map(branchId => branches.find(b => b.id === branchId)?.name)
+            .filter(Boolean) || [];
+
+          const departmentNames = departmentAssociations
+            .map(deptId => departments.find(d => d.id === deptId)?.name)
+            .filter(Boolean) || [];
+
+          return {
+            ...grade,
+            school_name: grade.schools?.name || 'Unknown School',
+            assigned_branches: assignedBranches,
+            department_associations: departmentAssociations,
+            branch_names: branchNames,
+            department_names: departmentNames
+          };
+        })
+      );
+
+      return gradeLevelsWithRelationships;
     },
     {
-      enabled: !!companyId,
+      enabled: !!companyId && branches.length >= 0 && departments.length >= 0,
       keepPreviousData: true,
       staleTime: 2 * 60 * 1000,
     }
@@ -626,17 +662,17 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       enableSorting: false,
       cell: (row: GradeLevel) => (
         <div className="text-xs space-y-1">
-          {row.branch_names && row.branch_names.length > 0 ? (
+          {row.branch_names?.length > 0 ? (
             <div className="text-blue-600 dark:text-blue-400">
               📍 {row.branch_names.length} branch{row.branch_names.length !== 1 ? 'es' : ''}
             </div>
           ) : null}
-          {row.department_names && row.department_names.length > 0 ? (
+          {row.department_names?.length > 0 ? (
             <div className="text-purple-600 dark:text-purple-400">
               🏢 {row.department_names.length} dept{row.department_names.length !== 1 ? 's' : ''}
             </div>
           ) : null}
-          {(!row.branch_names?.length && !row.department_names?.length) && (
+          {(!(row.branch_names?.length || 0) && !(row.department_names?.length || 0)) && (
             <span className="text-gray-400">No links</span>
           )}
         </div>
