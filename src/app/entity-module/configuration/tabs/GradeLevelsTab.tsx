@@ -492,6 +492,12 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
+            <input
+              type="hidden"
+              id="school_id"
+              name="school_id"
+              defaultValue={editingGradeLevel?.school_id || ''}
+            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
@@ -501,16 +507,14 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               selectedValues={editingGradeLevel?.school_id ? [editingGradeLevel.school_id] : []}
               onChange={(values) => {
                 const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
-                if (input) input.value = values[0] || '';
+                if (input) {
+                  input.value = values[0] || '';
+                  // Trigger change event for form validation
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
               }}
               isMulti={false}
               placeholder="Select school..."
-            />
-            <input
-              type="hidden"
-              id="school_id"
-              name="school_id"
-              defaultValue={editingGradeLevel?.school_id || ''}
             />
           </FormField>
 
