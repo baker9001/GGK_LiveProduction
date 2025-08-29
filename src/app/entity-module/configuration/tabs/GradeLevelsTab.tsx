@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, GraduationCap, School, Hash, Users } from 'lucide-react';
 import { z } from 'zod';
@@ -42,6 +42,17 @@ interface FilterState {
   status: string[];
 }
 
+interface FormState {
+  school_id: string;
+  grade_name: string;
+  grade_code: string;
+  grade_order: number;
+  education_level: string;
+  max_students_per_section: number;
+  total_sections: number;
+  status: 'active' | 'inactive';
+}
+
 type GradeLevel = {
   id: string;
   school_id: string;
@@ -60,6 +71,7 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
+export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   
@@ -463,8 +475,7 @@ interface GradeLevelsTabProps {
               { value: 'secondary', label: 'Secondary' },
               { value: 'senior', label: 'Senior' }
             ]}
-            value={formState.education_level} // Bind to formState
-            onChange={(value) => setFormState(prev => ({ ...prev, education_level: value }))} // Update formState
+            selectedValues={filters.education_level}
             onChange={(values) => setFilters({ ...filters, education_level: values })}
             placeholder="Select levels..."
           />
@@ -610,7 +621,8 @@ interface GradeLevelsTabProps {
                 { value: 'secondary', label: 'Secondary' },
                 { value: 'senior', label: 'Senior' }
               ]}
-              defaultValue={editingGradeLevel?.education_level || ''}
+              value={formState.education_level} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, education_level: e.target.value }))} // Update formState
             />
           </FormField>
 
