@@ -164,60 +164,42 @@ export default function ConfigurationPage() {
       </div>
 
       {/* Configuration Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-t-lg">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger 
-                value="grade-levels"
-                className="flex items-center gap-2"
-              >
-                <GraduationCap className="w-4 h-4" />
-                Grade Levels
-              </TabsTrigger>
-              <TabsTrigger 
-                value="academic-years"
-                className="flex items-center gap-2"
-              >
-                <Calendar className="w-4 h-4" />
-                Academic Years
-              </TabsTrigger>
-              <TabsTrigger 
-                value="departments"
-                className="flex items-center gap-2"
-              >
-                <Building2 className="w-4 h-4" />
-                Departments
-              </TabsTrigger>
-              <TabsTrigger 
-                value="class-sections"
-                className="flex items-center gap-2"
-              >
-                <Users className="w-4 h-4" />
-                Class Sections
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="grade-levels">
+            <GraduationCap className="w-4 h-4 mr-2" />
+            Grade Levels
+          </TabsTrigger>
+          <TabsTrigger value="academic-years">
+            <Calendar className="w-4 h-4 mr-2" />
+            Academic Years
+          </TabsTrigger>
+          <TabsTrigger value="departments">
+            <Building2 className="w-4 h-4 mr-2" />
+            Departments
+          </TabsTrigger>
+          <TabsTrigger value="class-sections">
+            <Users className="w-4 h-4 mr-2" />
+            Class Sections
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="grade-levels">
+          <GradeLevelsTab companyId={userCompanyId} />
+        </TabsContent>
 
-          <div className="p-6">
-            <TabsContent value="grade-levels">
-              <GradeLevelsTab companyId={userCompanyId} />
-            </TabsContent>
+        <TabsContent value="academic-years">
+          <AcademicYearsTab companyId={userCompanyId} />
+        </TabsContent>
 
-            <TabsContent value="academic-years">
-              <AcademicYearsTab companyId={userCompanyId} />
-            </TabsContent>
+        <TabsContent value="departments">
+          <DepartmentsTab companyId={userCompanyId} />
+        </TabsContent>
 
-            <TabsContent value="departments">
-              <DepartmentsTab companyId={userCompanyId} />
-            </TabsContent>
-
-            <TabsContent value="class-sections">
-              <ClassSectionsTab companyId={userCompanyId} />
-            </TabsContent>
-          </div>
-        </Tabs>
-      </div>
+        <TabsContent value="class-sections">
+          <ClassSectionsTab companyId={userCompanyId} />
+        </TabsContent>
+      </Tabs>
 
       {/* Development Status */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
