@@ -17,7 +17,7 @@ import {
   MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
   Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
   XCircle, AlertTriangle, School, Hash, Navigation, Home, Info,
-  Lock, Shield, Loader2
+  Lock, Shield, Loader2, Grid3X3, List
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -136,6 +136,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
   // Confirmation dialog state
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -758,6 +759,31 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 placeholder="Search branches..."
                 className="pl-10"
               />
+              {/* View Mode Toggle */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('card')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'card'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="Card View"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <Select
               value={filterSchool}
@@ -862,8 +888,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         </div>
       </div>
 
-      {/* Branches List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Branches Display */}
+      {viewMode === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredBranches.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -881,18 +908,21 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             return (
               <div
                 key={branch.id}
-                className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-[#8CC63F]/30 dark:hover:border-[#8CC63F]/30 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+                className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-[#8CC63F]/40 dark:hover:border-[#8CC63F]/40 transition-all duration-300 hover:-translate-y-2 overflow-hidden relative"
               >
-                <div className="p-6">
+                {/* Hover overlay for actions */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                
+                <div className="relative p-6">
                   {/* Header with logo, name, and status */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-xl flex items-center justify-center overflow-hidden shadow-inner">
+                      <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg border border-[#8CC63F]/20">
                         {logoUrl ? (
                           <img
                             src={logoUrl}
                             alt={`${branch.name} logo`}
-                            className="w-full h-full object-contain p-1"
+                            className="w-full h-full object-contain p-2"
                             onError={(e) => {
                               const target = e.currentTarget;
                               target.style.display = 'none';
@@ -902,30 +932,30 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                           />
                         ) : null}
                         <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                          <MapPin className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                          <MapPin className="w-8 h-8 text-[#8CC63F]/60" />
                         </div>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-lg text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
+                        <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
                           {branch.name}
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
                             {branch.code}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={branch.status} size="sm" showPulse={branch.status === 'active'} />
-                      {/* Action buttons - only visible on hover */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
+                      <StatusBadge status={branch.status} size="sm" />
+                      {/* Action buttons - floating on hover */}
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0">
                         {canEdit && (
                           <Button
                             onClick={() => handleEdit(branch)}
-                            variant="ghost"
-                            size="icon-sm"
-                            className="h-8 w-8 text-gray-400 hover:text-[#8CC63F] hover:bg-[#8CC63F]/10 transition-all duration-200"
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200 shadow-md hover:shadow-lg"
                             title="Edit branch"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -934,9 +964,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                         {can('delete_branch') && (
                           <Button
                             onClick={() => handleDeleteClick(branch)}
-                            variant="ghost"
-                            size="icon-sm"
-                            className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 shadow-md hover:shadow-lg"
                             title="Delete branch"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -947,20 +977,20 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                   </div>
 
                   {/* Branch details */}
-                  <div className="space-y-2 mb-3">
+                  <div className="space-y-3 mb-6">
                     <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <School className="w-3 h-3" />
+                      <School className="w-4 h-4 text-blue-500" />
                       <span>{branch.school_name}</span>
                     </div>
                     {branch.additional?.branch_head_name && (
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <User className="w-3 h-3" />
+                        <User className="w-4 h-4 text-green-500" />
                         <span>{branch.additional.branch_head_name}</span>
                       </div>
                     )}
                     {branch.additional?.building_name && (
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Building className="w-3 h-3" />
+                        <Building className="w-4 h-4 text-purple-500" />
                         <span>{branch.additional.building_name}</span>
                         {branch.additional.floor_details && (
                           <span className="text-gray-400">• {branch.additional.floor_details}</span>
@@ -969,39 +999,73 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                     )}
                     {branch.address && (
                       <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Navigation className="w-3 h-3 mt-0.5" />
+                        <Navigation className="w-4 h-4 text-orange-500 mt-0.5" />
                         <span className="line-clamp-2">{branch.address}</span>
                       </div>
                     )}
                     {branch.additional?.opening_time && branch.additional?.closing_time && (
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Clock className="w-3 h-3" />
+                        <Clock className="w-4 h-4 text-indigo-500" />
                         <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Statistics and footer */}
+                  {/* Statistics */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-center mb-1">
+                        <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                        {branch.student_count || 0}
+                      </div>
+                      <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                        Students
+                      </div>
+                    </div>
+                    <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
+                      <div className="flex items-center justify-center mb-1">
+                        <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="text-xl font-bold text-green-700 dark:text-green-300">
+                        {branch.teachers_count || 0}
+                      </div>
+                      <div className="text-xs font-medium text-green-600 dark:text-green-400">
+                        Teachers
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
                   <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1 text-sm">
-                          <Users className="w-4 h-4 text-blue-500" />
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {branch.student_count || 0}
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">students</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Users className="w-4 h-4 text-green-500" />
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {branch.teachers_count || 0}
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">teachers</span>
-                        </div>
-                      </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         Created {new Date(branch.created_at).toLocaleDateString()}
+                      </div>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        {canEdit && (
+                          <Button
+                            onClick={() => handleEdit(branch)}
+                            variant="outline"
+                            size="sm"
+                            className="text-[#8CC63F] border-[#8CC63F]/30 hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200"
+                          >
+                            <Edit2 className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                        {can('delete_branch') && (
+                          <Button
+                            onClick={() => handleDeleteClick(branch)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-500 border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1010,7 +1074,140 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             );
           })
         )}
-      </div>
+        </div>
+      ) : (
+        /* List View */
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branch</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Code</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">School</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Students</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Teachers</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredBranches.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center">
+                      <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-600 dark:text-gray-400">
+                        {searchTerm || filterStatus !== 'all' || filterSchool !== 'all' 
+                          ? 'No branches match your filters' 
+                          : 'No branches found'}
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBranches.map((branch) => {
+                    const logoUrl = getBranchLogoUrl(branch.logo);
+                    const canEdit = can('modify_branch') && !branch.readOnly;
+                    
+                    return (
+                      <tr key={branch.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-xl flex items-center justify-center overflow-hidden border border-[#8CC63F]/20">
+                              {logoUrl ? (
+                                <img
+                                  src={logoUrl}
+                                  alt={`${branch.name} logo`}
+                                  className="w-full h-full object-contain p-1"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const fallback = target.nextSibling as HTMLElement;
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
+                                <MapPin className="w-6 h-6 text-[#8CC63F]/60" />
+                              </div>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 dark:text-white">{branch.name}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {branch.additional?.building_name && (
+                                  <span>{branch.additional.building_name}</span>
+                                )}
+                                {branch.additional?.floor_details && (
+                                  <span className="text-gray-400"> • {branch.additional.floor_details}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                            {branch.code}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <School className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm">{branch.school_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={branch.status} size="sm" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4 text-blue-500" />
+                            <span className="font-medium">{branch.student_count || 0}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4 text-green-500" />
+                            <span className="font-medium">{branch.teachers_count || 0}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          {new Date(branch.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {canEdit && (
+                              <Button
+                                onClick={() => handleEdit(branch)}
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200"
+                                title="Edit branch"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {can('delete_branch') && (
+                              <Button
+                                onClick={() => handleDeleteClick(branch)}
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                                title="Delete branch"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       <SlideInForm
