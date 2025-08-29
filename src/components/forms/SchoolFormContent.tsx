@@ -4,8 +4,15 @@
  * Unified School Form Content Component
  * Uses standard system shared components for consistency
  * 
+ * IMPROVEMENTS:
+ * 1. Status field changed from dropdown to ToggleSwitch
+ * 2. Red dots on tabs with mandatory empty fields
+ * 3. Improved spacing between field headers and data
+ * 4. All database fields included
+ * 5. Green color theme throughout (borders, effects, etc.)
+ * 
  * Dependencies:
- *   - @/components/shared/* (FormField, Input, Select, Textarea, ImageUpload)
+ *   - @/components/shared/* (FormField, Input, Select, Textarea, ImageUpload, ToggleSwitch)
  *   - External: react, lucide-react
  * 
  * Database Tables:
@@ -15,10 +22,11 @@
 
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   BookOpen, FlaskConical, Dumbbell, Coffee, 
-  User, Mail, Phone, MapPin, Calendar
+  User, Mail, Phone, MapPin, Calendar,
+  CircleAlert
 } from 'lucide-react';
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
@@ -26,7 +34,7 @@ import { ToggleSwitch } from '../shared/ToggleSwitch';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolFormData {
-  // Main school fields
+  // Main school fields (from schools table)
   name: string;
   code: string;
   company_id: string;
@@ -36,7 +44,7 @@ interface SchoolFormData {
   notes: string;
   logo: string;
   
-  // Additional fields
+  // Additional fields (from schools_additional table)
   school_type: string;
   curriculum_type: string[];
   total_capacity: number;
@@ -109,49 +117,88 @@ export function SchoolFormContent({
     updateFormData(facility, checked);
   };
 
+  // Calculate which tabs have errors for mandatory fields
+  const tabErrors = useMemo(() => {
+    const errors = {
+      basic: false,
+      additional: false,
+      contact: false
+    };
+
+    // Basic tab mandatory fields
+    const basicMandatory = ['name', 'code'];
+    basicMandatory.forEach(field => {
+      if (!formData[field as keyof SchoolFormData] || formErrors[field]) {
+        errors.basic = true;
+      }
+    });
+
+    // Additional tab has no mandatory fields
+
+    // Contact tab mandatory fields (if principal email is provided, validate format)
+    if (formErrors.principal_email) {
+      errors.contact = true;
+    }
+
+    return errors;
+  }, [formData, formErrors]);
+
   return (
     <div className="space-y-4">
-      {/* Tab Navigation */}
+      {/* Tab Navigation with Error Indicators */}
       <div className="flex space-x-4 border-b dark:border-gray-700">
         <button
           type="button"
           onClick={() => setActiveTab('basic')}
-          className={`pb-2 px-1 ${activeTab === 'basic' 
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'basic' 
+            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
         >
           Basic Info
+          {tabErrors.basic && !isEditing && (
+            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
+                  title="Required fields missing" />
+          )}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('additional')}
-          className={`pb-2 px-1 ${activeTab === 'additional' 
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'additional' 
+            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
         >
           Additional
+          {tabErrors.additional && !isEditing && (
+            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
+                  title="Required fields missing" />
+          )}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('contact')}
-          className={`pb-2 px-1 ${activeTab === 'contact' 
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
+          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'contact' 
+            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
             : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
         >
           Contact
+          {tabErrors.contact && !isEditing && (
+            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
+                  title="Required fields missing" />
+          )}
         </button>
       </div>
 
       {/* Form Content */}
-      <div className="mt-4">
+      <div className="mt-6">
         {activeTab === 'basic' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <FormField id="name" label="School Name" required error={formErrors.name}>
               <Input
                 id="name"
                 value={formData.name || ''}
                 onChange={(e) => updateFormData('name', e.target.value)}
                 placeholder="Enter school name"
+                className="mt-1.5"
               />
             </FormField>
 
@@ -161,19 +208,22 @@ export function SchoolFormContent({
                 value={formData.code || ''}
                 onChange={(e) => updateFormData('code', e.target.value)}
                 placeholder="e.g., SCH-001"
+                className="mt-1.5"
               />
             </FormField>
 
-            <FormField id="status" label="Status" required error={formErrors.status}>
-              <Select
-                id="status"
-                value={formData.status || 'active'}
-                onChange={(value) => updateFormData('status', value)}
-                options={[
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' }
-                ]}
-              />
+            <FormField id="status" label="Status">
+              <div className="mt-1.5">
+                <ToggleSwitch
+                  checked={formData.status === 'active'}
+                  onChange={(checked) => updateFormData('status', checked ? 'active' : 'inactive')}
+                  color="green"
+                  size="md"
+                  showStateLabel={true}
+                  activeLabel="Active"
+                  inactiveLabel="Inactive"
+                />
+              </div>
             </FormField>
 
             <FormField id="school_type" label="School Type">
@@ -182,11 +232,14 @@ export function SchoolFormContent({
                 options={[
                   { value: 'primary', label: 'Primary School' },
                   { value: 'secondary', label: 'Secondary School' },
+                  { value: 'k12', label: 'K-12 School' },
+                  { value: 'higher_secondary', label: 'Higher Secondary' },
                   { value: 'other', label: 'Other' }
                 ]}
                 value={formData.school_type || ''}
                 onChange={(value) => updateFormData('school_type', value)}
                 placeholder="Select school type"
+                className="mt-1.5"
               />
             </FormField>
 
@@ -197,28 +250,31 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('description', e.target.value)}
                 placeholder="Enter school description"
                 rows={3}
+                className="mt-1.5"
               />
             </FormField>
 
             <FormField id="logo" label="School Logo">
-              <ImageUpload
-                id="logo"
-                bucket="school-logos"
-                value={formData.logo}
-                publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${formData.logo}` : null}
-                onChange={(path) => updateFormData('logo', path)}
-              />
+              <div className="mt-1.5">
+                <ImageUpload
+                  id="logo"
+                  bucket="school-logos"
+                  value={formData.logo}
+                  publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${formData.logo}` : null}
+                  onChange={(path) => updateFormData('logo', path)}
+                />
+              </div>
             </FormField>
 
             <FormField id="curriculum_type" label="Curriculum Types">
-              <div className="space-y-2">
+              <div className="space-y-2 mt-1.5">
                 {['national', 'cambridge', 'ib', 'american', 'other'].map(type => (
-                  <label key={type} className="flex items-center gap-2">
+                  <label key={type} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={(formData.curriculum_type || []).includes(type)}
                       onChange={(e) => handleCurriculumTypeChange(type, e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-600"
+                      className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
                     />
                     <span className="text-sm capitalize">{type}</span>
                   </label>
@@ -229,7 +285,7 @@ export function SchoolFormContent({
         )}
 
         {activeTab === 'additional' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <FormField id="total_capacity" label="Total Capacity">
                 <Input
@@ -238,6 +294,7 @@ export function SchoolFormContent({
                   value={formData.total_capacity || ''}
                   onChange={(e) => updateFormData('total_capacity', parseInt(e.target.value) || 0)}
                   placeholder="Maximum student capacity"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -248,6 +305,7 @@ export function SchoolFormContent({
                   value={formData.student_count || ''}
                   onChange={(e) => updateFormData('student_count', parseInt(e.target.value) || 0)}
                   placeholder="Current number of students"
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
@@ -260,6 +318,7 @@ export function SchoolFormContent({
                   value={formData.teachers_count || ''}
                   onChange={(e) => updateFormData('teachers_count', parseInt(e.target.value) || 0)}
                   placeholder="Number of teachers"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -270,6 +329,7 @@ export function SchoolFormContent({
                   value={formData.active_teachers_count || ''}
                   onChange={(e) => updateFormData('active_teachers_count', parseInt(e.target.value) || 0)}
                   placeholder="Number of active teachers"
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
@@ -281,6 +341,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('campus_address', e.target.value)}
                 placeholder="Enter campus address"
                 rows={3}
+                className="mt-1.5"
               />
             </FormField>
 
@@ -291,6 +352,7 @@ export function SchoolFormContent({
                   value={formData.campus_city || ''}
                   onChange={(e) => updateFormData('campus_city', e.target.value)}
                   placeholder="Enter city"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -300,6 +362,7 @@ export function SchoolFormContent({
                   value={formData.campus_state || ''}
                   onChange={(e) => updateFormData('campus_state', e.target.value)}
                   placeholder="Enter state/province"
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
@@ -311,6 +374,7 @@ export function SchoolFormContent({
                   value={formData.campus_postal_code || ''}
                   onChange={(e) => updateFormData('campus_postal_code', e.target.value)}
                   placeholder="Enter postal code"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -320,6 +384,7 @@ export function SchoolFormContent({
                   type="date"
                   value={formData.established_date || ''}
                   onChange={(e) => updateFormData('established_date', e.target.value)}
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
@@ -345,6 +410,7 @@ export function SchoolFormContent({
                   value={formData.academic_year_start?.toString() || ''}
                   onChange={(value) => updateFormData('academic_year_start', parseInt(value) || 1)}
                   placeholder="Select start month"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -368,49 +434,50 @@ export function SchoolFormContent({
                   value={formData.academic_year_end?.toString() || ''}
                   onChange={(value) => updateFormData('academic_year_end', parseInt(value) || 12)}
                   placeholder="Select end month"
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2">
+              <div className="space-y-3 mt-1.5">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.has_library || false}
                     onChange={(e) => handleFacilityChange('has_library', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   <BookOpen className="w-4 h-4 text-gray-500" />
                   <span className="text-sm">Has Library</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.has_laboratory || false}
                     onChange={(e) => handleFacilityChange('has_laboratory', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   <FlaskConical className="w-4 h-4 text-gray-500" />
                   <span className="text-sm">Has Laboratory</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.has_sports_facilities || false}
                     onChange={(e) => handleFacilityChange('has_sports_facilities', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   <Dumbbell className="w-4 h-4 text-gray-500" />
                   <span className="text-sm">Has Sports Facilities</span>
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.has_cafeteria || false}
                     onChange={(e) => handleFacilityChange('has_cafeteria', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   <Coffee className="w-4 h-4 text-gray-500" />
                   <span className="text-sm">Has Cafeteria</span>
@@ -425,13 +492,14 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('notes', e.target.value)}
                 placeholder="Additional notes"
                 rows={3}
+                className="mt-1.5"
               />
             </FormField>
           </div>
         )}
 
         {activeTab === 'contact' && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <FormField id="principal_name" label="Principal Name">
               <Input
                 id="principal_name"
@@ -439,6 +507,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_name', e.target.value)}
                 placeholder="Enter principal name"
                 leftIcon={<User className="h-5 w-5 text-gray-400" />}
+                className="mt-1.5"
               />
             </FormField>
 
@@ -450,6 +519,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_email', e.target.value)}
                 placeholder="principal@school.com"
                 leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
+                className="mt-1.5"
               />
             </FormField>
 
@@ -461,6 +531,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_phone', e.target.value)}
                 placeholder="+1 (555) 123-4567"
                 leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
+                className="mt-1.5"
               />
             </FormField>
 
@@ -471,6 +542,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('address', e.target.value)}
                 placeholder="Enter school address"
                 rows={3}
+                className="mt-1.5"
               />
             </FormField>
 
@@ -483,6 +555,7 @@ export function SchoolFormContent({
                   value={formData.latitude || ''}
                   onChange={(e) => updateFormData('latitude', parseFloat(e.target.value) || 0)}
                   placeholder="e.g., 29.3759"
+                  className="mt-1.5"
                 />
               </FormField>
 
@@ -494,6 +567,7 @@ export function SchoolFormContent({
                   value={formData.longitude || ''}
                   onChange={(e) => updateFormData('longitude', parseFloat(e.target.value) || 0)}
                   placeholder="e.g., 47.9774"
+                  className="mt-1.5"
                 />
               </FormField>
             </div>
