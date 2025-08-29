@@ -492,7 +492,6 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
-            <input
             <Select
               id="school_id"
               name="school_id"
