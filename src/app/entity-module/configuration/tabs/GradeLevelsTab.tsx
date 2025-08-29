@@ -375,14 +375,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         assigned_branches: data.assigned_branches,
         department_associations: data.department_associations,
         capacity_per_branch: data.capacity_per_branch
-        // NEW: Initialize enhanced fields
-        assigned_branches: editingGradeLevel.assigned_branches || [],
-        department_associations: editingGradeLevel.department_associations || [],
-        capacity_per_branch: editingGradeLevel.capacity_per_branch || {},
-        // NEW: Initialize enhanced fields
-        assigned_branches: [],
-        department_associations: [],
-        capacity_per_branch: {},
       });
       
       let gradeLevelId: string;
