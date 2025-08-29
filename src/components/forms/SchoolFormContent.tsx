@@ -25,12 +25,23 @@
 import React, { useMemo } from 'react';
 import { 
   BookOpen, FlaskConical, Dumbbell, Coffee, 
-  User, Mail, Phone, MapPin, Calendar,
-  CircleAlert
+  User, Mail, Phone, MapPin, Calendar
 } from 'lucide-react';
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
+
+// Override any CSS that might be setting tab colors to blue
+const tabStyles = {
+  active: {
+    borderBottomWidth: '2px',
+    borderBottomColor: '#8CC63F',
+    color: '#8CC63F'
+  },
+  inactive: {
+    color: '#6B7280'
+  }
+};
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolFormData {
@@ -92,6 +103,13 @@ export function SchoolFormContent({
   isEditing = false
 }: SchoolFormContentProps) {
   
+  // Initialize status to active if not set
+  React.useEffect(() => {
+    if (!formData.status) {
+      updateFormData('status', 'active');
+    }
+  }, []);
+
   // Helper to update form data
   const updateFormData = (field: string, value: any) => {
     setFormData({ ...formData, [field]: value });
@@ -126,14 +144,17 @@ export function SchoolFormContent({
     };
 
     // Basic tab mandatory fields
-    const basicMandatory = ['name', 'code'];
-    basicMandatory.forEach(field => {
-      if (!formData[field as keyof SchoolFormData] || formErrors[field]) {
-        errors.basic = true;
-      }
-    });
+    if (!formData.name || formData.name.trim() === '') {
+      errors.basic = true;
+    }
+    if (!formData.code || formData.code.trim() === '') {
+      errors.basic = true;
+    }
+    if (formErrors.name || formErrors.code) {
+      errors.basic = true;
+    }
 
-    // Additional tab has no mandatory fields
+    // Additional tab has no mandatory fields by default
 
     // Contact tab mandatory fields (if principal email is provided, validate format)
     if (formErrors.principal_email) {
@@ -150,40 +171,43 @@ export function SchoolFormContent({
         <button
           type="button"
           onClick={() => setActiveTab('basic')}
-          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'basic' 
-            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
-            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+          className="pb-2 px-1 flex items-center gap-2 transition-colors"
+          style={activeTab === 'basic' ? tabStyles.active : tabStyles.inactive}
         >
           Basic Info
           {tabErrors.basic && !isEditing && (
-            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
-                  title="Required fields missing" />
+            <span 
+              className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+              title="Required fields missing" 
+            />
           )}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('additional')}
-          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'additional' 
-            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
-            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+          className="pb-2 px-1 flex items-center gap-2 transition-colors"
+          style={activeTab === 'additional' ? tabStyles.active : tabStyles.inactive}
         >
           Additional
           {tabErrors.additional && !isEditing && (
-            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
-                  title="Required fields missing" />
+            <span 
+              className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+              title="Required fields missing" 
+            />
           )}
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('contact')}
-          className={`pb-2 px-1 flex items-center gap-2 ${activeTab === 'contact' 
-            ? 'border-b-2 border-[#8CC63F] text-[#8CC63F]' 
-            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+          className="pb-2 px-1 flex items-center gap-2 transition-colors"
+          style={activeTab === 'contact' ? tabStyles.active : tabStyles.inactive}
         >
           Contact
           {tabErrors.contact && !isEditing && (
-            <span className="inline-flex items-center justify-center w-2 h-2 bg-red-500 rounded-full" 
-                  title="Required fields missing" />
+            <span 
+              className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+              title="Required fields missing" 
+            />
           )}
         </button>
       </div>
@@ -199,6 +223,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('name', e.target.value)}
                 placeholder="Enter school name"
                 className="mt-1.5"
+                style={{ borderColor: formErrors.name ? '#EF4444' : undefined }}
               />
             </FormField>
 
@@ -208,6 +233,18 @@ export function SchoolFormContent({
                 value={formData.code || ''}
                 onChange={(e) => updateFormData('code', e.target.value)}
                 placeholder="e.g., SCH-001"
+                className="mt-1.5"
+                style={{ borderColor: formErrors.code ? '#EF4444' : undefined }}
+              />
+            </FormField>
+
+            <FormField id="description" label="Description">
+              <Textarea
+                id="description"
+                value={formData.description || ''}
+                onChange={(e) => updateFormData('description', e.target.value)}
+                placeholder="Enter school description"
+                rows={3}
                 className="mt-1.5"
               />
             </FormField>
@@ -226,29 +263,12 @@ export function SchoolFormContent({
               </div>
             </FormField>
 
-            <FormField id="school_type" label="School Type">
-              <Select
-                id="school_type"
-                options={[
-                  { value: 'primary', label: 'Primary School' },
-                  { value: 'secondary', label: 'Secondary School' },
-                  { value: 'k12', label: 'K-12 School' },
-                  { value: 'higher_secondary', label: 'Higher Secondary' },
-                  { value: 'other', label: 'Other' }
-                ]}
-                value={formData.school_type || ''}
-                onChange={(value) => updateFormData('school_type', value)}
-                placeholder="Select school type"
-                className="mt-1.5"
-              />
-            </FormField>
-
-            <FormField id="description" label="Description">
+            <FormField id="address" label="Address">
               <Textarea
-                id="description"
-                value={formData.description || ''}
-                onChange={(e) => updateFormData('description', e.target.value)}
-                placeholder="Enter school description"
+                id="address"
+                value={formData.address || ''}
+                onChange={(e) => updateFormData('address', e.target.value)}
+                placeholder="Enter school address"
                 rows={3}
                 className="mt-1.5"
               />
@@ -262,24 +282,53 @@ export function SchoolFormContent({
                   value={formData.logo}
                   publicUrl={formData.logo ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/school-logos/${formData.logo}` : null}
                   onChange={(path) => updateFormData('logo', path)}
+                  borderColor="#8CC63F"
                 />
               </div>
             </FormField>
 
+            <FormField id="school_type" label="School Type">
+              <Select
+                id="school_type"
+                options={[
+                  { value: 'primary', label: 'Primary School' },
+                  { value: 'secondary', label: 'Secondary School' },
+                  { value: 'k12', label: 'K-12 School' },
+                  { value: 'higher_secondary', label: 'Higher Secondary' },
+                  { value: 'other', label: 'Other' }
+                ]}
+                value={formData.school_type || ''}
+                onChange={(value) => updateFormData('school_type', value)}
+                placeholder="Select school type"
+                className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              />
+            </FormField>
+
             <FormField id="curriculum_type" label="Curriculum Types">
               <div className="space-y-2 mt-1.5">
-                {['national', 'cambridge', 'ib', 'american', 'other'].map(type => (
-                  <label key={type} className="flex items-center gap-2 cursor-pointer">
+                {['national', 'cambridge', 'ib', 'american', 'montessori', 'other'].map(type => (
+                  <label key={type} className="flex items-center gap-2 cursor-pointer hover:text-[#8CC63F]">
                     <input
                       type="checkbox"
                       checked={(formData.curriculum_type || []).includes(type)}
                       onChange={(e) => handleCurriculumTypeChange(type, e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
+                      className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
                     />
                     <span className="text-sm capitalize">{type}</span>
                   </label>
                 ))}
               </div>
+            </FormField>
+
+            <FormField id="notes" label="Notes">
+              <Textarea
+                id="notes"
+                value={formData.notes || ''}
+                onChange={(e) => updateFormData('notes', e.target.value)}
+                placeholder="Additional notes about the school"
+                rows={3}
+                className="mt-1.5"
+              />
             </FormField>
           </div>
         )}
@@ -294,7 +343,7 @@ export function SchoolFormContent({
                   value={formData.total_capacity || ''}
                   onChange={(e) => updateFormData('total_capacity', parseInt(e.target.value) || 0)}
                   placeholder="Maximum student capacity"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -305,7 +354,7 @@ export function SchoolFormContent({
                   value={formData.student_count || ''}
                   onChange={(e) => updateFormData('student_count', parseInt(e.target.value) || 0)}
                   placeholder="Current number of students"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
@@ -318,7 +367,7 @@ export function SchoolFormContent({
                   value={formData.teachers_count || ''}
                   onChange={(e) => updateFormData('teachers_count', parseInt(e.target.value) || 0)}
                   placeholder="Number of teachers"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -329,7 +378,7 @@ export function SchoolFormContent({
                   value={formData.active_teachers_count || ''}
                   onChange={(e) => updateFormData('active_teachers_count', parseInt(e.target.value) || 0)}
                   placeholder="Number of active teachers"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
@@ -352,7 +401,7 @@ export function SchoolFormContent({
                   value={formData.campus_city || ''}
                   onChange={(e) => updateFormData('campus_city', e.target.value)}
                   placeholder="Enter city"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -362,7 +411,7 @@ export function SchoolFormContent({
                   value={formData.campus_state || ''}
                   onChange={(e) => updateFormData('campus_state', e.target.value)}
                   placeholder="Enter state/province"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
@@ -374,7 +423,7 @@ export function SchoolFormContent({
                   value={formData.campus_postal_code || ''}
                   onChange={(e) => updateFormData('campus_postal_code', e.target.value)}
                   placeholder="Enter postal code"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -384,7 +433,7 @@ export function SchoolFormContent({
                   type="date"
                   value={formData.established_date || ''}
                   onChange={(e) => updateFormData('established_date', e.target.value)}
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
@@ -410,7 +459,7 @@ export function SchoolFormContent({
                   value={formData.academic_year_start?.toString() || ''}
                   onChange={(value) => updateFormData('academic_year_start', parseInt(value) || 1)}
                   placeholder="Select start month"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -434,67 +483,56 @@ export function SchoolFormContent({
                   value={formData.academic_year_end?.toString() || ''}
                   onChange={(value) => updateFormData('academic_year_end', parseInt(value) || 12)}
                   placeholder="Select end month"
-                  className="mt-1.5"
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
 
             <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
-              <div className="space-y-3 mt-1.5">
-                <label className="flex items-center gap-3 cursor-pointer">
+              <div className="grid grid-cols-2 gap-3 mt-1.5">
+                <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
                   <input
                     type="checkbox"
                     checked={formData.has_library || false}
                     onChange={(e) => handleFacilityChange('has_library', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
                   />
                   <BookOpen className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Has Library</span>
+                  <span className="text-sm">Library</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
                   <input
                     type="checkbox"
                     checked={formData.has_laboratory || false}
                     onChange={(e) => handleFacilityChange('has_laboratory', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
                   />
                   <FlaskConical className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Has Laboratory</span>
+                  <span className="text-sm">Laboratory</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
                   <input
                     type="checkbox"
                     checked={formData.has_sports_facilities || false}
                     onChange={(e) => handleFacilityChange('has_sports_facilities', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
                   />
                   <Dumbbell className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Has Sports Facilities</span>
+                  <span className="text-sm">Sports Facilities</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
                   <input
                     type="checkbox"
                     checked={formData.has_cafeteria || false}
                     onChange={(e) => handleFacilityChange('has_cafeteria', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F]"
+                    className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
                   />
                   <Coffee className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Has Cafeteria</span>
+                  <span className="text-sm">Cafeteria</span>
                 </label>
               </div>
             </div>
-
-            <FormField id="notes" label="Notes">
-              <Textarea
-                id="notes"
-                value={formData.notes || ''}
-                onChange={(e) => updateFormData('notes', e.target.value)}
-                placeholder="Additional notes"
-                rows={3}
-                className="mt-1.5"
-              />
-            </FormField>
           </div>
         )}
 
@@ -507,7 +545,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_name', e.target.value)}
                 placeholder="Enter principal name"
                 leftIcon={<User className="h-5 w-5 text-gray-400" />}
-                className="mt-1.5"
+                className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
               />
             </FormField>
 
@@ -519,7 +557,8 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_email', e.target.value)}
                 placeholder="principal@school.com"
                 leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
-                className="mt-1.5"
+                className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                style={{ borderColor: formErrors.principal_email ? '#EF4444' : undefined }}
               />
             </FormField>
 
@@ -531,18 +570,7 @@ export function SchoolFormContent({
                 onChange={(e) => updateFormData('principal_phone', e.target.value)}
                 placeholder="+1 (555) 123-4567"
                 leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
-                className="mt-1.5"
-              />
-            </FormField>
-
-            <FormField id="address" label="School Address">
-              <Textarea
-                id="address"
-                value={formData.address || ''}
-                onChange={(e) => updateFormData('address', e.target.value)}
-                placeholder="Enter school address"
-                rows={3}
-                className="mt-1.5"
+                className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
               />
             </FormField>
 
@@ -555,7 +583,8 @@ export function SchoolFormContent({
                   value={formData.latitude || ''}
                   onChange={(e) => updateFormData('latitude', parseFloat(e.target.value) || 0)}
                   placeholder="e.g., 29.3759"
-                  className="mt-1.5"
+                  leftIcon={<MapPin className="h-5 w-5 text-gray-400" />}
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
 
@@ -567,7 +596,8 @@ export function SchoolFormContent({
                   value={formData.longitude || ''}
                   onChange={(e) => updateFormData('longitude', parseFloat(e.target.value) || 0)}
                   placeholder="e.g., 47.9774"
-                  className="mt-1.5"
+                  leftIcon={<MapPin className="h-5 w-5 text-gray-400" />}
+                  className="mt-1.5 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                 />
               </FormField>
             </div>
