@@ -632,36 +632,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         );
         
         if (activeBranches.length > 0) {
-          setBranchesToDeactivate(activeBranches);
-          setShowDeactivateConfirmation(true);
-          return;
-        }
-      }
-
-      if (selectedSchool) {
-        updateSchoolMutation.mutate({ 
-          id: selectedSchool.id, 
-          data: formData 
-        });
-      } else {
-        createSchoolMutation.mutate(formData);
-      }
-    }, [formData, selectedSchool, validateForm, updateSchoolMutation, createSchoolMutation, branches]);
-
-    // Handle deactivation confirmation
-    const handleConfirmDeactivation = useCallback(() => {
-      if (selectedSchool) {
-        updateSchoolMutation.mutate({ 
-          id: selectedSchool.id, 
-          data: formData, 
-          deactivateAssociatedBranches: true 
-        });
-      }
-      setShowDeactivateConfirmation(false);
-      setBranchesToDeactivate([]);
-    }, [selectedSchool, formData, updateSchoolMutation]);
-
-    const handleEdit = useCallback((school: SchoolData) => {
       const combinedData = {
         ...school
       };

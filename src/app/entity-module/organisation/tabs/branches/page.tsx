@@ -533,36 +533,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setShowDeleteConfirmation(false);
         setBranchToDelete(null);
         if (refreshData) refreshData();
-      },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to delete branch');
-        setShowDeleteConfirmation(false);
-        setBranchToDelete(null);
-      }
-    }
-  );
-
-  // ===== HELPER FUNCTIONS =====
-  const validateForm = useCallback(() => {
-    const errors: Record<string, string> = {};
-    
-    if (!formData.name) errors.name = 'Name is required';
-    if (!formData.code) errors.code = 'Code is required';
-    if (!formData.school_id) errors.school_id = 'School is required';
-    
-    if (formData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.branch_head_email)) {
-      errors.branch_head_email = 'Invalid email address';
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData]);
-
-  // Effect to populate form data when editing
-  useEffect(() => {
-    if (selectedBranch && showEditModal) {
-      const additionalData = selectedBranch.additional || {};
-      const combinedData = {
         ...selectedBranch,
         ...additionalData
       };
