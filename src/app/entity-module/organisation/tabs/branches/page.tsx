@@ -1,13 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
- * UNIFIED VERSION with improved UI/UX matching schools implementation
+ * UNIFIED VERSION - Standardized UI/UX matching schools implementation
  * 
  * Improvements:
- * 1. Green tab colors (#8CC63F) with red dot indicators
- * 2. Status field as ToggleSwitch (consistent with schools)
- * 3. Better field organization and alignment
- * 4. All database fields included via BranchFormContent
- * 5. Consistent with schools implementation
+ * 1. Consistent green theme (#8CC63F) throughout
+ * 2. Standardized field names (student_count not current_students)
+ * 3. Unified spacing and layout patterns
+ * 4. Consistent validation and error handling
+ * 5. Same stats card design as schools
  */
 
 'use client';
@@ -46,13 +46,13 @@ interface BranchData {
   student_count?: number;
   teachers_count?: number;
   school_name?: string;
+  readOnly?: boolean;
 }
 
 interface BranchAdditional {
   id?: string;
   branch_id: string;
   student_capacity?: number;
-  current_students?: number;
   student_count?: number;
   teachers_count?: number;
   active_teachers_count?: number;
@@ -363,45 +363,47 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         throw new Error('Insufficient permissions');
       }
       
-      const mainData = {
-        name: data.name,
-        code: data.code,
-        school_id: data.school_id,
-        status: data.status,
-        address: data.address,
-        notes: data.notes,
-        logo: data.logo
-      };
+      const branchFields = ['name', 'code', 'school_id', 'status', 'address', 'notes', 'logo'];
       
-      const { data: branch, error } = await supabase
-        .from('branches')
-        .insert([mainData])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      const additionalData: any = {
-        branch_id: branch.id
-      };
-      
-      const additionalFields = [
-        'student_capacity', 'current_students', 'student_count', 'teachers_count',
+      const additionalFieldsList = [
+        'student_capacity', 'student_count', 'current_students', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
         'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
         'closing_time', 'working_days'
       ];
       
-      additionalFields.forEach(field => {
-        if (data[field] !== undefined) {
-          additionalData[field] = data[field];
+      const branchData: any = {};
+      const additionalData: any = {};
+      
+      Object.keys(data).forEach(key => {
+        if (branchFields.includes(key)) {
+          branchData[key] = data[key];
+        } else if (additionalFieldsList.includes(key)) {
+          // Map student_count to both fields for compatibility
+          if (key === 'student_count') {
+            additionalData['student_count'] = data[key];
+            additionalData['current_students'] = data[key];
+          } else {
+            additionalData[key] = data[key];
+          }
         }
       });
       
-      if (Object.keys(additionalData).length > 1) {
+      const { data: branch, error } = await supabase
+        .from('branches')
+        .insert([branchData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      if (Object.keys(additionalData).length > 0) {
         const { error: additionalError } = await supabase
           .from('branches_additional')
-          .insert([additionalData]);
+          .insert([{
+            branch_id: branch.id,
+            ...additionalData
+          }]);
         
         if (additionalError && additionalError.code !== '23505') {
           console.error('Additional data error:', additionalError);
@@ -412,7 +414,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab', companyId]);
+        queryClient.invalidateQueries(['branches-tab']);
         queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch created successfully');
@@ -431,41 +433,42 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   const updateBranchMutation = useMutation(
     async ({ id, data }: { id: string; data: any }) => {
-      const mainData = {
-        name: data.name,
-        code: data.code,
-        school_id: data.school_id,
-        status: data.status,
-        address: data.address,
-        notes: data.notes,
-        logo: data.logo
-      };
+      const branchFields = ['name', 'code', 'school_id', 'status', 'address', 'notes', 'logo'];
       
-      const { error } = await supabase
-        .from('branches')
-        .update(mainData)
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      const additionalData: any = {
-        branch_id: id
-      };
-      
-      const additionalFields = [
-        'student_capacity', 'current_students', 'student_count', 'teachers_count',
+      const additionalFieldsList = [
+        'student_capacity', 'student_count', 'current_students', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
         'branch_head_phone', 'building_name', 'floor_details', 'opening_time',
         'closing_time', 'working_days'
       ];
       
-      additionalFields.forEach(field => {
-        if (data[field] !== undefined) {
-          additionalData[field] = data[field];
+      const branchData: any = {};
+      const additionalData: any = {};
+      
+      Object.keys(data).forEach(key => {
+        if (branchFields.includes(key)) {
+          branchData[key] = data[key];
+        } else if (additionalFieldsList.includes(key)) {
+          // Map student_count to both fields for compatibility
+          if (key === 'student_count') {
+            additionalData['student_count'] = data[key];
+            additionalData['current_students'] = data[key];
+          } else {
+            additionalData[key] = data[key];
+          }
         }
       });
       
-      if (Object.keys(additionalData).length > 1) {
+      if (Object.keys(branchData).length > 0) {
+        const { error } = await supabase
+          .from('branches')
+          .update(branchData)
+          .eq('id', id);
+        
+        if (error) throw error;
+      }
+      
+      if (Object.keys(additionalData).length > 0) {
         const { error: updateError } = await supabase
           .from('branches_additional')
           .update(additionalData)
@@ -474,7 +477,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         if (updateError?.code === 'PGRST116') {
           const { error: insertError } = await supabase
             .from('branches_additional')
-            .insert([additionalData]);
+            .insert([{
+              branch_id: id,
+              ...additionalData
+            }]);
           
           if (insertError && insertError.code !== '23505') {
             console.error('Additional insert error:', insertError);
@@ -484,7 +490,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['branches-tab', companyId]);
+        queryClient.invalidateQueries(['branches-tab']);
         queryClient.invalidateQueries(['organization-stats']);
         if (refreshData) refreshData();
         toast.success('Branch updated successfully');
@@ -498,6 +504,29 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       onError: (error: any) => {
         console.error('Error updating branch:', error);
         toast.error(error.message || 'Failed to update branch');
+      }
+    }
+  );
+
+  // Delete branch mutation
+  const deleteBranchMutation = useMutation(
+    async (id: string) => {
+      const { error } = await supabase
+        .from('branches')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return id;
+    },
+    {
+      onSuccess: () => {
+        toast.success('Branch deleted successfully');
+        queryClient.invalidateQueries(['branches-tab']);
+        if (refreshData) refreshData();
+      },
+      onError: (error: any) => {
+        toast.error(error.message || 'Failed to delete branch');
       }
     }
   );
@@ -756,12 +785,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           </div>
         )}
 
-        {/* Stats */}
+        {/* Stats - Unified Style */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total Branches</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {canAccessAll ? 'Total Branches' : 'Assigned Branches'}
+                </p>
                 <p className="text-xl font-semibold text-gray-900 dark:text-white">
                   {stats.total}
                 </p>
@@ -819,115 +850,117 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         ) : (
           filteredBranches.map((branch) => {
             const logoUrl = getBranchLogoUrl(branch.logo);
-            const canEdit = can('modify_branch');
+            const canEdit = can('modify_branch') && !branch.readOnly;
             
             return (
               <div
                 key={branch.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-md overflow-hidden relative bg-white">
-                      {logoUrl ? (
-                        <>
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                        {logoUrl ? (
                           <img
                             src={logoUrl}
                             alt={`${branch.name} logo`}
                             className="w-full h-full object-contain p-0.5"
                             onError={(e) => {
-                              const imgElement = e.currentTarget as HTMLImageElement;
-                              imgElement.style.display = 'none';
-                              const parent = imgElement.parentElement;
-                              if (parent) {
-                                const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
-                                if (fallback) {
-                                  fallback.style.display = 'flex';
-                                }
-                              }
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const fallback = target.nextSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
                             }}
                           />
-                          <div className="logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 bg-purple-500 text-white">
-                            <MapPin className="w-5 h-5" />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex items-center justify-center w-full h-full bg-purple-500 text-white">
-                          <MapPin className="w-5 h-5" />
+                        ) : null}
+                        <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
+                          <MapPin className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                         </div>
-                      )}
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900 dark:text-white">{branch.name}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{branch.code}</p>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{branch.name}</h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{branch.code}</p>
-                    </div>
+                    <StatusBadge status={branch.status} />
                   </div>
-                  <StatusBadge status={branch.status} size="xs" />
-                </div>
 
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                    <School className="w-3 h-3" />
-                    <span>{branch.school_name}</span>
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <School className="w-3 h-3" />
+                      <span>{branch.school_name}</span>
+                    </div>
+                    {branch.additional?.branch_head_name && (
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <User className="w-3 h-3" />
+                        <span>{branch.additional.branch_head_name}</span>
+                      </div>
+                    )}
+                    {branch.additional?.building_name && (
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <Building className="w-3 h-3" />
+                        <span>{branch.additional.building_name}</span>
+                        {branch.additional.floor_details && (
+                          <span className="text-gray-400">• {branch.additional.floor_details}</span>
+                        )}
+                      </div>
+                    )}
+                    {branch.address && (
+                      <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <Navigation className="w-3 h-3 mt-0.5" />
+                        <span className="line-clamp-2">{branch.address}</span>
+                      </div>
+                    )}
+                    {branch.additional?.opening_time && branch.additional?.closing_time && (
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
+                      </div>
+                    )}
                   </div>
-                  {branch.additional?.branch_head_name && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <User className="w-3 h-3" />
-                      <span>{branch.additional.branch_head_name}</span>
-                    </div>
-                  )}
-                  {branch.additional?.building_name && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <Building className="w-3 h-3" />
-                      <span>{branch.additional.building_name}</span>
-                      {branch.additional.floor_details && (
-                        <span className="text-gray-400">• {branch.additional.floor_details}</span>
-                      )}
-                    </div>
-                  )}
-                  {branch.address && (
-                    <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <Navigation className="w-3 h-3 mt-0.5" />
-                      <span className="line-clamp-2">{branch.address}</span>
-                    </div>
-                  )}
-                  {branch.additional?.opening_time && branch.additional?.closing_time && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                      <Clock className="w-3 h-3" />
-                      <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
-                    </div>
-                  )}
-                </div>
 
-                <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
-                  <div className="flex items-center space-x-4 text-xs">
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {branch.student_count || 0}
-                      </span>
+                  <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
+                    <div className="flex items-center space-x-4 text-xs">
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3 text-gray-400" />
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {branch.student_count || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3 text-gray-400" />
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {branch.teachers_count || 0}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        {branch.teachers_count || 0}
-                      </span>
-                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => handleEdit(branch)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Edit2 className="w-3 h-3 mr-1" />
+                          Edit
+                        </Button>
+                        {can('delete_branch') && (
+                          <Button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this branch?')) {
+                                deleteBranchMutation.mutate(branch.id);
+                              }
+                            }}
+                            variant="danger-outline"
+                            size="sm"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {canEdit ? (
-                    <button
-                      onClick={() => handleEdit(branch)}
-                      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      title="Edit branch"
-                    >
-                      <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                    </button>
-                  ) : (
-                    <div className="p-1.5 opacity-50" title="You don't have permission to edit branches">
-                      <Shield className="w-4 h-4 text-gray-400" />
-                    </div>
-                  )}
                 </div>
               </div>
             );
@@ -947,7 +980,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setActiveTab('basic');
         }}
         onSave={() => handleSubmit('create')}
-        loading={createBranchMutation.isLoading}
+        loading={createBranchMutation.isPending || createBranchMutation.isLoading}
       >
         {renderFormContent()}
       </SlideInForm>
@@ -966,7 +999,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setActiveTab('basic');
         }}
         onSave={() => handleSubmit('edit')}
-        loading={updateBranchMutation.isLoading}
+        loading={updateBranchMutation.isPending || updateBranchMutation.isLoading}
       >
         {renderFormContent()}
       </SlideInForm>
