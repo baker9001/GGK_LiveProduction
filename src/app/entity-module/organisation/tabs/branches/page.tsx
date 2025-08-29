@@ -1,13 +1,12 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
- * UNIFIED VERSION - Standardized UI/UX matching schools implementation
+ * COMPLETE FIXED VERSION - All UI Issues Resolved
  * 
- * Improvements:
- * 1. Consistent green theme (#8CC63F) throughout
- * 2. Standardized field names (student_count not current_students)
- * 3. Unified spacing and layout patterns
- * 4. Consistent validation and error handling
- * 5. Same stats card design as schools
+ * Fixes Applied:
+ * 1. ✅ Removed duplicate bottom buttons (kept only top icon buttons)
+ * 2. ✅ Enhanced logo size (80x80) and display with better background
+ * 3. ✅ Unified color scheme (purple for branches, blue for students, green for teachers)
+ * 4. ✅ View mode toggle moved to right side for consistency
  */
 
 'use client';
@@ -791,7 +790,26 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 className="pl-10"
               />
             </div>
-            {/* View Mode Toggle */}
+            <Select
+              value={filterSchool}
+              onChange={(value) => setFilterSchool(value)}
+              className="w-48"
+              options={[
+                { value: 'all', label: 'All Schools' },
+                ...schools.map(s => ({ value: s.id, label: s.name }))
+              ]}
+            />
+            <Select
+              value={filterStatus}
+              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+              className="w-32"
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+            />
+            {/* View Mode Toggle - Moved to Right */}
             <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('card')}
@@ -816,25 +834,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 <List className="w-4 h-4" />
               </button>
             </div>
-            <Select
-              value={filterSchool}
-              onChange={(value) => setFilterSchool(value)}
-              className="w-48"
-              options={[
-                { value: 'all', label: 'All Schools' },
-                ...schools.map(s => ({ value: s.id, label: s.name }))
-              ]}
-            />
-            <Select
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              className="w-32"
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-            />
           </div>
           {can('create_branch') ? (
             <Button onClick={handleCreate}>
@@ -868,7 +867,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           </div>
         )}
 
-        {/* Stats - Unified Style */}
+        {/* Stats - Unified Colors */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
             <div className="flex items-center justify-between">
@@ -909,11 +908,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
-                <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
+                <p className="text-xl font-semibold text-green-600 dark:text-green-400">
                   {stats.teachers.toLocaleString()}
                 </p>
               </div>
-              <Users className="w-8 h-8 text-purple-400" />
+              <Users className="w-8 h-8 text-green-400" />
             </div>
           </div>
         </div>
@@ -945,10 +944,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                 
                 <div className="relative p-6">
-                  {/* Header with logo, name, and status */}
+                  {/* Header with ENHANCED logo, name, and status */}
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg border border-[#8CC63F]/20">
+                    <div className="flex items-center gap-4">
+                      {/* ENHANCED LOGO DISPLAY */}
+                      <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F]/20 to-[#8CC63F]/30 dark:from-[#8CC63F]/30 dark:to-[#8CC63F]/40 rounded-2xl flex items-center justify-center overflow-hidden shadow-xl border-2 border-[#8CC63F]/30 group-hover:border-[#8CC63F]/50 transition-all duration-300">
                         {logoUrl ? (
                           <img
                             src={logoUrl}
@@ -963,7 +963,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                           />
                         ) : null}
                         <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                          <MapPin className="w-8 h-8 text-[#8CC63F]/60" />
+                          <MapPin className="w-10 h-10 text-[#8CC63F]/70" />
                         </div>
                       </div>
                       <div>
@@ -1042,7 +1042,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                     )}
                   </div>
 
-                  {/* Statistics */}
+                  {/* Statistics - UNIFIED COLORS */}
                   <div className="grid grid-cols-2 gap-3 mb-6">
                     <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
                       <div className="flex items-center justify-center mb-1">
@@ -1068,35 +1068,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                     </div>
                   </div>
 
-                  {/* Footer */}
+                  {/* Footer - NO DUPLICATE BUTTONS */}
                   <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         Created {new Date(branch.created_at).toLocaleDateString()}
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        {canEdit && (
-                          <Button
-                            onClick={() => handleEdit(branch)}
-                            variant="outline"
-                            size="sm"
-                            className="text-[#8CC63F] border-[#8CC63F]/30 hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200"
-                          >
-                            <Edit2 className="w-3 h-3 mr-1" />
-                            Edit
-                          </Button>
-                        )}
-                        {can('delete_branch') && (
-                          <Button
-                            onClick={() => handleDeleteClick(branch)}
-                            variant="outline"
-                            size="sm"
-                            className="text-red-500 border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Delete
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1144,7 +1120,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       <tr key={branch.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-xl flex items-center justify-center overflow-hidden border border-[#8CC63F]/20">
+                            {/* ENHANCED LOGO IN LIST VIEW */}
+                            <div className="w-14 h-14 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-xl flex items-center justify-center overflow-hidden border border-[#8CC63F]/20">
                               {logoUrl ? (
                                 <img
                                   src={logoUrl}
@@ -1159,7 +1136,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                                 />
                               ) : null}
                               <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                                <MapPin className="w-6 h-6 text-[#8CC63F]/60" />
+                                <MapPin className="w-7 h-7 text-[#8CC63F]/60" />
                               </div>
                             </div>
                             <div>
