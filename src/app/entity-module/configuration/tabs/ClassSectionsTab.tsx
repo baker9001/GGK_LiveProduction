@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Users, Hash, MapPin, Building, User } from 'lucide-react';
 import { z } from 'zod';
@@ -74,6 +74,10 @@ interface ClassSectionsTabProps {
 export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const gradeLevelIdRef = useRef<HTMLInputElement>(null);
+  const academicYearIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClassSection, setEditingClassSection] = useState<ClassSection | null>(null);
@@ -614,8 +618,9 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           >
             <input
               type="hidden"
+              ref={gradeLevelIdRef}
               name="grade_level_id"
-              value={editingClassSection?.grade_level_id || ''}
+              defaultValue={editingClassSection?.grade_level_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -625,10 +630,8 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
               }))}
               selectedValues={editingClassSection?.grade_level_id ? [editingClassSection.grade_level_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="grade_level_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (gradeLevelIdRef.current) {
+                  gradeLevelIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}
@@ -644,8 +647,9 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           >
             <input
               type="hidden"
+              ref={academicYearIdRef}
               name="academic_year_id"
-              value={editingClassSection?.academic_year_id || ''}
+              defaultValue={editingClassSection?.academic_year_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -655,10 +659,8 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
               }))}
               selectedValues={editingClassSection?.academic_year_id ? [editingClassSection.academic_year_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="academic_year_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (academicYearIdRef.current) {
+                  academicYearIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}

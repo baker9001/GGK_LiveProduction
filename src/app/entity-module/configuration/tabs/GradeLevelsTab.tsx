@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, GraduationCap, School, Hash, Users } from 'lucide-react';
 import { z } from 'zod';
@@ -63,6 +63,9 @@ interface GradeLevelsTabProps {
 export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const schoolIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
@@ -485,6 +488,35 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               {formErrors.form}
             </div>
           )}
+
+          <FormField
+            id="school_id"
+            label="School"
+            required
+            error={formErrors.school_id}
+          >
+            <input
+              type="hidden"
+              ref={schoolIdRef}
+              name="school_id"
+              defaultValue={editingGradeLevel?.school_id || ''}
+            />
+            <SearchableMultiSelect
+              label=""
+              options={schools.map(school => ({
+                value: school.id,
+                label: school.name
+              }))}
+              selectedValues={editingGradeLevel?.school_id ? [editingGradeLevel.school_id] : []}
+              onChange={(values) => {
+                if (schoolIdRef.current) {
+                  schoolIdRef.current.value = values[0] || '';
+                }
+              }}
+              isMulti={false}
+              placeholder="Select school..."
+            />
+          </FormField>
 
           <FormField
             id="grade_name"

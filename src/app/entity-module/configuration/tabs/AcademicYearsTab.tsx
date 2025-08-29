@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Calendar, School, Hash, Clock } from 'lucide-react';
 import { z } from 'zod';
@@ -70,6 +70,9 @@ interface AcademicYearsTabProps {
 export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const schoolIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAcademicYear, setEditingAcademicYear] = useState<AcademicYear | null>(null);
@@ -494,8 +497,9 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           >
             <input
               type="hidden"
+              ref={schoolIdRef}
               name="school_id"
-              value={editingAcademicYear?.school_id || ''}
+              defaultValue={editingAcademicYear?.school_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -505,10 +509,8 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               }))}
               selectedValues={editingAcademicYear?.school_id ? [editingAcademicYear.school_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (schoolIdRef.current) {
+                  schoolIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}

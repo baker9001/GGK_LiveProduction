@@ -7,7 +7,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Building2, Hash, User, Mail, Users } from 'lucide-react';
 import { z } from 'zod';
@@ -73,6 +73,11 @@ interface DepartmentsTabProps {
 export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const schoolIdRef = useRef<HTMLInputElement>(null);
+  const branchIdRef = useRef<HTMLInputElement>(null);
+  const parentDepartmentIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
@@ -634,8 +639,9 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           >
             <input
               type="hidden"
+              ref={schoolIdRef}
               name="school_id"
-              value={editingDepartment?.school_id || ''}
+              defaultValue={editingDepartment?.school_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -648,10 +654,8 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               ]}
               selectedValues={editingDepartment?.school_id ? [editingDepartment.school_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (schoolIdRef.current) {
+                  schoolIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}
@@ -666,8 +670,9 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           >
             <input
               type="hidden"
+              ref={branchIdRef}
               name="branch_id"
-              value={editingDepartment?.branch_id || ''}
+              defaultValue={editingDepartment?.branch_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -680,10 +685,8 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               ]}
               selectedValues={editingDepartment?.branch_id ? [editingDepartment.branch_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="branch_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (branchIdRef.current) {
+                  branchIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}
@@ -698,8 +701,9 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           >
             <input
               type="hidden"
+              ref={parentDepartmentIdRef}
               name="parent_department_id"
-              value={editingDepartment?.parent_department_id || ''}
+              defaultValue={editingDepartment?.parent_department_id || ''}
             />
             <SearchableMultiSelect
               label=""
@@ -714,10 +718,8 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               ]}
               selectedValues={editingDepartment?.parent_department_id ? [editingDepartment.parent_department_id] : []}
               onChange={(values) => {
-                const input = document.querySelector('input[name="parent_department_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (parentDepartmentIdRef.current) {
+                  parentDepartmentIdRef.current.value = values[0] || '';
                 }
               }}
               isMulti={false}
