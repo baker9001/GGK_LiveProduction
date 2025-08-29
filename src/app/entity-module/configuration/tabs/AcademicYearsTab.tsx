@@ -1,15 +1,15 @@
 /**
- * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
+ * File: /src/app/entity-module/configuration/tabs/AcademicYearsTab.tsx
  * 
- * Grade Levels Management Tab
- * Manages grade_levels table data with school-based organization
+ * Academic Years Management Tab
+ * Manages academic_years table data with school-based organization
  */
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, GraduationCap, School, Hash, Users } from 'lucide-react';
+import { Plus, Calendar, School, CalendarClock } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
@@ -24,84 +24,81 @@ import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 
-const gradeLevelSchema = z.object({
+const academicYearSchema = z.object({
   school_id: z.string().uuid('Please select a school'),
-  grade_name: z.string().min(1, 'Grade name is required'),
-  grade_code: z.string().optional(),
-  grade_order: z.number().min(1, 'Grade order must be at least 1'),
-  education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']).optional(),
-  max_students_per_section: z.number().min(1, 'Must be at least 1').optional(),
-  total_sections: z.number().min(1, 'Must be at least 1').optional(),
-  status: z.enum(['active', 'inactive'])
+  year_name: z.string().min(1, 'Year name is required'),
+  year_code: z.string().optional(),
+  start_date: z.string().min(1, 'Start date is required'),
+  end_date: z.string().min(1, 'End date is required'),
+  is_current: z.boolean(),
+  description: z.string().optional(),
+  status: z.enum(['active', 'inactive', 'completed'])
 });
 
 interface FilterState {
   search: string;
   school_ids: string[];
-  education_level: string[];
+  is_current: boolean | null;
   status: string[];
 }
 
 interface FormState {
   school_id: string;
-  grade_name: string;
-  grade_code: string;
-  grade_order: number;
-  education_level: string;
-  max_students_per_section: number;
-  total_sections: number;
-  status: 'active' | 'inactive';
+  year_name: string;
+  year_code: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  description: string;
+  status: 'active' | 'inactive' | 'completed';
 }
 
-type GradeLevel = {
+type AcademicYear = {
   id: string;
   school_id: string;
   school_name: string;
-  grade_name: string;
-  grade_code: string | null;
-  grade_order: number;
-  education_level: string | null;
-  max_students_per_section: number | null;
-  total_sections: number | null;
-  status: 'active' | 'inactive';
+  year_name: string;
+  year_code: string | null;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  description: string | null;
+  status: 'active' | 'inactive' | 'completed';
   created_at: string;
 };
 
-interface GradeLevelsTabProps {
+interface AcademicYearsTabProps {
   companyId: string | null;
 }
 
-export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
+export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   
-  // Refs for hidden inputs
-  const schoolIdRef = useRef<HTMLInputElement>(null);
-  
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
+  const [editingYear, setEditingYear] = useState<AcademicYear | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     school_ids: [],
-    education_level: [],
+    is_current: null,
     status: []
   });
 
   const [formState, setFormState] = useState<FormState>({
     school_id: '',
-    grade_name: '',
-    grade_code: '',
-    grade_order: 1,
-    education_level: '',
-    max_students_per_section: 30,
-    total_sections: 1,
+    year_name: '',
+    year_code: '',
+    start_date: '',
+    end_date: '',
+    is_current: false,
+    description: '',
     status: 'active',
   });
 
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [gradeLevelsToDelete, setGradeLevelsToDelete] = useState<GradeLevel[]>([]);
+  const [yearsToDelete, setYearsToDelete] = useState<AcademicYear[]>([]);
 
   // Get scope filters
   const scopeFilters = getScopeFilters('schools');
@@ -109,7 +106,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
 
   // Fetch schools for dropdown
   const { data: schools = [] } = useQuery(
-    ['schools-for-grades', companyId, scopeFilters],
+    ['schools-for-years', companyId, scopeFilters],
     async () => {
       if (!companyId) return [];
 
@@ -120,7 +117,6 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
         .eq('status', 'active')
         .order('name');
 
-      // Apply scope filtering for non-entity admins
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
         query = query.in('id', scopeFilters.school_ids);
       }
@@ -135,76 +131,83 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
     }
   );
 
-  // Populate formState when editingGradeLevel changes or form is opened
+  // Populate formState when editing
   useEffect(() => {
     if (isFormOpen) {
-      if (editingGradeLevel) {
+      if (editingYear) {
         setFormState({
-          school_id: editingGradeLevel.school_id || '',
-          grade_name: editingGradeLevel.grade_name,
-          grade_code: editingGradeLevel.grade_code || '',
-          grade_order: editingGradeLevel.grade_order,
-          education_level: editingGradeLevel.education_level || '',
-          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
-          total_sections: editingGradeLevel.total_sections || 1,
-          status: editingGradeLevel.status,
+          school_id: editingYear.school_id || '',
+          year_name: editingYear.year_name || '',
+          year_code: editingYear.year_code || '',
+          start_date: editingYear.start_date || '',
+          end_date: editingYear.end_date || '',
+          is_current: editingYear.is_current || false,
+          description: editingYear.description || '',
+          status: editingYear.status || 'active',
         });
       } else {
-        // Reset for new creation
-        setFormState(prev => ({ ...prev, school_id: '', grade_name: '', grade_code: '', grade_order: 1, education_level: '', max_students_per_section: 30, total_sections: 1, status: 'active' }));
+        setFormState({
+          school_id: '',
+          year_name: '',
+          year_code: '',
+          start_date: '',
+          end_date: '',
+          is_current: false,
+          description: '',
+          status: 'active'
+        });
       }
-      setFormErrors({}); // Clear errors when form opens
+      setFormErrors({});
     }
-  }, [isFormOpen, editingGradeLevel]);
+  }, [isFormOpen, editingYear]);
 
-  // Fetch grade levels
+  // Fetch academic years
   const { 
-    data: gradeLevels = [], 
+    data: academicYears = [], 
     isLoading, 
     isFetching 
   } = useQuery(
-    ['grade-levels', companyId, filters, scopeFilters],
+    ['academic-years', companyId, filters, scopeFilters],
     async () => {
       if (!companyId) return [];
 
       let query = supabase
-        .from('grade_levels')
+        .from('academic_years')
         .select(`
           id,
           school_id,
-          grade_name,
-          grade_code,
-          grade_order,
-          education_level,
-          max_students_per_section,
-          total_sections,
+          year_name,
+          year_code,
+          start_date,
+          end_date,
+          is_current,
+          description,
           status,
           created_at,
-          schools!grade_levels_school_id_fkey (
+          schools!academic_years_school_id_fkey (
             name
           )
         `)
-        .order('grade_order', { ascending: true });
+        .order('start_date', { ascending: false });
 
-      // Apply school filtering based on scope
+      // Apply school filtering
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
         query = query.in('school_id', scopeFilters.school_ids);
       } else if (!canAccessAll) {
-        // No scope assigned, return empty
         return [];
       }
 
-      // Apply additional filters
+      // Apply filters
       if (filters.search) {
-        query = query.or(`grade_name.ilike.%${filters.search}%,grade_code.ilike.%${filters.search}%`);
+        query = query.or(`year_name.ilike.%${filters.search}%,year_code.ilike.%${filters.search}%`);
       }
 
       if (filters.school_ids.length > 0) {
         query = query.in('school_id', filters.school_ids);
       }
 
-      if (filters.education_level.length > 0) {
-        query = query.in('education_level', filters.education_level);
+      if (filters.is_current !== null) {
+        query = query.eq('is_current', filters.is_current);
       }
 
       if (filters.status.length > 0) {
@@ -214,9 +217,9 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map(grade => ({
-        ...grade,
-        school_name: grade.schools?.name || 'Unknown School'
+      return (data || []).map(year => ({
+        ...year,
+        school_name: year.schools?.name || 'Unknown School'
       }));
     },
     {
@@ -226,46 +229,59 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
     }
   );
 
-  // Create/update grade level mutation
-  const gradeLevelMutation = useMutation(
+  // Create/update mutation
+  const yearMutation = useMutation(
     async (data: FormState) => {
-      const validatedData = gradeLevelSchema.parse({
+      const validatedData = academicYearSchema.parse({
         school_id: data.school_id,
-        grade_name: data.grade_name,
-        grade_code: data.grade_code || undefined,
-        grade_order: data.grade_order,
-        education_level: data.education_level || undefined,
-        max_students_per_section: data.max_students_per_section || undefined,
-        total_sections: data.total_sections || undefined,
+        year_name: data.year_name,
+        year_code: data.year_code || undefined,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        is_current: data.is_current,
+        description: data.description || undefined,
         status: data.status
       });
 
-      if (editingGradeLevel) {
+      // Validate dates
+      if (new Date(validatedData.start_date) >= new Date(validatedData.end_date)) {
+        throw new Error('End date must be after start date');
+      }
+
+      // If setting as current, unset other current years for the same school
+      if (validatedData.is_current) {
+        await supabase
+          .from('academic_years')
+          .update({ is_current: false })
+          .eq('school_id', validatedData.school_id)
+          .neq('id', editingYear?.id || '');
+      }
+
+      if (editingYear) {
         const { error } = await supabase
-          .from('grade_levels')
+          .from('academic_years')
           .update(validatedData)
-          .eq('id', editingGradeLevel.id);
+          .eq('id', editingYear.id);
         if (error) throw error;
-        return { ...editingGradeLevel, ...validatedData };
+        return { ...editingYear, ...validatedData };
       } else {
-        // Ensure school_id is not empty for new creation
-        const { data: newGradeLevel, error } = await supabase
-          .from('grade_levels')
+        const { data: newYear, error } = await supabase
+          .from('academic_years')
           .insert([validatedData])
           .select()
           .single();
 
         if (error) throw error;
-        return newGradeLevel;
+        return newYear;
       }
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['grade-levels']);
+        queryClient.invalidateQueries(['academic-years']);
         setIsFormOpen(false);
-        setEditingGradeLevel(null);
+        setEditingYear(null);
         setFormErrors({});
-        toast.success(`Grade level ${editingGradeLevel ? 'updated' : 'created'} successfully`);
+        toast.success(`Academic year ${editingYear ? 'updated' : 'created'} successfully`);
       },
       onError: (error) => {
         if (error instanceof z.ZodError) {
@@ -276,87 +292,79 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
             }
           });
           setFormErrors(errors);
+        } else if (error instanceof Error) {
+          setFormErrors({ form: error.message });
+          toast.error(error.message);
         } else {
-          console.error('Error saving grade level:', error);
-          setFormErrors({ form: 'Failed to save grade level. Please try again.' });
-          toast.error('Failed to save grade level');
+          console.error('Error saving academic year:', error);
+          setFormErrors({ form: 'Failed to save academic year. Please try again.' });
+          toast.error('Failed to save academic year');
         }
       }
     }
   );
 
-  // Delete grade levels mutation
+  // Delete mutation
   const deleteMutation = useMutation(
-    async (gradeLevels: GradeLevel[]) => {
+    async (years: AcademicYear[]) => {
       const { error } = await supabase
-        .from('grade_levels')
+        .from('academic_years')
         .delete()
-        .in('id', gradeLevels.map(g => g.id));
+        .in('id', years.map(y => y.id));
 
       if (error) throw error;
-      return gradeLevels;
+      return years;
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['grade-levels']);
+        queryClient.invalidateQueries(['academic-years']);
         setIsConfirmDialogOpen(false);
-        setGradeLevelsToDelete([]);
-        toast.success('Grade level(s) deleted successfully');
+        setYearsToDelete([]);
+        toast.success('Academic year(s) deleted successfully');
       },
       onError: (error) => {
-        console.error('Error deleting grade levels:', error);
-        toast.error('Failed to delete grade level(s)');
+        console.error('Error deleting academic years:', error);
+        toast.error('Failed to delete academic year(s)');
         setIsConfirmDialogOpen(false);
-        setGradeLevelsToDelete([]);
+        setYearsToDelete([]);
       }
     }
   );
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    gradeLevelMutation.mutate(formState);
+    yearMutation.mutate(formState);
   };
 
-  const handleDelete = (gradeLevels: GradeLevel[]) => {
-    setGradeLevelsToDelete(gradeLevels);
+  const handleDelete = (years: AcademicYear[]) => {
+    setYearsToDelete(years);
     setIsConfirmDialogOpen(true);
   };
 
   const confirmDelete = () => {
-    deleteMutation.mutate(gradeLevelsToDelete);
+    deleteMutation.mutate(yearsToDelete);
   };
 
   const cancelDelete = () => {
     setIsConfirmDialogOpen(false);
-    setGradeLevelsToDelete([]);
+    setYearsToDelete([]);
   };
 
   const columns = [
     {
-      id: 'grade_name',
-      header: 'Grade Name',
-      accessorKey: 'grade_name',
+      id: 'year_name',
+      header: 'Year Name',
+      accessorKey: 'year_name',
       enableSorting: true,
     },
     {
-      id: 'grade_code',
+      id: 'year_code',
       header: 'Code',
-      accessorKey: 'grade_code',
+      accessorKey: 'year_code',
       enableSorting: true,
-      cell: (row: GradeLevel) => (
+      cell: (row: AcademicYear) => (
         <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.grade_code || '-'}
-        </span>
-      ),
-    },
-    {
-      id: 'grade_order',
-      header: 'Order',
-      accessorKey: 'grade_order',
-      enableSorting: true,
-      cell: (row: GradeLevel) => (
-        <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium">
-          {row.grade_order}
+          {row.year_code || '-'}
         </span>
       ),
     },
@@ -367,36 +375,38 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
       enableSorting: true,
     },
     {
-      id: 'education_level',
-      header: 'Education Level',
-      accessorKey: 'education_level',
+      id: 'dates',
+      header: 'Duration',
       enableSorting: true,
-      cell: (row: GradeLevel) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100 capitalize">
-          {row.education_level || '-'}
-        </span>
+      cell: (row: AcademicYear) => (
+        <div className="text-sm">
+          <div className="font-medium text-gray-900 dark:text-white">
+            {new Date(row.start_date).toLocaleDateString()} - {new Date(row.end_date).toLocaleDateString()}
+          </div>
+          <div className="text-gray-500 dark:text-gray-400">
+            {Math.ceil((new Date(row.end_date).getTime() - new Date(row.start_date).getTime()) / (1000 * 60 * 60 * 24))} days
+          </div>
+        </div>
       ),
     },
     {
-      id: 'sections',
-      header: 'Sections',
+      id: 'is_current',
+      header: 'Current',
+      accessorKey: 'is_current',
       enableSorting: true,
-      cell: (row: GradeLevel) => (
-        <div className="text-sm">
-          <div className="font-medium text-gray-900 dark:text-white">
-            {row.total_sections || 1}
-          </div>
-          <div className="text-gray-500 dark:text-gray-400">
-            Max {row.max_students_per_section || 30} students
-          </div>
-        </div>
+      cell: (row: AcademicYear) => (
+        row.is_current ? (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            Current Year
+          </span>
+        ) : null
       ),
     },
     {
       id: 'status',
       header: 'Status',
       enableSorting: true,
-      cell: (row: GradeLevel) => (
+      cell: (row: AcademicYear) => (
         <StatusBadge status={row.status} />
       ),
     },
@@ -405,7 +415,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
       header: 'Created At',
       accessorKey: 'created_at',
       enableSorting: true,
-      cell: (row: GradeLevel) => (
+      cell: (row: AcademicYear) => (
         <span className="text-sm text-gray-900 dark:text-gray-100">
           {new Date(row.created_at).toLocaleDateString()}
         </span>
@@ -417,19 +427,19 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Grade Levels</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Academic Years</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Manage grade levels and academic progression structure
+            Manage academic years and term schedules
           </p>
         </div>
         <Button
           onClick={() => {
-            setEditingGradeLevel(null);
+            setEditingYear(null);
             setIsFormOpen(true);
           }}
           leftIcon={<Plus className="h-4 w-4" />}
         >
-          Add Grade Level
+          Add Academic Year
         </Button>
       </div>
 
@@ -440,7 +450,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
           setFilters({
             search: '',
             school_ids: [],
-            education_level: [],
+            is_current: null,
             status: []
           });
         }}
@@ -466,25 +476,28 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
             placeholder="Select schools..."
           />
 
-          <SearchableMultiSelect
-            label="Education Level"
-            options={[
-              { value: 'kindergarten', label: 'Kindergarten' },
-              { value: 'primary', label: 'Primary' },
-              { value: 'middle', label: 'Middle' },
-              { value: 'secondary', label: 'Secondary' },
-              { value: 'senior', label: 'Senior' }
-            ]}
-            selectedValues={filters.education_level}
-            onChange={(values) => setFilters({ ...filters, education_level: values })}
-            placeholder="Select levels..."
-          />
+          <FormField id="is_current" label="Current Year">
+            <Select
+              id="is_current"
+              options={[
+                { value: '', label: 'All' },
+                { value: 'true', label: 'Current Only' },
+                { value: 'false', label: 'Non-Current' }
+              ]}
+              value={filters.is_current === null ? '' : filters.is_current.toString()}
+              onChange={(e) => setFilters({ 
+                ...filters, 
+                is_current: e.target.value === '' ? null : e.target.value === 'true' 
+              })}
+            />
+          </FormField>
 
           <SearchableMultiSelect
             label="Status"
             options={[
               { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' }
+              { value: 'inactive', label: 'Inactive' },
+              { value: 'completed', label: 'Completed' }
             ]}
             selectedValues={filters.status}
             onChange={(values) => setFilters({ ...filters, status: values })}
@@ -494,35 +507,35 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
       </FilterCard>
 
       <DataTable
-        data={gradeLevels}
+        data={academicYears}
         columns={columns}
         keyField="id"
-        caption="List of grade levels with their schools and academic structure"
-        ariaLabel="Grade levels data table"
+        caption="List of academic years with their duration and status"
+        ariaLabel="Academic years data table"
         loading={isLoading}
         isFetching={isFetching}
-        onEdit={(gradeLevel) => {
-          setEditingGradeLevel(gradeLevel);
+        onEdit={(year) => {
+          setEditingYear(year);
           setIsFormOpen(true);
         }}
         onDelete={handleDelete}
-        emptyMessage="No grade levels found"
+        emptyMessage="No academic years found"
       />
 
       <SlideInForm
-        key={editingGradeLevel?.id || 'new'}
-        title={editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level'}
+        key={editingYear?.id || 'new'}
+        title={editingYear ? 'Edit Academic Year' : 'Create Academic Year'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
-          setEditingGradeLevel(null);
+          setEditingYear(null);
           setFormErrors({});
         }}
         onSave={() => {
           const form = document.querySelector('form');
           if (form) form.requestSubmit();
         }}
-        loading={gradeLevelMutation.isLoading}
+        loading={yearMutation.isLoading}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
@@ -537,20 +550,15 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
-            <input
-              name="school_id"
-             value={formState?.school_id || ''} // Bind to formState
-              readOnly // Make it readOnly as SearchableMultiSelect will manage it
-            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
                 value: school.id,
                 label: school.name
               }))}
-             selectedValues={formState?.school_id ? [formState.school_id] : []} // Bind to formState
+              selectedValues={formState.school_id ? [formState.school_id] : []}
               onChange={(values) => {
-                setFormState(prev => ({ ...prev, school_id: values[0] || '' })); // Update formState
+                setFormState(prev => ({ ...prev, school_id: values[0] || '' }));
               }}
               isMulti={false}
               placeholder="Select school..."
@@ -558,108 +566,108 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
           </FormField>
 
           <FormField
-            id="grade_name"
-            label="Grade Name"
+            id="year_name"
+            label="Year Name"
             required
-            error={formErrors.grade_name}
+            error={formErrors.year_name}
           >
             <Input
-              id="grade_name"
-              name="grade_name"
-              placeholder="e.g., Grade 1, Year 7, Form 1"
-             value={formState?.grade_name || ''} // Bind to formState
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))} // Update formState
-              leftIcon={<GraduationCap className="h-5 w-5 text-gray-400" />}
+              id="year_name"
+              name="year_name"
+              placeholder="e.g., 2024-2025 Academic Year"
+              value={formState.year_name}
+              onChange={(e) => setFormState(prev => ({ ...prev, year_name: e.target.value }))}
+              leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
 
           <FormField
-            id="grade_code"
-            label="Grade Code"
-            error={formErrors.grade_code}
+            id="year_code"
+            label="Year Code"
+            error={formErrors.year_code}
           >
             <Input
-              id="grade_code"
-              name="grade_code"
-              placeholder="e.g., G1, Y7, F1"
-             value={formState?.grade_code || ''} // Bind to formState
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))} // Update formState
-              leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
-            />
-          </FormField>
-
-          <FormField
-            id="grade_order"
-            label="Grade Order"
-            required
-            error={formErrors.grade_order}
-          >
-            <Input
-              id="grade_order"
-              name="grade_order"
-              type="number"
-              min="1"
-              placeholder="1"
-             value={formState?.grade_order || 1} // Bind to formState
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 0 }))} // Update formState
-            />
-          </FormField>
-
-          <FormField
-            id="education_level"
-            label="Education Level"
-            error={formErrors.education_level}
-          >
-            <Select
-              id="education_level"
-              name="education_level"
-              options={[
-                { value: '', label: 'Select level' },
-                { value: 'kindergarten', label: 'Kindergarten' },
-                { value: 'primary', label: 'Primary' },
-                { value: 'middle', label: 'Middle' },
-                { value: 'secondary', label: 'Secondary' },
-                { value: 'senior', label: 'Senior' }
-              ]}
-             value={formState?.education_level || ''} // Bind to formState
-              onChange={(e) => setFormState(prev => ({ ...prev, education_level: e.target.value }))} // Update formState
+              id="year_code"
+              name="year_code"
+              placeholder="e.g., AY2024-25"
+              value={formState.year_code}
+              onChange={(e) => setFormState(prev => ({ ...prev, year_code: e.target.value }))}
+              leftIcon={<CalendarClock className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
 
           <div className="grid grid-cols-2 gap-4">
             <FormField
-              id="max_students_per_section"
-              label="Max Students per Section"
-              error={formErrors.max_students_per_section}
+              id="start_date"
+              label="Start Date"
+              required
+              error={formErrors.start_date}
             >
               <Input
-                id="max_students_per_section"
-                name="max_students_per_section"
-                type="number"
-                min="1"
-                placeholder="30"
-               value={formState?.max_students_per_section || 30} // Bind to formState
-                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 0 }))} // Update formState
-                leftIcon={<Users className="h-5 w-5 text-gray-400" />}
+                id="start_date"
+                name="start_date"
+                type="date"
+                value={formState.start_date}
+                onChange={(e) => setFormState(prev => ({ ...prev, start_date: e.target.value }))}
               />
             </FormField>
 
             <FormField
-              id="total_sections"
-              label="Total Sections"
-              error={formErrors.total_sections}
+              id="end_date"
+              label="End Date"
+              required
+              error={formErrors.end_date}
             >
               <Input
-                id="total_sections"
-                name="total_sections"
-                type="number"
-                min="1"
-                placeholder="1"
-               value={formState?.total_sections || 1} // Bind to formState
-                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 0 }))} // Update formState
+                id="end_date"
+                name="end_date"
+                type="date"
+                value={formState.end_date}
+                onChange={(e) => setFormState(prev => ({ ...prev, end_date: e.target.value }))}
               />
             </FormField>
           </div>
+
+          <FormField
+            id="description"
+            label="Description"
+            error={formErrors.description}
+          >
+            <Textarea
+              id="description"
+              name="description"
+              placeholder="Enter academic year description..."
+              value={formState.description}
+              onChange={(e) => setFormState(prev => ({ ...prev, description: e.target.value }))}
+              rows={3}
+            />
+          </FormField>
+
+          <FormField
+            id="is_current"
+            label="Current Academic Year"
+            error={formErrors.is_current}
+          >
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Set as Current Year
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {formState.is_current
+                    ? 'This will be set as the current academic year' 
+                    : 'This is not the current academic year'}
+                </p>
+              </div>
+              <ToggleSwitch
+                checked={formState.is_current}
+                onChange={(checked) => {
+                  setFormState(prev => ({ ...prev, is_current: checked }));
+                }}
+                label="Current"
+              />
+            </div>
+          </FormField>
 
           <FormField
             id="status"
@@ -667,25 +675,17 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.status}
           >
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Grade Level Status
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                 {formState?.status === 'active'
-                    ? 'Grade level is currently active' 
-                    : 'Grade level is currently inactive'}
-                </p>
-              </div>
-              <ToggleSwitch
-               checked={formState?.status === 'active'} // Bind to formState
-                onChange={(checked) => {
-                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' })); // Update formState
-                }}
-                label="Active"
-              />
-            </div>
+            <Select
+              id="status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'completed', label: 'Completed' }
+              ]}
+              value={formState.status}
+              onChange={(e) => setFormState(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' | 'completed' }))}
+            />
           </FormField>
         </form>
       </SlideInForm>
@@ -693,8 +693,8 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
       {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
-        title="Delete Grade Level"
-        message={`Are you sure you want to delete ${gradeLevelsToDelete.length} grade level(s)? This action cannot be undone.`}
+        title="Delete Academic Year"
+        message={`Are you sure you want to delete ${yearsToDelete.length} academic year(s)? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
