@@ -165,26 +165,15 @@ export function SchoolFormContent({
             </FormField>
 
             <FormField id="status" label="Status" required error={formErrors.status}>
-              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    School Status
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {formData.status === 'active' 
-                      ? 'School is currently active' 
-                      : 'School is currently inactive'}
-                  </p>
-                </div>
-                <ToggleSwitch
-                  checked={formData.status === 'active'}
-                  onChange={(checked) => updateFormData('status', checked ? 'active' : 'inactive')}
-                  label="Active"
-                  showStateLabel={true}
-                  activeLabel="Active"
-                  inactiveLabel="Inactive"
-                />
-              </div>
+              <Select
+                id="status"
+                value={formData.status || 'active'}
+                onChange={(value) => updateFormData('status', value)}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+              />
             </FormField>
 
             <FormField id="school_type" label="School Type">
