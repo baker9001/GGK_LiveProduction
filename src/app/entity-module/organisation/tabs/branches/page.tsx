@@ -1,24 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/branches/page.tsx
- * Dependencies:
- *   - @/lib/supabase
- *   - @/lib/auth
- *   - @/contexts/UserContext
- *   - @/hooks/useAccessControl
- *   - @/components/shared/* (SlideInForm, FormField, Button, StatusBadge)
- *   - @/components/shared/ImageUpload
- *   - @/components/forms/BranchFormContent
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
+ * UNIFIED VERSION with improved UI/UX matching schools implementation
  * 
- * FIXED ISSUES:
- * 1. Uses BranchFormContent component properly (without duplicate tabs)
- * 2. Auto-populate company from user context (no manual selection needed)
- * 3. Changed permission checks from 'organization.modify_branch' to 'modify_branch'
- * 
- * Database Tables:
- *   - branches & branches_additional
- *   - schools (for reference)
- *   - entity_user_branches (for scope)
+ * Improvements:
+ * 1. Green tab colors (#8CC63F) with red dot indicators
+ * 2. Status field as ToggleSwitch (consistent with schools)
+ * 3. Better field organization and alignment
+ * 4. All database fields included via BranchFormContent
+ * 5. Consistent with schools implementation
  */
 
 'use client';
@@ -114,21 +103,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // Get user context early for company ID
   const userContext = getUserContext();
   
-  // AUTO-SELECT USER'S COMPANY - Must be defined before any usage
+  // AUTO-SELECT USER'S COMPANY
   const companyId = useMemo(() => {
-    // First try to get from user context (most reliable)
     if (userContext?.companyId) {
       console.log('Using company ID from user context:', userContext.companyId);
       return userContext.companyId;
     }
     
-    // Fallback to user object
     if (user?.company_id) {
       console.log('Using company ID from user object:', user.company_id);
       return user.company_id;
     }
     
-    // Last resort - use prop (for backward compatibility)
     if (propCompanyId) {
       console.log('Using company ID from prop:', propCompanyId);
       return propCompanyId;
@@ -148,6 +134,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
+  const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
 
   // ACCESS CHECK: Block entry if user cannot view this tab
   useEffect(() => {
@@ -177,26 +164,23 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const getBranchLogoUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
     
-    // If it's already a full URL, return as is
     if (path.startsWith('http')) {
       return path;
     }
     
-    // Construct Supabase storage URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       console.warn('VITE_SUPABASE_URL is not defined');
       return null;
     }
     
-    // Use the correct bucket name for branches
     return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
   }, []);
 
   // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
   const scopeFilters = getScopeFilters('branches');
 
-  // ===== FETCH SCHOOLS FOR DROPDOWN - Auto-filtered by user's company =====
+  // ===== FETCH SCHOOLS FOR DROPDOWN =====
   const { data: schools = [], isLoading: isLoadingSchools, error: schoolsError } = useQuery(
     ['schools-for-branches', companyId],
     async () => {
@@ -207,14 +191,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         return [];
       }
       
-      // Fetch schools for the user's company
       let query = supabase
         .from('schools')
         .select('id, name, code, company_id')
         .eq('company_id', companyId)
         .order('name');
       
-      // Apply scope filters for school admins (if they have limited access)
       if (isSchoolAdmin && scopeFilters.school_id) {
         if (Array.isArray(scopeFilters.school_id)) {
           if (scopeFilters.school_id.length === 0) return [];
@@ -246,7 +228,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const { data: branches = [], isLoading, error: fetchError, refetch } = useQuery(
     ['branches-tab', companyId, scopeFilters],
     async () => {
-      // For branch admins, get branches directly
       if (isBranchAdmin && scopeFilters.branch_id) {
         let branchQuery = supabase
           .from('branches')
@@ -265,7 +246,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         const { data: branchesData, error } = await branchQuery.order('name');
         if (error) throw error;
         
-        // Fetch additional data
         const enrichedBranches = await Promise.all((branchesData || []).map(async (branch) => {
           const { data: additional } = await supabase
             .from('branches_additional')
@@ -273,14 +253,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             .eq('branch_id', branch.id)
             .maybeSingle();
           
-          // Get school name
           const { data: school } = await supabase
             .from('schools')
             .select('name')
             .eq('id', branch.school_id)
             .single();
           
-          // Get teacher count if not in additional
           let teacherCount = additional?.teachers_count || 0;
           if (!teacherCount) {
             const { count } = await supabase
@@ -303,7 +281,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         return enrichedBranches;
       }
       
-      // For others, get schools first then branches
       let schoolsQuery = supabase
         .from('schools')
         .select(`
@@ -312,7 +289,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         `)
         .eq('company_id', companyId);
 
-      // Apply school scope filters
       if (!isEntityAdmin && !isSubEntityAdmin && scopeFilters.school_id) {
         if (Array.isArray(scopeFilters.school_id)) {
           if (scopeFilters.school_id.length === 0) return [];
@@ -328,7 +304,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       const schoolIds = schoolsData?.map(s => s.id) || [];
       if (schoolIds.length === 0) return [];
       
-      // Get branches for these schools
       const { data: branchesData, error: branchesError } = await supabase
         .from('branches')
         .select(`
@@ -340,7 +315,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       
       if (branchesError) throw branchesError;
       
-      // Fetch additional data for each branch
       const branchesWithAdditional = await Promise.all((branchesData || []).map(async (branch) => {
         const { data: additional } = await supabase
           .from('branches_additional')
@@ -348,10 +322,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           .eq('branch_id', branch.id)
           .maybeSingle();
         
-        // Get school name
         const school = schoolsData?.find(s => s.id === branch.school_id);
         
-        // Get teacher count if not in additional
         let teacherCount = additional?.teachers_count || 0;
         if (!teacherCount) {
           const { count } = await supabase
@@ -362,7 +334,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           teacherCount = count || 0;
         }
         
-        // Return enriched branch data
         return {
           ...branch,
           additional,
@@ -387,13 +358,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // ===== MUTATIONS =====
   const createBranchMutation = useMutation(
     async (data: any) => {
-      // Validate school selection for branch admins
       if (isBranchAdmin) {
         toast.error('Branch administrators cannot create new branches');
         throw new Error('Insufficient permissions');
       }
       
-      // Prepare main data
       const mainData = {
         name: data.name,
         code: data.code,
@@ -404,7 +373,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         logo: data.logo
       };
       
-      // Create main record
       const { data: branch, error } = await supabase
         .from('branches')
         .insert([mainData])
@@ -413,12 +381,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       
       if (error) throw error;
       
-      // Create additional record
       const additionalData: any = {
         branch_id: branch.id
       };
       
-      // Add additional fields
       const additionalFields = [
         'student_capacity', 'current_students', 'student_count', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
@@ -453,6 +419,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setShowCreateModal(false);
         setFormData({});
         setFormErrors({});
+        setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
       },
       onError: (error: any) => {
@@ -464,7 +431,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   const updateBranchMutation = useMutation(
     async ({ id, data }: { id: string; data: any }) => {
-      // Prepare main data
       const mainData = {
         name: data.name,
         code: data.code,
@@ -475,7 +441,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         logo: data.logo
       };
       
-      // Update main record
       const { error } = await supabase
         .from('branches')
         .update(mainData)
@@ -483,12 +448,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       
       if (error) throw error;
       
-      // Update or insert additional record
       const additionalData: any = {
         branch_id: id
       };
       
-      // Add additional fields
       const additionalFields = [
         'student_capacity', 'current_students', 'student_count', 'teachers_count',
         'active_teachers_count', 'branch_head_name', 'branch_head_email',
@@ -503,13 +466,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       });
       
       if (Object.keys(additionalData).length > 1) {
-        // Try update first
         const { error: updateError } = await supabase
           .from('branches_additional')
           .update(additionalData)
           .eq('branch_id', id);
         
-        // If no rows updated, insert
         if (updateError?.code === 'PGRST116') {
           const { error: insertError } = await supabase
             .from('branches_additional')
@@ -531,6 +492,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setSelectedBranch(null);
         setFormData({});
         setFormErrors({});
+        setTabErrors({ basic: false, additional: false, contact: false });
         setActiveTab('basic');
       },
       onError: (error: any) => {
@@ -547,9 +509,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     if (!formData.name) errors.name = 'Name is required';
     if (!formData.code) errors.code = 'Code is required';
     if (!formData.school_id) errors.school_id = 'School is required';
-    if (!formData.status) errors.status = 'Status is required';
     
-    // Email validation
     if (formData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.branch_head_email)) {
       errors.branch_head_email = 'Invalid email address';
     }
@@ -587,14 +547,15 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     setSelectedBranch(branch);
     setFormErrors({});
     setActiveTab('basic');
+    setTabErrors({ basic: false, additional: false, contact: false });
     setShowEditModal(true);
   }, []);
 
   const handleCreate = useCallback(() => {
-    // Auto-set status to active for new branches
     setFormData({ status: 'active' });
     setFormErrors({});
     setActiveTab('basic');
+    setTabErrors({ basic: false, additional: false, contact: false });
     setShowCreateModal(true);
   }, []);
 
@@ -625,7 +586,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
+          <Loader2 className="h-8 w-8 animate-spin text-gray-600 mx-auto mb-2" />
           <p className="text-gray-600 dark:text-gray-400">Loading branches...</p>
         </div>
       </div>
@@ -647,6 +608,85 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       </div>
     );
   }
+
+  // Form content rendering function
+  const renderFormContent = () => {
+    return (
+      <div className="space-y-4">
+        {/* Tab Navigation with Green Theme and Error Indicators */}
+        <div className="flex space-x-4 border-b dark:border-gray-700">
+          <button
+            type="button"
+            onClick={() => setActiveTab('basic')}
+            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+              activeTab === 'basic' 
+                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+            }`}
+          >
+            Basic Info
+            {tabErrors.basic && !selectedBranch && (
+              <span 
+                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                title="Required fields missing" 
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('additional')}
+            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+              activeTab === 'additional' 
+                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+            }`}
+          >
+            Additional
+            {tabErrors.additional && !selectedBranch && (
+              <span 
+                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                title="Required fields missing" 
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('contact')}
+            className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+              activeTab === 'contact' 
+                ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+            }`}
+          >
+            Contact
+            {tabErrors.contact && !selectedBranch && (
+              <span 
+                className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                title="Required fields missing" 
+              />
+            )}
+          </button>
+        </div>
+
+        {/* Form Content using BranchFormContent component */}
+        <div className="mt-4">
+          <BranchFormContent
+            formData={formData}
+            setFormData={setFormData}
+            formErrors={formErrors}
+            setFormErrors={setFormErrors}
+            activeTab={activeTab}
+            schools={schools}
+            isEditing={!!selectedBranch}
+            isLoadingSchools={isLoadingSchools}
+            schoolsError={schoolsError}
+            isBranchAdmin={isBranchAdmin}
+            onTabErrorsChange={setTabErrors}
+          />
+        </div>
+      </div>
+    );
+  };
 
   // ===== MAIN RENDER =====
   return (
@@ -788,7 +828,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    {/* Logo display with better error handling */}
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-md overflow-hidden relative bg-white">
                       {logoUrl ? (
                         <>
@@ -896,7 +935,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         )}
       </div>
 
-      {/* Create Modal - Using BranchFormContent WITHOUT duplicate tabs */}
+      {/* Create Modal */}
       <SlideInForm
         title="Create Branch"
         isOpen={showCreateModal}
@@ -904,58 +943,16 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setShowCreateModal(false);
           setFormData({});
           setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
           setActiveTab('basic');
         }}
         onSave={() => handleSubmit('create')}
         loading={createBranchMutation.isLoading}
       >
-        <div className="space-y-4">
-          {/* Single Tab Navigation */}
-          <div className="flex space-x-4 border-b dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`pb-2 px-1 ${activeTab === 'basic' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Basic Info
-            </button>
-            <button
-              onClick={() => setActiveTab('additional')}
-              className={`pb-2 px-1 ${activeTab === 'additional' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Additional
-            </button>
-            <button
-              onClick={() => setActiveTab('contact')}
-              className={`pb-2 px-1 ${activeTab === 'contact' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Contact
-            </button>
-          </div>
-
-          {/* Form Content using BranchFormContent component */}
-          <div className="mt-4">
-            <BranchFormContent
-              formData={formData}
-              setFormData={setFormData}
-              formErrors={formErrors}
-              setFormErrors={setFormErrors}
-              activeTab={activeTab}
-              schools={schools}
-              isLoadingSchools={isLoadingSchools}
-              schoolsError={schoolsError}
-              isBranchAdmin={isBranchAdmin}
-            />
-          </div>
-        </div>
+        {renderFormContent()}
       </SlideInForm>
 
-      {/* Edit Modal - Using BranchFormContent WITHOUT duplicate tabs */}
+      {/* Edit Modal */}
       <SlideInForm
         key={`edit-${selectedBranch?.id || 'none'}`}
         title="Edit Branch"
@@ -965,56 +962,13 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
           setSelectedBranch(null);
           setFormData({});
           setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
           setActiveTab('basic');
         }}
         onSave={() => handleSubmit('edit')}
         loading={updateBranchMutation.isLoading}
       >
-        <div className="space-y-4">
-          {/* Single Tab Navigation */}
-          <div className="flex space-x-4 border-b dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`pb-2 px-1 ${activeTab === 'basic' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Basic Info
-            </button>
-            <button
-              onClick={() => setActiveTab('additional')}
-              className={`pb-2 px-1 ${activeTab === 'additional' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Additional
-            </button>
-            <button
-              onClick={() => setActiveTab('contact')}
-              className={`pb-2 px-1 ${activeTab === 'contact' 
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-                : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Contact
-            </button>
-          </div>
-
-          {/* Form Content using BranchFormContent component */}
-          <div className="mt-4">
-            <BranchFormContent
-              formData={formData}
-              setFormData={setFormData}
-              formErrors={formErrors}
-              setFormErrors={setFormErrors}
-              activeTab={activeTab}
-              schools={schools}
-              isEditing={true}
-              isLoadingSchools={isLoadingSchools}
-              schoolsError={schoolsError}
-              isBranchAdmin={isBranchAdmin}
-            />
-          </div>
-        </div>
+        {renderFormContent()}
       </SlideInForm>
     </div>
   );
