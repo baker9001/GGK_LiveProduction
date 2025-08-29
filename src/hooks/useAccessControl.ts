@@ -448,31 +448,31 @@ export function useAccessControl(): UseAccessControlResult {
 
   // Scope-based query filters
   const getScopeFilters = useCallback((resourceType?: 'schools' | 'branches' | 'users' | 'teachers' | 'students'): Record<string, any> => {
-    if (!userScope) return {};
+    if (!userScope) return { school_ids: [], branch_ids: [] };
     
     const { adminLevel, companyId, schoolIds, branchIds } = userScope;
     
     // Entity admin and sub-entity admin see everything in their company
     if (adminLevel === 'entity_admin' || adminLevel === 'sub_entity_admin') {
-      return companyId ? { company_id: companyId } : {};
+      return companyId ? { company_id: companyId, school_ids: schoolIds || [], branch_ids: branchIds || [] } : { school_ids: [], branch_ids: [] };
     }
     
     // School admin sees their assigned schools
     if (adminLevel === 'school_admin' && schoolIds.length > 0) {
       switch (resourceType) {
         case 'schools':
-          return { id: schoolIds };
+          return { id: schoolIds, school_ids: schoolIds, branch_ids: branchIds || [] };
         case 'branches':
-          return { school_id: schoolIds };
+          return { school_id: schoolIds, school_ids: schoolIds, branch_ids: branchIds || [] };
         case 'users':
         case 'teachers':
         case 'students':
           return { 
-            school_ids: schoolIds,
-            branch_ids: branchIds.length > 0 ? branchIds : []
+            school_ids: schoolIds || [],
+            branch_ids: branchIds || []
           };
         default:
-          return { school_id: schoolIds };
+          return { school_id: schoolIds, school_ids: schoolIds || [], branch_ids: branchIds || [] };
       }
     }
     
@@ -481,20 +481,20 @@ export function useAccessControl(): UseAccessControlResult {
       switch (resourceType) {
         case 'schools':
           // Branch admins can see schools that contain their branches
-          return { id: schoolIds };
+          return { id: schoolIds || [], school_ids: schoolIds || [], branch_ids: branchIds || [] };
         case 'branches':
-          return { id: branchIds };
+          return { id: branchIds, school_ids: schoolIds || [], branch_ids: branchIds || [] };
         case 'users':
         case 'teachers':
         case 'students':
-          return { branch_ids: branchIds };
+          return { school_ids: schoolIds || [], branch_ids: branchIds || [] };
         default:
-          return { branch_id: branchIds };
+          return { branch_id: branchIds, school_ids: schoolIds || [], branch_ids: branchIds || [] };
       }
     }
     
     // Default: no access
-    return { id: [] };
+    return { id: [], school_ids: [], branch_ids: [] };
   }, [userScope]);
 
   // Get user context
