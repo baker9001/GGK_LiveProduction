@@ -1,6 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
- * COMPLETE FIXED VERSION - Based on working Branches component structure
+ * COMPLETE UPDATED VERSION with all improvements
+ * 
+ * Changes implemented:
+ * 1. Status field as ToggleSwitch
+ * 2. Green tab colors (#8CC63F)
+ * 3. Red dot indicators for mandatory fields
+ * 4. All database fields via SchoolFormContent
+ * 5. Proper component integration
  */
 
 'use client';
@@ -23,6 +30,7 @@ import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { useUser } from '@/contexts/UserContext';
 import { getAuthenticatedUser } from '@/lib/auth';
+import { SchoolFormContent } from '@/components/forms/SchoolFormContent';
 
 // ===== INTERFACES =====
 interface SchoolData {
@@ -111,6 +119,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
     const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
     const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
+    const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
 
     // ACCESS CHECK: Block entry if user cannot view this tab
     useEffect(() => {
@@ -452,6 +461,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
           setShowCreateModal(false);
           setFormData({});
           setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
           queryClient.invalidateQueries(['schools-tab']);
           if (refreshData) refreshData();
         },
@@ -548,6 +558,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
           setSelectedSchool(null);
           setFormData({});
           setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
           queryClient.invalidateQueries(['schools-tab']);
           if (refreshData) refreshData();
         },
@@ -615,7 +626,6 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       
       if (!formData.name) errors.name = 'Name is required';
       if (!formData.code) errors.code = 'Code is required';
-      if (!formData.status) errors.status = 'Status is required';
       
       // Email validation
       if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
@@ -688,12 +698,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       setFormData(combinedData);
       setSelectedSchool(school);
       setActiveTab('basic');
+      setTabErrors({ basic: false, additional: false, contact: false });
       setShowEditModal(true);
     }, []);
 
     const handleCreate = useCallback(() => {
-      setFormData({ status: 'active', company_id: companyId });
+      setFormData({ 
+        status: 'active',
+        company_id: companyId 
+      });
       setActiveTab('basic');
+      setTabErrors({ basic: false, additional: false, contact: false });
       setShowCreateModal(true);
     }, [companyId]);
 
@@ -743,199 +758,79 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       );
     }
 
-    // Form content rendering
-    const renderFormContent = () => (
-      <>
-        {/* Tab Navigation */}
-        <div className="flex space-x-4 border-b dark:border-gray-700 mb-4">
-          <button
-            onClick={() => setActiveTab('basic')}
-            className={`pb-2 px-1 ${activeTab === 'basic' 
-              ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-              : 'text-gray-600 dark:text-gray-400'}`}
-          >
-            Basic Info
-          </button>
-          <button
-            onClick={() => setActiveTab('additional')}
-            className={`pb-2 px-1 ${activeTab === 'additional' 
-              ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-              : 'text-gray-600 dark:text-gray-400'}`}
-          >
-            Additional
-          </button>
-          <button
-            onClick={() => setActiveTab('contact')}
-            className={`pb-2 px-1 ${activeTab === 'contact' 
-              ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400' 
-              : 'text-gray-600 dark:text-gray-400'}`}
-          >
-            Contact
-          </button>
-        </div>
-
-        {activeTab === 'basic' && (
-          <div className="space-y-4">
-            <FormField label="School Name" required error={formErrors.name}>
-              <Input
-                value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter school name"
-              />
-            </FormField>
-
-            <FormField label="School Code" required error={formErrors.code}>
-              <Input
-                value={formData.code || ''}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                placeholder="Enter unique code"
-              />
-            </FormField>
-
-            <FormField label="Description">
-              <Textarea
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Enter school description"
-                rows={3}
-              />
-            </FormField>
-
-            <FormField label="Status" required error={formErrors.status}>
-              <Select
-                value={formData.status || 'active'}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </Select>
-            </FormField>
-
-            <FormField label="Address">
-              <Textarea
-                value={formData.address || ''}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Enter school address"
-                rows={2}
-              />
-            </FormField>
-
-            <FormField label="School Logo">
-              <ImageUpload
-                id="school-logo"
-                bucket="school-logos"
-                value={formData.logo}
-                publicUrl={formData.logo ? getSchoolLogoUrl(formData.logo) : null}
-                onChange={(path) => setFormData({...formData, logo: path || ''})}
-              />
-            </FormField>
-          </div>
-        )}
-
-        {activeTab === 'additional' && (
-          <div className="space-y-4">
-            <FormField label="School Type">
-              <Select
-                value={formData.school_type || ''}
-                onChange={(e) => setFormData({ ...formData, school_type: e.target.value })}
-              >
-                <option value="">Select type</option>
-                <option value="primary">Primary</option>
-                <option value="secondary">Secondary</option>
-                <option value="high_school">High School</option>
-                <option value="k12">K-12</option>
-              </Select>
-            </FormField>
-
-            <FormField label="Total Capacity">
-              <Input
-                type="number"
-                value={formData.total_capacity || ''}
-                onChange={(e) => setFormData({ ...formData, total_capacity: parseInt(e.target.value) })}
-                placeholder="Enter maximum capacity"
-              />
-            </FormField>
-
-            <FormField label="Established Date">
-              <Input
-                type="date"
-                value={formData.established_date || ''}
-                onChange={(e) => setFormData({ ...formData, established_date: e.target.value })}
-              />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Has Library">
-                <Select
-                  value={formData.has_library ? 'yes' : 'no'}
-                  onChange={(e) => setFormData({ ...formData, has_library: e.target.value === 'yes' })}
-                >
-                  <option value="no">No</option>
-                  <option value="yes">Yes</option>
-                </Select>
-              </FormField>
-
-              <FormField label="Has Laboratory">
-                <Select
-                  value={formData.has_laboratory ? 'yes' : 'no'}
-                  onChange={(e) => setFormData({ ...formData, has_laboratory: e.target.value === 'yes' })}
-                >
-                  <option value="no">No</option>
-                  <option value="yes">Yes</option>
-                </Select>
-              </FormField>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'contact' && (
-          <div className="space-y-4">
-            <FormField label="Principal Name">
-              <Input
-                value={formData.principal_name || ''}
-                onChange={(e) => setFormData({ ...formData, principal_name: e.target.value })}
-                placeholder="Enter principal name"
-              />
-            </FormField>
-
-            <FormField label="Principal Email" error={formErrors.principal_email}>
-              <Input
-                type="email"
-                value={formData.principal_email || ''}
-                onChange={(e) => setFormData({ ...formData, principal_email: e.target.value })}
-                placeholder="Enter principal email"
-              />
-            </FormField>
-
-            <FormField label="Principal Phone">
-              <Input
-                value={formData.principal_phone || ''}
-                onChange={(e) => setFormData({ ...formData, principal_phone: e.target.value })}
-                placeholder="Enter principal phone"
-              />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="City">
-                <Input
-                  value={formData.campus_city || ''}
-                  onChange={(e) => setFormData({ ...formData, campus_city: e.target.value })}
-                  placeholder="Enter city"
+    // Updated Form content rendering with SchoolFormContent component
+    const renderFormContent = () => {
+      return (
+        <>
+          {/* Tab Navigation with Green Theme and Error Indicators */}
+          <div className="flex space-x-4 border-b dark:border-gray-700 mb-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'basic' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Basic Info
+              {tabErrors.basic && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
                 />
-              </FormField>
-
-              <FormField label="State">
-                <Input
-                  value={formData.campus_state || ''}
-                  onChange={(e) => setFormData({ ...formData, campus_state: e.target.value })}
-                  placeholder="Enter state"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'additional' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Additional
+              {tabErrors.additional && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
                 />
-              </FormField>
-            </div>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'contact' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Contact
+              {tabErrors.contact && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
+                />
+              )}
+            </button>
           </div>
-        )}
-      </>
-    );
+
+          {/* School Form Content Component - Handles all form fields */}
+          <SchoolFormContent
+            formData={formData}
+            setFormData={setFormData}
+            formErrors={formErrors}
+            setFormErrors={setFormErrors}
+            activeTab={activeTab}
+            companyId={companyId}
+            isEditing={!!selectedSchool}
+            onTabErrorsChange={setTabErrors}
+          />
+        </>
+      );
+    };
 
     // ===== MAIN RENDER =====
     return (
@@ -1168,6 +1063,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             setShowCreateModal(false);
             setFormData({});
             setFormErrors({});
+            setTabErrors({ basic: false, additional: false, contact: false });
           }}
           onSave={handleSubmit}
           loading={createSchoolMutation.isPending}
@@ -1184,6 +1080,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             setSelectedSchool(null);
             setFormData({});
             setFormErrors({});
+            setTabErrors({ basic: false, additional: false, contact: false });
           }}
           onSave={handleSubmit}
           loading={updateSchoolMutation.isPending}
