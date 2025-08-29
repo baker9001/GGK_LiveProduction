@@ -25,7 +25,7 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 
 const departmentSchema = z.object({
-  school_id: z.string().uuid('Please select a school'),
+  school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   name: z.string().min(1, 'Department name is required'),
   code: z.string().optional(),
   department_type: z.enum(['academic', 'administrative', 'support', 'other']),
@@ -44,7 +44,7 @@ interface FilterState {
 }
 
 interface FormState {
-  school_id: string;
+  school_ids: string[];
   name: string;
   code: string;
   department_type: 'academic' | 'administrative' | 'support' | 'other';
@@ -57,8 +57,8 @@ interface FormState {
 
 type Department = {
   id: string;
-  school_id: string;
-  school_name: string;
+  school_ids: string[];
+  school_names: string[];
   name: string;
   code: string | null;
   department_type: 'academic' | 'administrative' | 'support' | 'other';
@@ -89,7 +89,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   });
 
   const [formState, setFormState] = useState<FormState>({
-    school_id: '',
+    school_ids: [],
     name: '',
     code: '',
     department_type: 'academic',
@@ -140,7 +140,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     if (isFormOpen) {
       if (editingDepartment) {
         setFormState({
-          school_id: editingDepartment.school_id || '',
+          school_ids: editingDepartment.school_ids || [],
           name: editingDepartment.name || '',
           code: editingDepartment.code || '',
           department_type: editingDepartment.department_type || 'academic',
@@ -152,7 +152,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         });
       } else {
         setFormState({
-          school_id: '',
+          school_ids: [],
           name: '',
           code: '',
           department_type: 'academic',
@@ -240,7 +240,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const departmentMutation = useMutation(
     async (data: FormState) => {
       const validatedData = departmentSchema.parse({
-        school_id: data.school_id,
+        school_ids: data.school_ids,
         name: data.name,
         code: data.code || undefined,
         department_type: data.department_type,
@@ -252,20 +252,57 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       });
 
       if (editingDepartment) {
+        // Update existing department
         const { error } = await supabase
           .from('departments')
-          .update(validatedData)
+          .update({
+            name: validatedData.name,
+            code: validatedData.code,
+            department_type: validatedData.department_type,
+            head_of_department: validatedData.head_of_department,
+            contact_email: validatedData.contact_email,
+            contact_phone: validatedData.contact_phone,
+            description: validatedData.description,
+            status: validatedData.status
+          })
           .eq('id', editingDepartment.id);
         if (error) throw error;
         return { ...editingDepartment, ...validatedData };
       } else {
+        // Create a single department record
+        const departmentRecord = {
+          name: validatedData.name,
+          code: validatedData.code,
+          department_type: validatedData.department_type,
+          head_of_department: validatedData.head_of_department,
+          contact_email: validatedData.contact_email,
+          contact_phone: validatedData.contact_phone,
+          description: validatedData.description,
+          status: validatedData.status
+        };
+
+        // Get the first school for the main record (we'll use junction table for others)
+        const mainSchoolId = validatedData.school_ids[0];
         const { data: newDepartment, error } = await supabase
           .from('departments')
-          .insert([validatedData])
+          .insert([{ ...departmentRecord, school_id: mainSchoolId }])
           .select()
           .single();
 
         if (error) throw error;
+
+        // Create junction table entries for all schools
+        const junctionRecords = validatedData.school_ids.map(schoolId => ({
+          department_id: newDepartment.id,
+          school_id: schoolId
+        }));
+
+        const { error: junctionError } = await supabase
+          .from('department_schools')
+          .insert(junctionRecords);
+          .single();
+
+        if (junctionError) throw junctionError;
         return newDepartment;
       }
     },
@@ -547,10 +584,10 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           )}
 
           <FormField
-            id="school_id"
+            id="school_ids"
             label="School"
             required
-            error={formErrors.school_id}
+            error={formErrors.school_ids}
           >
             <SearchableMultiSelect
               label=""
@@ -558,11 +595,12 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 value: school.id,
                 label: school.name
               }))}
-              selectedValues={formState.school_id ? [formState.school_id] : []}
+              selectedValues={formState.school_ids}
               onChange={(values) => {
-                setFormState(prev => ({ ...prev, school_id: values[0] || '' }));
+                setFormState(prev => ({ ...prev, school_ids: values }));
               }}
-              isMulti={false}
+              isMulti={true}
+              isMulti={true}
               placeholder="Select school..."
             />
           </FormField>
