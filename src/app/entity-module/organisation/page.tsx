@@ -369,13 +369,30 @@ export default function OrganizationManagement() {
         .select('id, school_id', { count: 'exact' })
         .eq('status', 'active');
 
+      // Apply scope filtering for non-entity/sub-entity admins
       if (!isEntityAdmin && !isSubEntityAdmin) {
-        if (scopeFilters.school_id) {
-          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_id);
-          branchesQuery = branchesQuery.in('school_id', scopeFilters.school_id);
-        }
-        if (scopeFilters.branch_id) {
-          branchesQuery = branchesQuery.in('id', scopeFilters.branch_id);
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+          branchesQuery = branchesQuery.in('school_id', scopeFilters.school_ids);
+        } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          // For branch admins, get schools that contain their branches
+          const { data: branchSchools } = await supabase
+            .from('branches')
+            .select('school_id')
+            .in('id', scopeFilters.branch_ids);
+          
+          const schoolIds = [...new Set(branchSchools?.map(b => b.school_id) || [])];
+          if (schoolIds.length > 0) {
+            schoolsQuery = schoolsQuery.in('id', schoolIds);
+          } else {
+            // No schools found, return empty result
+            schoolsQuery = schoolsQuery.eq('id', 'non-existent-id');
+          }
+          branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
+        } else {
+          // No scope assigned, return empty results
+          schoolsQuery = schoolsQuery.eq('id', 'non-existent-id');
+          branchesQuery = branchesQuery.eq('id', 'non-existent-id');
         }
       }
 
@@ -384,31 +401,91 @@ export default function OrganizationManagement() {
         branchesQuery
       ]);
 
-      const { count: teacherCount } = await supabase
+      // Apply scope filtering to teacher count
+      let teacherCountQuery = supabase
         .from('teachers')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
-      const { count: studentCount } = await supabase
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        const orConditions: string[] = [];
+        
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          orConditions.push(`school_id.in.(${scopeFilters.school_ids.join(',')})`);
+        }
+        
+        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          orConditions.push(`branch_id.in.(${scopeFilters.branch_ids.join(',')})`);
+        }
+        
+        if (orConditions.length > 0) {
+          teacherCountQuery = teacherCountQuery.or(orConditions.join(','));
+        } else {
+          // No scope assigned, return zero count
+          teacherCountQuery = teacherCountQuery.eq('id', 'non-existent-id');
+        }
+      }
+
+      // Apply scope filtering to student count
+      let studentCountQuery = supabase
         .from('students')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
-      const { count: userCount } = await supabase
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        const orConditions: string[] = [];
+        
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          orConditions.push(`school_id.in.(${scopeFilters.school_ids.join(',')})`);
+        }
+        
+        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          orConditions.push(`branch_id.in.(${scopeFilters.branch_ids.join(',')})`);
+        }
+        
+        if (orConditions.length > 0) {
+          studentCountQuery = studentCountQuery.or(orConditions.join(','));
+        } else {
+          // No scope assigned, return zero count
+          studentCountQuery = studentCountQuery.eq('id', 'non-existent-id');
+        }
+      }
+
+      // Apply scope filtering to entity users count
+      let userCountQuery = supabase
         .from('entity_users')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('is_active', true);
 
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        // For school and branch admins, only count users within their scope
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          userCountQuery = userCountQuery.overlaps('assigned_schools', scopeFilters.school_ids);
+        } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          userCountQuery = userCountQuery.overlaps('assigned_branches', scopeFilters.branch_ids);
+        } else {
+          // No scope assigned, return zero count
+          userCountQuery = userCountQuery.eq('id', 'non-existent-id');
+        }
+      }
+
+      // Execute all count queries
+      const [teacherCountResult, studentCountResult, userCountResult] = await Promise.all([
+        teacherCountQuery,
+        studentCountQuery,
+        userCountQuery
+      ]);
+
       return {
         company_id: userCompanyId,
         total_schools: schoolsResult.count || 0,
         total_branches: branchesResult.count || 0,
-        total_students: studentCount || 0,
-        total_teachers: teacherCount || 0,
-        total_users: userCount || 0
+        total_students: studentCountResult.count || 0,
+        total_teachers: teacherCountResult.count || 0,
+        total_users: userCountResult.count || 0
       } as OrganizationStats;
     },
     {
