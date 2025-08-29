@@ -513,6 +513,7 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               }}
               isMulti={false}
               placeholder="Select school..."
+            />
           </FormField>
 
           <FormField
