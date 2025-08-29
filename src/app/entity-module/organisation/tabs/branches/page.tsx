@@ -55,6 +55,7 @@ interface BranchAdditional {
   branch_id: string;
   student_capacity?: number;
   student_count?: number;
+  current_students?: number;
   teachers_count?: number;
   active_teachers_count?: number;
   branch_head_name?: string;
