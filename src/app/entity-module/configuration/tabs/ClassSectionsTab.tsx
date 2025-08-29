@@ -71,7 +71,7 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
-export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
+export function ClassSectionsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   

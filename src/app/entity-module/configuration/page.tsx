@@ -29,10 +29,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/sh
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import { useUser } from '../../../contexts/UserContext';
 import { toast } from '../../../components/shared/Toast';
-import GradeLevelsTab from './tabs/GradeLevelsTab';
-import AcademicYearsTab from './tabs/AcademicYearsTab';
-import DepartmentsTab from './tabs/DepartmentsTab';
-import ClassSectionsTab from './tabs/ClassSectionsTab';
+import { GradeLevelsTab } from './tabs/GradeLevelsTab';
+import { AcademicYearsTab } from './tabs/AcademicYearsTab';
+import { DepartmentsTab } from './tabs/DepartmentsTab';
+import { ClassSectionsTab } from './tabs/ClassSectionsTab';
 
 export default function ConfigurationPage() {
   const { user } = useUser();
