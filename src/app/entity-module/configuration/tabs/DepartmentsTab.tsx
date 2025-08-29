@@ -28,7 +28,6 @@ const departmentSchema = z.object({
   school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   name: z.string().min(1, 'Department name is required'),
   code: z.string().optional(),
-  department_type: z.enum(['academic', 'administrative', 'support', 'other']),
   head_of_department: z.string().optional(),
   contact_email: z.string().email('Invalid email').optional().or(z.literal('')),
   contact_phone: z.string().optional(),
@@ -39,7 +38,6 @@ const departmentSchema = z.object({
 interface FilterState {
   search: string;
   school_ids: string[];
-  department_type: string[];
   status: string[];
 }
 
@@ -47,7 +45,6 @@ interface FormState {
   school_ids: string[];
   name: string;
   code: string;
-  department_type: 'academic' | 'administrative' | 'support' | 'other';
   head_of_department: string;
   contact_email: string;
   contact_phone: string;
@@ -61,7 +58,6 @@ type Department = {
   school_names: string[];
   name: string;
   code: string | null;
-  department_type: 'academic' | 'administrative' | 'support' | 'other';
   head_of_department: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -84,7 +80,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     school_ids: [],
-    department_type: [],
     status: []
   });
 
@@ -92,7 +87,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     school_ids: [],
     name: '',
     code: '',
-    department_type: 'academic',
     head_of_department: '',
     contact_email: '',
     contact_phone: '',
@@ -184,7 +178,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           school_id,
           name,
           code,
-          department_type,
           head_of_department,
           contact_email,
           contact_phone,
@@ -211,10 +204,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
       if (filters.school_ids.length > 0) {
         query = query.in('school_id', filters.school_ids);
-      }
-
-      if (filters.department_type.length > 0) {
-        query = query.in('department_type', filters.department_type);
       }
 
       if (filters.status.length > 0) {
