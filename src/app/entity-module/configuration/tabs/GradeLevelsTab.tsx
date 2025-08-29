@@ -63,3 +63,4 @@
         school_names: grade.grade_level_schools?.map(gls => gls.schools?.name) || []
       }));
     },
+  )
