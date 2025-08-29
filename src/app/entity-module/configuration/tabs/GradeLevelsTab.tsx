@@ -10,7 +10,6 @@ import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { Toast } from '../../../../components/shared/Toast';
 import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
-import { useScopeFilter } from '../../../../hooks/useScopeFilter';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
 
 interface GradeLevelsTabProps {
@@ -55,8 +54,10 @@ const initialFormData: GradeLevelFormData = {
 
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
-  const { scopeFilters, canAccessAll } = useScopeFilter();
-  const { canCreate, canEdit, canDelete } = useAccessControl();
+  const { canCreate, canEdit, canDelete, isEntityAdmin, isSubEntityAdmin, getScopeFilters } = useAccessControl();
+  
+  const scopeFilters = getScopeFilters();
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
