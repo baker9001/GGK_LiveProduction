@@ -587,8 +587,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               onChange={(values) => {
                 setFormState(prev => ({ ...prev, school_ids: values }));
               }}
-              isMulti={true}
-              isMulti={true}
+              isMulti={false}
               placeholder="Select school..."
             />
           </FormField>
@@ -620,26 +619,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               placeholder="e.g., MATH, HR"
               value={formState.code}
               onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
-            />
-          </FormField>
-
-          <FormField
-            id="department_type"
-            label="Department Type"
-            required
-            error={formErrors.department_type}
-          >
-            <Select
-              id="department_type"
-              name="department_type"
-              options={[
-                { value: 'academic', label: 'Academic' },
-                { value: 'administrative', label: 'Administrative' },
-                { value: 'support', label: 'Support' },
-                { value: 'other', label: 'Other' }
-              ]}
-              value={formState.department_type}
-              onChange={(e) => setFormState(prev => ({ ...prev, department_type: e.target.value as 'academic' | 'administrative' | 'support' | 'other' }))}
             />
           </FormField>
 
