@@ -1,3 +1,10 @@
+/**
+ * File: /src/components/shared/SearchableMultiSelect.tsx
+ * 
+ * Searchable Multi-Select Component with Portal Support
+ * Provides dropdown selection with search, multi-select, and create new functionality
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, ChevronDown, Plus } from 'lucide-react';
@@ -20,6 +27,13 @@ interface SearchableMultiSelectProps {
   error?: string;
   usePortal?: boolean;
   onCreateNew?: (searchTerm: string) => Promise<string | null>;
+}
+
+// Type declaration for the global window object
+declare global {
+  interface Window {
+    __registerSlideInFormPortal?: (element: HTMLElement) => () => void;
+  }
 }
 
 export function SearchableMultiSelect({
@@ -46,13 +60,16 @@ export function SearchableMultiSelect({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
 
+  // Ensure selectedValues is always an array
+  const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
+
   const selectedOptions = options.filter(option => 
-    selectedValues.includes(option.value)
+    safeSelectedValues.includes(option.value)
   );
 
   const filteredOptions = options.filter(option =>
     option.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (!isMulti ? !selectedValues.includes(option.value) : true)
+    (!isMulti ? !safeSelectedValues.includes(option.value) : true)
   );
 
   // Determine if we should show the "Create New" option
@@ -165,9 +182,9 @@ export function SearchableMultiSelect({
 
   const handleSelect = (value: string) => {
     if (isMulti) {
-      const newValues = selectedValues.includes(value)
-        ? selectedValues.filter(v => v !== value)
-        : [...selectedValues, value];
+      const newValues = safeSelectedValues.includes(value)
+        ? safeSelectedValues.filter(v => v !== value)
+        : [...safeSelectedValues, value];
       onChange(newValues);
     } else {
       onChange([value]);
@@ -178,7 +195,7 @@ export function SearchableMultiSelect({
 
   const handleRemove = (value: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange(selectedValues.filter(v => v !== value));
+    onChange(safeSelectedValues.filter(v => v !== value));
   };
 
   const handleClear = (e: React.MouseEvent) => {
@@ -196,7 +213,7 @@ export function SearchableMultiSelect({
       if (newId) {
         // Add the new value to selected values
         if (isMulti) {
-          onChange([...selectedValues, newId]);
+          onChange([...safeSelectedValues, newId]);
         } else {
           onChange([newId]);
           setIsOpen(false);
@@ -261,7 +278,8 @@ export function SearchableMultiSelect({
           maxHeight: '300px',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 50
+          zIndex: 50,
+          marginTop: '4px'
         }}
         onKeyDown={handleKeyDown}
         role="listbox"
@@ -274,7 +292,7 @@ export function SearchableMultiSelect({
               <input
                 ref={searchInputRef}
                 type="text"
-                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -293,16 +311,16 @@ export function SearchableMultiSelect({
                   key={option.value}
                   type="button"
                   role="option"
-                  aria-selected={selectedValues.includes(option.value)}
+                  aria-selected={safeSelectedValues.includes(option.value)}
                   className={cn(
-                    'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                    selectedValues.includes(option.value) && 'bg-blue-50 dark:bg-blue-900/30'
+                    'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                    safeSelectedValues.includes(option.value) && 'bg-blue-50 dark:bg-blue-900/30'
                   )}
                   onClick={() => handleSelect(option.value)}
                 >
                   <span className={cn(
-                    selectedValues.includes(option.value) 
-                      ? "text-blue-600 dark:text-blue-400" 
+                    safeSelectedValues.includes(option.value) 
+                      ? "text-blue-600 dark:text-blue-400 font-medium" 
                       : "text-gray-900 dark:text-white"
                   )}>
                     {option.label}
@@ -314,7 +332,7 @@ export function SearchableMultiSelect({
               {shouldShowCreateOption && (
                 <button
                   type="button"
-                  className="w-full px-4 py-2 text-left hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 font-medium flex items-center transition-colors"
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 font-medium flex items-center transition-colors"
                   onClick={handleCreateNew}
                   disabled={isCreating}
                 >
@@ -363,10 +381,10 @@ export function SearchableMultiSelect({
             'min-h-[38px] w-full rounded-md border px-3 py-2 text-sm transition-colors duration-200',
             'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
             'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
-            disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed',
+            disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
             error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
             isOpen && 'ring-2 ring-blue-500 border-blue-500',
-            'cursor-pointer'
+            'cursor-pointer flex items-center justify-between'
           )}
           onClick={handleOpen}
           tabIndex={disabled ? -1 : 0}
@@ -379,33 +397,37 @@ export function SearchableMultiSelect({
           role="combobox"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
+          aria-disabled={disabled}
         >
-          <div className="flex flex-wrap gap-1">
-            {selectedOptions.map(option => (
-              <span
-                key={option.value}
-                className="inline-flex items-center bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded px-2 py-1 text-sm"
-              >
-                {option.label}
-                <button
-                  type="button"
-                  className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
-                  onClick={(e) => handleRemove(option.value, e)}
-                  aria-label={`Remove ${option.label}`}
+          <div className="flex flex-wrap gap-1 flex-1">
+            {selectedOptions.length > 0 ? (
+              selectedOptions.map(option => (
+                <span
+                  key={option.value}
+                  className="inline-flex items-center bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded px-2 py-0.5 text-sm"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-            {selectedOptions.length === 0 && (
-              <span className="text-gray-400 dark:text-gray-400">{placeholder}</span>
+                  {option.label}
+                  {isMulti && (
+                    <button
+                      type="button"
+                      className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                      onClick={(e) => handleRemove(option.value, e)}
+                      aria-label={`Remove ${option.label}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </span>
+              ))
+            ) : (
+              <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
             )}
           </div>
-          <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-            {selectedValues.length > 0 && (
+          <div className="flex items-center ml-2">
+            {safeSelectedValues.length > 0 && isMulti && (
               <button
                 type="button"
-                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 mr-1"
                 onClick={handleClear}
                 aria-label="Clear all selected options"
               >
@@ -413,7 +435,7 @@ export function SearchableMultiSelect({
               </button>
             )}
             <ChevronDown className={cn(
-              "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform ml-2",
+              "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
               isOpen && "transform rotate-180"
             )} />
           </div>
