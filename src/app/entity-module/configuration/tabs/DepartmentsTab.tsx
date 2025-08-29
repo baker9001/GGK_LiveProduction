@@ -71,9 +71,12 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
-export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
+export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const schoolIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
@@ -534,6 +537,11 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
+            <input
+              name="school_id"
+              value={formState.school_id} // Bind to formState
+              readOnly // Make it readOnly as SearchableMultiSelect will manage it
+            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
@@ -614,7 +622,7 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 { value: 'senior', label: 'Senior' }
               ]}
               value={formState.education_level} // Bind to formState
-              onChange={(value) => setFormState(prev => ({ ...prev, education_level: value }))} // Update formState
+              onChange={(e) => setFormState(prev => ({ ...prev, education_level: e.target.value }))} // Update formState
             />
           </FormField>
 
