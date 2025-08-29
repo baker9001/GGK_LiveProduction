@@ -60,7 +60,6 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
-export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   
@@ -75,6 +74,17 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     school_ids: [],
     education_level: [],
     status: []
+  });
+
+  const [formState, setFormState] = useState<FormState>({
+    school_id: '',
+    grade_name: '',
+    grade_code: '',
+    grade_order: 1,
+    education_level: '',
+    max_students_per_section: 30,
+    total_sections: 1,
+    status: 'active',
   });
 
   // Confirmation dialog state
@@ -112,6 +122,28 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       staleTime: 5 * 60 * 1000,
     }
   );
+
+  // Populate formState when editingGradeLevel changes or form is opened
+  useEffect(() => {
+    if (isFormOpen) {
+      if (editingGradeLevel) {
+        setFormState({
+          school_id: editingGradeLevel.school_id,
+          grade_name: editingGradeLevel.grade_name,
+          grade_code: editingGradeLevel.grade_code || '',
+          grade_order: editingGradeLevel.grade_order,
+          education_level: editingGradeLevel.education_level || '',
+          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
+          total_sections: editingGradeLevel.total_sections || 1,
+          status: editingGradeLevel.status,
+        });
+      } else {
+        // Reset for new creation
+        setFormState(prev => ({ ...prev, school_id: '', grade_name: '', grade_code: '', grade_order: 1, education_level: '', max_students_per_section: 30, total_sections: 1, status: 'active' }));
+      }
+      setFormErrors({}); // Clear errors when form opens
+    }
+  }, [isFormOpen, editingGradeLevel]);
 
   // Fetch grade levels
   const { 
@@ -184,29 +216,27 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   // Create/update grade level mutation
   const gradeLevelMutation = useMutation(
-    async (formData: FormData) => {
-      const data = {
-        school_id: formData.get('school_id') as string,
-        grade_name: formData.get('grade_name') as string,
-        grade_code: formData.get('grade_code') as string || undefined,
-        grade_order: parseInt(formData.get('grade_order') as string),
-        education_level: formData.get('education_level') as string || undefined,
-        max_students_per_section: parseInt(formData.get('max_students_per_section') as string) || undefined,
-        total_sections: parseInt(formData.get('total_sections') as string) || undefined,
-        status: formData.get('status') as 'active' | 'inactive'
-      };
-
-      const validatedData = gradeLevelSchema.parse(data);
+    async (data: FormState) => {
+      const validatedData = gradeLevelSchema.parse({
+        school_id: data.school_id,
+        grade_name: data.grade_name,
+        grade_code: data.grade_code || undefined,
+        grade_order: data.grade_order,
+        education_level: data.education_level || undefined,
+        max_students_per_section: data.max_students_per_section || undefined,
+        total_sections: data.total_sections || undefined,
+        status: data.status
+      });
 
       if (editingGradeLevel) {
         const { error } = await supabase
           .from('grade_levels')
           .update(validatedData)
           .eq('id', editingGradeLevel.id);
-
         if (error) throw error;
         return { ...editingGradeLevel, ...validatedData };
       } else {
+        // Ensure school_id is not empty for new creation
         const { data: newGradeLevel, error } = await supabase
           .from('grade_levels')
           .insert([validatedData])
@@ -272,7 +302,7 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    gradeLevelMutation.mutate(new FormData(e.currentTarget));
+    gradeLevelMutation.mutate(formState);
   };
 
   const handleDelete = (gradeLevels: GradeLevel[]) => {
@@ -433,7 +463,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               { value: 'secondary', label: 'Secondary' },
               { value: 'senior', label: 'Senior' }
             ]}
-            selectedValues={filters.education_level}
+            value={formState.education_level} // Bind to formState
+            onChange={(value) => setFormState(prev => ({ ...prev, education_level: value }))} // Update formState
             onChange={(values) => setFilters({ ...filters, education_level: values })}
             placeholder="Select levels..."
           />
@@ -496,10 +527,9 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             error={formErrors.school_id}
           >
             <input
-              type="hidden"
-              ref={schoolIdRef}
               name="school_id"
-              defaultValue={editingGradeLevel?.school_id || ''}
+              value={formState.school_id} // Bind to formState
+              readOnly // Make it readOnly as SearchableMultiSelect will manage it
             />
             <SearchableMultiSelect
               label=""
@@ -507,11 +537,9 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 value: school.id,
                 label: school.name
               }))}
-              selectedValues={editingGradeLevel?.school_id ? [editingGradeLevel.school_id] : []}
+              selectedValues={formState.school_id ? [formState.school_id] : []} // Bind to formState
               onChange={(values) => {
-                if (schoolIdRef.current) {
-                  schoolIdRef.current.value = values[0] || '';
-                }
+                setFormState(prev => ({ ...prev, school_id: values[0] || '' })); // Update formState
               }}
               isMulti={false}
               placeholder="Select school..."
@@ -528,7 +556,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_name"
               name="grade_name"
               placeholder="e.g., Grade 1, Year 7, Form 1"
-              defaultValue={editingGradeLevel?.grade_name}
+              value={formState.grade_name} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))} // Update formState
               leftIcon={<GraduationCap className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
@@ -542,7 +571,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_code"
               name="grade_code"
               placeholder="e.g., G1, Y7, F1"
-              defaultValue={editingGradeLevel?.grade_code || ''}
+              value={formState.grade_code} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))} // Update formState
               leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
@@ -559,7 +589,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               type="number"
               min="1"
               placeholder="1"
-              defaultValue={editingGradeLevel?.grade_order}
+              value={formState.grade_order} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 0 }))} // Update formState
             />
           </FormField>
 
@@ -595,7 +626,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="30"
-                defaultValue={editingGradeLevel?.max_students_per_section}
+                value={formState.max_students_per_section} // Bind to formState
+                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 0 }))} // Update formState
                 leftIcon={<Users className="h-5 w-5 text-gray-400" />}
               />
             </FormField>
@@ -611,7 +643,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="1"
-                defaultValue={editingGradeLevel?.total_sections}
+                value={formState.total_sections} // Bind to formState
+                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 0 }))} // Update formState
               />
             </FormField>
           </div>
@@ -628,21 +661,15 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   Grade Level Status
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {editingGradeLevel?.status === 'active' || !editingGradeLevel
+                  {formState.status === 'active'
                     ? 'Grade level is currently active' 
                     : 'Grade level is currently inactive'}
                 </p>
               </div>
-              <input
-                type="hidden"
-                name="status"
-                defaultValue={editingGradeLevel?.status || 'active'}
-              />
               <ToggleSwitch
-                checked={editingGradeLevel?.status === 'active' || !editingGradeLevel}
+                checked={formState.status === 'active'} // Bind to formState
                 onChange={(checked) => {
-                  const input = document.querySelector('input[name="status"]') as HTMLInputElement;
-                  if (input) input.value = checked ? 'active' : 'inactive';
+                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' })); // Update formState
                 }}
                 label="Active"
               />
