@@ -539,7 +539,7 @@ export function DepartmentsTab({ companyId }: GradeLevelsTabProps) {
           >
             <input
               name="school_id"
-              value={formState.school_id} // Bind to formState
+              value={formState.school_id || ''} // Bind to formState
               readOnly // Make it readOnly as SearchableMultiSelect will manage it
             />
             <SearchableMultiSelect
