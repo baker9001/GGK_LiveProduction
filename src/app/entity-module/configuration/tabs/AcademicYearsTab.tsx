@@ -513,17 +513,6 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               }}
               isMulti={false}
               placeholder="Select school..."
-            /></FormField>
-              id="school_id"
-              name="school_id"
-              options={schools.map(school => ({
-                value: school.id,
-                label: school.name
-              }))}
-              defaultValue={editingAcademicYear?.school_id || ''}
-              searchable={true}
-              usePortal={true}
-            />
           </FormField>
 
           <FormField
