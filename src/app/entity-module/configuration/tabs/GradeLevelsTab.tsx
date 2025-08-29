@@ -7,16 +7,16 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, GraduationCap, School, Hash, Users } from 'lucide-react';
+import { Plus, GraduationCap, Hash, Users } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
-import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
+import { FormField, Input, Select } from '../../../../components/shared/FormField';
 import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
@@ -71,7 +71,6 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
-// IMPORTANT: Correct export name for GradeLevelsTab
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
@@ -105,8 +104,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const scopeFilters = getScopeFilters('schools');
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
-  // Fetch schools for dropdown - with better error handling
-  const { data: schools = [], isLoading: isLoadingSchools } = useQuery(
+  // Fetch schools for dropdown
+  const { data: schools = [] } = useQuery(
     ['schools-for-grades', companyId, scopeFilters],
     async () => {
       if (!companyId) return [];
@@ -124,10 +123,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       }
 
       const { data, error } = await query;
-      if (error) {
-        console.error('Error fetching schools:', error);
-        throw error;
-      }
+      if (error) throw error;
       return data || [];
     },
     {
@@ -222,10 +218,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       }
 
       const { data, error } = await query;
-      if (error) {
-        console.error('Error fetching grade levels:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       return (data || []).map(grade => ({
         ...grade,
@@ -284,7 +277,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
             if (err.path.length > 0) {
-              errors[err.path[0].toString()] = err.message;
+              errors[err.path[0]] = err.message;
             }
           });
           setFormErrors(errors);
@@ -561,7 +554,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               }}
               isMulti={false}
               placeholder="Select school..."
-              disabled={isLoadingSchools}
             />
           </FormField>
 
@@ -608,7 +600,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               type="number"
               min="1"
               placeholder="1"
-              value={formState.grade_order}
+              value={formState.grade_order.toString()}
               onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 1 }))}
             />
           </FormField>
@@ -646,7 +638,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="30"
-                value={formState.max_students_per_section}
+                value={formState.max_students_per_section.toString()}
                 onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 30 }))}
                 leftIcon={<Users className="h-5 w-5 text-gray-400" />}
               />
@@ -663,7 +655,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="1"
-                value={formState.total_sections}
+                value={formState.total_sections.toString()}
                 onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 1 }))}
               />
             </FormField>
