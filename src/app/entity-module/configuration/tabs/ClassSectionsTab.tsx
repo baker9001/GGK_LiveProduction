@@ -20,6 +20,7 @@ import { FormField, Input, Select } from '../../../../components/shared/FormFiel
 import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 
@@ -611,13 +612,24 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             required
             error={formErrors.grade_level_id}
           >
-            <Select
-              id="grade_level_id"
-              name="grade_level_id"
+            <SearchableMultiSelect
+              label=""
               options={gradeLevels.map(grade => ({
                 value: grade.id,
                 label: `${grade.grade_name} (${grade.school_name})`
               }))}
+              selectedValues={editingClassSection?.grade_level_id ? [editingClassSection.grade_level_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="grade_level_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select grade level..."
+            />
+            <input
+              type="hidden"
+              id="grade_level_id"
+              name="grade_level_id"
               defaultValue={editingClassSection?.grade_level_id || ''}
             />
           </FormField>
@@ -628,13 +640,24 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             required
             error={formErrors.academic_year_id}
           >
-            <Select
-              id="academic_year_id"
-              name="academic_year_id"
+            <SearchableMultiSelect
+              label=""
               options={academicYears.map(year => ({
                 value: year.id,
                 label: `${year.year_name} (${year.school_name})`
               }))}
+              selectedValues={editingClassSection?.academic_year_id ? [editingClassSection.academic_year_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="academic_year_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select academic year..."
+            />
+            <input
+              type="hidden"
+              id="academic_year_id"
+              name="academic_year_id"
               defaultValue={editingClassSection?.academic_year_id || ''}
             />
           </FormField>
@@ -766,16 +789,52 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             required
             error={formErrors.status}
           >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' },
-                { value: 'archived', label: 'Archived' }
-              ]}
-              defaultValue={editingClassSection?.status || 'active'}
-            />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Class Section Status
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {editingClassSection?.status === 'active' || !editingClassSection
+                      ? 'Class section is currently active' 
+                      : editingClassSection?.status === 'archived'
+                        ? 'Class section has been archived'
+                        : 'Class section is currently inactive'}
+                  </p>
+                </div>
+                <input
+                  type="hidden"
+                  name="status"
+                  defaultValue={editingClassSection?.status || 'active'}
+                />
+                <ToggleSwitch
+                  checked={editingClassSection?.status === 'active' || !editingClassSection}
+                  onChange={(checked) => {
+                    const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                    if (input) input.value = checked ? 'active' : 'inactive';
+                  }}
+                  label="Active"
+                />
+              </div>
+              
+              {/* Additional status option for archived */}
+              <FormField id="status_select" label="Or select specific status">
+                <Select
+                  id="status_select"
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'inactive', label: 'Inactive' },
+                    { value: 'archived', label: 'Archived' }
+                  ]}
+                  value={editingClassSection?.status || 'active'}
+                  onChange={(value) => {
+                    const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                    if (input) input.value = value;
+                  }}
+                />
+              </FormField>
+            </div>
           </FormField>
         </form>
       </SlideInForm>

@@ -492,13 +492,24 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             required
             error={formErrors.school_id}
           >
-            <Select
-              id="school_id"
-              name="school_id"
+            <SearchableMultiSelect
+              label=""
               options={schools.map(school => ({
                 value: school.id,
                 label: school.name
               }))}
+              selectedValues={editingAcademicYear?.school_id ? [editingAcademicYear.school_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select school..."
+            />
+            <input
+              type="hidden"
+              id="school_id"
+              name="school_id"
               defaultValue={editingAcademicYear?.school_id || ''}
             />
           </FormField>
@@ -594,16 +605,52 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             required
             error={formErrors.status}
           >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'planned', label: 'Planned' },
-                { value: 'active', label: 'Active' },
-                { value: 'completed', label: 'Completed' }
-              ]}
-              defaultValue={editingAcademicYear?.status || 'planned'}
-            />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Academic Year Status
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {editingAcademicYear?.status === 'active' || (!editingAcademicYear && 'active')
+                      ? 'Academic year is currently active' 
+                      : editingAcademicYear?.status === 'completed'
+                        ? 'Academic year has been completed'
+                        : 'Academic year is in planning phase'}
+                  </p>
+                </div>
+                <input
+                  type="hidden"
+                  name="status"
+                  defaultValue={editingAcademicYear?.status || 'planned'}
+                />
+                <ToggleSwitch
+                  checked={editingAcademicYear?.status === 'active' || false}
+                  onChange={(checked) => {
+                    const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                    if (input) input.value = checked ? 'active' : 'planned';
+                  }}
+                  label="Active"
+                />
+              </div>
+              
+              {/* Additional status option for completed */}
+              <FormField id="status_select" label="Or select specific status">
+                <Select
+                  id="status_select"
+                  options={[
+                    { value: 'planned', label: 'Planned' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'completed', label: 'Completed' }
+                  ]}
+                  value={editingAcademicYear?.status || 'planned'}
+                  onChange={(value) => {
+                    const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                    if (input) input.value = value;
+                  }}
+                />
+              </FormField>
+            </div>
           </FormField>
 
           <FormField id="is_current" label="Current Academic Year">

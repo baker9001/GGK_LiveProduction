@@ -20,6 +20,7 @@ import { FormField, Input, Select, Textarea } from '../../../../components/share
 import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 
@@ -491,13 +492,24 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
-            <Select
-              id="school_id"
-              name="school_id"
+            <SearchableMultiSelect
+              label=""
               options={schools.map(school => ({
                 value: school.id,
                 label: school.name
               }))}
+              selectedValues={editingGradeLevel?.school_id ? [editingGradeLevel.school_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select school..."
+            />
+            <input
+              type="hidden"
+              id="school_id"
+              name="school_id"
               defaultValue={editingGradeLevel?.school_id || ''}
             />
           </FormField>
@@ -606,15 +618,31 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.status}
           >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              defaultValue={editingGradeLevel?.status || 'active'}
-            />
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Grade Level Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {editingGradeLevel?.status === 'active' || !editingGradeLevel
+                    ? 'Grade level is currently active' 
+                    : 'Grade level is currently inactive'}
+                </p>
+              </div>
+              <input
+                type="hidden"
+                name="status"
+                defaultValue={editingGradeLevel?.status || 'active'}
+              />
+              <ToggleSwitch
+                checked={editingGradeLevel?.status === 'active' || !editingGradeLevel}
+                onChange={(checked) => {
+                  const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                  if (input) input.value = checked ? 'active' : 'inactive';
+                }}
+                label="Active"
+              />
+            </div>
           </FormField>
         </form>
       </SlideInForm>

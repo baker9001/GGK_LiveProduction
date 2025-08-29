@@ -20,6 +20,7 @@ import { FormField, Input, Select, Textarea } from '../../../../components/share
 import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
 
@@ -631,16 +632,24 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="School (Optional)"
             error={formErrors.school_id}
           >
-            <Select
+            <SearchableMultiSelect
+              label=""
+              options={schools.map(school => ({
+                value: school.id,
+                label: school.name
+              }))}
+              selectedValues={editingDepartment?.school_id ? [editingDepartment.school_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select school (optional)..."
+            />
+            <input
+              type="hidden"
               id="school_id"
               name="school_id"
-              options={[
-                { value: '', label: 'Company Level' },
-                ...schools.map(school => ({
-                  value: school.id,
-                  label: school.name
-                }))
-              ]}
               defaultValue={editingDepartment?.school_id || ''}
             />
           </FormField>
@@ -650,16 +659,24 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Branch (Optional)"
             error={formErrors.branch_id}
           >
-            <Select
+            <SearchableMultiSelect
+              label=""
+              options={branches.map(branch => ({
+                value: branch.id,
+                label: branch.name
+              }))}
+              selectedValues={editingDepartment?.branch_id ? [editingDepartment.branch_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="branch_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select branch (optional)..."
+            />
+            <input
+              type="hidden"
               id="branch_id"
               name="branch_id"
-              options={[
-                { value: '', label: 'No specific branch' },
-                ...branches.map(branch => ({
-                  value: branch.id,
-                  label: branch.name
-                }))
-              ]}
               defaultValue={editingDepartment?.branch_id || ''}
             />
           </FormField>
@@ -669,18 +686,26 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Parent Department"
             error={formErrors.parent_department_id}
           >
-            <Select
+            <SearchableMultiSelect
+              label=""
+              options={departments
+                .filter(d => d.id !== editingDepartment?.id)
+                .map(dept => ({
+                  value: dept.id,
+                  label: dept.name
+                }))}
+              selectedValues={editingDepartment?.parent_department_id ? [editingDepartment.parent_department_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="parent_department_id"]') as HTMLInputElement;
+                if (input) input.value = values[0] || '';
+              }}
+              isMulti={false}
+              placeholder="Select parent department (optional)..."
+            />
+            <input
+              type="hidden"
               id="parent_department_id"
               name="parent_department_id"
-              options={[
-                { value: '', label: 'No parent department' },
-                ...departments
-                  .filter(d => d.id !== editingDepartment?.id)
-                  .map(dept => ({
-                    value: dept.id,
-                    label: dept.name
-                  }))
-              ]}
               defaultValue={editingDepartment?.parent_department_id || ''}
             />
           </FormField>
@@ -736,15 +761,31 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             required
             error={formErrors.status}
           >
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              defaultValue={editingDepartment?.status || 'active'}
-            />
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Department Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {editingDepartment?.status === 'active' || !editingDepartment
+                    ? 'Department is currently active' 
+                    : 'Department is currently inactive'}
+                </p>
+              </div>
+              <input
+                type="hidden"
+                name="status"
+                defaultValue={editingDepartment?.status || 'active'}
+              />
+              <ToggleSwitch
+                checked={editingDepartment?.status === 'active' || !editingDepartment}
+                onChange={(checked) => {
+                  const input = document.querySelector('input[name="status"]') as HTMLInputElement;
+                  if (input) input.value = checked ? 'active' : 'inactive';
+                }}
+                label="Active"
+              />
+            </div>
           </FormField>
         </form>
       </SlideInForm>
