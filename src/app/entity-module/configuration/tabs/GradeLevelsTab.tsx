@@ -1001,7 +1001,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 >
                   <SearchableMultiSelect
                     label=""
-                    options={branches.map(branch => ({
+                    options={(branches || []).map(branch => ({
                       value: branch.id,
                       label: `${branch.name} (${branch.school_name})`
                     }))}
@@ -1020,7 +1020,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                       Capacity per Branch
                     </label>
                     {formState.assigned_branches.map(branchId => {
-                      const branch = branches.find(b => b.id === branchId);
+                      const branch = (branches || []).find(b => b.id === branchId);
                       return (
                         <div key={branchId} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                           <div className="flex-1">
@@ -1075,7 +1075,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 >
                   <SearchableMultiSelect
                     label=""
-                    options={departments.map(dept => ({
+                    options={(departments || []).map(dept => ({
                       value: dept.id,
                       label: `${dept.name} (${dept.school_name})`
                     }))}
@@ -1093,7 +1093,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                       Department Priority Order:
                     </div>
                     {formState.department_associations.map((deptId, index) => {
-                      const dept = departments.find(d => d.id === deptId);
+                      const dept = (departments || []).find(d => d.id === deptId);
                       return (
                         <div key={deptId} className="flex items-center gap-2 text-sm">
                           <span className={`px-2 py-1 rounded text-xs ${
