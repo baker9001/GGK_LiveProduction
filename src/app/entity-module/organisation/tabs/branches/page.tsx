@@ -30,6 +30,7 @@ import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -135,6 +136,10 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
+  
+  // Confirmation dialog state
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [branchToDelete, setBranchToDelete] = useState<BranchData | null>(null);
 
   // ACCESS CHECK: Block entry if user cannot view this tab
   useEffect(() => {
@@ -523,10 +528,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       onSuccess: () => {
         toast.success('Branch deleted successfully');
         queryClient.invalidateQueries(['branches-tab']);
+        setShowDeleteConfirmation(false);
+        setBranchToDelete(null);
         if (refreshData) refreshData();
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to delete branch');
+        setShowDeleteConfirmation(false);
+        setBranchToDelete(null);
       }
     }
   );
@@ -586,6 +595,23 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     setActiveTab('basic');
     setTabErrors({ basic: false, additional: false, contact: false });
     setShowCreateModal(true);
+  }, []);
+
+  // Handle delete confirmation
+  const handleDeleteClick = useCallback((branch: BranchData) => {
+    setBranchToDelete(branch);
+    setShowDeleteConfirmation(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (branchToDelete) {
+      deleteBranchMutation.mutate(branchToDelete.id);
+    }
+  }, [branchToDelete, deleteBranchMutation]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirmation(false);
+    setBranchToDelete(null);
   }, []);
 
   // Filter branches based on search, status, and school
@@ -855,17 +881,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
             return (
               <div
                 key={branch.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-[#8CC63F]/30 dark:hover:border-[#8CC63F]/30 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
               >
-                <div className="p-4">
-                  <div className="flex items-start justify-between mb-3">
+                <div className="p-6">
+                  {/* Header with logo, name, and status */}
+                  <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-xl flex items-center justify-center overflow-hidden shadow-inner">
                         {logoUrl ? (
                           <img
                             src={logoUrl}
                             alt={`${branch.name} logo`}
-                            className="w-full h-full object-contain p-0.5"
+                            className="w-full h-full object-contain p-1"
                             onError={(e) => {
                               const target = e.currentTarget;
                               target.style.display = 'none';
@@ -875,30 +902,64 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                           />
                         ) : null}
                         <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                          <MapPin className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                          <MapPin className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                         </div>
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">{branch.name}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{branch.code}</p>
+                        <h3 className="font-semibold text-lg text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
+                          {branch.name}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                            {branch.code}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <StatusBadge status={branch.status} />
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={branch.status} size="sm" showPulse={branch.status === 'active'} />
+                      {/* Action buttons - only visible on hover */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
+                        {canEdit && (
+                          <Button
+                            onClick={() => handleEdit(branch)}
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-8 w-8 text-gray-400 hover:text-[#8CC63F] hover:bg-[#8CC63F]/10 transition-all duration-200"
+                            title="Edit branch"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {can('delete_branch') && (
+                          <Button
+                            onClick={() => handleDeleteClick(branch)}
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
+                            title="Delete branch"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Branch details */}
                   <div className="space-y-2 mb-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                       <School className="w-3 h-3" />
                       <span>{branch.school_name}</span>
                     </div>
                     {branch.additional?.branch_head_name && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <User className="w-3 h-3" />
                         <span>{branch.additional.branch_head_name}</span>
                       </div>
                     )}
                     {branch.additional?.building_name && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <Building className="w-3 h-3" />
                         <span>{branch.additional.building_name}</span>
                         {branch.additional.floor_details && (
@@ -907,59 +968,42 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       </div>
                     )}
                     {branch.address && (
-                      <div className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <Navigation className="w-3 h-3 mt-0.5" />
                         <span className="line-clamp-2">{branch.address}</span>
                       </div>
                     )}
                     {branch.additional?.opening_time && branch.additional?.closing_time && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <Clock className="w-3 h-3" />
                         <span>{branch.additional.opening_time} - {branch.additional.closing_time}</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 border-t dark:border-gray-700">
-                    <div className="flex items-center space-x-4 text-xs">
-                      <div className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {branch.student_count || 0}
-                        </span>
+                  {/* Statistics and footer */}
+                  <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1 text-sm">
+                          <Users className="w-4 h-4 text-blue-500" />
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {branch.student_count || 0}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">students</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Users className="w-4 h-4 text-green-500" />
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {branch.teachers_count || 0}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">teachers</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {branch.teachers_count || 0}
-                        </span>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Created {new Date(branch.created_at).toLocaleDateString()}
                       </div>
                     </div>
-                    {canEdit && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          onClick={() => handleEdit(branch)}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Edit2 className="w-3 h-3 mr-1" />
-                          Edit
-                        </Button>
-                        {can('delete_branch') && (
-                          <Button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this branch?')) {
-                                deleteBranchMutation.mutate(branch.id);
-                              }
-                            }}
-                            variant="danger-outline"
-                            size="sm"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1003,6 +1047,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       >
         {renderFormContent()}
       </SlideInForm>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteConfirmation}
+        title="Delete Branch"
+        message={`Are you sure you want to delete "${branchToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete Branch"
+        cancelText="Cancel"
+        confirmVariant="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 });
