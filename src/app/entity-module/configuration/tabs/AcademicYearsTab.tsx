@@ -71,9 +71,12 @@ interface GradeLevelsTabProps {
   companyId: string | null;
 }
 
-export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
+export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // Refs for hidden inputs
+  const schoolIdRef = useRef<HTMLInputElement>(null);
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
@@ -534,15 +537,20 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
+            <input
+              name="school_id"
+              value={formState.school_id} // Bind to formState
+              readOnly // Make it readOnly as SearchableMultiSelect will manage it
+            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
                 value: school.id,
                 label: school.name
               }))}
-              selectedValues={formState.school_id ? [formState.school_id] : []}
+              selectedValues={formState.school_id ? [formState.school_id] : []} // Bind to formState
               onChange={(values) => {
-                setFormState(prev => ({ ...prev, school_id: values[0] || '' }));
+                setFormState(prev => ({ ...prev, school_id: values[0] || '' })); // Update formState
               }}
               isMulti={false}
               placeholder="Select school..."
@@ -559,8 +567,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_name"
               name="grade_name"
               placeholder="e.g., Grade 1, Year 7, Form 1"
-              value={formState.grade_name}
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))}
+              value={formState.grade_name} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))} // Update formState
               leftIcon={<GraduationCap className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
@@ -574,8 +582,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_code"
               name="grade_code"
               placeholder="e.g., G1, Y7, F1"
-              value={formState.grade_code}
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))}
+              value={formState.grade_code} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))} // Update formState
               leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
@@ -592,8 +600,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               type="number"
               min="1"
               placeholder="1"
-              value={formState.grade_order}
-              onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 0 }))}
+              value={formState.grade_order} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 0 }))} // Update formState
             />
           </FormField>
 
@@ -613,8 +621,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 { value: 'secondary', label: 'Secondary' },
                 { value: 'senior', label: 'Senior' }
               ]}
-              value={formState.education_level}
-              onChange={(value) => setFormState(prev => ({ ...prev, education_level: value }))}
+              value={formState.education_level} // Bind to formState
+              onChange={(e) => setFormState(prev => ({ ...prev, education_level: e.target.value }))} // Update formState
             />
           </FormField>
 
@@ -630,8 +638,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="30"
-                value={formState.max_students_per_section}
-                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 0 }))}
+                value={formState.max_students_per_section} // Bind to formState
+                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 0 }))} // Update formState
                 leftIcon={<Users className="h-5 w-5 text-gray-400" />}
               />
             </FormField>
@@ -647,8 +655,8 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="1"
-                value={formState.total_sections}
-                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 0 }))}
+                value={formState.total_sections} // Bind to formState
+                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 0 }))} // Update formState
               />
             </FormField>
           </div>
@@ -671,9 +679,9 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 </p>
               </div>
               <ToggleSwitch
-                checked={formState.status === 'active'}
+                checked={formState.status === 'active'} // Bind to formState
                 onChange={(checked) => {
-                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
+                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' })); // Update formState
                 }}
                 label="Active"
               />
