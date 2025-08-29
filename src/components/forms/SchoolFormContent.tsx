@@ -1,11 +1,11 @@
 /**
- * File: /src/components/forms/BranchFormContent.tsx
+ * File: /src/components/forms/SchoolFormContent.tsx
  * 
- * UNIFIED Branch Form Content Component
- * Standardized UI/UX matching schools implementation
+ * UNIFIED School Form Content Component
+ * Standardized UI/UX matching branches implementation
  * 
  * Improvements:
- * 1. Consistent field naming (student_count not current_students)
+ * 1. Consistent field naming (student_count throughout)
  * 2. Unified spacing (mt-2 for all field content)
  * 3. Same validation patterns
  * 4. Green theme throughout (#8CC63F)
@@ -16,66 +16,72 @@
 
 import React, { useEffect } from 'react';
 import { 
-  MapPin, Building, Clock, Phone, Mail, User, Hash, Navigation
+  BookOpen, FlaskConical, Dumbbell, Coffee, 
+  User, Mail, Phone, MapPin, Calendar, School, Hash
 } from 'lucide-react';
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
 
 // ===== TYPE DEFINITIONS =====
-interface BranchFormData {
-  // Main branch fields
+interface SchoolFormData {
+  // Main school fields (from schools table)
   name: string;
   code: string;
-  school_id: string;
+  company_id: string;
+  description: string;
   status: 'active' | 'inactive';
   address: string;
   notes: string;
   logo: string;
   
-  // Additional fields - standardized names
-  student_capacity: number;
-  student_count: number; // Standardized - was current_students
+  // Additional fields (from schools_additional table)
+  school_type: string;
+  curriculum_type: string[];
+  total_capacity: number;
   teachers_count: number;
+  student_count: number; // Standardized name
   active_teachers_count: number;
-  branch_head_name: string;
-  branch_head_email: string;
-  branch_head_phone: string;
-  building_name: string;
-  floor_details: string;
-  opening_time: string;
-  closing_time: string;
-  working_days: string[];
+  principal_name: string;
+  principal_email: string;
+  principal_phone: string;
+  campus_address: string;
+  campus_city: string;
+  campus_state: string;
+  campus_postal_code: string;
+  latitude: number;
+  longitude: number;
+  established_date: string;
+  academic_year_start: number;
+  academic_year_end: number;
+  has_library: boolean;
+  has_laboratory: boolean;
+  has_sports_facilities: boolean;
+  has_cafeteria: boolean;
 }
 
-interface BranchFormContentProps {
-  formData: Partial<BranchFormData>;
-  setFormData: (data: Partial<BranchFormData>) => void;
+interface SchoolFormContentProps {
+  formData: Partial<SchoolFormData>;
+  setFormData: (data: Partial<SchoolFormData>) => void;
   formErrors: Record<string, string>;
   setFormErrors: (errors: Record<string, string>) => void;
   activeTab: 'basic' | 'additional' | 'contact';
-  schools: Array<{ id: string; name: string }>;
+  companyId: string;
   isEditing?: boolean;
-  isLoadingSchools?: boolean;
-  schoolsError?: Error | null;
-  isBranchAdmin?: boolean;
   onTabErrorsChange?: (errors: { basic: boolean; additional: boolean; contact: boolean }) => void;
 }
 
 // ===== MAIN COMPONENT =====
-export function BranchFormContent({
+export function SchoolFormContent({
   formData,
   setFormData,
   formErrors,
   setFormErrors,
   activeTab,
-  schools,
+  companyId,
   isEditing = false,
-  isLoadingSchools = false,
-  schoolsError = null,
-  isBranchAdmin = false,
   onTabErrorsChange
-}: BranchFormContentProps) {
+}: SchoolFormContentProps) {
   
   // Initialize status to active if not set
   useEffect(() => {
@@ -84,15 +90,31 @@ export function BranchFormContent({
     }
   }, []);
 
+  // Helper to update form data
   const updateFormData = (field: string, value: any) => {
     setFormData({ ...formData, [field]: value });
     
-    // Clear error for this field when user starts typing
+    // Clear error when user starts typing
     if (formErrors[field]) {
       const newErrors = { ...formErrors };
       delete newErrors[field];
       setFormErrors(newErrors);
     }
+  };
+
+  // Helper to handle checkbox arrays (curriculum types)
+  const handleCurriculumTypeChange = (type: string, checked: boolean) => {
+    const current = formData.curriculum_type || [];
+    if (checked) {
+      updateFormData('curriculum_type', [...current, type]);
+    } else {
+      updateFormData('curriculum_type', current.filter(t => t !== type));
+    }
+  };
+
+  // Helper to handle facility checkboxes
+  const handleFacilityChange = (facility: string, checked: boolean) => {
+    updateFormData(facility, checked);
   };
 
   // Get logo URL helper
@@ -109,7 +131,7 @@ export function BranchFormContent({
       return null;
     }
     
-    return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
+    return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
   };
 
   // Calculate which tabs have errors and notify parent
@@ -127,15 +149,12 @@ export function BranchFormContent({
     if (!formData.code || formData.code.trim() === '') {
       errors.basic = true;
     }
-    if (!formData.school_id || formData.school_id.trim() === '') {
-      errors.basic = true;
-    }
-    if (formErrors.name || formErrors.code || formErrors.school_id) {
+    if (formErrors.name || formErrors.code) {
       errors.basic = true;
     }
 
     // Contact tab - check for email format errors
-    if (formErrors.branch_head_email) {
+    if (formErrors.principal_email) {
       errors.contact = true;
     }
 
@@ -144,69 +163,30 @@ export function BranchFormContent({
       onTabErrorsChange(errors);
     }
   }, [formData, formErrors, onTabErrorsChange]);
-  
+
   // Render content based on active tab
   if (activeTab === 'basic') {
     return (
       <div className="space-y-4">
-        {/* School Dropdown - Auto-filtered by user's company */}
-        <FormField 
-          id="school_id" 
-          label="School" 
-          required 
-          error={formErrors.school_id}
-        >
-          {isLoadingSchools ? (
-            <div className="p-3 text-sm text-gray-600 dark:text-gray-400 mt-2">
-              Loading schools for your company...
-            </div>
-          ) : schoolsError ? (
-            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded mt-2">
-              Failed to load schools. Please refresh the page.
-            </div>
-          ) : schools.length === 0 ? (
-            <div className="space-y-2 mt-2">
-              <Select id="school_id" disabled options={[]}>
-                <option value="">No schools available</option>
-              </Select>
-              <div className="p-2 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded">
-                No schools found. Schools must be created first.
-              </div>
-            </div>
-          ) : (
-            <Select
-              id="school_id"
-              value={formData.school_id || ''}
-              onChange={(value) => updateFormData('school_id', value)}
-              disabled={isBranchAdmin}
-              options={[
-                { value: '', label: 'Select school' },
-                ...schools.map(s => ({ value: s.id, label: s.name }))
-              ]}
-              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-            />
-          )}
-        </FormField>
-
-        {/* Branch Name */}
-        <FormField id="name" label="Branch Name" required error={formErrors.name}>
+        {/* School Name */}
+        <FormField id="name" label="School Name" required error={formErrors.name}>
           <Input
             id="name"
             value={formData.name || ''}
             onChange={(e) => updateFormData('name', e.target.value)}
-            placeholder="Enter branch name"
-            leftIcon={<MapPin className="h-5 w-5 text-gray-400" />}
+            placeholder="Enter school name"
+            leftIcon={<School className="h-5 w-5 text-gray-400" />}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
 
-        {/* Branch Code */}
-        <FormField id="code" label="Branch Code" required error={formErrors.code}>
+        {/* School Code */}
+        <FormField id="code" label="School Code" required error={formErrors.code}>
           <Input
             id="code"
             value={formData.code || ''}
             onChange={(e) => updateFormData('code', e.target.value)}
-            placeholder="e.g., BR-001"
+            placeholder="e.g., SCH-001"
             leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
@@ -217,12 +197,12 @@ export function BranchFormContent({
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mt-2">
             <div>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Branch Status
+                School Status
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {formData.status === 'active' 
-                  ? 'Branch is currently active' 
-                  : 'Branch is currently inactive'}
+                  ? 'School is currently active' 
+                  : 'School is currently inactive'}
               </p>
             </div>
             <ToggleSwitch
@@ -233,26 +213,14 @@ export function BranchFormContent({
           </div>
         </FormField>
 
-        {/* Building Name */}
-        <FormField id="building_name" label="Building Name">
-          <Input
-            id="building_name"
-            value={formData.building_name || ''}
-            onChange={(e) => updateFormData('building_name', e.target.value)}
-            placeholder="Enter building name"
-            leftIcon={<Building className="h-5 w-5 text-gray-400" />}
-            className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-          />
-        </FormField>
-
-        {/* Floor Details */}
-        <FormField id="floor_details" label="Floor Details">
-          <Input
-            id="floor_details"
-            value={formData.floor_details || ''}
-            onChange={(e) => updateFormData('floor_details', e.target.value)}
-            placeholder="e.g., 2nd Floor, Wing A"
-            leftIcon={<Navigation className="h-5 w-5 text-gray-400" />}
+        {/* Description */}
+        <FormField id="description" label="Description">
+          <Textarea
+            id="description"
+            value={formData.description || ''}
+            onChange={(e) => updateFormData('description', e.target.value)}
+            placeholder="Enter school description"
+            rows={3}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
@@ -263,22 +231,57 @@ export function BranchFormContent({
             id="address"
             value={formData.address || ''}
             onChange={(e) => updateFormData('address', e.target.value)}
-            placeholder="Enter branch address"
+            placeholder="Enter school address"
             rows={3}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
 
-        {/* Branch Logo */}
-        <FormField id="logo" label="Branch Logo">
+        {/* School Logo */}
+        <FormField id="logo" label="School Logo">
           <div className="mt-2">
             <ImageUpload
-              id="branch-logo"
-              bucket="branch-logos"
+              id="logo"
+              bucket="school-logos"
               value={formData.logo}
               publicUrl={formData.logo ? getLogoUrl(formData.logo) : null}
               onChange={(path) => updateFormData('logo', path)}
             />
+          </div>
+        </FormField>
+
+        {/* School Type */}
+        <FormField id="school_type" label="School Type">
+          <Select
+            id="school_type"
+            options={[
+              { value: '', label: 'Select type' },
+              { value: 'primary', label: 'Primary School' },
+              { value: 'secondary', label: 'Secondary School' },
+              { value: 'k12', label: 'K-12 School' },
+              { value: 'higher_secondary', label: 'Higher Secondary' },
+              { value: 'other', label: 'Other' }
+            ]}
+            value={formData.school_type || ''}
+            onChange={(value) => updateFormData('school_type', value)}
+            className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+          />
+        </FormField>
+
+        {/* Curriculum Types */}
+        <FormField id="curriculum_type" label="Curriculum Types">
+          <div className="space-y-2 mt-2">
+            {['national', 'cambridge', 'ib', 'american', 'montessori', 'other'].map(type => (
+              <label key={type} className="flex items-center gap-2 cursor-pointer hover:text-[#8CC63F]">
+                <input
+                  type="checkbox"
+                  checked={(formData.curriculum_type || []).includes(type)}
+                  onChange={(e) => handleCurriculumTypeChange(type, e.target.checked)}
+                  className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
+                />
+                <span className="text-sm capitalize">{type}</span>
+              </label>
+            ))}
           </div>
         </FormField>
 
@@ -288,7 +291,7 @@ export function BranchFormContent({
             id="notes"
             value={formData.notes || ''}
             onChange={(e) => updateFormData('notes', e.target.value)}
-            placeholder="Additional notes"
+            placeholder="Additional notes about the school"
             rows={3}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
@@ -301,12 +304,12 @@ export function BranchFormContent({
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <FormField id="student_capacity" label="Student Capacity">
+          <FormField id="total_capacity" label="Total Capacity">
             <Input
-              id="student_capacity"
+              id="total_capacity"
               type="number"
-              value={formData.student_capacity || ''}
-              onChange={(e) => updateFormData('student_capacity', parseInt(e.target.value) || undefined)}
+              value={formData.total_capacity || ''}
+              onChange={(e) => updateFormData('total_capacity', parseInt(e.target.value) || undefined)}
               placeholder="0"
               className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
@@ -346,52 +349,154 @@ export function BranchFormContent({
           </FormField>
         </div>
 
+        <FormField id="campus_address" label="Campus Address">
+          <Textarea
+            id="campus_address"
+            value={formData.campus_address || ''}
+            onChange={(e) => updateFormData('campus_address', e.target.value)}
+            placeholder="Enter campus address"
+            rows={3}
+            className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+          />
+        </FormField>
+
         <div className="grid grid-cols-2 gap-4">
-          <FormField id="opening_time" label="Opening Time">
+          <FormField id="campus_city" label="Campus City">
             <Input
-              id="opening_time"
-              type="time"
-              value={formData.opening_time || ''}
-              onChange={(e) => updateFormData('opening_time', e.target.value)}
-              leftIcon={<Clock className="h-5 w-5 text-gray-400" />}
+              id="campus_city"
+              value={formData.campus_city || ''}
+              onChange={(e) => updateFormData('campus_city', e.target.value)}
+              placeholder="Enter city"
               className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
 
-          <FormField id="closing_time" label="Closing Time">
+          <FormField id="campus_state" label="Campus State">
             <Input
-              id="closing_time"
-              type="time"
-              value={formData.closing_time || ''}
-              onChange={(e) => updateFormData('closing_time', e.target.value)}
-              leftIcon={<Clock className="h-5 w-5 text-gray-400" />}
+              id="campus_state"
+              value={formData.campus_state || ''}
+              onChange={(e) => updateFormData('campus_state', e.target.value)}
+              placeholder="Enter state/province"
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+
+          <FormField id="campus_postal_code" label="Postal Code">
+            <Input
+              id="campus_postal_code"
+              value={formData.campus_postal_code || ''}
+              onChange={(e) => updateFormData('campus_postal_code', e.target.value)}
+              placeholder="Enter postal code"
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+
+          <FormField id="established_date" label="Established Date">
+            <Input
+              id="established_date"
+              type="date"
+              value={formData.established_date || ''}
+              onChange={(e) => updateFormData('established_date', e.target.value)}
               className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
         </div>
 
-        <FormField id="working_days" label="Working Days">
-          <div className="grid grid-cols-7 gap-2 mt-2">
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-              <label key={day} className="flex items-center space-x-1 cursor-pointer hover:text-[#8CC63F]">
-                <input
-                  type="checkbox"
-                  checked={(formData.working_days || []).includes(day)}
-                  onChange={(e) => {
-                    const days = formData.working_days || [];
-                    if (e.target.checked) {
-                      updateFormData('working_days', [...days, day]);
-                    } else {
-                      updateFormData('working_days', days.filter(d => d !== day));
-                    }
-                  }}
-                  className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{day}</span>
-              </label>
-            ))}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField id="academic_year_start" label="Academic Year Start">
+            <Select
+              id="academic_year_start"
+              options={[
+                { value: '', label: 'Select month' },
+                { value: '1', label: 'January' },
+                { value: '2', label: 'February' },
+                { value: '3', label: 'March' },
+                { value: '4', label: 'April' },
+                { value: '5', label: 'May' },
+                { value: '6', label: 'June' },
+                { value: '7', label: 'July' },
+                { value: '8', label: 'August' },
+                { value: '9', label: 'September' },
+                { value: '10', label: 'October' },
+                { value: '11', label: 'November' },
+                { value: '12', label: 'December' }
+              ]}
+              value={formData.academic_year_start?.toString() || ''}
+              onChange={(value) => updateFormData('academic_year_start', parseInt(value) || undefined)}
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+
+          <FormField id="academic_year_end" label="Academic Year End">
+            <Select
+              id="academic_year_end"
+              options={[
+                { value: '', label: 'Select month' },
+                { value: '1', label: 'January' },
+                { value: '2', label: 'February' },
+                { value: '3', label: 'March' },
+                { value: '4', label: 'April' },
+                { value: '5', label: 'May' },
+                { value: '6', label: 'June' },
+                { value: '7', label: 'July' },
+                { value: '8', label: 'August' },
+                { value: '9', label: 'September' },
+                { value: '10', label: 'October' },
+                { value: '11', label: 'November' },
+                { value: '12', label: 'December' }
+              ]}
+              value={formData.academic_year_end?.toString() || ''}
+              onChange={(value) => updateFormData('academic_year_end', parseInt(value) || undefined)}
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+        </div>
+
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Facilities</label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
+              <input
+                type="checkbox"
+                checked={formData.has_library || false}
+                onChange={(e) => handleFacilityChange('has_library', e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
+              />
+              <BookOpen className="w-4 h-4 text-gray-500" />
+              <span className="text-sm">Library</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
+              <input
+                type="checkbox"
+                checked={formData.has_laboratory || false}
+                onChange={(e) => handleFacilityChange('has_laboratory', e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
+              />
+              <FlaskConical className="w-4 h-4 text-gray-500" />
+              <span className="text-sm">Laboratory</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
+              <input
+                type="checkbox"
+                checked={formData.has_sports_facilities || false}
+                onChange={(e) => handleFacilityChange('has_sports_facilities', e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
+              />
+              <Dumbbell className="w-4 h-4 text-gray-500" />
+              <span className="text-sm">Sports Facilities</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer hover:text-[#8CC63F]">
+              <input
+                type="checkbox"
+                checked={formData.has_cafeteria || false}
+                onChange={(e) => handleFacilityChange('has_cafeteria', e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-600 text-[#8CC63F] focus:ring-[#8CC63F] focus:ring-offset-0"
+              />
+              <Coffee className="w-4 h-4 text-gray-500" />
+              <span className="text-sm">Cafeteria</span>
+            </label>
           </div>
-        </FormField>
+        </div>
       </div>
     );
   }
@@ -399,40 +504,68 @@ export function BranchFormContent({
   if (activeTab === 'contact') {
     return (
       <div className="space-y-4">
-        <FormField id="branch_head_name" label="Branch Head Name">
+        <FormField id="principal_name" label="Principal Name">
           <Input
-            id="branch_head_name"
-            value={formData.branch_head_name || ''}
-            onChange={(e) => updateFormData('branch_head_name', e.target.value)}
-            placeholder="Enter branch head name"
+            id="principal_name"
+            value={formData.principal_name || ''}
+            onChange={(e) => updateFormData('principal_name', e.target.value)}
+            placeholder="Enter principal name"
             leftIcon={<User className="h-5 w-5 text-gray-400" />}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
 
-        <FormField id="branch_head_email" label="Branch Head Email" error={formErrors.branch_head_email}>
+        <FormField id="principal_email" label="Principal Email" error={formErrors.principal_email}>
           <Input
-            id="branch_head_email"
+            id="principal_email"
             type="email"
-            value={formData.branch_head_email || ''}
-            onChange={(e) => updateFormData('branch_head_email', e.target.value)}
-            placeholder="branchhead@school.com"
+            value={formData.principal_email || ''}
+            onChange={(e) => updateFormData('principal_email', e.target.value)}
+            placeholder="principal@school.com"
             leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
 
-        <FormField id="branch_head_phone" label="Branch Head Phone">
+        <FormField id="principal_phone" label="Principal Phone">
           <Input
-            id="branch_head_phone"
+            id="principal_phone"
             type="tel"
-            value={formData.branch_head_phone || ''}
-            onChange={(e) => updateFormData('branch_head_phone', e.target.value)}
+            value={formData.principal_phone || ''}
+            onChange={(e) => updateFormData('principal_phone', e.target.value)}
             placeholder="+1 (555) 123-4567"
             leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
             className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField id="latitude" label="Latitude">
+            <Input
+              id="latitude"
+              type="number"
+              step="any"
+              value={formData.latitude || ''}
+              onChange={(e) => updateFormData('latitude', parseFloat(e.target.value) || undefined)}
+              placeholder="e.g., 29.3759"
+              leftIcon={<MapPin className="h-5 w-5 text-gray-400" />}
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+
+          <FormField id="longitude" label="Longitude">
+            <Input
+              id="longitude"
+              type="number"
+              step="any"
+              value={formData.longitude || ''}
+              onChange={(e) => updateFormData('longitude', parseFloat(e.target.value) || undefined)}
+              placeholder="e.g., 47.9774"
+              leftIcon={<MapPin className="h-5 w-5 text-gray-400" />}
+              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          </FormField>
+        </div>
       </div>
     );
   }
@@ -440,4 +573,4 @@ export function BranchFormContent({
   return null;
 }
 
-export default BranchFormContent;
+export default SchoolFormContent;
