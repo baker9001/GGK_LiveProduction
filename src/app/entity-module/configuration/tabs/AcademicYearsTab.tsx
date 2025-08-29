@@ -27,7 +27,6 @@ import { toast } from '../../../../components/shared/Toast';
 const academicYearSchema = z.object({
   school_id: z.string().uuid('Please select a school'),
   year_name: z.string().min(1, 'Year name is required'),
-  year_code: z.string().optional(),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
   is_current: z.boolean(),
@@ -45,7 +44,6 @@ interface FilterState {
 interface FormState {
   school_id: string;
   year_name: string;
-  year_code: string;
   start_date: string;
   end_date: string;
   is_current: boolean;
@@ -58,7 +56,6 @@ type AcademicYear = {
   school_id: string;
   school_name: string;
   year_name: string;
-  year_code: string | null;
   start_date: string;
   end_date: string;
   is_current: boolean;
@@ -88,7 +85,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   const [formState, setFormState] = useState<FormState>({
     school_id: '',
     year_name: '',
-    year_code: '',
     start_date: '',
     end_date: '',
     is_current: false,
@@ -138,7 +134,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         setFormState({
           school_id: editingYear.school_id || '',
           year_name: editingYear.year_name || '',
-          year_code: editingYear.year_code || '',
           start_date: editingYear.start_date || '',
           end_date: editingYear.end_date || '',
           is_current: editingYear.is_current || false,
@@ -149,7 +144,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         setFormState({
           school_id: '',
           year_name: '',
-          year_code: '',
           start_date: '',
           end_date: '',
           is_current: false,
@@ -177,7 +171,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           id,
           school_id,
           year_name,
-          year_code,
           start_date,
           end_date,
           is_current,
@@ -199,7 +192,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
 
       // Apply filters
       if (filters.search) {
-        query = query.or(`year_name.ilike.%${filters.search}%,year_code.ilike.%${filters.search}%`);
+        query = query.or(`year_name.ilike.%${filters.search}%`);
       }
 
       if (filters.school_ids.length > 0) {
@@ -235,7 +228,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
       const validatedData = academicYearSchema.parse({
         school_id: data.school_id,
         year_name: data.year_name,
-        year_code: data.year_code || undefined,
         start_date: data.start_date,
         end_date: data.end_date,
         is_current: data.is_current,
@@ -359,17 +351,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
     },
     {
       id: 'year_code',
-      header: 'Code',
-      accessorKey: 'year_code',
-      enableSorting: true,
-      cell: (row: AcademicYear) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.year_code || '-'}
-        </span>
-      ),
-    },
-    {
-      id: 'school_name',
       header: 'School',
       accessorKey: 'school_name',
       enableSorting: true,
@@ -578,21 +559,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               value={formState.year_name}
               onChange={(e) => setFormState(prev => ({ ...prev, year_name: e.target.value }))}
               leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
-            />
-          </FormField>
-
-          <FormField
-            id="year_code"
-            label="Year Code"
-            error={formErrors.year_code}
-          >
-            <Input
-              id="year_code"
-              name="year_code"
-              placeholder="e.g., AY2024-25"
-              value={formState.year_code}
-              onChange={(e) => setFormState(prev => ({ ...prev, year_code: e.target.value }))}
-              leftIcon={<CalendarClock className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
 

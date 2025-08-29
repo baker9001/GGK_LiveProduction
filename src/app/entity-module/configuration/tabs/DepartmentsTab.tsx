@@ -26,8 +26,8 @@ import { toast } from '../../../../components/shared/Toast';
 
 const departmentSchema = z.object({
   school_id: z.string().uuid('Please select a school'),
-  department_name: z.string().min(1, 'Department name is required'),
-  department_code: z.string().optional(),
+  name: z.string().min(1, 'Department name is required'),
+  code: z.string().optional(),
   department_type: z.enum(['academic', 'administrative', 'support', 'other']),
   head_of_department: z.string().optional(),
   contact_email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -45,8 +45,8 @@ interface FilterState {
 
 interface FormState {
   school_id: string;
-  department_name: string;
-  department_code: string;
+  name: string;
+  code: string;
   department_type: 'academic' | 'administrative' | 'support' | 'other';
   head_of_department: string;
   contact_email: string;
@@ -59,8 +59,8 @@ type Department = {
   id: string;
   school_id: string;
   school_name: string;
-  department_name: string;
-  department_code: string | null;
+  name: string;
+  code: string | null;
   department_type: 'academic' | 'administrative' | 'support' | 'other';
   head_of_department: string | null;
   contact_email: string | null;
@@ -90,8 +90,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   const [formState, setFormState] = useState<FormState>({
     school_id: '',
-    department_name: '',
-    department_code: '',
+    name: '',
+    code: '',
     department_type: 'academic',
     head_of_department: '',
     contact_email: '',
@@ -141,8 +141,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       if (editingDepartment) {
         setFormState({
           school_id: editingDepartment.school_id || '',
-          department_name: editingDepartment.department_name || '',
-          department_code: editingDepartment.department_code || '',
+          name: editingDepartment.name || '',
+          code: editingDepartment.code || '',
           department_type: editingDepartment.department_type || 'academic',
           head_of_department: editingDepartment.head_of_department || '',
           contact_email: editingDepartment.contact_email || '',
@@ -153,8 +153,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       } else {
         setFormState({
           school_id: '',
-          department_name: '',
-          department_code: '',
+          name: '',
+          code: '',
           department_type: 'academic',
           head_of_department: '',
           contact_email: '',
@@ -182,8 +182,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         .select(`
           id,
           school_id,
-          department_name,
-          department_code,
+          name,
+          code,
           department_type,
           head_of_department,
           contact_email,
@@ -195,7 +195,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             name
           )
         `)
-        .order('department_name');
+        .order('name');
 
       // Apply school filtering
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
@@ -206,7 +206,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
       // Apply filters
       if (filters.search) {
-        query = query.or(`department_name.ilike.%${filters.search}%,department_code.ilike.%${filters.search}%,head_of_department.ilike.%${filters.search}%`);
+        query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%,head_of_department.ilike.%${filters.search}%`);
       }
 
       if (filters.school_ids.length > 0) {
@@ -241,8 +241,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     async (data: FormState) => {
       const validatedData = departmentSchema.parse({
         school_id: data.school_id,
-        department_name: data.department_name,
-        department_code: data.department_code || undefined,
+        name: data.name,
+        code: data.code || undefined,
         department_type: data.department_type,
         head_of_department: data.head_of_department || undefined,
         contact_email: data.contact_email || undefined,
@@ -343,19 +343,19 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   const columns = [
     {
-      id: 'department_name',
+      id: 'name',
       header: 'Department Name',
-      accessorKey: 'department_name',
+      accessorKey: 'name',
       enableSorting: true,
     },
     {
-      id: 'department_code',
+      id: 'code',
       header: 'Code',
-      accessorKey: 'department_code',
+      accessorKey: 'code',
       enableSorting: true,
       cell: (row: Department) => (
         <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.department_code || '-'}
+          {row.code || '-'}
         </span>
       ),
     },
@@ -568,32 +568,32 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           </FormField>
 
           <FormField
-            id="department_name"
+            id="name"
             label="Department Name"
             required
-            error={formErrors.department_name}
+            error={formErrors.name}
           >
             <Input
-              id="department_name"
-              name="department_name"
+              id="name"
+              name="name"
               placeholder="e.g., Mathematics, Human Resources"
-              value={formState.department_name}
-              onChange={(e) => setFormState(prev => ({ ...prev, department_name: e.target.value }))}
+              value={formState.name}
+              onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
               leftIcon={<Building2 className="h-5 w-5 text-gray-400" />}
             />
           </FormField>
 
           <FormField
-            id="department_code"
+            id="code"
             label="Department Code"
-            error={formErrors.department_code}
+            error={formErrors.code}
           >
             <Input
-              id="department_code"
-              name="department_code"
+              id="code"
+              name="code"
               placeholder="e.g., MATH, HR"
-              value={formState.department_code}
-              onChange={(e) => setFormState(prev => ({ ...prev, department_code: e.target.value }))}
+              value={formState.code}
+              onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
             />
           </FormField>
 
