@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, AlertCircle, Loader2, BookOpen, CheckCircle, Phone, Mail, MapPin, Clock } from 'lucide-react';
+import { Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
 import { supabase } from '../../lib/supabase';
