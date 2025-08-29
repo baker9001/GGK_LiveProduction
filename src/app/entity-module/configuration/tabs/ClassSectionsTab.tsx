@@ -73,6 +73,8 @@ interface GradeLevelsTabProps {
 
 // IMPORTANT: Correct export name for GradeLevelsTab
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
+// IMPORTANT: Correct export name for ClassSectionsTab
+export function ClassSectionsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   
