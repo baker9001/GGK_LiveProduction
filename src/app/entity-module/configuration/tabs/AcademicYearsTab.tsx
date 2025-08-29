@@ -539,7 +539,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
           >
             <input
               name="school_id"
-              value={formState.school_id || ''} // Bind to formState
+             value={formState?.school_id || ''} // Bind to formState
               readOnly // Make it readOnly as SearchableMultiSelect will manage it
             />
             <SearchableMultiSelect
@@ -548,7 +548,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
                 value: school.id,
                 label: school.name
               }))}
-              selectedValues={formState.school_id ? [formState.school_id] : []} // Bind to formState
+             selectedValues={formState?.school_id ? [formState.school_id] : []} // Bind to formState
               onChange={(values) => {
                 setFormState(prev => ({ ...prev, school_id: values[0] || '' })); // Update formState
               }}
@@ -567,7 +567,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_name"
               name="grade_name"
               placeholder="e.g., Grade 1, Year 7, Form 1"
-              value={formState.grade_name} // Bind to formState
+             value={formState?.grade_name || ''} // Bind to formState
               onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))} // Update formState
               leftIcon={<GraduationCap className="h-5 w-5 text-gray-400" />}
             />
@@ -582,7 +582,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
               id="grade_code"
               name="grade_code"
               placeholder="e.g., G1, Y7, F1"
-              value={formState.grade_code} // Bind to formState
+             value={formState?.grade_code || ''} // Bind to formState
               onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))} // Update formState
               leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
             />
@@ -600,7 +600,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
               type="number"
               min="1"
               placeholder="1"
-              value={formState.grade_order} // Bind to formState
+             value={formState?.grade_order || 1} // Bind to formState
               onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 0 }))} // Update formState
             />
           </FormField>
@@ -621,7 +621,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
                 { value: 'secondary', label: 'Secondary' },
                 { value: 'senior', label: 'Senior' }
               ]}
-              value={formState.education_level} // Bind to formState
+             value={formState?.education_level || ''} // Bind to formState
               onChange={(e) => setFormState(prev => ({ ...prev, education_level: e.target.value }))} // Update formState
             />
           </FormField>
@@ -638,7 +638,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="30"
-                value={formState.max_students_per_section} // Bind to formState
+               value={formState?.max_students_per_section || 30} // Bind to formState
                 onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 0 }))} // Update formState
                 leftIcon={<Users className="h-5 w-5 text-gray-400" />}
               />
@@ -655,7 +655,7 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
                 type="number"
                 min="1"
                 placeholder="1"
-                value={formState.total_sections} // Bind to formState
+               value={formState?.total_sections || 1} // Bind to formState
                 onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 0 }))} // Update formState
               />
             </FormField>
@@ -673,13 +673,13 @@ export function AcademicYearsTab({ companyId }: GradeLevelsTabProps) {
                   Grade Level Status
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {formState.status === 'active'
+                 {formState?.status === 'active'
                     ? 'Grade level is currently active' 
                     : 'Grade level is currently inactive'}
                 </p>
               </div>
               <ToggleSwitch
-                checked={formState.status === 'active'} // Bind to formState
+               checked={formState?.status === 'active'} // Bind to formState
                 onChange={(checked) => {
                   setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' })); // Update formState
                 }}
