@@ -385,14 +385,27 @@ export default function OrganizationManagement() {
           if (schoolIds.length > 0) {
             schoolsQuery = schoolsQuery.in('id', schoolIds);
           } else {
-            // No schools found, return empty result
-            schoolsQuery = schoolsQuery.eq('id', 'non-existent-id');
+            // No schools found, return zero count
+            return {
+              company_id: userCompanyId,
+              total_schools: 0,
+              total_branches: 0,
+              total_students: 0,
+              total_teachers: 0,
+              total_users: 0
+            } as OrganizationStats;
           }
           branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
         } else {
-          // No scope assigned, return empty results
-          schoolsQuery = schoolsQuery.eq('id', 'non-existent-id');
-          branchesQuery = branchesQuery.eq('id', 'non-existent-id');
+          // No scope assigned, return zero counts
+          return {
+            company_id: userCompanyId,
+            total_schools: 0,
+            total_branches: 0,
+            total_students: 0,
+            total_teachers: 0,
+            total_users: 0
+          } as OrganizationStats;
         }
       }
 
@@ -422,8 +435,8 @@ export default function OrganizationManagement() {
         if (orConditions.length > 0) {
           teacherCountQuery = teacherCountQuery.or(orConditions.join(','));
         } else {
-          // No scope assigned, return zero count
-          teacherCountQuery = teacherCountQuery.eq('id', 'non-existent-id');
+          // This case is already handled above with early return
+          teacherCountQuery = teacherCountQuery.limit(0);
         }
       }
 
@@ -448,8 +461,8 @@ export default function OrganizationManagement() {
         if (orConditions.length > 0) {
           studentCountQuery = studentCountQuery.or(orConditions.join(','));
         } else {
-          // No scope assigned, return zero count
-          studentCountQuery = studentCountQuery.eq('id', 'non-existent-id');
+          // This case is already handled above with early return
+          studentCountQuery = studentCountQuery.limit(0);
         }
       }
 
@@ -467,8 +480,8 @@ export default function OrganizationManagement() {
         } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
           userCountQuery = userCountQuery.overlaps('assigned_branches', scopeFilters.branch_ids);
         } else {
-          // No scope assigned, return zero count
-          userCountQuery = userCountQuery.eq('id', 'non-existent-id');
+          // This case is already handled above with early return
+          userCountQuery = userCountQuery.limit(0);
         }
       }
 
