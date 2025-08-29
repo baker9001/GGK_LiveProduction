@@ -168,7 +168,7 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           branches!entity_departments_branch_id_fkey (
             name
           ),
-          parent_department:entity_departments!entity_departments_parent_department_id_fkey (
+          parent_department:entity_departments (
             name
           )
         `)
