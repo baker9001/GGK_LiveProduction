@@ -22,6 +22,7 @@ import {
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
+import { getPublicUrl } from '../../lib/storageHelpers';
 
 // ===== TYPE DEFINITIONS =====
 interface SchoolFormData {
@@ -119,19 +120,7 @@ export function SchoolFormContent({
 
   // Get logo URL helper
   const getLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.warn('VITE_SUPABASE_URL is not defined');
-      return null;
-    }
-    
-    return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
+    return getPublicUrl('school-logos', path);
   };
 
   // Calculate which tabs have errors and notify parent

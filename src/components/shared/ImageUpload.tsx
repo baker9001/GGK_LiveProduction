@@ -9,6 +9,7 @@ import { useUser } from '../../contexts/UserContext';
 import { toast } from './Toast';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { getAuthenticatedUser } from '../../lib/auth';
+import { getPublicUrl, deleteFileFromStorage } from '../../lib/storageHelpers';
 
 interface ImageUploadProps {
   id: string;
@@ -73,46 +74,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   // Delete old file from storage
   const deleteOldFile = async (oldPath: string): Promise<void> => {
     if (!oldPath) return;
-
-    try {
-      // Try to delete with the stored path
-      const { error } = await supabase.storage
-        .from(bucket)
-        .remove([oldPath]);
-
-      if (error) {
-        console.warn(`Failed to delete old file at: ${oldPath}`, error);
-
-        // Try alternative paths based on bucket type
-        const bucketToSubfolder: Record<string, string> = {
-          'company-logos': 'companies',
-          'school-logos': 'schools',
-          'branch-logos': 'branches',
-          'subject-logos': 'subjects',
-          'avatars': 'users'
-        };
-
-        const expectedSubfolder = bucketToSubfolder[bucket];
-
-        if (expectedSubfolder) {
-          // Try alternative paths
-          if (oldPath.startsWith(`${expectedSubfolder}/`)) {
-            // Path has subfolder, try without it
-            const fileNameOnly = oldPath.replace(`${expectedSubfolder}/`, '');
-            await supabase.storage.from(bucket).remove([fileNameOnly]);
-          } else {
-            // Path doesn't have subfolder, try with it (for old files)
-            const withSubfolder = `${expectedSubfolder}/${oldPath}`;
-            await supabase.storage.from(bucket).remove([withSubfolder]);
-          }
-        }
-      } else {
-        console.log(`Successfully deleted old file: ${oldPath}`);
-      }
-    } catch (error) {
-      console.error('Error deleting old file:', error);
-      // Don't throw - we still want to proceed with the new upload
-    }
+    await deleteFileFromStorage(bucket, oldPath);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,18 +219,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   // Generate public URL with proper handling
   const getPublicUrl = (path: string | null) => {
     if (!path) return null;
-    
-    // If already a full URL, return it
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    
-    // Get public URL from Supabase
-    const { data } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(path);
-    
-    return data?.publicUrl || null;
+    return getPublicUrl(bucket, path);
   };
 
   const displayUrl = publicUrl || getPublicUrl(value);
@@ -345,7 +296,6 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
                   isHovered && !uploading && "opacity-70 scale-105"
                 )}
                 onError={() => {
-                  console.error('Image load error for:', displayUrl);
                   setHasError(true);
                 }}
               />

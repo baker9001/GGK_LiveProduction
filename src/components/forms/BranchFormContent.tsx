@@ -16,6 +16,7 @@ import {
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { ImageUpload } from '../shared/ImageUpload';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
+import { getPublicUrl } from '../../lib/storageHelpers';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchFormData {
@@ -83,21 +84,7 @@ export function BranchFormContent({
 
   // Get logo URL helper
   const getLogoUrl = (path: string | null) => {
-    if (!path) return null;
-    
-    // If path is already a full URL, return it
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    
-    // Get public URL from Supabase
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.warn('VITE_SUPABASE_URL is not defined');
-      return null;
-    }
-    
-    return `${supabaseUrl}/storage/v1/object/public/branch-logos/${path}`;
+    return getPublicUrl('branch-logos', path);
   };
 
   // NO TAB NAVIGATION HERE - IT'S HANDLED BY THE PARENT COMPONENT
