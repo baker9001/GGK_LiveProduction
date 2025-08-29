@@ -358,22 +358,44 @@ export default function OrganizationManagement() {
     async () => {
       if (!userCompanyId) return null;
 
+      // Count schools belonging to this company
       let schoolsQuery = supabase
         .from('schools')
         .select('id', { count: 'exact' })
         .eq('company_id', userCompanyId)
         .eq('status', 'active');
 
+      // Count branches belonging to schools in this company
+      const { data: companySchoolIds } = await supabase
+        .from('schools')
+        .select('id')
+        .eq('company_id', userCompanyId);
+      
+      const schoolIds = companySchoolIds?.map(s => s.id) || [];
+      
       let branchesQuery = supabase
         .from('branches')
-        .select('id, school_id', { count: 'exact' })
+        .select('id', { count: 'exact' })
         .eq('status', 'active');
+      
+      if (schoolIds.length > 0) {
+        branchesQuery = branchesQuery.in('school_id', schoolIds);
+      } else {
+        // No schools in company, so no branches
+        branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Force empty result
+      }
 
       // Apply scope filtering for non-entity/sub-entity admins
       if (!isEntityAdmin && !isSubEntityAdmin) {
         if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
           schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
-          branchesQuery = branchesQuery.in('school_id', scopeFilters.school_ids);
+          // Filter branches to only those in scope schools
+          const scopeSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (scopeSchoolIds.length > 0) {
+            branchesQuery = branchesQuery.in('school_id', scopeSchoolIds);
+          } else {
+            branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+          }
         } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
           // For branch admins, get schools that contain their branches
           const { data: branchSchools } = await supabase
@@ -381,11 +403,12 @@ export default function OrganizationManagement() {
             .select('school_id')
             .in('id', scopeFilters.branch_ids);
           
-          const schoolIds = [...new Set(branchSchools?.map(b => b.school_id) || [])];
-          if (schoolIds.length > 0) {
-            schoolsQuery = schoolsQuery.in('id', schoolIds);
+          const branchSchoolIds = [...new Set(branchSchools?.map(b => b.school_id) || [])];
+          // Only include schools that belong to this company
+          const validSchoolIds = branchSchoolIds.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            schoolsQuery = schoolsQuery.in('id', validSchoolIds);
           } else {
-            // No schools found, return zero count
             return {
               company_id: userCompanyId,
               total_schools: 0,
@@ -397,7 +420,6 @@ export default function OrganizationManagement() {
           }
           branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
         } else {
-          // No scope assigned, return zero counts
           return {
             company_id: userCompanyId,
             total_schools: 0,
@@ -414,7 +436,7 @@ export default function OrganizationManagement() {
         branchesQuery
       ]);
 
-      // Apply scope filtering to teacher count
+      // Count teachers belonging to this company
       let teacherCountQuery = supabase
         .from('teachers')
         .select('id', { count: 'exact' })
@@ -425,22 +447,35 @@ export default function OrganizationManagement() {
         const orConditions: string[] = [];
         
         if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          orConditions.push(`school_id.in.(${scopeFilters.school_ids.join(',')})`);
+          // Only include schools that belong to this company
+          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
+          }
         }
         
         if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          orConditions.push(`branch_id.in.(${scopeFilters.branch_ids.join(',')})`);
+          // Only include branches that belong to schools in this company
+          const { data: validBranches } = await supabase
+            .from('branches')
+            .select('id')
+            .in('id', scopeFilters.branch_ids)
+            .in('school_id', schoolIds);
+          
+          const validBranchIds = validBranches?.map(b => b.id) || [];
+          if (validBranchIds.length > 0) {
+            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
+          }
         }
         
         if (orConditions.length > 0) {
           teacherCountQuery = teacherCountQuery.or(orConditions.join(','));
         } else {
-          // This case is already handled above with early return
           teacherCountQuery = teacherCountQuery.limit(0);
         }
       }
 
-      // Apply scope filtering to student count
+      // Count students belonging to this company
       let studentCountQuery = supabase
         .from('students')
         .select('id', { count: 'exact' })
@@ -451,22 +486,35 @@ export default function OrganizationManagement() {
         const orConditions: string[] = [];
         
         if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          orConditions.push(`school_id.in.(${scopeFilters.school_ids.join(',')})`);
+          // Only include schools that belong to this company
+          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
+          }
         }
         
         if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          orConditions.push(`branch_id.in.(${scopeFilters.branch_ids.join(',')})`);
+          // Only include branches that belong to schools in this company
+          const { data: validBranches } = await supabase
+            .from('branches')
+            .select('id')
+            .in('id', scopeFilters.branch_ids)
+            .in('school_id', schoolIds);
+          
+          const validBranchIds = validBranches?.map(b => b.id) || [];
+          if (validBranchIds.length > 0) {
+            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
+          }
         }
         
         if (orConditions.length > 0) {
           studentCountQuery = studentCountQuery.or(orConditions.join(','));
         } else {
-          // This case is already handled above with early return
           studentCountQuery = studentCountQuery.limit(0);
         }
       }
 
-      // Apply scope filtering to entity users count
+      // Count entity users belonging to this company
       let userCountQuery = supabase
         .from('entity_users')
         .select('id', { count: 'exact' })
@@ -474,15 +522,9 @@ export default function OrganizationManagement() {
         .eq('is_active', true);
 
       if (!isEntityAdmin && !isSubEntityAdmin) {
-        // For school and branch admins, only count users within their scope
-        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-          userCountQuery = userCountQuery.overlaps('assigned_schools', scopeFilters.school_ids);
-        } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
-          userCountQuery = userCountQuery.overlaps('assigned_branches', scopeFilters.branch_ids);
-        } else {
-          // This case is already handled above with early return
-          userCountQuery = userCountQuery.limit(0);
-        }
+        // For school and branch admins, they still see all entity users in the company
+        // as entity users are company-level administrators
+        // No additional filtering needed beyond company_id
       }
 
       // Execute all count queries
