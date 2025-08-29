@@ -632,9 +632,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="School (Optional)"
             error={formErrors.school_id}
           >
-            <Select
-              id="school_id"
+            <input
+              type="hidden"
               name="school_id"
+              value={editingDepartment?.school_id || ''}
+            />
+            <SearchableMultiSelect
+              label=""
               options={[
                 { value: '', label: 'Select school (optional)...' },
                 ...schools.map(school => ({
@@ -642,9 +646,16 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   label: school.name
                 }))
               ]}
-              defaultValue={editingDepartment?.school_id || ''}
-              searchable={true}
-              usePortal={true}
+              selectedValues={editingDepartment?.school_id ? [editingDepartment.school_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }}
+              isMulti={false}
+              placeholder="Select school (optional)..."
             />
           </FormField>
 
@@ -653,9 +664,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Branch (Optional)"
             error={formErrors.branch_id}
           >
-            <Select
-              id="branch_id"
+            <input
+              type="hidden"
               name="branch_id"
+              value={editingDepartment?.branch_id || ''}
+            />
+            <SearchableMultiSelect
+              label=""
               options={[
                 { value: '', label: 'Select branch (optional)...' },
                 ...branches.map(branch => ({
@@ -663,9 +678,16 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   label: branch.name
                 }))
               ]}
-              defaultValue={editingDepartment?.branch_id || ''}
-              searchable={true}
-              usePortal={true}
+              selectedValues={editingDepartment?.branch_id ? [editingDepartment.branch_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="branch_id"]') as HTMLInputElement;
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }}
+              isMulti={false}
+              placeholder="Select branch (optional)..."
             />
           </FormField>
 
@@ -674,9 +696,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Parent Department"
             error={formErrors.parent_department_id}
           >
-            <Select
-              id="parent_department_id"
+            <input
+              type="hidden"
               name="parent_department_id"
+              value={editingDepartment?.parent_department_id || ''}
+            />
+            <SearchableMultiSelect
+              label=""
               options={[
                 { value: '', label: 'Select parent department (optional)...' },
                 ...departments
@@ -686,9 +712,16 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     label: dept.name
                   }))
               ]}
-              defaultValue={editingDepartment?.parent_department_id || ''}
-              searchable={true}
-              usePortal={true}
+              selectedValues={editingDepartment?.parent_department_id ? [editingDepartment.parent_department_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="parent_department_id"]') as HTMLInputElement;
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }}
+              isMulti={false}
+              placeholder="Select parent department (optional)..."
             />
           </FormField>
 
