@@ -140,7 +140,7 @@ export function DepartmentsTab({ companyId }: GradeLevelsTabProps) {
     if (isFormOpen) {
       if (editingGradeLevel) {
         setFormState({
-          school_id: editingGradeLevel.school_id,
+          school_id: editingGradeLevel.school_id || '',
           grade_name: editingGradeLevel.grade_name,
           grade_code: editingGradeLevel.grade_code || '',
           grade_order: editingGradeLevel.grade_order,
