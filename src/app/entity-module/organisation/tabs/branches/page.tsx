@@ -533,6 +533,66 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
         setShowDeleteConfirmation(false);
         setBranchToDelete(null);
         if (refreshData) refreshData();
+      },
+      onError: (error: any) => {
+        console.error('Error deleting branch:', error);
+        toast.error(error.message || 'Failed to delete branch');
+      }
+    }
+  );
+
+  // Form validation
+  const validateForm = useCallback(() => {
+    const errors: Record<string, string> = {};
+    let hasBasicErrors = false;
+    let hasAdditionalErrors = false;
+    let hasContactErrors = false;
+
+    // Basic tab validation
+    if (!formData.name?.trim()) {
+      errors.name = 'Branch name is required';
+      hasBasicErrors = true;
+    }
+    if (!formData.code?.trim()) {
+      errors.code = 'Branch code is required';
+      hasBasicErrors = true;
+    }
+    if (!formData.school_id) {
+      errors.school_id = 'School is required';
+      hasBasicErrors = true;
+    }
+
+    // Additional tab validation (optional fields, but validate format if provided)
+    if (formData.student_capacity && formData.student_capacity < 0) {
+      errors.student_capacity = 'Student capacity must be a positive number';
+      hasAdditionalErrors = true;
+    }
+    if (formData.student_count && formData.student_count < 0) {
+      errors.student_count = 'Student count must be a positive number';
+      hasAdditionalErrors = true;
+    }
+
+    // Contact tab validation (optional fields, but validate format if provided)
+    if (formData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.branch_head_email)) {
+      errors.branch_head_email = 'Please enter a valid email address';
+      hasContactErrors = true;
+    }
+
+    setFormErrors(errors);
+    setTabErrors({
+      basic: hasBasicErrors,
+      additional: hasAdditionalErrors,
+      contact: hasContactErrors
+    });
+
+    return Object.keys(errors).length === 0;
+  }, [formData]);
+
+  // Update form data when editing
+  useEffect(() => {
+    if (selectedBranch && showEditModal) {
+      const additionalData = selectedBranch.additional || {};
+      const combinedData = {
         ...selectedBranch,
         ...additionalData
       };
@@ -730,31 +790,31 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 placeholder="Search branches..."
                 className="pl-10"
               />
-              {/* View Mode Toggle */}
-              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('card')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'card'
-                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                  title="Card View"
-                >
-                  <Grid3X3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                  title="List View"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
+            </div>
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'card'
+                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                title="Card View"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
             </div>
             <Select
               value={filterSchool}
