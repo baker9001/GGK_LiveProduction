@@ -152,25 +152,6 @@ function RelationshipsPage() {
   );
 }
 
-function ConfigurationPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-        Entity Configuration
-      </h1>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-        <Settings className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Configuration management features are coming soon.
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-500">
-          Configure entity properties, permissions, and access controls for your organization.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function AnalyticsPage() {
   return (
     <div className="p-6">
