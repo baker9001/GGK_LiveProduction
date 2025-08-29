@@ -38,8 +38,8 @@ const gradeLevelSchema = z.object({
   total_sections: z.number().min(1, 'Must be at least 1 section'),
   status: z.enum(['active', 'inactive']),
   // NEW: Enhanced linking fields
-  assigned_branches: z.array(z.string().uuid()).optional(),
-  department_associations: z.array(z.string().uuid()).optional(),
+  assigned_branches: z.array(z.string().uuid()).optional().default([]),
+  department_associations: z.array(z.string().uuid()).optional().default([]),
   capacity_per_branch: z.record(z.number().min(1)).optional()
 });
 
