@@ -632,6 +632,12 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="School (Optional)"
             error={formErrors.school_id}
           >
+            <input
+              type="hidden"
+              id="school_id"
+              name="school_id"
+              defaultValue={editingDepartment?.school_id || ''}
+            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
@@ -641,16 +647,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               selectedValues={editingDepartment?.school_id ? [editingDepartment.school_id] : []}
               onChange={(values) => {
                 const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
-                if (input) input.value = values[0] || '';
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
               }}
               isMulti={false}
               placeholder="Select school (optional)..."
-            />
-            <input
-              type="hidden"
-              id="school_id"
-              name="school_id"
-              defaultValue={editingDepartment?.school_id || ''}
             />
           </FormField>
 
@@ -659,6 +662,12 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Branch (Optional)"
             error={formErrors.branch_id}
           >
+            <input
+              type="hidden"
+              id="branch_id"
+              name="branch_id"
+              defaultValue={editingDepartment?.branch_id || ''}
+            />
             <SearchableMultiSelect
               label=""
               options={branches.map(branch => ({
@@ -668,16 +677,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               selectedValues={editingDepartment?.branch_id ? [editingDepartment.branch_id] : []}
               onChange={(values) => {
                 const input = document.querySelector('input[name="branch_id"]') as HTMLInputElement;
-                if (input) input.value = values[0] || '';
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
               }}
               isMulti={false}
               placeholder="Select branch (optional)..."
-            />
-            <input
-              type="hidden"
-              id="branch_id"
-              name="branch_id"
-              defaultValue={editingDepartment?.branch_id || ''}
             />
           </FormField>
 
@@ -686,6 +692,12 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             label="Parent Department"
             error={formErrors.parent_department_id}
           >
+            <input
+              type="hidden"
+              id="parent_department_id"
+              name="parent_department_id"
+              defaultValue={editingDepartment?.parent_department_id || ''}
+            />
             <SearchableMultiSelect
               label=""
               options={departments
@@ -697,16 +709,13 @@ export default function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               selectedValues={editingDepartment?.parent_department_id ? [editingDepartment.parent_department_id] : []}
               onChange={(values) => {
                 const input = document.querySelector('input[name="parent_department_id"]') as HTMLInputElement;
-                if (input) input.value = values[0] || '';
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
               }}
               isMulti={false}
               placeholder="Select parent department (optional)..."
-            />
-            <input
-              type="hidden"
-              id="parent_department_id"
-              name="parent_department_id"
-              defaultValue={editingDepartment?.parent_department_id || ''}
             />
           </FormField>
 

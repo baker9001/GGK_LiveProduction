@@ -492,6 +492,12 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             required
             error={formErrors.school_id}
           >
+            <input
+              type="hidden"
+              id="school_id"
+              name="school_id"
+              defaultValue={editingAcademicYear?.school_id || ''}
+            />
             <SearchableMultiSelect
               label=""
               options={schools.map(school => ({
@@ -501,16 +507,13 @@ export default function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               selectedValues={editingAcademicYear?.school_id ? [editingAcademicYear.school_id] : []}
               onChange={(values) => {
                 const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
-                if (input) input.value = values[0] || '';
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
               }}
               isMulti={false}
               placeholder="Select school..."
-            />
-            <input
-              type="hidden"
-              id="school_id"
-              name="school_id"
-              defaultValue={editingAcademicYear?.school_id || ''}
             />
           </FormField>
 
