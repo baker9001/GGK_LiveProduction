@@ -119,6 +119,10 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
     const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
     const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
+    
+    // Confirmation dialog state
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+    const [schoolToDelete, setSchoolToDelete] = useState<SchoolData | null>(null);
 
     // ACCESS CHECK: Block entry if user cannot view this tab
     useEffect(() => {
@@ -556,10 +560,14 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         onSuccess: () => {
           toast.success('School deleted successfully');
           queryClient.invalidateQueries(['schools-tab']);
+          setShowDeleteConfirmation(false);
+          setSchoolToDelete(null);
           if (refreshData) refreshData();
         },
         onError: (error: any) => {
           toast.error(error.message || 'Failed to delete school');
+          setShowDeleteConfirmation(false);
+          setSchoolToDelete(null);
         }
       }
     );
@@ -679,6 +687,23 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       setTabErrors({ basic: false, additional: false, contact: false });
       setShowCreateModal(true);
     }, [companyId]);
+
+    // Handle delete confirmation
+    const handleDeleteClick = useCallback((school: SchoolData) => {
+      setSchoolToDelete(school);
+      setShowDeleteConfirmation(true);
+    }, []);
+
+    const handleConfirmDelete = useCallback(() => {
+      if (schoolToDelete) {
+        deleteSchoolMutation.mutate(schoolToDelete.id);
+      }
+    }, [schoolToDelete, deleteSchoolMutation]);
+
+    const handleCancelDelete = useCallback(() => {
+      setShowDeleteConfirmation(false);
+      setSchoolToDelete(null);
+    }, []);
 
     // Filter schools based on search and status
     const displayedSchools = useMemo(() => {
@@ -938,17 +963,18 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
               return (
                 <div
                   key={school.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                  className="group bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-[#8CC63F]/30 dark:hover:border-[#8CC63F]/30 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
                 >
-                  <div className="p-4">
-                    <div className="flex items-start justify-between mb-3">
+                  <div className="p-6">
+                    {/* Header with logo, name, and status */}
+                    <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                        <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-xl flex items-center justify-center overflow-hidden shadow-inner">
                           {logoUrl ? (
                             <img
                               src={logoUrl}
                               alt={`${school.name} logo`}
-                              className="w-full h-full object-contain p-0.5"
+                              className="w-full h-full object-contain p-1"
                               onError={(e) => {
                                 const target = e.currentTarget;
                                 target.style.display = 'none';
@@ -958,62 +984,124 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                             />
                           ) : null}
                           <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                            <School className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                            <School className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                           </div>
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-900 dark:text-white">{school.name}</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{school.code}</p>
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
+                            {school.name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                              {school.code}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <StatusBadge status={school.status} />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={school.status} size="sm" showPulse={school.status === 'active'} />
+                        {/* Action buttons - only visible on hover */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
+                          {canEdit && (
+                            <Button
+                              onClick={() => handleEdit(school)}
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-8 w-8 text-gray-400 hover:text-[#8CC63F] hover:bg-[#8CC63F]/10 transition-all duration-200"
+                              title="Edit school"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {can('delete_school') && (
+                            <Button
+                              onClick={() => handleDeleteClick(school)}
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
+                              title="Delete school"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Description */}
                     {school.description && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2 leading-relaxed">
                         {school.description}
                       </p>
                     )}
 
-                    <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {school.branch_count || 0} branches
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {school.student_count || 0} students
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {school.teachers_count || 0} teachers
-                      </span>
+                    {/* Statistics */}
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div className="flex items-center justify-center mb-1">
+                          <MapPin className="w-4 h-4 text-purple-500" />
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {school.branch_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Branches
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div className="flex items-center justify-center mb-1">
+                          <Users className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {school.student_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Students
+                        </div>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div className="flex items-center justify-center mb-1">
+                          <Users className="w-4 h-4 text-green-500" />
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {school.teachers_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Teachers
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Footer with quick actions */}
                     {canEdit && (
-                      <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <Button
-                          onClick={() => handleEdit(school)}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                        >
-                          <Edit2 className="w-3 h-3 mr-1" />
-                          Edit
-                        </Button>
-                        {can('delete_school') && (
-                          <Button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this school?')) {
-                                deleteSchoolMutation.mutate(school.id);
-                              }
-                            }}
-                            variant="danger-outline"
-                            size="sm"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
+                      <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Created {new Date(school.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              onClick={() => handleEdit(school)}
+                              variant="outline"
+                              size="sm"
+                              className="text-[#8CC63F] border-[#8CC63F]/30 hover:bg-[#8CC63F]/10 hover:border-[#8CC63F] transition-all duration-200"
+                            >
+                              <Edit2 className="w-3 h-3 mr-1" />
+                              Edit
+                            </Button>
+                            {can('delete_school') && (
+                              <Button
+                                onClick={() => handleDeleteClick(school)}
+                                variant="outline"
+                                size="sm"
+                                className="text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:hover:bg-red-900/20 dark:hover:border-red-700 transition-all duration-200"
+                              >
+                                <Trash2 className="w-3 h-3 mr-1" />
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1055,6 +1143,18 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         >
           {renderFormContent()}
         </SlideInForm>
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={showDeleteConfirmation}
+          title="Delete School"
+          message={`Are you sure you want to delete "${schoolToDelete?.name}"? This action cannot be undone and will also delete all associated branches.`}
+          confirmText="Delete School"
+          cancelText="Cancel"
+          confirmVariant="destructive"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
 
         {/* Deactivation Confirmation Dialog */}
         <ConfirmationDialog
