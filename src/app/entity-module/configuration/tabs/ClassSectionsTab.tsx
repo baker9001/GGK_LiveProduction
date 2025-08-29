@@ -612,28 +612,16 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             required
             error={formErrors.grade_level_id}
           >
-            <input
-              type="hidden"
+            <Select
               id="grade_level_id"
               name="grade_level_id"
-              defaultValue={editingClassSection?.grade_level_id || ''}
-            />
-            <SearchableMultiSelect
-              label=""
               options={gradeLevels.map(grade => ({
                 value: grade.id,
                 label: `${grade.grade_name} (${grade.school_name})`
               }))}
-              selectedValues={editingClassSection?.grade_level_id ? [editingClassSection.grade_level_id] : []}
-              onChange={(values) => {
-                const input = document.querySelector('input[name="grade_level_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-              }}
-              isMulti={false}
-              placeholder="Select grade level..."
+              defaultValue={editingClassSection?.grade_level_id || ''}
+              searchable={true}
+              usePortal={true}
             />
           </FormField>
 
@@ -643,28 +631,16 @@ export default function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             required
             error={formErrors.academic_year_id}
           >
-            <input
-              type="hidden"
+            <Select
               id="academic_year_id"
               name="academic_year_id"
-              defaultValue={editingClassSection?.academic_year_id || ''}
-            />
-            <SearchableMultiSelect
-              label=""
               options={academicYears.map(year => ({
                 value: year.id,
                 label: `${year.year_name} (${year.school_name})`
               }))}
-              selectedValues={editingClassSection?.academic_year_id ? [editingClassSection.academic_year_id] : []}
-              onChange={(values) => {
-                const input = document.querySelector('input[name="academic_year_id"]') as HTMLInputElement;
-                if (input) {
-                  input.value = values[0] || '';
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-              }}
-              isMulti={false}
-              placeholder="Select academic year..."
+              defaultValue={editingClassSection?.academic_year_id || ''}
+              searchable={true}
+              usePortal={true}
             />
           </FormField>
 
