@@ -1,97 +1,168 @@
-///home/project/src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
+/**
+ * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
+ * 
+ * FIXED VERSION - Aligned with Database Schema
+ * - Added missing "Add Grade Level" button
+ * - Fixed table structure to match grade_levels schema
+ * - Corrected form fields to match database columns
+ * - Fixed data fetching and mutations
+ */
+
+'use client';
 
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, GraduationCap, Edit, Trash2, School } from 'lucide-react';
+import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
+import { useAccessControl } from '../../../../hooks/useAccessControl';
 import { DataTable } from '../../../../components/shared/DataTable';
+import { FilterCard } from '../../../../components/shared/FilterCard';
+import { SlideInForm } from '../../../../components/shared/SlideInForm';
+import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
+import { StatusBadge } from '../../../../components/shared/StatusBadge';
 import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
-import { SlideInForm } from '../../../../components/shared/SlideInForm';
-import { FormField } from '../../../../components/shared/FormField';
-import { StatusBadge } from '../../../../components/shared/StatusBadge';
-import { FilterCard } from '../../../../components/shared/FilterCard';
-import { Toast } from '../../../../components/shared/Toast';
-import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
-import { useAccessControl } from '../../../../hooks/useAccessControl';
+import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
+import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { toast } from '../../../../components/shared/Toast';
+
+const gradeLevelSchema = z.object({
+  school_id: z.string().uuid('Please select a school'),
+  grade_name: z.string().min(1, 'Grade name is required'),
+  grade_code: z.string().optional(),
+  grade_order: z.number().min(1, 'Grade order must be at least 1'),
+  education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']),
+  max_students_per_section: z.number().min(1, 'Must be at least 1 student'),
+  total_sections: z.number().min(1, 'Must be at least 1 section'),
+  status: z.enum(['active', 'inactive'])
+});
+
+interface FilterState {
+  search: string;
+  school_ids: string[];
+  education_level: string[];
+  status: string[];
+}
+
+interface FormState {
+  school_id: string;
+  grade_name: string;
+  grade_code: string;
+  grade_order: number;
+  education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
+  max_students_per_section: number;
+  total_sections: number;
+  status: 'active' | 'inactive';
+}
+
+type GradeLevel = {
+  id: string;
+  school_id: string;
+  school_name: string;
+  grade_name: string;
+  grade_code: string | null;
+  grade_order: number;
+  education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
+  max_students_per_section: number;
+  total_sections: number;
+  status: 'active' | 'inactive';
+  created_at: string;
+};
 
 interface GradeLevelsTabProps {
-  companyId: string;
+  companyId: string | null;
 }
-
-interface GradeLevel {
-  id: string;
-  grade_name: string;
-  grade_code: string;
-  grade_order: number;
-  education_level: string;
-  max_students_per_section: number;
-  total_sections: number;
-  status: string;
-  created_at: string;
-  school_ids: string[];
-  school_names: string[];
-}
-
-interface GradeLevelFormData {
-  grade_name: string;
-  grade_code: string;
-  grade_order: number;
-  education_level: string;
-  max_students_per_section: number;
-  total_sections: number;
-  status: string;
-  school_ids: string[];
-}
-
-const initialFormData: GradeLevelFormData = {
-  grade_name: '',
-  grade_code: '',
-  grade_order: 1,
-  education_level: 'primary',
-  max_students_per_section: 30,
-  total_sections: 1,
-  status: 'active',
-  school_ids: []
-};
 
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
-  const { canCreate, canEdit, canDelete, isEntityAdmin, isSubEntityAdmin, getScopeFilters } = useAccessControl();
+  const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
   
-  const scopeFilters = getScopeFilters();
-  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
-
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGradeLevel, setEditingGradeLevel] = useState<GradeLevel | null>(null);
-  const [formData, setFormData] = useState<GradeLevelFormData>(initialFormData);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  // Filters
-  const [filters, setFilters] = useState({
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<FilterState>({
     search: '',
-    school_ids: [] as string[],
-    education_level: [] as string[],
-    status: [] as string[]
+    school_ids: [],
+    education_level: [],
+    status: []
   });
+
+  const [formState, setFormState] = useState<FormState>({
+    school_id: '',
+    grade_name: '',
+    grade_code: '',
+    grade_order: 1,
+    education_level: 'primary',
+    max_students_per_section: 30,
+    total_sections: 1,
+    status: 'active',
+  });
+
+  // Confirmation dialog state
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [gradeLevelsToDelete, setGradeLevelsToDelete] = useState<GradeLevel[]>([]);
+
+  // Get scope filters
+  const scopeFilters = getScopeFilters('schools');
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // Fetch schools for dropdown
   const { data: schools = [] } = useQuery(
-    ['schools', companyId],
+    ['schools-for-grade-levels', companyId, scopeFilters],
     async () => {
       if (!companyId) return [];
 
       let query = supabase
         .from('schools')
-        .select('id, name')
+        .select('id, name, status')
         .eq('company_id', companyId)
         .eq('status', 'active')
         .order('name');
 
+      if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+        query = query.in('id', scopeFilters.school_ids);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
+    },
+    {
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
     }
   );
+
+  // Populate formState when editing
+  React.useEffect(() => {
+    if (isFormOpen) {
+      if (editingGradeLevel) {
+        setFormState({
+          school_id: editingGradeLevel.school_id || '',
+          grade_name: editingGradeLevel.grade_name || '',
+          grade_code: editingGradeLevel.grade_code || '',
+          grade_order: editingGradeLevel.grade_order || 1,
+          education_level: editingGradeLevel.education_level || 'primary',
+          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
+          total_sections: editingGradeLevel.total_sections || 1,
+          status: editingGradeLevel.status || 'active',
+        });
+      } else {
+        setFormState({
+          school_id: '',
+          grade_name: '',
+          grade_code: '',
+          grade_order: 1,
+          education_level: 'primary',
+          max_students_per_section: 30,
+          total_sections: 1,
+          status: 'active'
+        });
+      }
+      setFormErrors({});
+    }
+  }, [isFormOpen, editingGradeLevel]);
 
   // Fetch grade levels
   const { 
@@ -107,6 +178,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         .from('grade_levels')
         .select(`
           id,
+          school_id,
           grade_name,
           grade_code,
           grade_order,
@@ -115,18 +187,15 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           total_sections,
           status,
           created_at,
-          grade_level_schools!inner (
-            schools!grade_level_schools_school_id_fkey (
-              id,
-              name
-            )
+          schools!grade_levels_school_id_fkey (
+            name
           )
         `)
         .order('grade_order', { ascending: true });
 
       // Apply school filtering based on scope
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-        query = query.in('grade_level_schools.school_id', scopeFilters.school_ids);
+        query = query.in('school_id', scopeFilters.school_ids);
       } else if (!canAccessAll) {
         // No scope assigned, return empty
         return [];
@@ -138,7 +207,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       }
 
       if (filters.school_ids.length > 0) {
-        query = query.in('grade_level_schools.school_id', filters.school_ids);
+        query = query.in('school_id', filters.school_ids);
       }
 
       if (filters.education_level.length > 0) {
@@ -154,298 +223,260 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       return (data || []).map(grade => ({
         ...grade,
-        school_ids: grade.grade_level_schools?.map(gls => gls.schools?.id) || [],
-        school_names: grade.grade_level_schools?.map(gls => gls.schools?.name) || []
+        school_name: grade.schools?.name || 'Unknown School'
       }));
+    },
+    {
+      enabled: !!companyId,
+      keepPreviousData: true,
+      staleTime: 2 * 60 * 1000,
     }
   );
 
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: GradeLevelFormData) => {
-      // Create grade levels for each selected school
-      const gradeRecords = data.school_ids.map(schoolId => ({
+  // Create/update mutation
+  const gradeLevelMutation = useMutation(
+    async (data: FormState) => {
+      const validatedData = gradeLevelSchema.parse({
+        school_id: data.school_id,
         grade_name: data.grade_name,
-        grade_code: data.grade_code,
+        grade_code: data.grade_code || undefined,
         grade_order: data.grade_order,
         education_level: data.education_level,
         max_students_per_section: data.max_students_per_section,
         total_sections: data.total_sections,
-        status: data.status,
-        school_id: schoolId
-      }));
+        status: data.status
+      });
 
-      const { data: newGrades, error } = await supabase
-        .from('grade_levels')
-        .insert(gradeRecords)
-        .select();
-
-      if (error) throw error;
-
-      // Create junction table entries
-      const junctionRecords = newGrades.flatMap(grade => 
-        data.school_ids.map(schoolId => ({
-          grade_level_id: grade.id,
-          school_id: schoolId
-        }))
-      );
-
-      const { error: junctionError } = await supabase
-        .from('grade_level_schools')
-        .insert(junctionRecords);
-
-      if (junctionError) throw junctionError;
-      return newGrades;
+      if (editingGradeLevel) {
+        // Update existing grade level
+        const { error } = await supabase
+          .from('grade_levels')
+          .update(validatedData)
+          .eq('id', editingGradeLevel.id);
+        if (error) throw error;
+        return { ...editingGradeLevel, ...validatedData };
+      } else {
+        // Create new grade level
+        const { data: newGradeLevel, error } = await supabase
+          .from('grade_levels')
+          .insert([validatedData])
+          .select()
+          .single();
+        if (error) throw error;
+        return newGradeLevel;
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-levels']);
-      setIsFormOpen(false);
-      setFormData(initialFormData);
-      setToast({ message: 'Grade level created successfully', type: 'success' });
-    },
-    onError: (error) => {
-      setToast({ message: `Error creating grade level: ${error.message}`, type: 'error' });
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['grade-levels']);
+        setIsFormOpen(false);
+        setEditingGradeLevel(null);
+        setFormErrors({});
+        toast.success(`Grade level ${editingGradeLevel ? 'updated' : 'created'} successfully`);
+      },
+      onError: (error) => {
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0]] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          console.error('Error saving grade level:', error);
+          setFormErrors({ form: 'Failed to save grade level. Please try again.' });
+          toast.error('Failed to save grade level');
+        }
+      }
     }
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async (data: GradeLevelFormData) => {
-      if (!editingGradeLevel) throw new Error('No grade level selected for editing');
-
-      const { error } = await supabase
-        .from('grade_levels')
-        .update({
-          grade_name: data.grade_name,
-          grade_code: data.grade_code,
-          grade_order: data.grade_order,
-          education_level: data.education_level,
-          max_students_per_section: data.max_students_per_section,
-          total_sections: data.total_sections,
-          status: data.status
-        })
-        .eq('id', editingGradeLevel.id);
-
-      if (error) throw error;
-
-      // Update junction table entries
-      await supabase
-        .from('grade_level_schools')
-        .delete()
-        .eq('grade_level_id', editingGradeLevel.id);
-
-      const junctionRecords = data.school_ids.map(schoolId => ({
-        grade_level_id: editingGradeLevel.id,
-        school_id: schoolId
-      }));
-
-      const { error: junctionError } = await supabase
-        .from('grade_level_schools')
-        .insert(junctionRecords);
-
-      if (junctionError) throw junctionError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-levels']);
-      setIsFormOpen(false);
-      setEditingGradeLevel(null);
-      setFormData(initialFormData);
-      setToast({ message: 'Grade level updated successfully', type: 'success' });
-    },
-    onError: (error) => {
-      setToast({ message: `Error updating grade level: ${error.message}`, type: 'error' });
-    }
-  });
+  );
 
   // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const deleteMutation = useMutation(
+    async (gradeLevels: GradeLevel[]) => {
       const { error } = await supabase
         .from('grade_levels')
         .delete()
-        .eq('id', id);
+        .in('id', gradeLevels.map(g => g.id));
 
       if (error) throw error;
+      return gradeLevels;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-levels']);
-      setToast({ message: 'Grade level deleted successfully', type: 'success' });
-    },
-    onError: (error) => {
-      setToast({ message: `Error deleting grade level: ${error.message}`, type: 'error' });
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['grade-levels']);
+        setIsConfirmDialogOpen(false);
+        setGradeLevelsToDelete([]);
+        toast.success('Grade level(s) deleted successfully');
+      },
+      onError: (error) => {
+        console.error('Error deleting grade levels:', error);
+        toast.error('Failed to delete grade level(s)');
+        setIsConfirmDialogOpen(false);
+        setGradeLevelsToDelete([]);
+      }
     }
-  });
+  );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (editingGradeLevel) {
-      updateMutation.mutate(formData);
-    } else {
-      createMutation.mutate(formData);
-    }
+    gradeLevelMutation.mutate(formState);
   };
 
-  const handleEdit = (gradeLevel: GradeLevel) => {
-    setEditingGradeLevel(gradeLevel);
-    setFormData({
-      grade_name: gradeLevel.grade_name,
-      grade_code: gradeLevel.grade_code,
-      grade_order: gradeLevel.grade_order,
-      education_level: gradeLevel.education_level,
-      max_students_per_section: gradeLevel.max_students_per_section,
-      total_sections: gradeLevel.total_sections,
-      status: gradeLevel.status,
-      school_ids: gradeLevel.school_ids
-    });
-    setIsFormOpen(true);
+  const handleDelete = (gradeLevels: GradeLevel[]) => {
+    setGradeLevelsToDelete(gradeLevels);
+    setIsConfirmDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this grade level?')) {
-      deleteMutation.mutate(id);
-    }
+  const confirmDelete = () => {
+    deleteMutation.mutate(gradeLevelsToDelete);
+  };
+
+  const cancelDelete = () => {
+    setIsConfirmDialogOpen(false);
+    setGradeLevelsToDelete([]);
   };
 
   const columns = [
     {
-      key: 'grade_name',
-      label: 'Grade Name',
-      render: (gradeLevel: GradeLevel) => (
+      id: 'grade_name',
+      header: 'Grade Name',
+      accessorKey: 'grade_name',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
         <div className="flex items-center gap-2">
           <GraduationCap className="w-4 h-4 text-blue-500" />
-          <span className="font-medium">{gradeLevel.grade_name}</span>
+          <span className="font-medium text-gray-900 dark:text-white">{row.grade_name}</span>
         </div>
-      )
+      ),
     },
     {
-      key: 'grade_code',
-      label: 'Code',
-      render: (gradeLevel: GradeLevel) => (
-        <span className="text-sm text-gray-600">{gradeLevel.grade_code}</span>
-      )
+      id: 'grade_code',
+      header: 'Code',
+      accessorKey: 'grade_code',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
+        <span className="text-sm text-gray-900 dark:text-gray-100">
+          {row.grade_code || '-'}
+        </span>
+      ),
     },
     {
-      key: 'grade_order',
-      label: 'Order',
-      render: (gradeLevel: GradeLevel) => (
-        <span className="text-sm">{gradeLevel.grade_order}</span>
-      )
+      id: 'grade_order',
+      header: 'Order',
+      accessorKey: 'grade_order',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
+        <span className="text-sm font-medium text-gray-900 dark:text-white">
+          {row.grade_order}
+        </span>
+      ),
     },
     {
-      key: 'education_level',
-      label: 'Education Level',
-      render: (gradeLevel: GradeLevel) => (
-        <span className="capitalize text-sm">{gradeLevel.education_level}</span>
-      )
+      id: 'education_level',
+      header: 'Education Level',
+      accessorKey: 'education_level',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
+        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 capitalize">
+          {row.education_level}
+        </span>
+      ),
     },
     {
-      key: 'schools',
-      label: 'Schools',
-      render: (gradeLevel: GradeLevel) => (
-        <div className="text-sm">
-          {gradeLevel.school_names.length > 0 ? (
-            <span>{gradeLevel.school_names.join(', ')}</span>
-          ) : (
-            <span className="text-gray-400">No schools assigned</span>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'max_students_per_section',
-      label: 'Max Students',
-      render: (gradeLevel: GradeLevel) => (
-        <span className="text-sm">{gradeLevel.max_students_per_section}</span>
-      )
-    },
-    {
-      key: 'total_sections',
-      label: 'Sections',
-      render: (gradeLevel: GradeLevel) => (
-        <span className="text-sm">{gradeLevel.total_sections}</span>
-      )
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (gradeLevel: GradeLevel) => (
-        <StatusBadge status={gradeLevel.status} />
-      )
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (gradeLevel: GradeLevel) => (
+      id: 'school_name',
+      header: 'School',
+      accessorKey: 'school_name',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
         <div className="flex items-center gap-2">
-          {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleEdit(gradeLevel)}
-            >
-              <Edit className="w-4 h-4" />
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(gradeLevel.id)}
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
+          <School className="w-4 h-4 text-green-500" />
+          <span className="text-sm text-gray-900 dark:text-white">{row.school_name}</span>
         </div>
-      )
-    }
+      ),
+    },
+    {
+      id: 'capacity',
+      header: 'Capacity',
+      enableSorting: false,
+      cell: (row: GradeLevel) => (
+        <div className="text-sm">
+          <div className="font-medium text-gray-900 dark:text-white">
+            {row.max_students_per_section} per section
+          </div>
+          <div className="text-gray-500 dark:text-gray-400">
+            {row.total_sections} section{row.total_sections !== 1 ? 's' : ''}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
+        <StatusBadge status={row.status} />
+      ),
+    },
+    {
+      id: 'created_at',
+      header: 'Created At',
+      accessorKey: 'created_at',
+      enableSorting: true,
+      cell: (row: GradeLevel) => (
+        <span className="text-sm text-gray-900 dark:text-gray-100">
+          {new Date(row.created_at).toLocaleDateString()}
+        </span>
+      ),
+    },
   ];
-
-  const filteredSchools = useMemo(() => {
-    if (canAccessAll) return schools;
-    if (!scopeFilters.school_ids) return [];
-    return schools.filter(school => scopeFilters.school_ids!.includes(school.id));
-  }, [schools, scopeFilters.school_ids, canAccessAll]);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Grade Levels</h2>
-          <p className="text-gray-600">Manage grade levels and their configurations</p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Grade Levels</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Manage grade levels and their configurations
+          </p>
         </div>
-        {canCreate && (
-          <Button
-            onClick={() => {
-              setEditingGradeLevel(null);
-              setFormData(initialFormData);
-              setIsFormOpen(true);
-            }}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Grade Level
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            setEditingGradeLevel(null);
+            setIsFormOpen(true);
+          }}
+          leftIcon={<Plus className="h-4 w-4" />}
+        >
+          Add Grade Level
+        </Button>
       </div>
 
-      {/* Filters */}
-      <FilterCard>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <FormField label="Search">
-            <input
-              type="text"
-              placeholder="Search grade levels..."
+      <FilterCard
+        title="Filters"
+        onApply={() => {}}
+        onClear={() => {
+          setFilters({
+            search: '',
+            school_ids: [],
+            education_level: [],
+            status: []
+          });
+        }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <FormField id="search" label="Search">
+            <Input
+              id="search"
+              placeholder="Search by name or code..."
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </FormField>
 
           <SearchableMultiSelect
-            label="Schools"
-            options={filteredSchools.map(s => ({
+            label="School"
+            options={schools.map(s => ({
               value: s.id,
               label: s.name
             }))}
@@ -481,149 +512,210 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         </div>
       </FilterCard>
 
-      {/* Data Table */}
       <DataTable
         data={gradeLevels}
         columns={columns}
-        isLoading={isLoading || isFetching}
+        keyField="id"
+        caption="List of grade levels with their configurations and capacity"
+        ariaLabel="Grade levels data table"
+        loading={isLoading}
+        isFetching={isFetching}
+        onEdit={(gradeLevel) => {
+          setEditingGradeLevel(gradeLevel);
+          setIsFormOpen(true);
+        }}
+        onDelete={handleDelete}
         emptyMessage="No grade levels found"
       />
 
-      {/* Form Modal */}
       <SlideInForm
+        key={editingGradeLevel?.id || 'new'}
+        title={editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
           setEditingGradeLevel(null);
-          setFormData(initialFormData);
+          setFormErrors({});
         }}
-        title={editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level'}
+        onSave={() => {
+          const form = document.querySelector('form');
+          if (form) form.requestSubmit();
+        }}
+        loading={gradeLevelMutation.isPending}
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Grade Name" required>
-              <input
-                type="text"
-                value={formData.grade_name}
-                onChange={(e) => setFormData({ ...formData, grade_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </FormField>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {formErrors.form}
+            </div>
+          )}
 
-            <FormField label="Grade Code">
-              <input
-                type="text"
-                value={formData.grade_code}
-                onChange={(e) => setFormData({ ...formData, grade_code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </FormField>
-
-            <FormField label="Grade Order" required>
-              <input
-                type="number"
-                min="1"
-                value={formData.grade_order}
-                onChange={(e) => setFormData({ ...formData, grade_order: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </FormField>
-
-            <FormField label="Education Level" required>
-              <select
-                value={formData.education_level}
-                onChange={(e) => setFormData({ ...formData, education_level: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="kindergarten">Kindergarten</option>
-                <option value="primary">Primary</option>
-                <option value="middle">Middle</option>
-                <option value="secondary">Secondary</option>
-                <option value="senior">Senior</option>
-              </select>
-            </FormField>
-
-            <FormField label="Max Students per Section" required>
-              <input
-                type="number"
-                min="1"
-                value={formData.max_students_per_section}
-                onChange={(e) => setFormData({ ...formData, max_students_per_section: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </FormField>
-
-            <FormField label="Total Sections" required>
-              <input
-                type="number"
-                min="1"
-                value={formData.total_sections}
-                onChange={(e) => setFormData({ ...formData, total_sections: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Schools" required>
-            <SearchableMultiSelect
-              options={filteredSchools.map(school => ({
-                value: school.id,
-                label: school.name
-              }))}
-              selectedValues={formData.school_ids}
-              onChange={(values) => setFormData({ ...formData, school_ids: values })}
-              placeholder="Select schools..."
-              isMulti={true}
+          <FormField
+            id="school_id"
+            label="School"
+            required
+            error={formErrors.school_id}
+          >
+            <Select
+              id="school_id"
+              name="school_id"
+              options={[
+                { value: '', label: 'Select school...' },
+                ...schools.map(school => ({
+                  value: school.id,
+                  label: school.name
+                }))
+              ]}
+              value={formState.school_id}
+              onChange={(value) => setFormState(prev => ({ ...prev, school_id: value }))}
             />
           </FormField>
 
-          <FormField label="Status" required>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+          <FormField
+            id="grade_name"
+            label="Grade Name"
+            required
+            error={formErrors.grade_name}
+          >
+            <Input
+              id="grade_name"
+              name="grade_name"
+              placeholder="e.g., Grade 1, Year 7, Kindergarten"
+              value={formState.grade_name}
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_name: e.target.value }))}
+              leftIcon={<GraduationCap className="h-5 w-5 text-gray-400" />}
+            />
           </FormField>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setIsFormOpen(false);
-                setEditingGradeLevel(null);
-                setFormData(initialFormData);
-              }}
+          <FormField
+            id="grade_code"
+            label="Grade Code"
+            error={formErrors.grade_code}
+          >
+            <Input
+              id="grade_code"
+              name="grade_code"
+              placeholder="e.g., G1, Y7, KG"
+              value={formState.grade_code}
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_code: e.target.value }))}
+            />
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              id="grade_order"
+              label="Grade Order"
+              required
+              error={formErrors.grade_order}
             >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              isLoading={createMutation.isLoading || updateMutation.isLoading}
+              <Input
+                id="grade_order"
+                name="grade_order"
+                type="number"
+                min="1"
+                placeholder="1"
+                value={formState.grade_order.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, grade_order: parseInt(e.target.value) || 1 }))}
+              />
+            </FormField>
+
+            <FormField
+              id="education_level"
+              label="Education Level"
+              required
+              error={formErrors.education_level}
             >
-              {editingGradeLevel ? 'Update' : 'Create'} Grade Level
-            </Button>
+              <Select
+                id="education_level"
+                name="education_level"
+                options={[
+                  { value: 'kindergarten', label: 'Kindergarten' },
+                  { value: 'primary', label: 'Primary' },
+                  { value: 'middle', label: 'Middle' },
+                  { value: 'secondary', label: 'Secondary' },
+                  { value: 'senior', label: 'Senior' }
+                ]}
+                value={formState.education_level}
+                onChange={(value) => setFormState(prev => ({ ...prev, education_level: value as any }))}
+              />
+            </FormField>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              id="max_students_per_section"
+              label="Max Students per Section"
+              required
+              error={formErrors.max_students_per_section}
+            >
+              <Input
+                id="max_students_per_section"
+                name="max_students_per_section"
+                type="number"
+                min="1"
+                placeholder="30"
+                value={formState.max_students_per_section.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 30 }))}
+              />
+            </FormField>
+
+            <FormField
+              id="total_sections"
+              label="Total Sections"
+              required
+              error={formErrors.total_sections}
+            >
+              <Input
+                id="total_sections"
+                name="total_sections"
+                type="number"
+                min="1"
+                placeholder="1"
+                value={formState.total_sections.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 1 }))}
+              />
+            </FormField>
+          </div>
+
+          <FormField
+            id="status"
+            label="Status"
+            required
+            error={formErrors.status}
+          >
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Grade Level Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {formState.status === 'active'
+                    ? 'Grade level is currently active' 
+                    : 'Grade level is currently inactive'}
+                </p>
+              </div>
+              <ToggleSwitch
+                checked={formState.status === 'active'}
+                onChange={(checked) => {
+                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
+                }}
+                label="Active"
+              />
+            </div>
+          </FormField>
         </form>
       </SlideInForm>
 
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        title="Delete Grade Level"
+        message={`Are you sure you want to delete ${gradeLevelsToDelete.length} grade level(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </div>
   );
 }
