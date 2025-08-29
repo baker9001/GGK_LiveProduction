@@ -1,29 +1,12 @@
 /**
  * File: /src/hooks/useAccessControl.ts
  * 
- * COMPLETE VERSION: Updated with corrected permissions
- * - School Admin can now fully manage their assigned schools
- * - Branch Admin can now fully manage their assigned branches
- * - Sub-Entity Admin can create/edit users lower than their level
- * - All users can edit their own profiles
+ * COMPLETE CORRECTED VERSION - Full File Replacement
+ * Fixed: Proper fetching from junction tables (entity_user_schools, entity_user_branches)
  * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/contexts/UserContext
- * 
- * Database Tables:
- *   - entity_users
- *   - entity_admin_scope
- *   - users
- * 
- * Security Features:
- *   - UUID validation with strict regex
- *   - Development mode detection
- *   - Cache TTL (5 minutes)
- *   - Retry logic with exponential backoff (3 attempts)
- *   - Security logging
- *   - Cache invalidation on user change
- *   - LocalStorage cache removal
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -36,13 +19,16 @@ export type AdminLevel = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 
 export interface CompleteUserScope {
   userId: string;
   userType: UserType;
-  adminLevel?: AdminLevel;
-  companyId?: string;
+  adminLevel?: AdminLevel | null;
+  companyId: string;
   schoolIds: string[];
   branchIds: string[];
   isActive: boolean;
   assignedSchools?: string[];
   assignedBranches?: string[];
+  permissions?: Record<string, any>;
+  isCompanyAdmin?: boolean;
+  canCreateAdmins?: boolean;
 }
 
 export interface UseAccessControlResult {
@@ -63,31 +49,11 @@ export interface UseAccessControlResult {
 
 // Security constants
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_RETRY_ATTEMPTS = 3;
-
-// Environment check for development mode
-const isDevelopmentMode = (): boolean => {
-  return import.meta.env.MODE === 'development' && 
-         (import.meta.env.VITE_ENABLE_DEV_MODE === 'true' || 
-          import.meta.env.VITE_ENABLE_DEV_MODE === undefined);
-};
-
-// UUID validation with strict regex
-const isValidUUID = (uuid: string): boolean => {
-  if (!uuid || typeof uuid !== 'string') return false;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
-};
-
-// Check if this is a dev/test user
-const isDevUser = (userId: string): boolean => {
-  return userId?.startsWith('dev-') || userId === 'test' || !isValidUUID(userId);
-};
 
 // Simple logging function
 const logAction = (action: string, details: any) => {
   if (import.meta.env.MODE === 'development') {
-    console.log(`[AccessControl] ${action}:`, details);
+    console.log(`[useAccessControl] ${action}:`, details);
   }
 };
 
@@ -97,232 +63,263 @@ export function useAccessControl(): UseAccessControlResult {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastUserId, setLastUserId] = useState<string | null>(null);
-  
-  // Cache with TTL
-  const scopeCache = useRef<{
-    data: CompleteUserScope | null;
-    timestamp: number;
-  }>({ data: null, timestamp: 0 });
 
-  // SECURITY FIX: Clear cache when user changes
-  useEffect(() => {
-    if (user?.id !== lastUserId) {
-      console.log('[Security] User changed, clearing scope cache', {
-        oldUserId: lastUserId,
-        newUserId: user?.id
-      });
-      
-      // Clear the cache
-      scopeCache.current = { data: null, timestamp: 0 };
-      setUserScope(null);
-      
-      // Remove from localStorage as well
-      localStorage.removeItem('user_scope_cache');
-      localStorage.removeItem('last_user_id');
-    }
-  }, [user?.id, lastUserId]);
-
-  // Fetch user scope data
-  const fetchUserScope = useCallback(async (userId: string) => {
+  // Fetch user scope with proper junction table handling
+  const fetchUserScope = useCallback(async (): Promise<CompleteUserScope | null> => {
     try {
-      // Input validation
-      if (!userId || typeof userId !== 'string') {
-        throw new Error('Invalid user ID');
+      if (!user?.id) {
+        logAction('No user found', null);
+        return null;
       }
-      
-      // SECURITY FIX: Always verify we're fetching for the current user
-      if (user?.id !== userId) {
-        console.error('[Security] Attempted to fetch scope for wrong user', {
-          currentUserId: user?.id,
-          requestedUserId: userId
-        });
-        throw new Error('User ID mismatch - security violation');
+
+      // Get the base user data
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email, user_type, is_active')
+        .eq('id', user.id)
+        .single();
+
+      if (userError || !userData) {
+        console.error('[useAccessControl] Error fetching user data:', userError);
+        throw new Error('Failed to fetch user data');
       }
-      
-      // Check cache validity - but ONLY if user hasn't changed
-      const now = Date.now();
-      if (scopeCache.current.data && 
-          scopeCache.current.timestamp > now - CACHE_TTL &&
-          lastUserId === userId &&
-          scopeCache.current.data.userId === userId) {
-        console.log('Using cached user scope for:', userId);
-        setUserScope(scopeCache.current.data);
-        setIsLoading(false);
-        return scopeCache.current.data;
-      }
-      
-      setIsLoading(true);
-      setHasError(false);
-      setError(null);
-      
-      console.log('Fetching user scope for:', userId);
-      
-      // Handle development/test users
-      if (isDevelopmentMode() && isDevUser(userId)) {
-        console.warn('Development user detected:', userId);
-        
-        const devScope: CompleteUserScope = {
-          userId: userId,
-          userType: 'entity',
-          adminLevel: 'entity_admin',
-          companyId: 'dev-company-id',
-          schoolIds: [],
-          branchIds: [],
-          isActive: true,
-          assignedSchools: [],
-          assignedBranches: []
-        };
-        
-        scopeCache.current = { data: devScope, timestamp: now };
-        setUserScope(devScope);
-        setLastUserId(userId);
-        setIsLoading(false);
-        
-        logAction('dev_mode_access', { userId });
-        
-        return devScope;
-      }
-      
-      // Validate UUID for production users
-      if (!isValidUUID(userId)) {
-        throw new Error('Invalid user ID format');
-      }
-      
-      // Fetch entity user data with retry logic
-      let attempts = 0;
-      let entityUserData = null;
-      let lastError = null;
-      
-      while (attempts < MAX_RETRY_ATTEMPTS && !entityUserData) {
-        attempts++;
-        
-        try {
-          const { data, error: fetchError } = await supabase
-            .from('entity_users')
+
+      // For entity users, get additional information
+      if (userData.user_type === 'entity') {
+        const { data: entityUser, error: entityError } = await supabase
+          .from('entity_users')
+          .select(`
+            id,
+            user_id,
+            company_id,
+            admin_level,
+            permissions,
+            is_company_admin,
+            can_create_admins
+          `)
+          .eq('user_id', user.id)
+          .single();
+
+        if (entityError || !entityUser) {
+          console.error('[useAccessControl] Entity user not found:', entityError);
+          return null;
+        }
+
+        // Initialize arrays for assigned schools and branches
+        let assignedSchools: string[] = [];
+        let assignedSchoolNames: string[] = [];
+        let assignedBranches: string[] = [];
+        let assignedBranchNames: string[] = [];
+
+        // For school admins, fetch assigned schools from junction table
+        if (entityUser.admin_level === 'school_admin') {
+          const { data: schoolAssignments, error: schoolError } = await supabase
+            .from('entity_user_schools')
             .select(`
-              id,
-              user_id,
-              admin_level,
-              company_id,
-              is_active,
-              name,
-              permissions,
-              is_company_admin,
-              users!entity_users_user_id_fkey (
+              school_id,
+              schools!entity_user_schools_school_id_fkey (
                 id,
-                email,
-                user_type,
-                is_active
+                name,
+                status
               )
             `)
-            .eq('user_id', userId)
-            .eq('is_active', true)
-            .maybeSingle();
-          
-          if (fetchError) {
-            lastError = fetchError;
-            if (attempts < MAX_RETRY_ATTEMPTS) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
-              continue;
+            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
+
+          if (!schoolError && schoolAssignments) {
+            assignedSchools = schoolAssignments
+              .filter(s => s.schools?.status === 'active')
+              .map(s => s.school_id);
+            assignedSchoolNames = schoolAssignments
+              .filter(s => s.schools?.status === 'active')
+              .map(s => s.schools?.name || '')
+              .filter(Boolean);
+
+            logAction('School admin assigned schools', {
+              assignedSchools,
+              assignedSchoolNames
+            });
+
+            // Also fetch branches for those schools
+            if (assignedSchools.length > 0) {
+              const { data: branchesData, error: branchesError } = await supabase
+                .from('branches')
+                .select('id, name')
+                .in('school_id', assignedSchools)
+                .eq('status', 'active');
+
+              if (!branchesError && branchesData) {
+                assignedBranches = branchesData.map(b => b.id);
+                assignedBranchNames = branchesData.map(b => b.name);
+              }
             }
-            throw fetchError;
-          }
-          
-          entityUserData = data;
-        } catch (error) {
-          lastError = error;
-          if (attempts < MAX_RETRY_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
-            continue;
+          } else {
+            console.warn('[useAccessControl] No school assignments found for school admin');
           }
         }
-      }
-      
-      if (!entityUserData) {
-        console.warn('User is not an entity admin:', userId);
-        const fallbackScope: CompleteUserScope = {
-          userId: userId,
-          userType: 'entity',
-          adminLevel: undefined,
-          companyId: undefined,
-          schoolIds: [],
-          branchIds: [],
-          isActive: false,
-          assignedSchools: [],
-          assignedBranches: []
+
+        // For branch admins, fetch assigned branches and their schools
+        if (entityUser.admin_level === 'branch_admin') {
+          const { data: branchAssignments, error: branchError } = await supabase
+            .from('entity_user_branches')
+            .select(`
+              branch_id,
+              branches!entity_user_branches_branch_id_fkey (
+                id,
+                name,
+                school_id,
+                status,
+                schools!branches_school_id_fkey (
+                  id,
+                  name,
+                  status
+                )
+              )
+            `)
+            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
+
+          if (!branchError && branchAssignments) {
+            assignedBranches = branchAssignments
+              .filter(b => b.branches?.status === 'active')
+              .map(b => b.branch_id);
+            assignedBranchNames = branchAssignments
+              .filter(b => b.branches?.status === 'active')
+              .map(b => b.branches?.name || '')
+              .filter(Boolean);
+
+            // Get unique school IDs from the branches
+            const schoolIds = [...new Set(
+              branchAssignments
+                .filter(b => b.branches?.schools?.status === 'active')
+                .map(b => b.branches?.school_id)
+                .filter(Boolean)
+            )];
+
+            const schoolNames = [...new Set(
+              branchAssignments
+                .filter(b => b.branches?.schools?.status === 'active')
+                .map(b => b.branches?.schools?.name || '')
+                .filter(Boolean)
+            )];
+
+            assignedSchools = schoolIds;
+            assignedSchoolNames = schoolNames;
+
+            logAction('Branch admin assigned entities', {
+              assignedBranches,
+              assignedBranchNames,
+              assignedSchools,
+              assignedSchoolNames
+            });
+          }
+        }
+
+        // For entity and sub-entity admins, they have access to all schools/branches
+        if (entityUser.admin_level === 'entity_admin' || entityUser.admin_level === 'sub_entity_admin') {
+          // Fetch all schools in the company
+          const { data: allSchools } = await supabase
+            .from('schools')
+            .select('id, name')
+            .eq('company_id', entityUser.company_id)
+            .eq('status', 'active');
+
+          if (allSchools) {
+            assignedSchools = allSchools.map(s => s.id);
+            assignedSchoolNames = allSchools.map(s => s.name);
+          }
+
+          // Fetch all branches in the company
+          const { data: allBranches } = await supabase
+            .from('branches')
+            .select(`
+              id,
+              name,
+              schools!branches_school_id_fkey (
+                company_id
+              )
+            `)
+            .eq('schools.company_id', entityUser.company_id)
+            .eq('status', 'active');
+
+          if (allBranches) {
+            assignedBranches = allBranches.map(b => b.id);
+            assignedBranchNames = allBranches.map(b => b.name);
+          }
+
+          logAction('Entity/Sub-entity admin full access', {
+            schoolCount: assignedSchools.length,
+            branchCount: assignedBranches.length
+          });
+        }
+
+        const scope: CompleteUserScope = {
+          userId: userData.id,
+          userType: userData.user_type as UserType,
+          isActive: userData.is_active,
+          adminLevel: entityUser.admin_level as AdminLevel,
+          companyId: entityUser.company_id,
+          permissions: entityUser.permissions || {},
+          isCompanyAdmin: entityUser.is_company_admin || false,
+          canCreateAdmins: entityUser.can_create_admins || false,
+          schoolIds: assignedSchools,
+          branchIds: assignedBranches,
+          assignedSchools: assignedSchoolNames,
+          assignedBranches: assignedBranchNames,
         };
-        
-        scopeCache.current = { data: fallbackScope, timestamp: now };
-        setUserScope(fallbackScope);
-        setLastUserId(userId);
-        setIsLoading(false);
-        return fallbackScope;
+
+        logAction('Final user scope', scope);
+        return scope;
       }
-      
-      // Fetch assigned schools and branches
-      let assignedSchools: string[] = [];
-      let assignedBranches: string[] = [];
-      
-      // Fetch assigned schools and branches from entity_admin_scope table
-      const { data: scopeData } = await supabase
-        .from('entity_admin_scope')
-        .select('scope_type, scope_id')
-        .eq('user_id', userId)
-        .eq('is_active', true);
-      
-      if (scopeData) {
-        assignedSchools = scopeData
-          .filter(s => s.scope_type === 'school')
-          .map(s => s.scope_id);
-        
-        assignedBranches = scopeData
-          .filter(s => s.scope_type === 'branch')
-          .map(s => s.scope_id);
-      }
-      
-      const userScope: CompleteUserScope = {
-        userId: userId,
-        userType: entityUserData.users?.user_type || 'entity',
-        adminLevel: entityUserData.admin_level as AdminLevel,
-        companyId: entityUserData.company_id,
-        schoolIds: assignedSchools,
-        branchIds: assignedBranches,
-        isActive: entityUserData.is_active && entityUserData.users?.is_active,
-        assignedSchools,
-        assignedBranches
+
+      // For non-entity users (teachers, students, etc.)
+      const scope: CompleteUserScope = {
+        userId: userData.id,
+        userType: userData.user_type as UserType,
+        isActive: userData.is_active,
+        adminLevel: null,
+        companyId: '',
+        permissions: {},
+        isCompanyAdmin: false,
+        canCreateAdmins: false,
+        schoolIds: [],
+        branchIds: [],
+        assignedSchools: [],
+        assignedBranches: [],
       };
-      
-      // Cache the result
-      scopeCache.current = { data: userScope, timestamp: now };
-      setUserScope(userScope);
-      setLastUserId(userId);
-      setIsLoading(false);
-      
-      logAction('scope_fetched', { userId, adminLevel: userScope.adminLevel });
-      
-      return userScope;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user scope';
-      console.error('fetchUserScope error:', err);
-      setHasError(true);
-      setError(errorMessage);
-      setIsLoading(false);
-      throw err;
+
+      return scope;
+    } catch (error) {
+      console.error('[useAccessControl] Error in fetchUserScope:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
+      return null;
     }
-  }, [user?.id, lastUserId]);
+  }, [user]);
 
   // Effect to fetch user scope when user changes
   useEffect(() => {
-    if (user?.id && !isUserLoading) {
-      fetchUserScope(user.id).catch(err => {
+    const loadUserScope = async () => {
+      if (!user?.id || isUserLoading) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setHasError(false);
+      setError(null);
+
+      try {
+        const scope = await fetchUserScope();
+        setUserScope(scope);
+      } catch (err) {
         console.error('Failed to fetch user scope:', err);
-      });
-    } else if (!user && !isUserLoading) {
-      setUserScope(null);
-      setIsLoading(false);
-    }
-  }, [user, isUserLoading, fetchUserScope]);
+        setHasError(true);
+        setError(err instanceof Error ? err.message : 'Failed to fetch user scope');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserScope();
+  }, [user?.id, isUserLoading, fetchUserScope]);
 
   // Module access check
   const canAccessModule = useCallback((modulePath: string, userType?: UserType): boolean => {
@@ -342,19 +339,19 @@ export function useAccessControl(): UseAccessControlResult {
     return allowedTypes ? allowedTypes.includes(type) : false;
   }, [userScope]);
 
-  // Tab access check - FIXED: Aligned with hierarchy table
+  // Tab access check
   const canViewTab = useCallback((tabName: string, adminLevel?: AdminLevel): boolean => {
     const level = adminLevel || userScope?.adminLevel;
     
     if (!level) return false;
     
     const tabPermissions: Record<string, AdminLevel[]> = {
-      'structure': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
-      'schools': ['entity_admin', 'sub_entity_admin', 'school_admin'], // school_admin can see schools
-      'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all can see branches
-      'admins': ['entity_admin', 'sub_entity_admin'], // Only entity & sub-entity admins
-      'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'], // all levels
-      'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'] // all levels
+      'structure': ['entity_admin', 'sub_entity_admin'],
+      'schools': ['entity_admin', 'sub_entity_admin', 'school_admin'],
+      'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+      'admins': ['entity_admin', 'sub_entity_admin'],
+      'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+      'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin']
     };
     
     const hasAccess = tabPermissions[tabName]?.includes(level) || false;
@@ -364,38 +361,26 @@ export function useAccessControl(): UseAccessControlResult {
     return hasAccess;
   }, [userScope]);
 
-  // Permission check - UPDATED with corrected permissions
+  // Permission check
   const can = useCallback((action: string, targetUserId?: string, targetAdminLevel?: AdminLevel): boolean => {
     if (!userScope) return false;
     
-    // Special handling for self-actions
-    const isSelfAction = targetUserId === userScope.userId;
+    const isSelfAction = targetUserId && targetUserId === userScope.userId;
     
-    // All users can edit their own profiles
-    if (action === 'edit_profile' && isSelfAction) {
-      return true;
-    }
-    
-    // Prevent self-deactivation for ALL admin levels
-    if (action === 'deactivate' && isSelfAction) {
-      logAction('self_deactivation_blocked', { userId: userScope.userId });
-      return false;
-    }
-    
+    // Define permissions based on admin level
     const permissions: Record<string, boolean> = {
-      // User management permissions - UPDATED
-      'create_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      // Creation permissions
       'create_entity_admin': userScope.adminLevel === 'entity_admin',
-      'create_sub_admin': userScope.adminLevel === 'entity_admin', // Only entity admin can create sub-entity admins
+      'create_sub_admin': userScope.adminLevel === 'entity_admin',
       'create_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'create_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'create_teacher': true,
       'create_student': true,
       
-      // UPDATED: Modified permissions based on requirements
-      'modify_entity_admin': userScope.adminLevel === 'entity_admin',
-      'modify_sub_admin': userScope.adminLevel === 'entity_admin', // Only entity admin can modify sub-entity admins
-      'modify_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
+      // Modification permissions
+      'modify_entity_admin': userScope.adminLevel === 'entity_admin' || isSelfAction,
+      'modify_sub_admin': ['entity_admin'].includes(userScope.adminLevel || '') || isSelfAction,
+      'modify_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || '') || isSelfAction,
       'modify_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'modify_teacher': true,
       'modify_student': true,
@@ -412,47 +397,30 @@ export function useAccessControl(): UseAccessControlResult {
       'view_admins': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'view_audit_logs': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       
-      // Organization management permissions - UPDATED
+      // Organization management permissions
       'create_school': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'modify_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can modify their assigned schools
+      'modify_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'delete_school': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'view_all_schools': true,
       
       'create_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      'modify_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''), // Branch admin can modify their assigned branches
-      'delete_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''), // School admin can delete branches in their schools
+      'modify_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
+      'delete_branch': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
       'view_all_branches': true,
-      
-      // Department and settings permissions
-      'manage_departments': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      'manage_company_settings': userScope.adminLevel === 'entity_admin',
-      'manage_school_settings': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      'manage_branch_settings': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
-      'export_data': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      
-      // Edit permissions (for UI buttons)
-      'edit_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
-      'edit_school': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
-      'edit_branch': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
-      'edit_teacher': true,
-      'edit_student': true,
-      'edit_profile': true // All users can edit their own profiles
     };
     
     // Check for hierarchy-based modification permissions
     if (action.startsWith('modify_') && targetAdminLevel) {
-      // Entity admin can modify anyone (including other entity admins)
+      // Entity admin can modify anyone
       if (userScope.adminLevel === 'entity_admin') {
-        return true; // Can modify everyone
+        return true;
       }
       
       // Sub-entity admin can only modify users lower than their level
       if (userScope.adminLevel === 'sub_entity_admin') {
-        // Cannot modify entity admins or other sub-entity admins
         if (targetAdminLevel === 'entity_admin' || targetAdminLevel === 'sub_entity_admin') {
           return false;
         }
-        // Can modify school and branch admins
         return true;
       }
       
@@ -511,6 +479,11 @@ export function useAccessControl(): UseAccessControlResult {
     // Branch admin sees only their branches
     if (adminLevel === 'branch_admin' && branchIds.length > 0) {
       switch (resourceType) {
+        case 'schools':
+          // Branch admins can see schools that contain their branches
+          return { id: schoolIds };
+        case 'branches':
+          return { id: branchIds };
         case 'users':
         case 'teachers':
         case 'students':
