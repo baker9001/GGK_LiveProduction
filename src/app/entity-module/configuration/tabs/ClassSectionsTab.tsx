@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Hash, School } from 'lucide-react';
+import { Plus, Users, Hash, School, Building2 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
@@ -347,7 +347,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             academic_year_id: academicYear?.id || null
           }])
           .select()
-          .single();
           .single();
 
         if (error) throw error;

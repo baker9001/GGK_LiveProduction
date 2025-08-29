@@ -296,7 +296,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         const { error: junctionError } = await supabase
           .from('academic_year_schools')
           .insert(junctionRecords);
-          .single();
 
         if (junctionError) throw junctionError;
         return newYear;

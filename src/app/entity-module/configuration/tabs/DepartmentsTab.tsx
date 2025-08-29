@@ -300,7 +300,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         const { error: junctionError } = await supabase
           .from('department_schools')
           .insert(junctionRecords);
-          .single();
 
         if (junctionError) throw junctionError;
         return newDepartment;
