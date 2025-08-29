@@ -1,13 +1,13 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
- * UNIFIED VERSION with improved UI/UX
+ * UNIFIED VERSION - Standardized UI/UX
  * 
  * Improvements:
- * 1. Green tab colors (#8CC63F) with red dot indicators
- * 2. Status field as ToggleSwitch
- * 3. Better field organization and alignment
- * 4. All database fields included via SchoolFormContent
- * 5. Consistent with branches implementation
+ * 1. Consistent green theme (#8CC63F) throughout
+ * 2. Standardized field names and organization
+ * 3. Unified spacing and layout patterns
+ * 4. Consistent validation and error handling
+ * 5. Same stats card design as branches
  */
 
 'use client';
@@ -15,9 +15,9 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, Search, Edit2, Trash2, Building2, Users, MapPin, Calendar,
-  Filter, X, ChevronRight, AlertTriangle, Shield, Lock, Loader2,
-  CheckCircle, XCircle, Info, School, Activity, Settings, Eye
+  Plus, Search, Edit2, Trash2, Building2, Users, MapPin,
+  Filter, X, AlertTriangle, Shield, Lock, Loader2,
+  CheckCircle2, XCircle, Info, School, Hash
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -25,7 +25,6 @@ import { Button } from '@/components/shared/Button';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SlideInForm } from '@/components/shared/SlideInForm';
-import { ImageUpload } from '@/components/shared/ImageUpload';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { useUser } from '@/contexts/UserContext';
@@ -692,8 +691,12 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     }, [schools, searchTerm, filterStatus]);
 
     // Calculate stats
-    const totalStudents = schools.reduce((sum, school) => sum + (school.student_count || 0), 0);
-    const totalTeachers = schools.reduce((sum, school) => sum + (school.teachers_count || 0), 0);
+    const stats = useMemo(() => ({
+      total: schools.length,
+      active: schools.filter(s => s.status === 'active').length,
+      students: schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
+      teachers: schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0)
+    }), [schools]);
 
     // Get user context for display
     const userContext = getUserContext();
@@ -704,8 +707,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       return (
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <Loader2 className="inline-block animate-spin h-8 w-8 text-gray-600" />
-            <p className="mt-2 text-gray-600 dark:text-gray-400">Loading schools...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-gray-600 mx-auto mb-2" />
+            <p className="text-gray-600 dark:text-gray-400">Loading schools...</p>
           </div>
         </div>
       );
@@ -727,7 +730,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       );
     }
 
-    // Updated Form content rendering with SchoolFormContent component
+    // Form content rendering with SchoolFormContent component
     const renderFormContent = () => {
       return (
         <div className="space-y-4">
@@ -862,73 +865,55 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             </div>
           )}
 
-          {/* No schools warning */}
-          {schools.length === 0 && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                    No Schools {!canAccessAll ? 'Assigned' : 'Available'}
-                  </p>
-                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    {isSchoolAdmin 
-                      ? "You haven't been assigned to any schools yet. Please contact your administrator."
-                      : isBranchAdmin
-                      ? "Your branches don't belong to any active schools."
-                      : canAccessAll
-                      ? "No schools have been created yet. Click 'Add School' to create the first one."
-                      : "No schools available to display."
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-4 gap-4 mt-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+          {/* Statistics Cards - Unified Style */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {canAccessAll ? 'Total Schools' : 'Assigned Schools'}
                   </p>
-                  <p className="text-xl font-semibold mt-1">{schools.length}</p>
+                  <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {stats.total}
+                  </p>
                 </div>
-                <Building2 className="w-6 h-6 text-gray-400" />
+                <School className="w-8 h-8 text-gray-400" />
               </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
-                  <p className="text-xl font-semibold mt-1 text-green-600">
-                    {schools.filter(s => s.status === 'active').length}
+                  <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                    {stats.active}
                   </p>
                 </div>
-                <CheckCircle className="w-6 h-6 text-green-500" />
+                <CheckCircle2 className="w-8 h-8 text-green-400" />
               </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
-                  <p className="text-xl font-semibold mt-1">{totalStudents}</p>
+                  <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
+                    {stats.students.toLocaleString()}
+                  </p>
                 </div>
-                <Users className="w-6 h-6 text-gray-400" />
+                <Users className="w-8 h-8 text-blue-400" />
               </div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
-                  <p className="text-xl font-semibold mt-1">{totalTeachers}</p>
+                  <p className="text-xl font-semibold text-purple-600 dark:text-purple-400">
+                    {stats.teachers.toLocaleString()}
+                  </p>
                 </div>
-                <Users className="w-6 h-6 text-gray-400" />
+                <Users className="w-8 h-8 text-purple-400" />
               </div>
             </div>
           </div>
@@ -936,95 +921,106 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
 
         {/* Schools Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {displayedSchools.map((school) => {
-            const logoUrl = getSchoolLogoUrl(school.logo);
-            const canEdit = can('modify_school') && !school.readOnly;
+          {displayedSchools.length === 0 ? (
+            <div className="col-span-full text-center py-8">
+              <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-gray-400">
+                {searchTerm || filterStatus !== 'all'
+                  ? 'No schools match your filters'
+                  : 'No schools found'}
+              </p>
+            </div>
+          ) : (
+            displayedSchools.map((school) => {
+              const logoUrl = getSchoolLogoUrl(school.logo);
+              const canEdit = can('modify_school') && !school.readOnly;
 
-            return (
-              <div
-                key={school.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
-              >
-                <div className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
-                        {logoUrl ? (
-                          <img
-                            src={logoUrl}
-                            alt={`${school.name} logo`}
-                            className="w-full h-full object-contain p-0.5"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.nextSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
-                          <School className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              return (
+                <div
+                  key={school.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                >
+                  <div className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl}
+                              alt={`${school.name} logo`}
+                              className="w-full h-full object-contain p-0.5"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                                const fallback = target.nextSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
+                            <School className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                          </div>
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900 dark:text-white">{school.name}</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{school.code}</p>
                         </div>
                       </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">{school.name}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{school.code}</p>
-                      </div>
+                      <StatusBadge status={school.status} />
                     </div>
-                    <StatusBadge status={school.status} />
-                  </div>
 
-                  {school.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                      {school.description}
-                    </p>
-                  )}
+                    {school.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                        {school.description}
+                      </p>
+                    )}
 
-                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      {school.branch_count || 0} branches
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {school.student_count || 0} students
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {school.teachers_count || 0} teachers
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {school.branch_count || 0} branches
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {school.student_count || 0} students
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {school.teachers_count || 0} teachers
+                      </span>
+                    </div>
 
-                  {canEdit && (
-                    <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <Button
-                        onClick={() => handleEdit(school)}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                      >
-                        <Edit2 className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      {can('delete_school') && (
+                    {canEdit && (
+                      <div className="flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
                         <Button
-                          onClick={() => {
-                            if (confirm('Are you sure you want to delete this school?')) {
-                              deleteSchoolMutation.mutate(school.id);
-                            }
-                          }}
-                          variant="danger-outline"
+                          onClick={() => handleEdit(school)}
+                          variant="outline"
                           size="sm"
+                          className="flex-1"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Edit2 className="w-3 h-3 mr-1" />
+                          Edit
                         </Button>
-                      )}
-                    </div>
-                  )}
+                        {can('delete_school') && (
+                          <Button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this school?')) {
+                                deleteSchoolMutation.mutate(school.id);
+                              }
+                            }}
+                            variant="danger-outline"
+                            size="sm"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         {/* Create Modal */}
@@ -1038,7 +1034,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             setTabErrors({ basic: false, additional: false, contact: false });
           }}
           onSave={handleSubmit}
-          loading={createSchoolMutation.isPending}
+          loading={createSchoolMutation.isPending || createSchoolMutation.isLoading}
         >
           {renderFormContent()}
         </SlideInForm>
@@ -1055,7 +1051,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
             setTabErrors({ basic: false, additional: false, contact: false });
           }}
           onSave={handleSubmit}
-          loading={updateSchoolMutation.isPending}
+          loading={updateSchoolMutation.isPending || updateSchoolMutation.isLoading}
         >
           {renderFormContent()}
         </SlideInForm>
