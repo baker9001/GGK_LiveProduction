@@ -492,7 +492,29 @@ export default function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             required
             error={formErrors.school_id}
           >
-            <Select
+            <input
+              type="hidden"
+              name="school_id"
+              value={editingGradeLevel?.school_id || ''}
+            />
+            <SearchableMultiSelect
+              label=""
+              options={schools.map(school => ({
+                value: school.id,
+                label: school.name
+              }))}
+              selectedValues={editingGradeLevel?.school_id ? [editingGradeLevel.school_id] : []}
+              onChange={(values) => {
+                const input = document.querySelector('input[name="school_id"]') as HTMLInputElement;
+                if (input) {
+                  input.value = values[0] || '';
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }}
+              isMulti={false}
+              placeholder="Select school..."
+            />
+          </FormField>
               id="school_id"
               name="school_id"
               options={schools.map(school => ({
