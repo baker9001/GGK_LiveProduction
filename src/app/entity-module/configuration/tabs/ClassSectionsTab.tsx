@@ -29,7 +29,6 @@ const classSectionSchema = z.object({
   section_name: z.string().min(1, 'Section name is required'),
   section_code: z.string().optional(),
   max_capacity: z.number().min(1, 'Must be at least 1'),
-  current_enrollment: z.number().min(0, 'Cannot be negative').optional(),
   room_number: z.string().optional(),
   classroom_number: z.string().optional(),
   building: z.string().optional(),
@@ -49,7 +48,6 @@ interface FormState {
   section_name: string;
   section_code: string;
   max_capacity: number;
-  current_enrollment: number;
   room_number: string;
   classroom_number: string;
   building: string;
@@ -65,7 +63,6 @@ type ClassSection = {
   section_name: string;
   section_code: string | null;
   max_capacity: number;
-  current_enrollment: number | null;
   room_number: string | null;
   classroom_number: string | null;
   building: string | null;
@@ -97,7 +94,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
     section_name: '',
     section_code: '',
     max_capacity: 30,
-    current_enrollment: 0,
     room_number: '',
     classroom_number: '',
     building: '',
@@ -188,7 +184,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           section_name: editingSection.section_name || '',
           section_code: editingSection.section_code || '',
           max_capacity: editingSection.max_capacity || 30,
-          current_enrollment: editingSection.current_enrollment || 0,
           room_number: editingSection.room_number || '',
           classroom_number: editingSection.classroom_number || '',
           building: editingSection.building || '',
@@ -201,7 +196,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           section_name: '',
           section_code: '',
           max_capacity: 30,
-          current_enrollment: 0,
           room_number: '',
           classroom_number: '',
           building: '',
@@ -231,7 +225,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           section_name,
           section_code,
           max_capacity,
-          current_enrollment,
           room_number,
           section_teacher_id,
           status,
@@ -282,7 +275,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
         section_name: data.section_name,
         section_code: data.section_code || undefined,
         max_capacity: data.max_capacity,
-        current_enrollment: data.current_enrollment || undefined,
         room_number: data.room_number || undefined,
         classroom_number: data.classroom_number || undefined,
         building: data.building || undefined,
@@ -298,7 +290,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             section_name: validatedData.section_name,
             section_code: validatedData.section_code,
             max_capacity: validatedData.max_capacity,
-            current_enrollment: validatedData.current_enrollment,
             room_number: validatedData.room_number,
             classroom_number: validatedData.classroom_number,
             building: validatedData.building,
@@ -314,7 +305,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           section_name: validatedData.section_name,
           section_code: validatedData.section_code,
           max_capacity: validatedData.max_capacity,
-          current_enrollment: validatedData.current_enrollment,
           room_number: validatedData.room_number,
           classroom_number: validatedData.classroom_number,
           building: validatedData.building,
@@ -473,10 +463,10 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
       cell: (row: ClassSection) => (
         <div className="text-sm">
           <div className="font-medium text-gray-900 dark:text-white">
-            {row.current_enrollment || 0} / {row.max_capacity}
+            0 / {row.max_capacity}
           </div>
           <div className="text-gray-500 dark:text-gray-400">
-            {Math.round(((row.current_enrollment || 0) / row.max_capacity) * 100)}% full
+            0% full
           </div>
         </div>
       ),
@@ -634,7 +624,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
                 setFormState(prev => ({ ...prev, grade_level_ids: values }));
               }}
               isMulti={true}
-              isMulti={true}
               placeholder="Select grade level..."
             />
           </FormField>
@@ -737,48 +726,32 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             </FormField>
 
             <FormField
-              id="current_enrollment"
-              label="Current Students"
-              error={formErrors.current_enrollment}
+              id="status"
+              label="Status"
+              required
+              error={formErrors.status}
             >
-              <Input
-                id="current_enrollment"
-                name="current_enrollment"
-                type="number"
-                min="0"
-                placeholder="0"
-                value={formState.current_enrollment.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, current_enrollment: parseInt(e.target.value) || 0 }))}
-              />
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Section Status
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {formState.status === 'active'
+                      ? 'Section is currently active' 
+                      : 'Section is currently inactive'}
+                  </p>
+                </div>
+                <ToggleSwitch
+                  checked={formState.status === 'active'}
+                  onChange={(checked) => {
+                    setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
+                  }}
+                  label="Active"
+                />
+              </div>
             </FormField>
           </div>
-
-          <FormField
-            id="status"
-            label="Status"
-            required
-            error={formErrors.status}
-          >
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Section Status
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {formState.status === 'active'
-                    ? 'Section is currently active' 
-                    : 'Section is currently inactive'}
-                </p>
-              </div>
-              <ToggleSwitch
-                checked={formState.status === 'active'}
-                onChange={(checked) => {
-                  setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
-                }}
-                label="Active"
-              />
-            </div>
-          </FormField>
         </form>
       </SlideInForm>
 
