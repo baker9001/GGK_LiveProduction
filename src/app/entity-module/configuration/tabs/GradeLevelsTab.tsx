@@ -524,6 +524,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   const handleGradeSubmit = () => {
     // Client-side validation for grade level
+    handleGradeSubmitWithValidation();
+  };
+
+  const handleGradeSubmitWithValidation = async () => {
+    // First validate the form data structure
     const validationData = {
       school_ids: formState.school_ids,
       grade_name: formState.grade_name,
@@ -544,6 +549,40 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         }
       });
       setFormErrors(errors);
+      return;
+    }
+
+    // Check for duplicate grade_order within the same school
+    try {
+      const schoolId = contextSchoolId || formState.school_ids[0];
+      if (schoolId) {
+        const { data: existingGrades, error: queryError } = await supabase
+          .from('grade_levels')
+          .select('id, grade_order')
+          .eq('school_id', schoolId)
+          .eq('grade_order', formState.grade_order);
+
+        if (queryError) {
+          console.error('Error checking for duplicate grade order:', queryError);
+          setFormErrors({ form: 'Failed to validate grade order. Please try again.' });
+          return;
+        }
+
+        // Check if there's a duplicate (excluding current grade level if editing)
+        const duplicateGrade = existingGrades?.find(grade => 
+          editingGradeLevel ? grade.id !== editingGradeLevel.id : true
+        );
+
+        if (duplicateGrade) {
+          setFormErrors({ 
+            grade_order: `Grade order ${formState.grade_order} already exists for this school. Please choose a different order.` 
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error validating grade order:', error);
+      setFormErrors({ form: 'Failed to validate grade order. Please try again.' });
       return;
     }
     
