@@ -1391,8 +1391,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
-        onClose={cancelDelete}
         onConfirm={confirmDelete}
+        onCancel={cancelDelete}
         title={`Delete ${itemsToDelete.type === 'grade' ? 'Grade Level' : 'Class Section'}`}
         message={`Are you sure you want to delete ${itemsToDelete.items.length} ${itemsToDelete.type === 'grade' ? 'grade level(s)' : 'class section(s)'}? This action cannot be undone.`}
         confirmText="Delete"
