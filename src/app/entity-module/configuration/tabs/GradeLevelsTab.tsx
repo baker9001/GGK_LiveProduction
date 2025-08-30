@@ -512,6 +512,33 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Client-side validation before mutation
+    const validationData = {
+      school_ids: formState.school_ids,
+      grade_name: formState.grade_name,
+      grade_code: formState.grade_code || undefined,
+      grade_order: formState.grade_order,
+      education_level: formState.education_level,
+      status: formState.status,
+      class_sections: formState.class_sections
+    };
+    
+    const validation = gradeLevelSchema.safeParse(validationData);
+    
+    if (!validation.success) {
+      const errors: Record<string, string> = {};
+      validation.error.errors.forEach((err) => {
+        if (err.path.length > 0) {
+          errors[err.path[0]] = err.message;
+        }
+      });
+      setFormErrors(errors);
+      return;
+    }
+    
+    // Clear any previous errors and proceed with mutation
+    setFormErrors({});
     gradeLevelMutation.mutate(formState);
   };
 
