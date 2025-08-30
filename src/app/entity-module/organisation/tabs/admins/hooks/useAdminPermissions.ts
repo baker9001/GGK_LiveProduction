@@ -1,3 +1,5 @@
+///home/project/src/app/entity-module/organisation/tabs/admins/hooks/useAdminPermissions.ts
+
 import { useQuery } from '@tanstack/react-query';
 import { permissionService } from '../services/permissionService';
 import { AdminPermissions } from '../types/admin.types';
