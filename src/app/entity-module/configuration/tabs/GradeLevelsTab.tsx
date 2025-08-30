@@ -675,42 +675,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             </FormField>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              id="max_students_per_section"
-              label="Max Students per Section"
-              required
-              error={formErrors.max_students_per_section}
-            >
-              <Input
-                id="max_students_per_section"
-                name="max_students_per_section"
-                type="number"
-                min="1"
-                placeholder="30"
-                value={formState.max_students_per_section.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 30 }))}
-              />
-            </FormField>
-
-            <FormField
-              id="total_sections"
-              label="Total Sections"
-              required
-              error={formErrors.total_sections}
-            >
-              <Input
-                id="total_sections"
-                name="total_sections"
-                type="number"
-                min="1"
-                placeholder="1"
-                value={formState.total_sections.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 1 }))}
-              />
-            </FormField>
-          </div>
-
           <FormField
             id="status"
             label="Status"
