@@ -513,7 +513,17 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    // Client-side validation before mutation
+    if (formType === 'section') {
+      // Handle class section creation/editing
+      handleSectionSubmit();
+    } else {
+      // Handle grade level creation/editing
+      handleGradeSubmit();
+    }
+  };
+
+  const handleGradeSubmit = () => {
+    // Client-side validation for grade level
     const validationData = {
       school_ids: formState.school_ids,
       grade_name: formState.grade_name,
@@ -540,6 +550,73 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     // Clear any previous errors and proceed with mutation
     setFormErrors({});
     gradeLevelMutation.mutate(formState);
+  };
+
+  const handleSectionSubmit = async () => {
+    // Validate class section data
+    const sectionData = formState.class_sections[0];
+    if (!sectionData) {
+      setFormErrors({ section_name: 'Section data is missing' });
+      return;
+    }
+
+    const errors: Record<string, string> = {};
+    if (!sectionData.section_name.trim()) {
+      errors.section_name = 'Section name is required';
+    }
+    if (sectionData.max_capacity < 1) {
+      errors.max_capacity = 'Max capacity must be at least 1';
+    }
+    if (sectionData.class_section_order < 1) {
+      errors.class_section_order = 'Display order must be at least 1';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    try {
+      if (editingSection) {
+        // Update existing class section
+        const { error } = await supabase
+          .from('class_sections')
+          .update({
+            section_name: sectionData.section_name,
+            section_code: sectionData.section_code || null,
+            max_capacity: sectionData.max_capacity,
+            status: sectionData.status,
+            class_section_order: sectionData.class_section_order
+          })
+          .eq('id', editingSection.id);
+        
+        if (error) throw error;
+      } else {
+        // Create new class section
+        const { error } = await supabase
+          .from('class_sections')
+          .insert([{
+            grade_level_id: contextGradeId,
+            section_name: sectionData.section_name,
+            section_code: sectionData.section_code || null,
+            max_capacity: sectionData.max_capacity,
+            status: sectionData.status,
+            class_section_order: sectionData.class_section_order
+          }]);
+        
+        if (error) throw error;
+      }
+
+      queryClient.invalidateQueries(['grade-hierarchy']);
+      setIsFormOpen(false);
+      setEditingSection(null);
+      setFormErrors({});
+      toast.success(`Class section ${editingSection ? 'updated' : 'created'} successfully`);
+    } catch (error) {
+      console.error('Error saving class section:', error);
+      setFormErrors({ form: 'Failed to save class section. Please try again.' });
+      toast.error('Failed to save class section');
+    }
   };
 
   // Tree action handlers
