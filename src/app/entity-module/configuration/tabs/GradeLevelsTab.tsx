@@ -363,16 +363,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       
       // Handle class sections
       if (validatedData.class_sections && validatedData.class_sections.length > 0) {
-        // Get academic year for the first school
-        const { data: academicYear } = await supabase
-          .from('academic_years')
-          .select('id')
-          .eq('school_id', validatedData.school_ids[0])
-          .eq('is_current', true)
-          .maybeSingle();
-        
-        const academicYearId = academicYear?.id || null;
-        
         // Get existing class sections if editing
         let existingClassSectionIds: string[] = [];
         if (editingGradeLevel) {
@@ -408,7 +398,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               .from('class_sections')
               .insert([{
                 grade_level_id: gradeLevelId,
-                academic_year_id: academicYearId,
                 section_name: section.section_name,
                 section_code: section.section_code || null,
                 max_capacity: section.max_capacity,
