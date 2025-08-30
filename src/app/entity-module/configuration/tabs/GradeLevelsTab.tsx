@@ -254,8 +254,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             grade_code: validatedData.grade_code,
             grade_order: validatedData.grade_order,
             education_level: validatedData.education_level,
-            max_students_per_section: data.max_students_per_section,
-            total_sections: data.total_sections,
             status: validatedData.status
           })
           .eq('id', editingGradeLevel.id);
@@ -287,12 +285,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         const { data: newGradeLevel, error } = await supabase
           .from('grade_levels')
           .insert([{
+            school_id: validatedData.school_ids[0], // Use first school as primary
             grade_name: validatedData.grade_name,
             grade_code: validatedData.grade_code,
             grade_order: validatedData.grade_order,
             education_level: validatedData.education_level,
-            max_students_per_section: data.max_students_per_section,
-            total_sections: data.total_sections,
             status: validatedData.status
           }])
           .select()
