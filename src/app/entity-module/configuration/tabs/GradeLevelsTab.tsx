@@ -11,7 +11,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, GraduationCap, School, Users, Building2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, GraduationCap, School, Users, Building2, AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
