@@ -9,6 +9,8 @@
  * - Status indicators
  * - Action buttons for each node type
  * - Responsive design
+ * 
+ * FIXED: Removed duplicate summary statistics (now only in parent component)
  */
 
 import React, { useState } from 'react';
@@ -453,53 +455,8 @@ export function GradeHierarchyTree({
         ))}
       </div>
 
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <School className="h-5 w-5 text-blue-500" />
-            <span className="font-medium text-gray-900 dark:text-white">Schools</span>
-          </div>
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {data.schools.length}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {data.schools.filter(s => s.status === 'active').length} active
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <GraduationCap className="h-5 w-5 text-green-500" />
-            <span className="font-medium text-gray-900 dark:text-white">Grade Levels</span>
-          </div>
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {data.schools.reduce((sum, s) => sum + s.grade_levels.length, 0)}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {data.schools.reduce((sum, s) => sum + s.grade_levels.filter(g => g.status === 'active').length, 0)} active
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="h-5 w-5 text-orange-500" />
-            <span className="font-medium text-gray-900 dark:text-white">Class Sections</span>
-          </div>
-          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-            {data.schools.reduce((sum, s) => 
-              sum + s.grade_levels.reduce((gradeSum, g) => gradeSum + g.class_sections.length, 0), 0
-            )}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {data.schools.reduce((sum, s) => 
-              sum + s.grade_levels.reduce((gradeSum, g) => 
-                gradeSum + g.class_sections.filter(cs => cs.status === 'active').length, 0
-              ), 0
-            )} active
-          </div>
-        </div>
-      </div>
+      {/* REMOVED: Summary Statistics section that was causing duplication */}
+      {/* Stats are now only rendered in the parent GradeLevelsTab component */}
     </div>
   );
 }
