@@ -270,7 +270,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             if (error) throw error;
             
             setFormState({
-              school_ids: editingGradeLevel.school_ids || [],
               school_ids: [contextSchoolId],
               grade_name: editingGradeLevel.grade_name || '',
               grade_code: editingGradeLevel.grade_code || '',
@@ -334,8 +333,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         school_ids: data.school_ids,
         grade_name: data.grade_name,
         grade_code: data.grade_code || undefined,
-        grade_order: data.grade_order,
-        education_level: data.education_level,
         grade_order: data.grade_order,
         education_level: data.education_level,
         status: data.status,
@@ -804,6 +801,37 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Schools</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchyData?.schools?.length || 0}
+              </p>
+            </div>
+            <School className="h-8 w-8 text-blue-500" />
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Grade Levels</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchyData?.schools?.reduce((total, school) => total + (school.grade_levels?.length || 0), 0) || 0}
+              </p>
+            </div>
+            <GraduationCap className="h-8 w-8 text-green-500" />
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Class Sections</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchyData?.schools?.reduce((total, school) => 
+                  total + (school.grade_levels?.reduce((gradeTotal, grade) => 
+                    gradeTotal + (grade.class_sections?.length || 0), 0) || 0), 0) || 0}
+              </p>
+            </div>
+            <Users className="h-8 w-8 text-purple-500" />
+          </div>
+        </div>
+      </div>
 
       <FilterCard
         title="Filters"
