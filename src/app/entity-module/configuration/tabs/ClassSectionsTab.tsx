@@ -1,15 +1,13 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/ClassSectionsTab.tsx
- * 
- * Class Sections Management Tab
- * Manages class_sections table data with grade level organization
+ * CORRECTED VERSION - Fixed all database column mismatches
  */
 
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users, Hash, School, Building2 } from 'lucide-react';
+import { Plus, Users, Hash, School, Building2, User } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
@@ -25,15 +23,16 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 
 const classSectionSchema = z.object({
-  grade_level_ids: z.array(z.string().uuid()).min(1, 'Please select at least one grade level'),
+  grade_level_id: z.string().uuid('Please select a grade level'),
   section_name: z.string().min(1, 'Section name is required'),
   section_code: z.string().optional(),
-  max_capacity: z.number().min(1, 'Must be at least 1'),
-  current_enrollment: z.number().min(0, 'Cannot be negative').optional(),
+  max_students: z.number().min(1, 'Must be at least 1'), // Fixed: max_students not max_capacity
+  current_students: z.number().min(0, 'Cannot be negative').optional(), // Fixed: current_students not current_enrollment
   room_number: z.string().optional(),
   classroom_number: z.string().optional(),
   building: z.string().optional(),
   floor: z.number().optional(),
+  section_teacher_id: z.string().uuid().optional(), // Added missing field
   status: z.enum(['active', 'inactive'])
 });
 
@@ -45,31 +44,34 @@ interface FilterState {
 }
 
 interface FormState {
-  grade_level_ids: string[];
+  grade_level_id: string;
   section_name: string;
   section_code: string;
-  max_capacity: number;
-  current_enrollment: number;
+  max_students: number; // Fixed
+  current_students: number; // Fixed
   room_number: string;
   classroom_number: string;
   building: string;
   floor: number;
+  section_teacher_id: string; // Added
   status: 'active' | 'inactive';
 }
 
 type ClassSection = {
   id: string;
-  grade_level_ids: string[];
-  grade_level_names: string[];
-  school_names: string[];
+  grade_level_id: string;
+  grade_level_name: string;
+  school_name: string;
   section_name: string;
   section_code: string | null;
-  max_capacity: number;
-  current_enrollment: number | null;
+  max_students: number; // Fixed
+  current_students: number | null; // Fixed
   room_number: string | null;
   classroom_number: string | null;
   building: string | null;
   floor: number | null;
+  section_teacher_id: string | null; // Added
+  teacher_name?: string | null; // Added for display
   status: 'active' | 'inactive';
   created_at: string;
 };
@@ -93,23 +95,22 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
   });
 
   const [formState, setFormState] = useState<FormState>({
-    grade_level_ids: [],
+    grade_level_id: '',
     section_name: '',
     section_code: '',
-    max_capacity: 30,
-    current_enrollment: 0,
+    max_students: 30, // Fixed
+    current_students: 0, // Fixed
     room_number: '',
     classroom_number: '',
     building: '',
     floor: 1,
+    section_teacher_id: '', // Added
     status: 'active',
   });
 
-  // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [sectionsToDelete, setSectionsToDelete] = useState<ClassSection[]>([]);
 
-  // Get scope filters
   const scopeFilters = getScopeFilters('schools');
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
@@ -159,7 +160,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
         .eq('status', 'active')
         .order('grade_order');
 
-      // Apply school filtering
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
         query = query.in('school_id', scopeFilters.school_ids);
       }
@@ -179,33 +179,65 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
     }
   );
 
+  // Fetch teachers for assignment
+  const { data: teachers = [] } = useQuery(
+    ['teachers-for-sections', companyId, formState.grade_level_id],
+    async () => {
+      if (!companyId || !formState.grade_level_id) return [];
+
+      // Get the school for this grade level
+      const gradeLevel = gradeLevels.find(g => g.id === formState.grade_level_id);
+      if (!gradeLevel) return [];
+
+      const { data, error } = await supabase
+        .from('teachers')
+        .select('id, first_name, last_name')
+        .eq('school_id', gradeLevel.school_id)
+        .eq('is_active', true)
+        .order('first_name');
+
+      if (error) throw error;
+      
+      return (data || []).map(teacher => ({
+        id: teacher.id,
+        name: `${teacher.first_name} ${teacher.last_name}`
+      }));
+    },
+    {
+      enabled: !!companyId && !!formState.grade_level_id,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
+
   // Populate formState when editing
   useEffect(() => {
     if (isFormOpen) {
       if (editingSection) {
         setFormState({
-          grade_level_ids: editingSection.grade_level_ids || [],
+          grade_level_id: editingSection.grade_level_id || '',
           section_name: editingSection.section_name || '',
           section_code: editingSection.section_code || '',
-          max_capacity: editingSection.max_capacity || 30,
-          current_enrollment: editingSection.current_enrollment || 0,
+          max_students: editingSection.max_students || 30, // Fixed
+          current_students: editingSection.current_students || 0, // Fixed
           room_number: editingSection.room_number || '',
           classroom_number: editingSection.classroom_number || '',
           building: editingSection.building || '',
           floor: editingSection.floor || 1,
+          section_teacher_id: editingSection.section_teacher_id || '', // Added
           status: editingSection.status || 'active',
         });
       } else {
         setFormState({
-          grade_level_ids: [],
+          grade_level_id: '',
           section_name: '',
           section_code: '',
-          max_capacity: 30,
-          current_enrollment: 0,
+          max_students: 30,
+          current_students: 0,
           room_number: '',
           classroom_number: '',
           building: '',
           floor: 1,
+          section_teacher_id: '',
           status: 'active'
         });
       }
@@ -233,6 +265,9 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           max_students,
           current_students,
           room_number,
+          classroom_number,
+          building,
+          floor,
           section_teacher_id,
           status,
           created_at,
@@ -241,13 +276,17 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             schools!grade_levels_school_id_fkey (
               name
             )
+          ),
+          teachers!class_sections_section_teacher_id_fkey (
+            first_name,
+            last_name
           )
         `)
         .order('section_name');
 
       // Apply filters
       if (filters.search) {
-        query = query.or(`section_name.ilike.%${filters.search}%,section_code.ilike.%${filters.search}%,room_number.ilike.%${filters.search}%`);
+        query = query.or(`section_name.ilike.%${filters.search}%,section_code.ilike.%${filters.search}%,room_number.ilike.%${filters.search}%,classroom_number.ilike.%${filters.search}%`);
       }
 
       if (filters.grade_level_ids.length > 0) {
@@ -264,7 +303,8 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
       return (data || []).map(section => ({
         ...section,
         grade_level_name: section.grade_levels?.grade_name || 'Unknown Grade',
-        school_name: section.grade_levels?.schools?.name || 'Unknown School'
+        school_name: section.grade_levels?.schools?.name || 'Unknown School',
+        teacher_name: section.teachers ? `${section.teachers.first_name} ${section.teachers.last_name}` : null
       }));
     },
     {
@@ -277,18 +317,12 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
   // Create/update mutation
   const sectionMutation = useMutation(
     async (data: FormState) => {
-      const validatedData = classSectionSchema.parse({
-        grade_level_ids: data.grade_level_ids,
-        section_name: data.section_name,
-        section_code: data.section_code || undefined,
-        max_capacity: data.max_capacity,
-        current_enrollment: data.current_enrollment || undefined,
-        room_number: data.room_number || undefined,
-        classroom_number: data.classroom_number || undefined,
-        building: data.building || undefined,
-        floor: data.floor || undefined,
-        status: data.status
-      });
+      const validatedData = classSectionSchema.parse(data);
+
+      // Validate capacity
+      if (validatedData.current_students && validatedData.current_students > validatedData.max_students) {
+        throw new Error('Current students cannot exceed maximum capacity');
+      }
 
       if (editingSection) {
         // Update existing class section
@@ -297,39 +331,25 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           .update({
             section_name: validatedData.section_name,
             section_code: validatedData.section_code,
-            max_capacity: validatedData.max_capacity,
-            current_enrollment: validatedData.current_enrollment,
+            max_students: validatedData.max_students, // Fixed
+            current_students: validatedData.current_students, // Fixed
             room_number: validatedData.room_number,
             classroom_number: validatedData.classroom_number,
             building: validatedData.building,
             floor: validatedData.floor,
+            section_teacher_id: validatedData.section_teacher_id || null, // Added
             status: validatedData.status
           })
           .eq('id', editingSection.id);
+        
         if (error) throw error;
         return { ...editingSection, ...validatedData };
       } else {
-        // Create a single class section record
-        const sectionRecord = {
-          section_name: validatedData.section_name,
-          section_code: validatedData.section_code,
-          max_capacity: validatedData.max_capacity,
-          current_enrollment: validatedData.current_enrollment,
-          room_number: validatedData.room_number,
-          classroom_number: validatedData.classroom_number,
-          building: validatedData.building,
-          floor: validatedData.floor,
-          status: validatedData.status
-        };
-
-        // Get the first grade level for the main record
-        const mainGradeLevelId = validatedData.grade_level_ids[0];
-        
         // Get academic year for the grade level's school
         const { data: gradeLevel } = await supabase
           .from('grade_levels')
           .select('school_id')
-          .eq('id', mainGradeLevelId)
+          .eq('id', validatedData.grade_level_id)
           .single();
 
         const { data: academicYear } = await supabase
@@ -342,9 +362,18 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
         const { data: newSection, error } = await supabase
           .from('class_sections')
           .insert([{
-            ...sectionRecord,
-            grade_level_id: mainGradeLevelId,
-            academic_year_id: academicYear?.id || null
+            grade_level_id: validatedData.grade_level_id,
+            academic_year_id: academicYear?.id || null,
+            section_name: validatedData.section_name,
+            section_code: validatedData.section_code,
+            max_students: validatedData.max_students, // Fixed
+            current_students: validatedData.current_students, // Fixed
+            room_number: validatedData.room_number,
+            classroom_number: validatedData.classroom_number,
+            building: validatedData.building,
+            floor: validatedData.floor,
+            section_teacher_id: validatedData.section_teacher_id || null, // Added
+            status: validatedData.status
           }])
           .select()
           .single();
@@ -370,6 +399,9 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
             }
           });
           setFormErrors(errors);
+        } else if (error instanceof Error) {
+          setFormErrors({ form: error.message });
+          toast.error(error.message);
         } else {
           console.error('Error saving class section:', error);
           setFormErrors({ form: 'Failed to save class section. Please try again.' });
@@ -456,14 +488,36 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
       enableSorting: true,
     },
     {
-      id: 'room_number',
-      header: 'Room',
-      accessorKey: 'room_number',
-      enableSorting: true,
+      id: 'teacher',
+      header: 'Teacher',
+      enableSorting: false,
       cell: (row: ClassSection) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.room_number || '-'}
-        </span>
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-gray-400" />
+          <span className="text-sm text-gray-900 dark:text-gray-100">
+            {row.teacher_name || 'Not Assigned'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: 'location',
+      header: 'Location',
+      enableSorting: false,
+      cell: (row: ClassSection) => (
+        <div className="text-sm">
+          {row.classroom_number && (
+            <div className="text-gray-900 dark:text-white">
+              Room {row.classroom_number}
+            </div>
+          )}
+          {row.building && (
+            <div className="text-gray-500 dark:text-gray-400">
+              {row.building} {row.floor && `- Floor ${row.floor}`}
+            </div>
+          )}
+          {!row.classroom_number && !row.building && '-'}
+        </div>
       ),
     },
     {
@@ -473,10 +527,10 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
       cell: (row: ClassSection) => (
         <div className="text-sm">
           <div className="font-medium text-gray-900 dark:text-white">
-            {row.current_enrollment || 0} / {row.max_capacity}
+            {row.current_students || 0} / {row.max_students}
           </div>
           <div className="text-gray-500 dark:text-gray-400">
-            {Math.round(((row.current_enrollment || 0) / row.max_capacity) * 100)}% full
+            {Math.round(((row.current_students || 0) / row.max_students) * 100)}% full
           </div>
         </div>
       ),
@@ -618,24 +672,23 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           )}
 
           <FormField
-            id="grade_level_ids"
+            id="grade_level_id"
             label="Grade Level"
             required
-            error={formErrors.grade_level_ids}
+            error={formErrors.grade_level_id}
           >
-            <SearchableMultiSelect
-              label=""
-              options={gradeLevels.map(grade => ({
-                value: grade.id,
-                label: grade.label
-              }))}
-              selectedValues={formState.grade_level_ids}
-              onChange={(values) => {
-                setFormState(prev => ({ ...prev, grade_level_ids: values }));
-              }}
-              isMulti={true}
-              isMulti={true}
-              placeholder="Select grade level..."
+            <Select
+              id="grade_level_id"
+              name="grade_level_id"
+              options={[
+                { value: '', label: 'Select grade level...' },
+                ...gradeLevels.map(grade => ({
+                  value: grade.id,
+                  label: grade.label
+                }))
+              ]}
+              value={formState.grade_level_id}
+              onChange={(e) => setFormState(prev => ({ ...prev, grade_level_id: e.target.value }))}
             />
           </FormField>
 
@@ -667,6 +720,26 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
               value={formState.section_code}
               onChange={(e) => setFormState(prev => ({ ...prev, section_code: e.target.value }))}
               leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField
+            id="section_teacher_id"
+            label="Section Teacher"
+            error={formErrors.section_teacher_id}
+          >
+            <Select
+              id="section_teacher_id"
+              name="section_teacher_id"
+              options={[
+                { value: '', label: 'Select teacher...' },
+                ...teachers.map(teacher => ({
+                  value: teacher.id,
+                  label: teacher.name
+                }))
+              ]}
+              value={formState.section_teacher_id}
+              onChange={(e) => setFormState(prev => ({ ...prev, section_teacher_id: e.target.value }))}
             />
           </FormField>
 
@@ -720,35 +793,36 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <FormField
-              id="max_capacity"
+              id="max_students"
               label="Max Students"
               required
-              error={formErrors.max_capacity}
+              error={formErrors.max_students}
             >
               <Input
-                id="max_capacity"
-                name="max_capacity"
+                id="max_students"
+                name="max_students"
                 type="number"
                 min="1"
                 placeholder="30"
-                value={formState.max_capacity.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, max_capacity: parseInt(e.target.value) || 30 }))}
+                value={formState.max_students.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, max_students: parseInt(e.target.value) || 30 }))}
               />
             </FormField>
 
             <FormField
-              id="current_enrollment"
+              id="current_students"
               label="Current Students"
-              error={formErrors.current_enrollment}
+              error={formErrors.current_students}
             >
               <Input
-                id="current_enrollment"
-                name="current_enrollment"
+                id="current_students"
+                name="current_students"
                 type="number"
                 min="0"
+                max={formState.max_students.toString()}
                 placeholder="0"
-                value={formState.current_enrollment.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, current_enrollment: parseInt(e.target.value) || 0 }))}
+                value={formState.current_students.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, current_students: parseInt(e.target.value) || 0 }))}
               />
             </FormField>
           </div>
@@ -782,7 +856,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
         </form>
       </SlideInForm>
 
-      {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
         title="Delete Class Section"
