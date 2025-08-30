@@ -1,6 +1,8 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/AcademicYearsTab.tsx
- * CORRECTED VERSION - Fixed multi-school handling and date validation
+ * 
+ * Academic Years Management Tab - CORRECTED VERSION
+ * Fixed: Multi-school selection, date validation, junction table handling
  */
 
 'use client';
@@ -23,18 +25,17 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 
 const academicYearSchema = z.object({
-  school_id: z.string().uuid('Please select a school'),
+  school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   year_name: z.string().min(1, 'Year name is required'),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
   is_current: z.boolean(),
   description: z.string().optional(),
   status: z.enum(['active', 'inactive', 'completed'])
-}).refine((data) => {
-  if (data.start_date && data.end_date) {
-    return new Date(data.start_date) < new Date(data.end_date);
-  }
-  return true;
+}).refine(data => {
+  const start = new Date(data.start_date);
+  const end = new Date(data.end_date);
+  return start < end;
 }, {
   message: "End date must be after start date",
   path: ["end_date"]
@@ -48,7 +49,7 @@ interface FilterState {
 }
 
 interface FormState {
-  school_id: string;
+  school_ids: string[];
   year_name: string;
   start_date: string;
   end_date: string;
@@ -89,7 +90,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   });
 
   const [formState, setFormState] = useState<FormState>({
-    school_id: '',
+    school_ids: [],
     year_name: '',
     start_date: '',
     end_date: '',
@@ -98,9 +99,11 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
     status: 'active',
   });
 
+  // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [yearsToDelete, setYearsToDelete] = useState<AcademicYear[]>([]);
 
+  // Get scope filters
   const scopeFilters = getScopeFilters('schools');
   const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
@@ -135,18 +138,30 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
   useEffect(() => {
     if (isFormOpen) {
       if (editingYear) {
-        setFormState({
-          school_id: editingYear.school_id || '',
-          year_name: editingYear.year_name || '',
-          start_date: editingYear.start_date || '',
-          end_date: editingYear.end_date || '',
-          is_current: editingYear.is_current || false,
-          description: editingYear.description || '',
-          status: editingYear.status || 'active',
-        });
+        // When editing, get associated schools from junction table
+        const loadAssociatedSchools = async () => {
+          const { data: schoolAssociations } = await supabase
+            .from('academic_year_schools')
+            .select('school_id')
+            .eq('academic_year_id', editingYear.id);
+          
+          const associatedSchoolIds = schoolAssociations?.map(s => s.school_id) || [editingYear.school_id];
+          
+          setFormState({
+            school_ids: associatedSchoolIds,
+            year_name: editingYear.year_name || '',
+            start_date: editingYear.start_date || '',
+            end_date: editingYear.end_date || '',
+            is_current: editingYear.is_current || false,
+            description: editingYear.description || '',
+            status: editingYear.status || 'active',
+          });
+        };
+        
+        loadAssociatedSchools();
       } else {
         setFormState({
-          school_id: '',
+          school_ids: [],
           year_name: '',
           start_date: '',
           end_date: '',
@@ -231,13 +246,15 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
     async (data: FormState) => {
       const validatedData = academicYearSchema.parse(data);
 
-      // If setting as current, unset other current years for the same school
+      // If setting as current, unset other current years for the same schools
       if (validatedData.is_current) {
-        await supabase
-          .from('academic_years')
-          .update({ is_current: false })
-          .eq('school_id', validatedData.school_id)
-          .neq('id', editingYear?.id || '');
+        for (const schoolId of validatedData.school_ids) {
+          await supabase
+            .from('academic_years')
+            .update({ is_current: false })
+            .eq('school_id', schoolId)
+            .neq('id', editingYear?.id || '');
+        }
       }
 
       if (editingYear) {
@@ -245,7 +262,6 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         const { error } = await supabase
           .from('academic_years')
           .update({
-            school_id: validatedData.school_id,
             year_name: validatedData.year_name,
             start_date: validatedData.start_date,
             end_date: validatedData.end_date,
@@ -256,36 +272,56 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           .eq('id', editingYear.id);
         
         if (error) throw error;
+
+        // Update junction table entries
+        await supabase
+          .from('academic_year_schools')
+          .delete()
+          .eq('academic_year_id', editingYear.id);
+
+        const junctionRecords = validatedData.school_ids.map(schoolId => ({
+          academic_year_id: editingYear.id,
+          school_id: schoolId
+        }));
+
+        const { error: junctionError } = await supabase
+          .from('academic_year_schools')
+          .insert(junctionRecords);
+
+        if (junctionError) throw junctionError;
+
         return { ...editingYear, ...validatedData };
       } else {
         // Create new academic year
+        const yearRecord = {
+          year_name: validatedData.year_name,
+          start_date: validatedData.start_date,
+          end_date: validatedData.end_date,
+          is_current: validatedData.is_current,
+          description: validatedData.description,
+          status: validatedData.status,
+          school_id: validatedData.school_ids[0] // Primary school
+        };
+
         const { data: newYear, error } = await supabase
           .from('academic_years')
-          .insert([{
-            school_id: validatedData.school_id,
-            year_name: validatedData.year_name,
-            start_date: validatedData.start_date,
-            end_date: validatedData.end_date,
-            is_current: validatedData.is_current,
-            description: validatedData.description,
-            status: validatedData.status
-          }])
+          .insert([yearRecord])
           .select()
           .single();
 
         if (error) throw error;
 
-        // Create junction table entry for multi-school support
+        // Create junction table entries for all schools
+        const junctionRecords = validatedData.school_ids.map(schoolId => ({
+          academic_year_id: newYear.id,
+          school_id: schoolId
+        }));
+
         const { error: junctionError } = await supabase
           .from('academic_year_schools')
-          .insert([{
-            academic_year_id: newYear.id,
-            school_id: validatedData.school_id
-          }]);
+          .insert(junctionRecords);
 
-        if (junctionError) {
-          console.error('Error creating academic year school junction:', junctionError);
-        }
+        if (junctionError) throw junctionError;
 
         return newYear;
       }
@@ -549,23 +585,22 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
           )}
 
           <FormField
-            id="school_id"
+            id="school_ids"
             label="School"
             required
-            error={formErrors.school_id}
+            error={formErrors.school_ids}
           >
-            <Select
-              id="school_id"
-              name="school_id"
-              options={[
-                { value: '', label: 'Select school...' },
-                ...schools.map(school => ({
-                  value: school.id,
-                  label: school.name
-                }))
-              ]}
-              value={formState.school_id}
-              onChange={(e) => setFormState(prev => ({ ...prev, school_id: e.target.value }))}
+            <SearchableMultiSelect
+              label=""
+              options={schools.map(school => ({
+                value: school.id,
+                label: school.name
+              }))}
+              selectedValues={formState.school_ids}
+              onChange={(values) => {
+                setFormState(prev => ({ ...prev, school_ids: values }));
+              }}
+              placeholder="Select schools..."
             />
           </FormField>
 
@@ -605,7 +640,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               id="end_date"
               label="End Date"
               required
-              error={formErrors.end_date || formErrors.form}
+              error={formErrors.end_date}
             >
               <Input
                 id="end_date"
@@ -679,6 +714,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         </form>
       </SlideInForm>
 
+      {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
         title="Delete Academic Year"
