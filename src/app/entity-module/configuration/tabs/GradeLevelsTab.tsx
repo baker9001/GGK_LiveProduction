@@ -797,6 +797,68 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         </div>
       </div>
 
+      {/* Status Cards - Moved to top */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Schools</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchicalData.schools.length}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <School className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {hierarchicalData.schools.filter(s => s.status === 'active').length} active
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Grade Levels</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchicalData.schools.reduce((sum, s) => sum + s.grade_levels.length, 0)}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {hierarchicalData.schools.reduce((sum, s) => 
+              sum + s.grade_levels.filter(g => g.status === 'active').length, 0
+            )} active
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Class Sections</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {hierarchicalData.schools.reduce((sum, s) => 
+                  sum + s.grade_levels.reduce((gradeSum, g) => gradeSum + g.class_sections.length, 0), 0
+                )}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {hierarchicalData.schools.reduce((sum, s) => 
+              sum + s.grade_levels.reduce((gradeSum, g) => 
+                gradeSum + g.class_sections.filter(cs => cs.status === 'active').length, 0
+              ), 0
+            )} active
+          </div>
+        </div>
+      </div>
+
       <FilterCard
         title="Filters"
         onApply={() => {}}
@@ -1275,67 +1337,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                             </FormField>
                             
                             <FormField
-                              id={`class_section_order_${index}`}
-                              label="Display Order"
-                              required
-                              error={formErrors[`class_sections.${index}.class_section_order`]}
-                            >
-                              <Input
-                                id={`class_section_order_${index}`}
-                                type="number"
-                                min="1"
-                                value={section.class_section_order.toString()}
-                                onChange={(e) => updateClassSection(index, 'class_section_order', parseInt(e.target.value) || index + 1)}
-                                placeholder={(index + 1).toString()}
-                              />
-                            </FormField>
-                          </div>
-                          
-                          <div className="mt-4">
-                            <FormField
-                              id={`section_status_${index}`}
-                              label="Section Status"
-                            >
-                              <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Section Status
-                                  </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {section.status === 'active'
-                                      ? 'Section is currently active' 
-                                      : 'Section is currently inactive'}
-                                  </p>
-                                </div>
-                                <ToggleSwitch
-                                  checked={section.status === 'active'}
-                                  onChange={(checked) => updateClassSection(index, 'status', checked ? 'active' : 'inactive')}
-                                  label="Active"
-                                />
-                              </div>
-                            </FormField>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CollapsibleSection>
-            </div>
-          )}
-        </form>
-      </SlideInForm>
-
-      {/* Confirmation Dialog */}
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        title={`Delete ${itemsToDelete.type === 'grade' ? 'Grade Level' : 'Class Section'}`}
-        message={`Are you sure you want to delete ${itemsToDelete.items.length} ${itemsToDelete.type === 'grade' ? 'grade level(s)' : 'class section(s)'}? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
     </div>
   );
 }
