@@ -181,8 +181,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order,
           education_level,
           status,
-          max_students_per_section,
-          total_sections,
           created_at,
           grade_level_schools!inner (
             school_id,
