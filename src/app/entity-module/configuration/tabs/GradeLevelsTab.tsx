@@ -50,6 +50,8 @@ interface FormState {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
+  max_students_per_section: number;
+  total_sections: number;
 }
 
 type GradeLevel = {
@@ -61,6 +63,8 @@ type GradeLevel = {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
+  max_students_per_section: number;
+  total_sections: number;
   created_at: string;
 };
 
@@ -83,12 +87,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   });
 
   const [formState, setFormState] = useState<FormState>({
-    school_id: '',
+    school_ids: [],
     grade_name: '',
     grade_code: '',
     grade_order: 1,
     education_level: 'primary',
     status: 'active',
+    max_students_per_section: 30,
+    total_sections: 1
   });
 
   // Confirmation dialog state
@@ -137,6 +143,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order: editingGradeLevel.grade_order || 1,
           education_level: editingGradeLevel.education_level || 'primary',
           status: editingGradeLevel.status || 'active',
+          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
+          total_sections: editingGradeLevel.total_sections || 1
         });
       } else {
         setFormState({
@@ -145,7 +153,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_code: '',
           grade_order: 1,
           education_level: 'primary',
-          status: 'active'
+          status: 'active',
+          max_students_per_section: 30,
+          total_sections: 1
         });
       }
       setFormErrors({});
@@ -171,6 +181,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order,
           education_level,
           status,
+          max_students_per_section,
+          total_sections,
           created_at,
           grade_level_schools!inner (
             school_id,
@@ -232,8 +244,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         grade_code: data.grade_code || undefined,
         grade_order: data.grade_order,
         education_level: data.education_level,
-        max_students_per_section: data.max_students_per_section,
-        total_sections: data.total_sections,
         status: data.status
       });
 
@@ -241,25 +251,24 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         // Update existing grade level
         const { error } = await supabase
           .from('grade_levels')
-          .update(validatedData)
+          .update({
+            grade_name: validatedData.grade_name,
+            grade_code: validatedData.grade_code,
+            grade_order: validatedData.grade_order,
+            education_level: validatedData.education_level,
+            max_students_per_section: data.max_students_per_section,
+            total_sections: data.total_sections,
+            status: validatedData.status
+          })
           .eq('id', editingGradeLevel.id);
         if (error) throw error;
-        return { ...editingGradeLevel, ...validatedData };
-      } else {
-        // Create new grade level
-        const { data: newGradeLevel, error } = await supabase
-          .from('grade_levels')
-          .insert([validatedData])
-          .select()
-          .single();
-        if (error) throw error;
+
         // Update school associations
         // First, delete existing associations
         await supabase
           .from('grade_level_schools')
           .delete()
           .eq('grade_level_id', editingGradeLevel.id);
-        const mainSchoolId = validatedData.school_ids[0];
 
         // Then, insert new associations
         if (validatedData.school_ids.length > 0) {
@@ -274,6 +283,23 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           if (schoolError) throw schoolError;
         }
 
+        return { ...editingGradeLevel, ...validatedData };
+      } else {
+        // Create new grade level
+        const { data: newGradeLevel, error } = await supabase
+          .from('grade_levels')
+          .insert([{
+            grade_name: validatedData.grade_name,
+            grade_code: validatedData.grade_code,
+            grade_order: validatedData.grade_order,
+            education_level: validatedData.education_level,
+            max_students_per_section: data.max_students_per_section,
+            total_sections: data.total_sections,
+            status: validatedData.status
+          }])
+          .select()
+          .single();
+        if (error) throw error;
 
         // Create school associations
         if (validatedData.school_ids.length > 0) {
@@ -671,6 +697,42 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 ]}
                 value={formState.education_level}
                 onChange={(value) => setFormState(prev => ({ ...prev, education_level: value as any }))}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              id="max_students_per_section"
+              label="Max Students per Section"
+              required
+              error={formErrors.max_students_per_section}
+            >
+              <Input
+                id="max_students_per_section"
+                name="max_students_per_section"
+                type="number"
+                min="1"
+                placeholder="30"
+                value={formState.max_students_per_section.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 30 }))}
+              />
+            </FormField>
+
+            <FormField
+              id="total_sections"
+              label="Total Sections"
+              required
+              error={formErrors.total_sections}
+            >
+              <Input
+                id="total_sections"
+                name="total_sections"
+                type="number"
+                min="1"
+                placeholder="1"
+                value={formState.total_sections.toString()}
+                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 1 }))}
               />
             </FormField>
           </div>
