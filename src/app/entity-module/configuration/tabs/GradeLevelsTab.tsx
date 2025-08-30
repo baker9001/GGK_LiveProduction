@@ -199,7 +199,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       if (gradeLevelsData && gradeLevelsData.length > 0) {
         const { data: sectionsData, error: sectionsError } = await supabase
           .from('class_sections')
-          .select('id, grade_level_id, section_name, section_code, max_capacity, class_section_order, status, room_number')
+          .select('id, grade_level_id, section_name, section_code, max_capacity, class_section_order, status')
           .in('grade_level_id', gradeLevelsData.map(g => g.id))
           .order('class_section_order');
 

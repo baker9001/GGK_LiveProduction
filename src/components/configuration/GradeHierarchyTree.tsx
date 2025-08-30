@@ -38,7 +38,6 @@ export interface ClassSectionNode {
   max_capacity: number;
   class_section_order: number;
   status: 'active' | 'inactive';
-  room_number?: string;
   current_students?: number;
 }
 
@@ -369,12 +368,6 @@ export function GradeHierarchyTree({
                 <User className="h-3 w-3" />
                 {section.current_students || 0}/{section.max_capacity} students
               </span>
-              {section.room_number && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  Room {section.room_number}
-                </span>
-              )}
             </div>
           </div>
         </div>

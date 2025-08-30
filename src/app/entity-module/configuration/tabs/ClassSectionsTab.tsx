@@ -225,7 +225,6 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
           section_name,
           section_code,
           max_capacity,
-          room_number,
           section_teacher_id,
           status,
           created_at,
@@ -446,13 +445,13 @@ export function ClassSectionsTab({ companyId }: ClassSectionsTabProps) {
       enableSorting: true,
     },
     {
-      id: 'room_number',
+      id: 'classroom_number',
       header: 'Room',
-      accessorKey: 'room_number',
+      accessorKey: 'classroom_number',
       enableSorting: true,
       cell: (row: ClassSection) => (
         <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.room_number || '-'}
+          {row.classroom_number || '-'}
         </span>
       ),
     },
