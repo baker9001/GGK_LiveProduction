@@ -31,8 +31,6 @@ const gradeLevelSchema = z.object({
   school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   grade_name: z.string().min(1, 'Grade name is required'),
   grade_code: z.string().optional(),
-  grade_order: z.number().min(1, 'Grade order must be at least 1'),
-  education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -50,8 +48,6 @@ interface FormState {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
-  max_students_per_section: number;
-  total_sections: number;
 }
 
 type GradeLevel = {
@@ -63,8 +59,6 @@ type GradeLevel = {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
-  max_students_per_section: number;
-  total_sections: number;
   created_at: string;
 };
 
@@ -93,8 +87,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     grade_order: 1,
     education_level: 'primary',
     status: 'active',
-    max_students_per_section: 30,
-    total_sections: 1
   });
 
   // Confirmation dialog state
@@ -143,8 +135,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order: editingGradeLevel.grade_order || 1,
           education_level: editingGradeLevel.education_level || 'primary',
           status: editingGradeLevel.status || 'active',
-          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
-          total_sections: editingGradeLevel.total_sections || 1
         });
       } else {
         setFormState({
@@ -154,8 +144,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order: 1,
           education_level: 'primary',
           status: 'active',
-          max_students_per_section: 30,
-          total_sections: 1
         });
       }
       setFormErrors({});
@@ -692,42 +680,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 ]}
                 value={formState.education_level}
                 onChange={(value) => setFormState(prev => ({ ...prev, education_level: value as any }))}
-              />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              id="max_students_per_section"
-              label="Max Students per Section"
-              required
-              error={formErrors.max_students_per_section}
-            >
-              <Input
-                id="max_students_per_section"
-                name="max_students_per_section"
-                type="number"
-                min="1"
-                placeholder="30"
-                value={formState.max_students_per_section.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, max_students_per_section: parseInt(e.target.value) || 30 }))}
-              />
-            </FormField>
-
-            <FormField
-              id="total_sections"
-              label="Total Sections"
-              required
-              error={formErrors.total_sections}
-            >
-              <Input
-                id="total_sections"
-                name="total_sections"
-                type="number"
-                min="1"
-                placeholder="1"
-                value={formState.total_sections.toString()}
-                onChange={(e) => setFormState(prev => ({ ...prev, total_sections: parseInt(e.target.value) || 1 }))}
               />
             </FormField>
           </div>
