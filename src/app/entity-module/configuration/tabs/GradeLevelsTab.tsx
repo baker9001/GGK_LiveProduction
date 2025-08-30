@@ -31,6 +31,8 @@ const gradeLevelSchema = z.object({
   school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   grade_name: z.string().min(1, 'Grade name is required'),
   grade_code: z.string().optional(),
+  grade_order: z.number().min(1, 'Grade order must be at least 1'),
+  education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -228,6 +230,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         school_ids: data.school_ids,
         grade_name: data.grade_name,
         grade_code: data.grade_code || undefined,
+        grade_order: data.grade_order,
+        education_level: data.education_level,
         grade_order: data.grade_order,
         education_level: data.education_level,
         status: data.status
