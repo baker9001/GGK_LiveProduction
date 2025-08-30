@@ -33,8 +33,6 @@ const gradeLevelSchema = z.object({
   grade_code: z.string().optional(),
   grade_order: z.number().min(1, 'Grade order must be at least 1'),
   education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']),
-  max_students_per_section: z.number().min(1, 'Must be at least 1 student'),
-  total_sections: z.number().min(1, 'Must be at least 1 section'),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -51,8 +49,6 @@ interface FormState {
   grade_code: string;
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
-  max_students_per_section: number;
-  total_sections: number;
   status: 'active' | 'inactive';
 }
 
@@ -64,8 +60,6 @@ type GradeLevel = {
   grade_code: string | null;
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
-  max_students_per_section: number;
-  total_sections: number;
   status: 'active' | 'inactive';
   created_at: string;
 };
@@ -94,8 +88,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     grade_code: '',
     grade_order: 1,
     education_level: 'primary',
-    max_students_per_section: 30,
-    total_sections: 1,
     status: 'active',
   });
 
@@ -144,8 +136,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_code: editingGradeLevel.grade_code || '',
           grade_order: editingGradeLevel.grade_order || 1,
           education_level: editingGradeLevel.education_level || 'primary',
-          max_students_per_section: editingGradeLevel.max_students_per_section || 30,
-          total_sections: editingGradeLevel.total_sections || 1,
           status: editingGradeLevel.status || 'active',
         });
       } else {
@@ -155,8 +145,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_code: '',
           grade_order: 1,
           education_level: 'primary',
-          max_students_per_section: 30,
-          total_sections: 1,
           status: 'active'
         });
       }
@@ -182,8 +170,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_code,
           grade_order,
           education_level,
-          max_students_per_section,
-          total_sections,
           status,
           created_at,
           grade_level_schools!inner (
