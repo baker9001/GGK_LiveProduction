@@ -277,7 +277,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
         // Then, insert new associations
         if (validatedData.school_ids.length > 0) {
-            school_id: mainSchoolId,
           const schoolAssociations = validatedData.school_ids.map(schoolId => ({
             grade_level_id: editingGradeLevel.id,
             school_id: schoolId
