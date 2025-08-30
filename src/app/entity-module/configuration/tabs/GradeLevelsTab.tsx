@@ -28,7 +28,7 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 
 const gradeLevelSchema = z.object({
-  school_id: z.string().uuid('Please select a school'),
+  school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   grade_name: z.string().min(1, 'Grade name is required'),
   grade_code: z.string().optional(),
   grade_order: z.number().min(1, 'Grade order must be at least 1'),
@@ -46,7 +46,7 @@ interface FilterState {
 }
 
 interface FormState {
-  school_id: string;
+  school_ids: string[];
   grade_name: string;
   grade_code: string;
   grade_order: number;
@@ -58,8 +58,8 @@ interface FormState {
 
 type GradeLevel = {
   id: string;
-  school_id: string;
-  school_name: string;
+  school_ids: string[];
+  school_names: string[];
   grade_name: string;
   grade_code: string | null;
   grade_order: number;
@@ -139,7 +139,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     if (isFormOpen) {
       if (editingGradeLevel) {
         setFormState({
-          school_id: editingGradeLevel.school_id || '',
+          school_ids: editingGradeLevel.school_ids || [],
           grade_name: editingGradeLevel.grade_name || '',
           grade_code: editingGradeLevel.grade_code || '',
           grade_order: editingGradeLevel.grade_order || 1,
@@ -150,7 +150,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         });
       } else {
         setFormState({
-          school_id: '',
+          school_ids: [],
           grade_name: '',
           grade_code: '',
           grade_order: 1,
@@ -178,7 +178,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         .from('grade_levels')
         .select(`
           id,
-          school_id,
           grade_name,
           grade_code,
           grade_order,
@@ -187,15 +186,19 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           total_sections,
           status,
           created_at,
-          schools!grade_levels_school_id_fkey (
-            name
+          grade_level_schools!inner (
+            school_id,
+            schools (
+              id,
+              name
+            )
           )
         `)
         .order('grade_order', { ascending: true });
 
       // Apply school filtering based on scope
       if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
-        query = query.in('school_id', scopeFilters.school_ids);
+        query = query.in('grade_level_schools.school_id', scopeFilters.school_ids);
       } else if (!canAccessAll) {
         // No scope assigned, return empty
         return [];
@@ -207,7 +210,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       }
 
       if (filters.school_ids.length > 0) {
-        query = query.in('school_id', filters.school_ids);
+        query = query.in('grade_level_schools.school_id', filters.school_ids);
       }
 
       if (filters.education_level.length > 0) {
@@ -223,7 +226,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       return (data || []).map(grade => ({
         ...grade,
-        school_name: grade.schools?.name || 'Unknown School'
+        school_ids: grade.grade_level_schools?.map(gls => gls.school_id) || [],
+        school_names: grade.grade_level_schools?.map(gls => gls.schools?.name || 'Unknown School') || []
       }));
     },
     {
@@ -237,7 +241,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const gradeLevelMutation = useMutation(
     async (data: FormState) => {
       const validatedData = gradeLevelSchema.parse({
-        school_id: data.school_id,
+        school_ids: data.school_ids,
         grade_name: data.grade_name,
         grade_code: data.grade_code || undefined,
         grade_order: data.grade_order,
@@ -263,6 +267,42 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           .select()
           .single();
         if (error) throw error;
+        // Update school associations
+        // First, delete existing associations
+        await supabase
+          .from('grade_level_schools')
+          .delete()
+          .eq('grade_level_id', editingGradeLevel.id);
+        const mainSchoolId = validatedData.school_ids[0];
+
+        // Then, insert new associations
+        if (validatedData.school_ids.length > 0) {
+            school_id: mainSchoolId,
+          const schoolAssociations = validatedData.school_ids.map(schoolId => ({
+            grade_level_id: editingGradeLevel.id,
+            school_id: schoolId
+          }));
+
+          const { error: schoolError } = await supabase
+            .from('grade_level_schools')
+            .insert(schoolAssociations);
+          if (schoolError) throw schoolError;
+        }
+
+
+        // Create school associations
+        if (validatedData.school_ids.length > 0) {
+          const schoolAssociations = validatedData.school_ids.map(schoolId => ({
+            grade_level_id: newGradeLevel.id,
+            school_id: schoolId
+          }));
+
+          const { error: schoolError } = await supabase
+            .from('grade_level_schools')
+            .insert(schoolAssociations);
+          if (schoolError) throw schoolError;
+        }
+
         return newGradeLevel;
       }
     },
@@ -387,12 +427,24 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     {
       id: 'school_name',
       header: 'School',
-      accessorKey: 'school_name',
+      accessorKey: 'school_names',
       enableSorting: true,
       cell: (row: GradeLevel) => (
         <div className="flex items-center gap-2">
           <School className="w-4 h-4 text-green-500" />
-          <span className="text-sm text-gray-900 dark:text-white">{row.school_name}</span>
+          <div className="text-sm text-gray-900 dark:text-white">
+            {row.school_names.length > 0 ? (
+              <div className="space-y-1">
+                {row.school_names.map((name, index) => (
+                  <div key={index} className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 px-2 py-1 rounded">
+                    {name}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-gray-500">No schools assigned</span>
+            )}
+          </div>
         </div>
       ),
     },
@@ -551,23 +603,20 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           )}
 
           <FormField
-            id="school_id"
+            id="school_ids"
             label="School"
             required
-            error={formErrors.school_id}
+            error={formErrors.school_ids}
           >
-            <Select
-              id="school_id"
-              name="school_id"
-              options={[
-                { value: '', label: 'Select school...' },
-                ...schools.map(school => ({
-                  value: school.id,
-                  label: school.name
-                }))
-              ]}
-              value={formState.school_id}
-              onChange={(value) => setFormState(prev => ({ ...prev, school_id: value }))}
+            <SearchableMultiSelect
+              label=""
+              options={schools.map(school => ({
+                value: school.id,
+                label: school.name
+              }))}
+              selectedValues={formState.school_ids}
+              onChange={(values) => setFormState(prev => ({ ...prev, school_ids: values }))}
+              placeholder="Select schools..."
             />
           </FormField>
 
