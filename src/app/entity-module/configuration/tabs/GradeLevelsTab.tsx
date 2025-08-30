@@ -254,6 +254,44 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     }
   );
 
+  // Calculate summary statistics
+  const summaryStats = useMemo(() => {
+    if (!hierarchyData?.schools) {
+      return {
+        schools: 0,
+        activeSchools: 0,
+        gradeLevels: 0,
+        activeGradeLevels: 0,
+        classSections: 0,
+        activeClassSections: 0
+      };
+    }
+
+    const schools = hierarchyData.schools;
+    const activeSchools = schools.filter(s => s.status === 'active').length;
+    
+    const gradeLevels = schools.reduce((total, school) => total + (school.grade_levels?.length || 0), 0);
+    const activeGradeLevels = schools.reduce((total, school) => 
+      total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
+    
+    const classSections = schools.reduce((total, school) => 
+      total + (school.grade_levels?.reduce((gradeTotal, grade) => 
+        gradeTotal + (grade.class_sections?.length || 0), 0) || 0), 0);
+    
+    const activeClassSections = schools.reduce((total, school) => 
+      total + (school.grade_levels?.reduce((gradeTotal, grade) => 
+        gradeTotal + (grade.class_sections?.filter(s => s.status === 'active').length || 0), 0) || 0), 0);
+
+    return {
+      schools: schools.length,
+      activeSchools,
+      gradeLevels,
+      activeGradeLevels,
+      classSections,
+      activeClassSections
+    };
+  }, [hierarchyData]);
+
   // Populate formState when editing
   React.useEffect(() => {
     if (isFormOpen) {
@@ -791,6 +829,60 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           >
             Add Grade Level
           </Button>
+        </div>
+      </div>
+
+      {/* Summary Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Schools</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {summaryStats.schools}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <School className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {summaryStats.activeSchools} active
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Grade Levels</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {summaryStats.gradeLevels}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {summaryStats.activeGradeLevels} active
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Class Sections</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {summaryStats.classSections}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {summaryStats.activeClassSections} active
+          </div>
         </div>
       </div>
 
