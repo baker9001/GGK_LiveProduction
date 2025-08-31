@@ -25,6 +25,8 @@ import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
+import { ClassSectionFormItem, type ClassSectionFormData } from '../../../../components/forms/ClassSectionFormItem';
+import { CollapsibleSection } from '../../../../components/shared/CollapsibleSection';
 import { CollapsibleSection } from '../../../../components/shared/CollapsibleSection';
 import { toast } from '../../../../components/shared/Toast';
 
@@ -45,6 +47,16 @@ const gradeLevelSchema = z.object({
   grade_order: z.number().min(1, 'Grade order must be at least 1'),
   education_level: z.enum(['kindergarten', 'primary', 'middle', 'secondary', 'senior']),
   status: z.enum(['active', 'inactive']),
+  class_sections: z.array(z.object({
+    section_name: z.string().min(1, 'Section name is required'),
+    section_code: z.string().optional(),
+    max_capacity: z.number().min(1, 'Capacity must be at least 1'),
+    room_number: z.string().optional(),
+    building: z.string().optional(),
+    floor: z.number().min(0, 'Floor must be 0 or higher'),
+    status: z.enum(['active', 'inactive']),
+    class_section_order: z.number().min(1, 'Order must be at least 1')
+  })).optional()
   class_sections: z.array(z.object({
     id: z.string().optional(),
     section_name: z.string().min(1, 'Section name is required'),
@@ -69,6 +81,7 @@ interface FormState {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
+  class_sections: ClassSectionFormData[];
   class_sections: ClassSectionFormData[];
 }
 
@@ -101,8 +114,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     grade_order: 1,
     education_level: 'primary',
     status: 'active',
+    class_sections: []
     class_sections: [],
   });
+
+  // UI state for class sections
+  const [isSectionsExpanded, setIsSectionsExpanded] = useState(true);
 
   // State for class sections UI
   const [classSectionsExpanded, setClassSectionsExpanded] = useState(false);
@@ -298,6 +315,57 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     if (isFormOpen) {
       if (editingGradeLevel) {
         // Fetch existing class sections for this grade level
+        const fetchExistingSections = async () => {
+          try {
+            const { data: sections, error } = await supabase
+              .from('class_sections')
+              .select('*')
+              .eq('grade_level_id', editingGrade.id)
+              .order('class_section_order');
+            
+            if (error) {
+              console.error('Error fetching class sections:', error);
+            }
+            
+            const existingSections: ClassSectionFormData[] = (sections || []).map(section => ({
+              id: section.id,
+              section_name: section.section_name || '',
+              section_code: section.section_code || '',
+              max_capacity: section.max_capacity || 30,
+              room_number: section.room_number || '',
+              building: section.building || '',
+              floor: section.floor || 1,
+              status: section.status || 'active',
+              class_section_order: section.class_section_order || 1,
+              _isNew: false
+            }));
+            
+            setFormState({
+              school_ids: editingGrade.school_ids || [],
+              grade_name: editingGrade.grade_name || '',
+              grade_code: editingGrade.grade_code || '',
+              grade_order: editingGrade.grade_order || 1,
+              education_level: editingGrade.education_level || 'primary',
+              status: editingGrade.status || 'active',
+              class_sections: existingSections
+            });
+          } catch (error) {
+            console.error('Error in fetchExistingSections:', error);
+            // Set form state without sections if fetch fails
+            setFormState({
+              school_ids: editingGrade.school_ids || [],
+              grade_name: editingGrade.grade_name || '',
+              grade_code: editingGrade.grade_code || '',
+              grade_order: editingGrade.grade_order || 1,
+              education_level: editingGrade.education_level || 'primary',
+              status: editingGrade.status || 'active',
+              class_sections: []
+            });
+          }
+        };
+        
+        fetchExistingSections();
+        // Fetch existing class sections for this grade level
         const fetchClassSections = async () => {
           try {
             const { data: classSections, error } = await supabase
@@ -342,14 +410,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           education_level: 'primary',
           status: 'active',
           class_sections: [{
-            id: editingSection.id,
-            section_name: editingSection.section_name,
-            section_code: editingSection.section_code || '',
-            max_capacity: editingSection.max_capacity,
-            status: editingSection.status,
-            class_section_order: editingSection.class_section_order
-          }]
-        });
       } else {
         setFormState({
           school_ids: contextSchoolId ? [contextSchoolId] : [],
@@ -358,10 +418,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           grade_order: 1,
           education_level: 'primary',
           status: 'active',
+          class_sections: []
           class_sections: [],
         });
       }
       setFormErrors({});
+      setIsSectionsExpanded(true);
     }
   }, [isFormOpen, editingGradeLevel, editingSection, contextSchoolId]);
 
@@ -376,8 +438,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         education_level: data.education_level,
         status: data.status,
         class_sections: data.class_sections
+        class_sections: data.class_sections
       });
 
+      let gradeId: string;
+      
       let gradeLevelId: string;
 
       if (editingGradeLevel) {
@@ -393,7 +458,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           })
           .eq('id', editingGradeLevel.id);
         if (error) throw error;
-        
+        gradeId = editingGrade.id;
         gradeLevelId = editingGradeLevel.id;
 
         // Update school associations
@@ -416,6 +481,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           .single();
         if (error) throw error;
         
+        gradeId = newGrade.id;
         gradeLevelId = newGradeLevel.id;
       }
       
@@ -481,24 +547,108 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           if (deleteError) throw deleteError;
         }
       }
-      
       return editingGradeLevel ? { ...editingGradeLevel, ...validatedData } : validatedData;
+      
+      // Handle class sections if any are provided
+      if (validatedData.class_sections && validatedData.class_sections.length > 0) {
+        // Get the academic year for the first school (required for class_sections)
+        const firstSchoolId = validatedData.school_ids[0];
+        const { data: academicYear } = await supabase
+          .from('academic_years')
+          .select('id')
+          .eq('school_id', firstSchoolId)
+          .eq('is_current', true)
+          .maybeSingle();
+        
+        // Process each class section
+        for (const section of validatedData.class_sections) {
+          const sectionData = {
+            grade_level_id: gradeId,
+            academic_year_id: academicYear?.id || null,
+            section_name: section.section_name,
+            section_code: section.section_code || null,
+            max_capacity: section.max_capacity,
+            room_number: section.room_number || null,
+            building: section.building || null,
+            floor: section.floor || null,
+            status: section.status,
+            class_section_order: section.class_section_order
+          };
+          
+          // Check if this is an existing section (has id) or new section
+          const existingSection = data.class_sections.find(s => s.id === section.id);
+          
+          if (existingSection && existingSection.id && !existingSection._isNew) {
+            // Update existing section
+            const { error: updateError } = await supabase
+              .from('class_sections')
+              .update(sectionData)
+              .eq('id', existingSection.id);
+            
+            if (updateError) {
+              console.error('Error updating class section:', updateError);
+              throw new Error(`Failed to update section "${section.section_name}": ${updateError.message}`);
+            }
+          } else {
+            // Create new section
+            const { error: insertError } = await supabase
+              .from('class_sections')
+              .insert([sectionData]);
+            
+            if (insertError) {
+              console.error('Error creating class section:', insertError);
+              throw new Error(`Failed to create section "${section.section_name}": ${insertError.message}`);
+            }
+          }
+        }
+        
+        // Delete sections that were removed from the form (only when editing)
+        if (editingGrade) {
+          const currentSectionIds = data.class_sections
+            .filter(s => s.id && !s._isNew)
+            .map(s => s.id);
+          
+          const formSectionIds = validatedData.class_sections
+            .filter(s => s.id && !s._isNew)
+            .map(s => s.id);
+          
+          const sectionsToDelete = currentSectionIds.filter(id => !formSectionIds.includes(id));
+          
+          if (sectionsToDelete.length > 0) {
+            const { error: deleteError } = await supabase
+              .from('class_sections')
+              .delete()
+              .in('id', sectionsToDelete);
+            
+            if (deleteError) {
+              console.error('Error deleting removed sections:', deleteError);
+              // Don't throw - allow the main operation to succeed
+            }
+          }
+        }
+      }
+      
+      return { gradeId, sectionsCreated: validatedData.class_sections?.length || 0 };
     },
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['grade-hierarchy']);
+        queryClient.invalidateQueries(['class-sections']);
         setIsFormOpen(false);
         setEditingGradeLevel(null);
         setEditingSection(null);
         setFormErrors({});
-        toast.success(`${formType === 'grade' ? 'Grade level' : 'Class section'} ${editingGradeLevel || editingSection ? 'updated' : 'created'} successfully`);
+        const sectionsCount = formState.class_sections.length;
+        const sectionsText = sectionsCount > 0 ? ` with ${sectionsCount} section${sectionsCount > 1 ? 's' : ''}` : '';
+        toast.success(`Grade level ${editingGrade ? 'updated' : 'created'} successfully${sectionsText}`);
       },
       onError: (error) => {
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0]] = err.message;
+            const path = err.path.join('.');
+            if (path) {
+              errors[path] = err.message;
             }
           });
           setFormErrors(errors);
@@ -748,6 +898,58 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setItemsToDelete({ type: 'grade', items: [] });
   };
   
+  // Class sections handlers
+  const handleAddSection = () => {
+    const newSection: ClassSectionFormData = {
+      section_name: '',
+      section_code: '',
+      max_capacity: 30,
+      room_number: '',
+      building: '',
+      floor: 1,
+      status: 'active',
+      class_section_order: formState.class_sections.length + 1,
+      _isNew: true
+    };
+    
+    setFormState(prev => ({
+      ...prev,
+      class_sections: [...prev.class_sections, newSection]
+    }));
+  };
+
+  const handleSectionChange = (index: number, field: keyof ClassSectionFormData, value: any) => {
+    setFormState(prev => ({
+      ...prev,
+      class_sections: prev.class_sections.map((section, i) => 
+        i === index ? { ...section, [field]: value } : section
+      )
+    }));
+    
+    // Clear section-specific errors
+    const errorKey = `sections.${index}.${field}`;
+    if (formErrors[errorKey]) {
+      const newErrors = { ...formErrors };
+      delete newErrors[errorKey];
+      setFormErrors(newErrors);
+    }
+  };
+
+  const handleRemoveSection = (index: number) => {
+    setFormState(prev => ({
+      ...prev,
+      class_sections: prev.class_sections.filter((_, i) => i !== index)
+    }));
+    
+    // Clear errors for removed section
+    const newErrors = { ...formErrors };
+    Object.keys(newErrors).forEach(key => {
+      if (key.startsWith(`sections.${index}.`)) {
+        delete newErrors[key];
+      }
+    });
+    setFormErrors(newErrors);
+  };
   // Class section management functions
   const addClassSection = () => {
     const newSection: ClassSectionFormData = {
@@ -977,6 +1179,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           if (form) form.requestSubmit();
         }}
         loading={gradeLevelMutation.isPending}
+        width="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
@@ -1114,6 +1317,78 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 error={formErrors.section_name}
               >
                 <Input
+          {/* Class Sections */}
+          <CollapsibleSection
+            id="class-sections"
+            title={`Class Sections (${formState.class_sections.length})`}
+            isOpen={isSectionsExpanded}
+            onToggle={() => setIsSectionsExpanded(!isSectionsExpanded)}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Add class sections for this grade level. Each section represents a class group within the grade.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddSection}
+                  leftIcon={<Plus className="w-4 h-4" />}
+                >
+                  Add Section
+                </Button>
+              </div>
+              
+              {formState.class_sections.length === 0 ? (
+                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    No class sections added yet
+                  </h4>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    Click "Add Section" to create class sections for this grade level
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddSection}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    Add First Section
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {formState.class_sections.map((section, index) => (
+                    <ClassSectionFormItem
+                      key={section.id || `new-${index}`}
+                      data={section}
+                      index={index}
+                      onChange={handleSectionChange}
+                      onRemove={handleRemoveSection}
+                      errors={formErrors}
+                      disabled={gradeMutation.isLoading}
+                      showRemoveButton={formState.class_sections.length > 1}
+                    />
+                  ))}
+                  
+                  {/* Add Another Section Button */}
+                  <div className="text-center pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddSection}
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      className="border-dashed"
+                    >
+                      Add Another Section
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CollapsibleSection>
                   id="section_name"
                   name="section_name"
                   placeholder="e.g., Section A, Blue House"
