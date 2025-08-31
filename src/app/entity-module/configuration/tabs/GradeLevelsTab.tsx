@@ -358,7 +358,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               grade_code: grade.grade_code,
               status: grade.status,
               class_sections: gradeSections
-          .insert([gradeLevelRecord])
+            };
           });
 
         // Ensure we have at least one school selected
@@ -371,8 +371,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           name: school.name,
           code: school.code,
           status: school.status,
-          status: validatedData.status,
-          school_id: validatedData.school_ids[0] // Use first school as primary
+          grade_levels: schoolGrades
         };
       });
 
