@@ -134,6 +134,8 @@ const gradeLevelSchema = z.object({
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  const scopeFilters = getScopeFilters();
+  const canAccessAll = isEntityAdmin();
   
   // ===== ORIGINAL STATE (PRESERVED) =====
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -210,19 +212,175 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       description: 'Standard high school structure',
       grades: [
         { name: 'Grade 9', code: 'G9', order: 10, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
-    createGradeLevelAsync,
-        }));
+        { name: 'Grade 10', code: 'G10', order: 11, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
+        { name: 'Grade 11', code: 'G11', order: 12, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] },
+        { name: 'Grade 12', code: 'G12', order: 13, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] }
+      ]
+    }
+  ];
 
-        const { error: sectionsError } = await supabase
-          .from('class_sections')
-          .insert(sectionRecords);
-
-        if (sectionsError) throw sectionsError;
+  // ===== MUTATIONS =====
+  
+  const createGradeLevelMutation = useMutation({
+    mutationFn: async (data: FormState) => {
+      const validation = gradeLevelSchema.safeParse(data);
+      if (!validation.success) {
+        throw new Error(validation.error.errors[0].message);
       }
 
-      return newGradeLevel;
+      // Determine the main school ID for the grade level
+      const mainSchoolId = data.branch_id 
+        ? branches.find(b => b.id === data.branch_id)?.school_id
+        : data.school_ids[0];
+
+      if (!mainSchoolId) {
+        throw new Error('Unable to determine school for grade level');
+      }
+
+      const gradeLevelRecord = {
+        grade_name: data.grade_name,
+        grade_code: data.grade_code || null,
+        grade_order: data.grade_order,
+        education_level: data.education_level,
+        status: data.status
+      };
+
+      if (data.branch_id) {
+        // Branch-level assignment
+        const { data: newGradeLevel, error } = await supabase
+          .from('grade_levels')
+          .insert([{
+            ...gradeLevelRecord,
+            school_id: mainSchoolId,
+            branch_id: data.branch_id
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Create class sections if provided
+        if (data.class_sections && data.class_sections.length > 0) {
+          const sectionRecords = data.class_sections.map(section => ({
+            grade_level_id: newGradeLevel.id,
+            section_name: section.section_name,
+            section_code: section.section_code || null,
+            max_capacity: section.max_capacity,
+            class_section_order: section.class_section_order,
+            status: section.status
+          }));
+
+          const { error: sectionsError } = await supabase
+            .from('class_sections')
+            .insert(sectionRecords);
+
+          if (sectionsError) throw sectionsError;
+        }
+
+        return newGradeLevel;
+      } else {
+        // School-level assignment (multiple schools)
+        const results = [];
+        for (const schoolId of data.school_ids) {
+          const { data: newGradeLevel, error } = await supabase
+            .from('grade_levels')
+            .insert([{
+              ...gradeLevelRecord, 
+              school_id: schoolId,
+              branch_id: null
+            }])
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Create class sections if provided
+          if (data.class_sections && data.class_sections.length > 0) {
+            const sectionRecords = data.class_sections.map(section => ({
+              grade_level_id: newGradeLevel.id,
+              section_name: section.section_name,
+              section_code: section.section_code || null,
+              max_capacity: section.max_capacity,
+              class_section_order: section.class_section_order,
+              status: section.status
+            }));
+
+            const { error: sectionsError } = await supabase
+              .from('class_sections')
+              .insert(sectionRecords);
+
+            if (sectionsError) throw sectionsError;
+          }
+
+          results.push(newGradeLevel);
+        }
+        return results[0]; // Return first for consistency
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['grade-hierarchy']);
+      toast.success('Grade level created successfully');
+      setIsFormOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to create grade level');
     }
-  };
+  });
+
+  const updateGradeLevelMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<FormState> }) => {
+      const { error } = await supabase
+        .from('grade_levels')
+        .update({
+          grade_name: data.grade_name,
+          grade_code: data.grade_code || null,
+          grade_order: data.grade_order,
+          education_level: data.education_level,
+          status: data.status
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['grade-hierarchy']);
+      toast.success('Grade level updated successfully');
+      setIsFormOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update grade level');
+    }
+  });
+
+  const deleteGradeLevelMutation = useMutation({
+    mutationFn: async (gradeIds: string[]) => {
+      // First delete all class sections
+      const { error: sectionsError } = await supabase
+        .from('class_sections')
+        .delete()
+        .in('grade_level_id', gradeIds);
+
+      if (sectionsError) throw sectionsError;
+
+      // Then delete grade levels
+      const { error: gradesError } = await supabase
+        .from('grade_levels')
+        .delete()
+        .in('id', gradeIds);
+
+      if (gradesError) throw gradesError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['grade-hierarchy']);
+      toast.success('Grade level(s) deleted successfully');
+      setIsConfirmDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to delete grade level(s)');
+    }
+  });
 
   // ===== FETCH SCHOOLS AND BRANCHES =====
   
@@ -400,13 +558,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     const schools = hierarchyData.schools;
     const activeSchools = schools.filter(s => s.status === 'active').length;
     
-        const { data: newGradeLevel, error } = await supabase
-          .from('grade_levels')
-          .insert([{
-          ...gradeLevelRecord, 
-          school_id: mainSchoolId,
-          branch_id: null
-        }])
+    const gradeLevels = schools.reduce((total, school) => 
+      total + (school.grade_levels?.length || 0), 0);
+    
     const activeGradeLevels = schools.reduce((total, school) => 
       total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
     
@@ -427,6 +581,22 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       activeClassSections
     };
   }, [hierarchyData]);
+
+  // ===== HELPER FUNCTIONS =====
+  
+  const resetForm = () => {
+    setFormState({
+      school_ids: [],
+      branch_id: undefined,
+      grade_name: '',
+      grade_code: '',
+      grade_order: 1,
+      education_level: 'primary',
+      status: 'active',
+      class_sections: []
+    });
+    setFormErrors({});
+  };
 
   // ===== HANDLER FUNCTIONS =====
   
