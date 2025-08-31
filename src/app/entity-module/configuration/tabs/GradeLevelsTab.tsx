@@ -11,7 +11,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, 
@@ -178,6 +178,95 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     description: '',
     grades: []
   });
+
+  // Helper functions for stable updates
+  const updateGradeName = useCallback((gradeIndex: number, value: string) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, idx) => 
+        idx === gradeIndex ? { ...grade, name: value } : grade
+      )
+    }));
+  }, []);
+
+  const updateGradeCode = useCallback((gradeIndex: number, value: string) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, idx) => 
+        idx === gradeIndex ? { ...grade, code: value } : grade
+      )
+    }));
+  }, []);
+
+  const updateGradeOrder = useCallback((gradeIndex: number, value: number) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, idx) => 
+        idx === gradeIndex ? { ...grade, order: value } : grade
+      )
+    }));
+  }, []);
+
+  const updateGradeEducationLevel = useCallback((gradeIndex: number, value: string) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, idx) => 
+        idx === gradeIndex ? { ...grade, education_level: value as any } : grade
+      )
+    }));
+  }, []);
+
+  const updateSectionName = useCallback((gradeIndex: number, sectionIndex: number, value: string) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, gIdx) => 
+        gIdx === gradeIndex 
+          ? {
+              ...grade,
+              sections: grade.sections.map((section, sIdx) => 
+                sIdx === sectionIndex ? value : section
+              )
+            }
+          : grade
+      )
+    }));
+  }, []);
+
+  const addSection = useCallback((gradeIndex: number) => {
+    setBulkGradeTemplate(prev => {
+      const grade = prev.grades[gradeIndex];
+      const nextLetter = String.fromCharCode(65 + grade.sections.length);
+      return {
+        ...prev,
+        grades: prev.grades.map((g, idx) => 
+          idx === gradeIndex 
+            ? { ...g, sections: [...g.sections, nextLetter] }
+            : g
+        )
+      };
+    });
+  }, []);
+
+  const removeSection = useCallback((gradeIndex: number, sectionIndex: number) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, gIdx) => 
+        gIdx === gradeIndex 
+          ? {
+              ...grade,
+              sections: grade.sections.filter((_, sIdx) => sIdx !== sectionIndex)
+            }
+          : grade
+      )
+    }));
+  }, []);
+
+  const removeGrade = useCallback((gradeIndex: number) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.filter((_, idx) => idx !== gradeIndex)
+    }));
+  }, []);
 
   // Pre-defined Templates for bulk creation
   const preDefinedTemplates: GradeStructureTemplate[] = [
@@ -534,60 +623,102 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       try {
         setIsApplyingBulk(true);
         
+        let successCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
+        
         for (const school of selectedSchoolsWithBranches) {
           if (assignmentLevel === 'branch' && school.selectedBranches) {
             // Apply to selected branches
             for (const branchId of school.selectedBranches) {
+              // First verify the branch exists
+              const { data: branchExists } = await supabase
+                .from('branches')
+                .select('id, name')
+                .eq('id', branchId)
+                .single();
+                
+              if (!branchExists) {
+                errors.push(`Branch ${branchId} not found`);
+                errorCount++;
+                continue;
+              }
+              
               for (const grade of bulkGradeTemplate.grades) {
-                // Check for existing grade - use maybeSingle() to handle 0 rows
-                const { data: existingGrade } = await supabase
+                // Check for existing grade
+                const { data: existingGrade, error: checkError } = await supabase
                   .from('grade_levels')
                   .select('id')
+                  .eq('school_id', school.id)
                   .eq('branch_id', branchId)
                   .eq('grade_order', grade.order)
-                  .maybeSingle(); // Changed from .single() to .maybeSingle()
+                  .maybeSingle();
                 
-                if (existingGrade) {
-                  console.warn(`Grade order ${grade.order} already exists for branch ${branchId}, skipping...`);
+                if (checkError) {
+                  console.error('Error checking existing grade:', checkError);
+                  errors.push(`Error checking grade ${grade.name}: ${checkError.message}`);
+                  errorCount++;
                   continue;
                 }
                 
-                // For branch assignment
+                if (existingGrade) {
+                  console.warn(`Grade order ${grade.order} already exists for branch ${branchExists.name}, skipping...`);
+                  continue;
+                }
+                
+                // Create grade level
+                const gradeData = {
+                  school_id: school.id,
+                  branch_id: branchId,
+                  grade_name: grade.name,
+                  grade_code: grade.code || null,
+                  grade_order: grade.order,
+                  education_level: grade.education_level,
+                  status: 'active'
+                };
+                
+                console.log('Creating grade level:', gradeData);
+                
                 const { data: gradeLevel, error: gradeError } = await supabase
                   .from('grade_levels')
-                  .insert([{
-                    school_id: school.id, // Keep school_id as required by NOT NULL constraint
-                    branch_id: branchId,
-                    grade_name: grade.name,
-                    grade_code: grade.code,
-                    grade_order: grade.order,
-                    education_level: grade.education_level,
-                    status: 'active'
-                  }])
+                  .insert([gradeData])
                   .select()
                   .single();
                 
                 if (gradeError) {
                   console.error('Grade creation error:', gradeError);
+                  errors.push(`Failed to create ${grade.name} for branch ${branchExists.name}: ${gradeError.message}`);
+                  errorCount++;
                   continue;
                 }
                 
+                console.log('Grade level created:', gradeLevel);
+                successCount++;
+                
                 // Create sections
-                if (gradeLevel) {
+                if (gradeLevel && grade.sections.length > 0) {
                   for (const sectionName of grade.sections) {
+                    const sectionData = {
+                      grade_level_id: gradeLevel.id,
+                      section_name: `Section ${sectionName}`,
+                      section_code: sectionName,
+                      max_capacity: 30,
+                      class_section_order: grade.sections.indexOf(sectionName) + 1,
+                      status: 'active'
+                    };
+                    
+                    console.log('Creating section:', sectionData);
+                    
                     const { error: sectionError } = await supabase
                       .from('class_sections')
-                      .insert([{
-                        grade_level_id: gradeLevel.id,
-                        section_name: `Section ${sectionName}`,
-                        section_code: sectionName,
-                        max_capacity: 30,
-                        class_section_order: grade.sections.indexOf(sectionName) + 1,
-                        status: 'active'
-                      }]);
+                      .insert([sectionData]);
                     
                     if (sectionError) {
                       console.error('Section creation error:', sectionError);
+                      errors.push(`Failed to create section ${sectionName}: ${sectionError.message}`);
+                      errorCount++;
+                    } else {
+                      console.log('Section created successfully');
                     }
                   }
                 }
@@ -596,55 +727,79 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           } else {
             // Apply to school level
             for (const grade of bulkGradeTemplate.grades) {
-              // Check for existing grade - use maybeSingle() to handle 0 rows
-              const { data: existingGrade } = await supabase
+              // Check for existing grade
+              const { data: existingGrade, error: checkError } = await supabase
                 .from('grade_levels')
                 .select('id')
                 .eq('school_id', school.id)
                 .is('branch_id', null)
                 .eq('grade_order', grade.order)
-                .maybeSingle(); // Changed from .single() to .maybeSingle()
+                .maybeSingle();
               
-              if (existingGrade) {
-                console.warn(`Grade order ${grade.order} already exists for school ${school.id}, skipping...`);
+              if (checkError) {
+                console.error('Error checking existing grade:', checkError);
+                errors.push(`Error checking grade ${grade.name}: ${checkError.message}`);
+                errorCount++;
                 continue;
               }
               
+              if (existingGrade) {
+                console.warn(`Grade order ${grade.order} already exists for school ${school.name}, skipping...`);
+                continue;
+              }
+              
+              const gradeData = {
+                school_id: school.id,
+                branch_id: null,
+                grade_name: grade.name,
+                grade_code: grade.code || null,
+                grade_order: grade.order,
+                education_level: grade.education_level,
+                status: 'active'
+              };
+              
+              console.log('Creating grade level:', gradeData);
+              
               const { data: gradeLevel, error: gradeError } = await supabase
                 .from('grade_levels')
-                .insert([{
-                  school_id: school.id,
-                  branch_id: null,
-                  grade_name: grade.name,
-                  grade_code: grade.code,
-                  grade_order: grade.order,
-                  education_level: grade.education_level,
-                  status: 'active'
-                }])
+                .insert([gradeData])
                 .select()
                 .single();
               
               if (gradeError) {
                 console.error('Grade creation error:', gradeError);
+                errors.push(`Failed to create ${grade.name} for school ${school.name}: ${gradeError.message}`);
+                errorCount++;
                 continue;
               }
               
+              console.log('Grade level created:', gradeLevel);
+              successCount++;
+              
               // Create sections
-              if (gradeLevel) {
+              if (gradeLevel && grade.sections.length > 0) {
                 for (const sectionName of grade.sections) {
+                  const sectionData = {
+                    grade_level_id: gradeLevel.id,
+                    section_name: `Section ${sectionName}`,
+                    section_code: sectionName,
+                    max_capacity: 30,
+                    class_section_order: grade.sections.indexOf(sectionName) + 1,
+                    status: 'active'
+                  };
+                  
+                  console.log('Creating section:', sectionData);
+                  
                   const { error: sectionError } = await supabase
                     .from('class_sections')
-                    .insert([{
-                      grade_level_id: gradeLevel.id,
-                      section_name: `Section ${sectionName}`,
-                      section_code: sectionName,
-                      max_capacity: 30,
-                      class_section_order: grade.sections.indexOf(sectionName) + 1,
-                      status: 'active'
-                    }]);
+                    .insert([sectionData]);
                   
                   if (sectionError) {
                     console.error('Section creation error:', sectionError);
+                    errors.push(`Failed to create section ${sectionName}: ${sectionError.message}`);
+                    errorCount++;
+                  } else {
+                    console.log('Section created successfully');
                   }
                 }
               }
@@ -652,16 +807,30 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           }
         }
         
-        queryClient.invalidateQueries(['grade-hierarchy']);
-        const totalAssignments = assignmentLevel === 'branch' 
-          ? selectedSchoolsWithBranches.reduce((sum, s) => sum + (s.selectedBranches?.length || 0), 0)
-          : selectedSchoolsWithBranches.length;
-        toast.success(`Template applied to ${totalAssignments} ${assignmentLevel}(s) successfully!`);
-        setShowBulkWizard(false);
-        resetBulkWizard();
+        // Force refresh the data
+        await queryClient.invalidateQueries(['grade-hierarchy']);
+        await queryClient.refetchQueries(['grade-hierarchy']);
+        
+        // Show detailed result
+        if (successCount > 0 && errorCount === 0) {
+          toast.success(`Successfully created ${successCount} grade level(s)!`);
+        } else if (successCount > 0 && errorCount > 0) {
+          toast.warning(`Created ${successCount} grade level(s) with ${errorCount} error(s). Check console for details.`);
+          console.error('Bulk creation errors:', errors);
+        } else if (errorCount > 0) {
+          toast.error(`Failed to create grade levels. ${errorCount} error(s) occurred.`);
+          console.error('Bulk creation errors:', errors);
+        } else {
+          toast.info('No grade levels were created. They may already exist.');
+        }
+        
+        if (successCount > 0) {
+          setShowBulkWizard(false);
+          resetBulkWizard();
+        }
       } catch (error) {
-        console.error('Error applying template:', error);
-        toast.error('Failed to apply template. Please check the console for details.');
+        console.error('Unexpected error in bulk template:', error);
+        toast.error('An unexpected error occurred. Please check the console.');
       } finally {
         setIsApplyingBulk(false);
       }
@@ -834,67 +1003,45 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 ) : (
                   <div className="space-y-4">
                     {bulkGradeTemplate.grades.map((grade, gradeIndex) => (
-                      <div key={`grade-${gradeIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div key={`grade-static-${gradeIndex}`} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                         <div className="space-y-4">
                           {/* Grade Basic Info */}
                           <div className="flex items-start gap-4">
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                               <FormField label="Grade Name">
-                                <Input
+                                <input
+                                  type="text"
                                   value={grade.name}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setBulkGradeTemplate(prev => {
-                                      const updatedGrades = [...prev.grades];
-                                      updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], name: newValue };
-                                      return { ...prev, grades: updatedGrades };
-                                    });
-                                  }}
+                                  onChange={(e) => updateGradeName(gradeIndex, e.target.value)}
                                   placeholder="e.g., Grade 1"
+                                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
                                 />
                               </FormField>
                               
                               <FormField label="Code">
-                                <Input
+                                <input
+                                  type="text"
                                   value={grade.code}
-                                  onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setBulkGradeTemplate(prev => {
-                                      const updatedGrades = [...prev.grades];
-                                      updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], code: newValue };
-                                      return { ...prev, grades: updatedGrades };
-                                    });
-                                  }}
+                                  onChange={(e) => updateGradeCode(gradeIndex, e.target.value)}
                                   placeholder="e.g., G1"
+                                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
                                 />
                               </FormField>
                               
                               <FormField label="Order">
-                                <Input
+                                <input
                                   type="number"
                                   value={grade.order}
-                                  onChange={(e) => {
-                                    const newValue = parseInt(e.target.value) || 0;
-                                    setBulkGradeTemplate(prev => {
-                                      const updatedGrades = [...prev.grades];
-                                      updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], order: newValue };
-                                      return { ...prev, grades: updatedGrades };
-                                    });
-                                  }}
+                                  onChange={(e) => updateGradeOrder(gradeIndex, parseInt(e.target.value) || 0)}
                                   min="1"
+                                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
                                 />
                               </FormField>
                               
                               <FormField label="Education Level">
                                 <Select
                                   value={grade.education_level}
-                                  onChange={(value) => {
-                                    setBulkGradeTemplate(prev => {
-                                      const updatedGrades = [...prev.grades];
-                                      updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], education_level: value as any };
-                                      return { ...prev, grades: updatedGrades };
-                                    });
-                                  }}
+                                  onChange={(value) => updateGradeEducationLevel(gradeIndex, value)}
                                   options={[
                                     { value: 'kindergarten', label: 'Kindergarten' },
                                     { value: 'primary', label: 'Primary' },
@@ -908,12 +1055,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                             
                             <button
                               type="button"
-                              onClick={() => {
-                                setBulkGradeTemplate(prev => ({
-                                  ...prev,
-                                  grades: prev.grades.filter((_, i) => i !== gradeIndex)
-                                }));
-                              }}
+                              onClick={() => removeGrade(gradeIndex)}
                               className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -928,17 +1070,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                               </h5>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const nextLetter = String.fromCharCode(65 + grade.sections.length); // A, B, C...
-                                  setBulkGradeTemplate(prev => {
-                                    const updatedGrades = [...prev.grades];
-                                    updatedGrades[gradeIndex] = {
-                                      ...updatedGrades[gradeIndex],
-                                      sections: [...grade.sections, nextLetter]
-                                    };
-                                    return { ...prev, grades: updatedGrades };
-                                  });
-                                }}
+                                onClick={() => addSection(gradeIndex)}
                                 className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center gap-1"
                               >
                                 <Plus className="w-3 h-3" />
@@ -953,39 +1085,18 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                             ) : (
                               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                                 {grade.sections.map((section, sectionIndex) => (
-                                  <div key={`section-${gradeIndex}-${sectionIndex}`} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                  <div key={`section-static-${sectionIndex}`} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
                                     <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
                                     <input
                                       type="text"
                                       value={section}
-                                      onChange={(e) => {
-                                        const newValue = e.target.value;
-                                        setBulkGradeTemplate(prev => {
-                                          const updatedGrades = [...prev.grades];
-                                          const updatedSections = [...updatedGrades[gradeIndex].sections];
-                                          updatedSections[sectionIndex] = newValue;
-                                          updatedGrades[gradeIndex] = {
-                                            ...updatedGrades[gradeIndex],
-                                            sections: updatedSections
-                                          };
-                                          return { ...prev, grades: updatedGrades };
-                                        });
-                                      }}
+                                      onChange={(e) => updateSectionName(gradeIndex, sectionIndex, e.target.value)}
                                       className="flex-1 bg-transparent border-b border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-[#8CC63F] min-w-0"
                                       placeholder="A"
                                     />
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setBulkGradeTemplate(prev => {
-                                          const updatedGrades = [...prev.grades];
-                                          updatedGrades[gradeIndex] = {
-                                            ...updatedGrades[gradeIndex],
-                                            sections: grade.sections.filter((_, i) => i !== sectionIndex)
-                                          };
-                                          return { ...prev, grades: updatedGrades };
-                                        });
-                                      }}
+                                      onClick={() => removeSection(gradeIndex, sectionIndex)}
                                       className="p-0.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                                     >
                                       <X className="w-3 h-3" />
