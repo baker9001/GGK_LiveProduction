@@ -210,16 +210,19 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       description: 'Standard high school structure',
       grades: [
         { name: 'Grade 9', code: 'G9', order: 10, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
-        { name: 'Grade 10', code: 'G10', order: 11, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
-        { name: 'Grade 11', code: 'G11', order: 12, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] },
-        { name: 'Grade 12', code: 'G12', order: 13, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] }
-      ]
-    }
-  ];
+    createGradeLevelAsync,
+        }));
 
-  // Get scope filters
-  const scopeFilters = getScopeFilters('schools');
-  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
+        const { error: sectionsError } = await supabase
+          .from('class_sections')
+          .insert(sectionRecords);
+
+        if (sectionsError) throw sectionsError;
+      }
+
+      return newGradeLevel;
+    }
+  };
 
   // ===== FETCH SCHOOLS AND BRANCHES =====
   
