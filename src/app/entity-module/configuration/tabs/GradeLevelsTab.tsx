@@ -356,19 +356,23 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id: grade.id,
               grade_name: grade.grade_name,
               grade_code: grade.grade_code,
-              grade_order: grade.grade_order,
-              education_level: grade.education_level,
               status: grade.status,
               class_sections: gradeSections
-            };
+          .insert([gradeLevelRecord])
           });
+
+        // Ensure we have at least one school selected
+        if (!validatedData.school_ids || validatedData.school_ids.length === 0) {
+          throw new Error('At least one school must be selected');
+        }
 
         return {
           id: school.id,
           name: school.name,
           code: school.code,
           status: school.status,
-          grade_levels: schoolGrades
+          status: validatedData.status,
+          school_id: validatedData.school_ids[0] // Use first school as primary
         };
       });
 
