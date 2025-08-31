@@ -397,7 +397,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     const schools = hierarchyData.schools;
     const activeSchools = schools.filter(s => s.status === 'active').length;
     
-        .insert([{ 
+        const { data: newGradeLevel, error } = await supabase
+          .from('grade_levels')
+          .insert([{
           ...gradeLevelRecord, 
           school_id: mainSchoolId,
           branch_id: null
