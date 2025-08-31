@@ -373,8 +373,8 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
     { id: 'entity', label: 'Entity', icon: Building2, color: 'blue' },
     { id: 'schools', label: 'Schools', icon: School, color: 'green' },
     { id: 'branches', label: 'Branches', icon: MapPin, color: 'purple' },
-    { id: 'years', label: 'Years', icon: GraduationCap, color: 'orange' },
-    { id: 'sections', label: 'Sections', icon: BookOpen, color: 'indigo' }
+    { id: 'years', label: 'Grade/Years', icon: GraduationCap, color: 'orange' },
+    { id: 'sections', label: 'Class/Section', icon: BookOpen, color: 'indigo' }
   ];
 
   const getColorClasses = (color: string, isVisible: boolean) => {
