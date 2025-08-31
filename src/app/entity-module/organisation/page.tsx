@@ -310,12 +310,37 @@ export default function OrganizationManagement() {
             })
           );
 
+          // Fetch grade levels for this school
+          const { data: gradeLevels } = await supabase
+            .from('grade_levels')
+            .select('*')
+            .eq('school_id', school.id)
+            .eq('status', 'active')
+            .order('grade_order');
+
+          // Fetch class sections for each grade level
+          const gradeLevelsWithSections = await Promise.all(
+            (gradeLevels || []).map(async (grade) => {
+              const { data: classSections } = await supabase
+                .from('class_sections')
+                .select('*')
+                .eq('grade_level_id', grade.id)
+                .eq('status', 'active')
+                .order('class_section_order');
+
+              return {
+                ...grade,
+                class_sections: classSections || []
+              };
+            })
+          );
           const activeBranches = branchesWithDetails.filter(b => b.status === 'active');
 
           return { 
             ...school, 
             additional: schoolAdditional, 
             branches: branchesWithDetails,
+            grade_levels: gradeLevelsWithSections,
             branch_count: activeBranches.length,
             student_count: schoolAdditional?.student_count || 0,
             teachers_count: schoolAdditional?.teachers_count || 0
