@@ -27,7 +27,6 @@ import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { ClassSectionFormItem, type ClassSectionFormData } from '../../../../components/forms/ClassSectionFormItem';
 import { CollapsibleSection } from '../../../../components/shared/CollapsibleSection';
-import { CollapsibleSection } from '../../../../components/shared/CollapsibleSection';
 import { toast } from '../../../../components/shared/Toast';
 
 // Class Section interface
@@ -56,7 +55,7 @@ const gradeLevelSchema = z.object({
     floor: z.number().min(0, 'Floor must be 0 or higher'),
     status: z.enum(['active', 'inactive']),
     class_section_order: z.number().min(1, 'Order must be at least 1')
-  })).optional()
+  })).optional(),
   class_sections: z.array(z.object({
     id: z.string().optional(),
     section_name: z.string().min(1, 'Section name is required'),
@@ -81,7 +80,6 @@ interface FormState {
   grade_order: number;
   education_level: 'kindergarten' | 'primary' | 'middle' | 'secondary' | 'senior';
   status: 'active' | 'inactive';
-  class_sections: ClassSectionFormData[];
   class_sections: ClassSectionFormData[];
 }
 
@@ -115,7 +113,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     education_level: 'primary',
     status: 'active',
     class_sections: []
-    class_sections: [],
   });
 
   // UI state for class sections
@@ -320,7 +317,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             const { data: sections, error } = await supabase
               .from('class_sections')
               .select('*')
-              .eq('grade_level_id', editingGrade.id)
+              .eq('grade_level_id', editingGradeLevel.id)
               .order('class_section_order');
             
             if (error) {
@@ -341,24 +338,24 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             }));
             
             setFormState({
-              school_ids: editingGrade.school_ids || [],
-              grade_name: editingGrade.grade_name || '',
-              grade_code: editingGrade.grade_code || '',
-              grade_order: editingGrade.grade_order || 1,
-              education_level: editingGrade.education_level || 'primary',
-              status: editingGrade.status || 'active',
+              school_ids: [contextSchoolId],
+              grade_name: editingGradeLevel.grade_name || '',
+              grade_code: editingGradeLevel.grade_code || '',
+              grade_order: editingGradeLevel.grade_order || 1,
+              education_level: editingGradeLevel.education_level || 'primary',
+              status: editingGradeLevel.status || 'active',
               class_sections: existingSections
             });
           } catch (error) {
             console.error('Error in fetchExistingSections:', error);
             // Set form state without sections if fetch fails
             setFormState({
-              school_ids: editingGrade.school_ids || [],
-              grade_name: editingGrade.grade_name || '',
-              grade_code: editingGrade.grade_code || '',
-              grade_order: editingGrade.grade_order || 1,
-              education_level: editingGrade.education_level || 'primary',
-              status: editingGrade.status || 'active',
+              school_ids: [contextSchoolId],
+              grade_name: editingGradeLevel.grade_name || '',
+              grade_code: editingGradeLevel.grade_code || '',
+              grade_order: editingGradeLevel.grade_order || 1,
+              education_level: editingGradeLevel.education_level || 'primary',
+              status: editingGradeLevel.status || 'active',
               class_sections: []
             });
           }
@@ -410,6 +407,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           education_level: 'primary',
           status: 'active',
           class_sections: [{
+            id: editingSection.id,
+            section_name: editingSection.section_name,
+            section_code: editingSection.section_code || '',
+            max_capacity: editingSection.max_capacity,
+            status: editingSection.status,
+            class_section_order: editingSection.class_section_order
+          }]
+        });
       } else {
         setFormState({
           school_ids: contextSchoolId ? [contextSchoolId] : [],
@@ -419,7 +424,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           education_level: 'primary',
           status: 'active',
           class_sections: []
-          class_sections: [],
         });
       }
       setFormErrors({});
@@ -437,7 +441,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         grade_order: data.grade_order,
         education_level: data.education_level,
         status: data.status,
-        class_sections: data.class_sections
         class_sections: data.class_sections
       });
 
@@ -458,7 +461,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           })
           .eq('id', editingGradeLevel.id);
         if (error) throw error;
-        gradeId = editingGrade.id;
         gradeLevelId = editingGradeLevel.id;
 
         // Update school associations
@@ -481,7 +483,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           .single();
         if (error) throw error;
         
-        gradeId = newGrade.id;
         gradeLevelId = newGradeLevel.id;
       }
       
@@ -603,7 +604,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         }
         
         // Delete sections that were removed from the form (only when editing)
-        if (editingGrade) {
+        if (editingGradeLevel) {
           const currentSectionIds = data.class_sections
             .filter(s => s.id && !s._isNew)
             .map(s => s.id);
@@ -640,7 +641,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         setFormErrors({});
         const sectionsCount = formState.class_sections.length;
         const sectionsText = sectionsCount > 0 ? ` with ${sectionsCount} section${sectionsCount > 1 ? 's' : ''}` : '';
-        toast.success(`Grade level ${editingGrade ? 'updated' : 'created'} successfully${sectionsText}`);
+        toast.success(`Grade level ${editingGradeLevel ? 'updated' : 'created'} successfully${sectionsText}`);
       },
       onError: (error) => {
         if (error instanceof z.ZodError) {
@@ -899,7 +900,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   };
   
   // Class sections handlers
-  const handleAddSection = () => {
+  const handleAddSectionForm = () => {
     const newSection: ClassSectionFormData = {
       section_name: '',
       section_code: '',
@@ -1317,78 +1318,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 error={formErrors.section_name}
               >
                 <Input
-          {/* Class Sections */}
-          <CollapsibleSection
-            id="class-sections"
-            title={`Class Sections (${formState.class_sections.length})`}
-            isOpen={isSectionsExpanded}
-            onToggle={() => setIsSectionsExpanded(!isSectionsExpanded)}
-          >
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Add class sections for this grade level. Each section represents a class group within the grade.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddSection}
-                  leftIcon={<Plus className="w-4 h-4" />}
-                >
-                  Add Section
-                </Button>
-              </div>
-              
-              {formState.class_sections.length === 0 ? (
-                <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    No class sections added yet
-                  </h4>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Click "Add Section" to create class sections for this grade level
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAddSection}
-                    leftIcon={<Plus className="w-4 h-4" />}
-                  >
-                    Add First Section
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {formState.class_sections.map((section, index) => (
-                    <ClassSectionFormItem
-                      key={section.id || `new-${index}`}
-                      data={section}
-                      index={index}
-                      onChange={handleSectionChange}
-                      onRemove={handleRemoveSection}
-                      errors={formErrors}
-                      disabled={gradeMutation.isLoading}
-                      showRemoveButton={formState.class_sections.length > 1}
-                    />
-                  ))}
-                  
-                  {/* Add Another Section Button */}
-                  <div className="text-center pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddSection}
-                      leftIcon={<Plus className="w-4 h-4" />}
-                      className="border-dashed"
-                    >
-                      Add Another Section
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CollapsibleSection>
                   id="section_name"
                   name="section_name"
                   placeholder="e.g., Section A, Blue House"
@@ -1541,6 +1470,81 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 </div>
               </FormField>
             </>
+          )}
+
+          {/* Class Sections */}
+          {formType === 'grade' && (
+            <CollapsibleSection
+              id="class-sections"
+              title={`Class Sections (${formState.class_sections.length})`}
+              isOpen={isSectionsExpanded}
+              onToggle={() => setIsSectionsExpanded(!isSectionsExpanded)}
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Add class sections for this grade level. Each section represents a class group within the grade.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddSectionForm}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    Add Section
+                  </Button>
+                </div>
+                
+                {formState.class_sections.length === 0 ? (
+                  <div className="text-center py-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No class sections added yet
+                    </h4>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      Click "Add Section" to create class sections for this grade level
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddSectionForm}
+                      leftIcon={<Plus className="w-4 h-4" />}
+                    >
+                      Add First Section
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {formState.class_sections.map((section, index) => (
+                      <ClassSectionFormItem
+                        key={section.id || `new-${index}`}
+                        data={section}
+                        index={index}
+                        onChange={handleSectionChange}
+                        onRemove={handleRemoveSection}
+                        errors={formErrors}
+                        disabled={gradeLevelMutation.isPending}
+                        showRemoveButton={formState.class_sections.length > 1}
+                      />
+                    ))}
+                    
+                    {/* Add Another Section Button */}
+                    <div className="text-center pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleAddSectionForm}
+                        leftIcon={<Plus className="w-4 h-4" />}
+                        className="border-dashed"
+                      >
+                        Add Another Section
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
           )}
 
           {/* Class Sections Section - Only show for grade form type */}
