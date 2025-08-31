@@ -206,9 +206,9 @@ export function GradeLevelFormContent({
               id="grade_order"
               type="number"
               min="1"
-              value={formData.grade_order?.toString() || '1'}
+              value={formData.grade_order?.toString() || ''}
               onChange={(e) => updateFormData('grade_order', parseInt(e.target.value) || 1)}
-              placeholder="1"
+              placeholder="Enter grade order"
               disabled={disabled}
             />
           </FormField>
