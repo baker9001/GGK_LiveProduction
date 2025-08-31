@@ -397,7 +397,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     const schools = hierarchyData.schools;
     const activeSchools = schools.filter(s => s.status === 'active').length;
     
-    const gradeLevels = schools.reduce((total, school) => total + (school.grade_levels?.length || 0), 0);
+        .insert([{ 
+          ...gradeLevelRecord, 
+          school_id: mainSchoolId,
+          branch_id: null
+        }])
     const activeGradeLevels = schools.reduce((total, school) => 
       total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
     
