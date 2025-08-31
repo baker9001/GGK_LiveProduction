@@ -536,14 +536,28 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         
         for (const school of selectedSchoolsWithBranches) {
           if (assignmentLevel === 'branch' && school.selectedBranches) {
-            // Apply to selected branches
+            // Apply to selected branches - school_id is still required
             for (const branchId of school.selectedBranches) {
               for (const grade of bulkGradeTemplate.grades) {
+                // First check if a grade with this order already exists for this branch
+                const { data: existingGrade } = await supabase
+                  .from('grade_levels')
+                  .select('id')
+                  .eq('school_id', school.id)
+                  .eq('branch_id', branchId)
+                  .eq('grade_order', grade.order)
+                  .single();
+                
+                if (existingGrade) {
+                  console.warn(`Grade order ${grade.order} already exists for branch ${branchId}, skipping...`);
+                  continue;
+                }
+                
                 const { data: gradeLevel, error: gradeError } = await supabase
                   .from('grade_levels')
                   .insert([{
-                    school_id: null,  // Set to null for branch-level assignment
-                    branch_id: branchId,
+                    school_id: school.id,  // Always required
+                    branch_id: branchId,    // Optional branch assignment
                     grade_name: grade.name,
                     grade_code: grade.code,
                     grade_order: grade.order,
@@ -553,7 +567,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   .select()
                   .single();
                 
-                if (gradeError) throw gradeError;
+                if (gradeError) {
+                  console.error('Grade creation error:', gradeError);
+                  // Skip this grade but continue with others
+                  continue;
+                }
                 
                 // Create sections
                 if (gradeLevel) {
@@ -569,7 +587,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                         status: 'active'
                       }]);
                     
-                    if (sectionError) throw sectionError;
+                    if (sectionError) {
+                      console.error('Section creation error:', sectionError);
+                    }
                   }
                 }
               }
@@ -577,11 +597,25 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           } else {
             // Apply to school level (no branch_id)
             for (const grade of bulkGradeTemplate.grades) {
+              // First check if a grade with this order already exists for this school
+              const { data: existingGrade } = await supabase
+                .from('grade_levels')
+                .select('id')
+                .eq('school_id', school.id)
+                .is('branch_id', null)
+                .eq('grade_order', grade.order)
+                .single();
+              
+              if (existingGrade) {
+                console.warn(`Grade order ${grade.order} already exists for school ${school.id}, skipping...`);
+                continue;
+              }
+              
               const { data: gradeLevel, error: gradeError } = await supabase
                 .from('grade_levels')
                 .insert([{
                   school_id: school.id,
-                  branch_id: null,  // Explicitly set to null for school-level
+                  branch_id: null,  // Explicitly null for school-level
                   grade_name: grade.name,
                   grade_code: grade.code,
                   grade_order: grade.order,
@@ -591,7 +625,11 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 .select()
                 .single();
               
-              if (gradeError) throw gradeError;
+              if (gradeError) {
+                console.error('Grade creation error:', gradeError);
+                // Skip this grade but continue with others
+                continue;
+              }
               
               // Create sections
               if (gradeLevel) {
@@ -607,7 +645,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                       status: 'active'
                     }]);
                   
-                  if (sectionError) throw sectionError;
+                  if (sectionError) {
+                    console.error('Section creation error:', sectionError);
+                  }
                 }
               }
             }
@@ -623,7 +663,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         resetBulkWizard();
       } catch (error) {
         console.error('Error applying template:', error);
-        toast.error('Failed to apply template. Please try again.');
+        toast.error('Failed to apply template. Please check the console for details.');
       } finally {
         setIsApplyingBulk(false);
       }
@@ -797,73 +837,144 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   <div className="space-y-4">
                     {bulkGradeTemplate.grades.map((grade, gradeIndex) => (
                       <div key={gradeIndex} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <FormField label="Grade Name">
-                              <Input
-                                value={grade.name}
-                                onChange={(e) => {
-                                  const updatedGrades = [...bulkGradeTemplate.grades];
-                                  updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], name: e.target.value };
-                                  setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
-                                }}
-                                placeholder="e.g., Grade 1"
-                              />
-                            </FormField>
+                        <div className="space-y-4">
+                          {/* Grade Basic Info */}
+                          <div className="flex items-start gap-4">
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <FormField label="Grade Name">
+                                <Input
+                                  value={grade.name}
+                                  onChange={(e) => {
+                                    const updatedGrades = [...bulkGradeTemplate.grades];
+                                    updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], name: e.target.value };
+                                    setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                  }}
+                                  placeholder="e.g., Grade 1"
+                                />
+                              </FormField>
+                              
+                              <FormField label="Code">
+                                <Input
+                                  value={grade.code}
+                                  onChange={(e) => {
+                                    const updatedGrades = [...bulkGradeTemplate.grades];
+                                    updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], code: e.target.value };
+                                    setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                  }}
+                                  placeholder="e.g., G1"
+                                />
+                              </FormField>
+                              
+                              <FormField label="Order">
+                                <Input
+                                  type="number"
+                                  value={grade.order}
+                                  onChange={(e) => {
+                                    const updatedGrades = [...bulkGradeTemplate.grades];
+                                    updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], order: parseInt(e.target.value) };
+                                    setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                  }}
+                                  min="1"
+                                />
+                              </FormField>
+                              
+                              <FormField label="Education Level">
+                                <Select
+                                  value={grade.education_level}
+                                  onChange={(value) => {
+                                    const updatedGrades = [...bulkGradeTemplate.grades];
+                                    updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], education_level: value as any };
+                                    setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                  }}
+                                  options={[
+                                    { value: 'kindergarten', label: 'Kindergarten' },
+                                    { value: 'primary', label: 'Primary' },
+                                    { value: 'middle', label: 'Middle' },
+                                    { value: 'secondary', label: 'Secondary' },
+                                    { value: 'senior', label: 'Senior' }
+                                  ]}
+                                />
+                              </FormField>
+                            </div>
                             
-                            <FormField label="Code">
-                              <Input
-                                value={grade.code}
-                                onChange={(e) => {
-                                  const updatedGrades = [...bulkGradeTemplate.grades];
-                                  updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], code: e.target.value };
-                                  setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
-                                }}
-                                placeholder="e.g., G1"
-                              />
-                            </FormField>
-                            
-                            <FormField label="Order">
-                              <Input
-                                type="number"
-                                value={grade.order}
-                                onChange={(e) => {
-                                  const updatedGrades = [...bulkGradeTemplate.grades];
-                                  updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], order: parseInt(e.target.value) };
-                                  setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
-                                }}
-                                min="1"
-                              />
-                            </FormField>
-                            
-                            <FormField label="Education Level">
-                              <Select
-                                value={grade.education_level}
-                                onChange={(value) => {
-                                  const updatedGrades = [...bulkGradeTemplate.grades];
-                                  updatedGrades[gradeIndex] = { ...updatedGrades[gradeIndex], education_level: value as any };
-                                  setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
-                                }}
-                                options={[
-                                  { value: 'kindergarten', label: 'Kindergarten' },
-                                  { value: 'primary', label: 'Primary' },
-                                  { value: 'middle', label: 'Middle' },
-                                  { value: 'secondary', label: 'Secondary' },
-                                  { value: 'senior', label: 'Senior' }
-                                ]}
-                              />
-                            </FormField>
+                            <button
+                              onClick={() => {
+                                const updatedGrades = bulkGradeTemplate.grades.filter((_, i) => i !== gradeIndex);
+                                setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                           
-                          <button
-                            onClick={() => {
-                              const updatedGrades = bulkGradeTemplate.grades.filter((_, i) => i !== gradeIndex);
-                              setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {/* Sections Management */}
+                          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Class Sections ({grade.sections.length})
+                              </h5>
+                              <button
+                                onClick={() => {
+                                  const updatedGrades = [...bulkGradeTemplate.grades];
+                                  const nextLetter = String.fromCharCode(65 + grade.sections.length); // A, B, C...
+                                  updatedGrades[gradeIndex] = {
+                                    ...updatedGrades[gradeIndex],
+                                    sections: [...grade.sections, nextLetter]
+                                  };
+                                  setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                }}
+                                className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center gap-1"
+                              >
+                                <Plus className="w-3 h-3" />
+                                Add Section
+                              </button>
+                            </div>
+                            
+                            {grade.sections.length === 0 ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                No sections added. Click "Add Section" to create class sections.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                {grade.sections.map((section, sectionIndex) => (
+                                  <div key={sectionIndex} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
+                                    <input
+                                      type="text"
+                                      value={section}
+                                      onChange={(e) => {
+                                        const updatedGrades = [...bulkGradeTemplate.grades];
+                                        const updatedSections = [...grade.sections];
+                                        updatedSections[sectionIndex] = e.target.value;
+                                        updatedGrades[gradeIndex] = {
+                                          ...updatedGrades[gradeIndex],
+                                          sections: updatedSections
+                                        };
+                                        setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                      }}
+                                      className="flex-1 bg-transparent border-b border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-[#8CC63F] min-w-0"
+                                      placeholder="A"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const updatedGrades = [...bulkGradeTemplate.grades];
+                                        const updatedSections = grade.sections.filter((_, i) => i !== sectionIndex);
+                                        updatedGrades[gradeIndex] = {
+                                          ...updatedGrades[gradeIndex],
+                                          sections: updatedSections
+                                        };
+                                        setBulkGradeTemplate({ ...bulkGradeTemplate, grades: updatedGrades });
+                                      }}
+                                      className="p-0.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
