@@ -383,6 +383,21 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
     const colorMap: Record<string, string> = {
       blue: 'bg-blue-500 text-white',
       green: 'bg-green-500 text-white',
+            // Fetch grade levels for this school
+            const { data: gradeLevels } = await supabase
+              .from('grade_levels')
+              .select(`
+                id,
+                grade_name,
+                grade_code,
+                grade_order,
+                education_level,
+                status,
+                created_at
+              `)
+              .eq('school_id', school.id)
+              .eq('status', 'active')
+              .order('grade_order');
       purple: 'bg-purple-500 text-white',
       orange: 'bg-orange-500 text-white',
       indigo: 'bg-indigo-500 text-white'
@@ -392,16 +407,58 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
 
   return (
     <div className="flex items-center gap-2">
+                // Fetch grade levels for this branch (if any are specifically assigned)
+                const { data: branchGradeLevels } = await supabase
+                  .from('grade_level_branches')
+                  .select(`
+                    grade_levels!grade_level_branches_grade_level_id_fkey (
+                      id,
+                      grade_name,
+                      grade_code,
+                      grade_order,
+                      education_level,
+                      status
+                    )
+                  `)
+                  .eq('branch_id', branch.id)
+                  .eq('is_active', true);
+
+                const branchGrades = branchGradeLevels?.map(bg => bg.grade_levels).filter(Boolean) || [];
       {levels.map(level => {
         const Icon = level.icon;
         const isVisible = visibleLevels.has(level.id);
         
+                  grade_levels: branchGrades,
         return (
           <button
             key={level.id}
             onClick={() => onToggleLevel(level.id)}
             className={`
               flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+            // Fetch class sections for each grade level
+            const gradeLevelsWithSections = await Promise.all(
+              (gradeLevels || []).map(async (grade) => {
+                const { data: classSections } = await supabase
+                  .from('class_sections')
+                  .select(`
+                    id,
+                    section_name,
+                    section_code,
+                    max_capacity,
+                    class_section_order,
+                    status,
+                    created_at
+                  `)
+                  .eq('grade_level_id', grade.id)
+                  .eq('status', 'active')
+                  .order('class_section_order');
+
+                return {
+                  ...grade,
+                  class_sections: classSections || []
+                };
+              })
+            );
               ${getColorClasses(level.color, isVisible)}
               hover:shadow-md transform hover:scale-105
             `}
@@ -409,6 +466,7 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
             <Icon className="w-3.5 h-3.5" />
             <span>{level.label}</span>
             {isVisible ? (
+              grade_levels: gradeLevelsWithSections,
               <Eye className="w-3 h-3" />
             ) : (
               <EyeOff className="w-3 h-3 opacity-70" />
