@@ -381,8 +381,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     async (): Promise<HierarchyData> => {
       if (!companyId) return { schools: [] };
 
-      // Fetch schools, grade levels, and class sections
-      // (Original query logic preserved)
+      // Fetch schools
       let schoolsQuery = supabase
         .from('schools')
         .select('id, name, code, status')
@@ -401,11 +400,29 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         return { schools: [] };
       }
 
-      // Fetch grade levels
+      // Fetch ALL grade levels - both school and branch assigned
       let gradeLevelsQuery = supabase
         .from('grade_levels')
         .select('id, school_id, branch_id, grade_name, grade_code, grade_order, education_level, status')
         .order('grade_order');
+
+      // Filter by schools OR their branches
+      const schoolIds = schoolsData.map(s => s.id);
+      
+      // Also get branch IDs for these schools
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('id')
+        .in('school_id', schoolIds);
+      
+      const branchIds = branchData?.map(b => b.id) || [];
+
+      // Get grades that belong to these schools OR their branches
+      if (schoolIds.length > 0 || branchIds.length > 0) {
+        gradeLevelsQuery = gradeLevelsQuery.or(
+          `school_id.in.(${schoolIds.join(',')}),branch_id.in.(${branchIds.join(',')})`
+        );
+      }
 
       const { data: gradeLevelsData, error: gradeLevelsError } = await gradeLevelsQuery;
       if (gradeLevelsError) throw gradeLevelsError;
@@ -425,9 +442,24 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       // Build hierarchical structure
       const schools: SchoolNode[] = schoolsData.map(school => {
+        // Get grades that belong to this school (either directly or through branches)
         const schoolGrades = (gradeLevelsData || [])
-          .filter(grade => grade.school_id === school.id || 
-                          branches.some(b => b.school_id === school.id && b.id === grade.branch_id))
+          .filter(grade => {
+            // Include if directly assigned to school
+            if (grade.school_id === school.id && !grade.branch_id) {
+              return true;
+            }
+            // Include if assigned to a branch of this school
+            if (grade.branch_id) {
+              const branch = branches.find(b => b.id === grade.branch_id);
+              return branch && branch.school_id === school.id;
+            }
+            // Also check if school_id matches even with branch_id (for the constraint issue)
+            if (grade.school_id === school.id && grade.branch_id) {
+              return true;
+            }
+            return false;
+          })
           .map(grade => {
             const gradeSections = classSectionsData
               .filter(section => section.grade_level_id === grade.id)
@@ -441,7 +473,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 current_students: 0
               }));
 
-            return {
+            // Add branch info if grade is branch-assigned
+            let gradeInfo: any = {
               id: grade.id,
               grade_name: grade.grade_name,
               grade_code: grade.grade_code,
@@ -450,6 +483,16 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               status: grade.status,
               class_sections: gradeSections
             };
+
+            if (grade.branch_id) {
+              const branch = branches.find(b => b.id === grade.branch_id);
+              if (branch) {
+                gradeInfo.branch_name = branch.name;
+                gradeInfo.branch_id = branch.id;
+              }
+            }
+
+            return gradeInfo;
           });
 
         return {
@@ -459,6 +502,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           status: school.status,
           grade_levels: schoolGrades
         };
+      });
+
+      console.log('Hierarchy data:', {
+        schools: schools.length,
+        totalGrades: schools.reduce((sum, s) => sum + s.grade_levels.length, 0),
+        totalSections: schools.reduce((sum, s) => 
+          sum + s.grade_levels.reduce((gSum, g) => gSum + g.class_sections.length, 0), 0
+        )
       });
 
       return { schools };
