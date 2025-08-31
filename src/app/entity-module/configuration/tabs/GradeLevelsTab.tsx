@@ -461,6 +461,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           })
           .eq('id', editingGradeLevel.id);
         if (error) throw error;
+        gradeId = editingGradeLevel.id;
         gradeLevelId = editingGradeLevel.id;
 
         // Update school associations
@@ -483,6 +484,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           .single();
         if (error) throw error;
         
+        gradeId = newGradeLevel.id;
         gradeLevelId = newGradeLevel.id;
       }
       
