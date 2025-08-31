@@ -1,5 +1,6 @@
 // src/lib/layout/treeLayout.ts
 // Tidy tree layout algorithm for organizational charts with variable card sizes
+// FIXED: Grade levels and class sections now properly display when tabs are toggled
 
 export interface TreeNode {
   id: string;
@@ -322,8 +323,9 @@ export function buildTreeFromData(
     });
   }
 
-  // Add grade level nodes for expanded schools (when grade_levels is visible)
-  if (visibleLevels?.has('grade_levels') && companyData?.schools) {
+  // FIXED: Changed 'grade_levels' to 'years' to match the tab ID
+  // Add grade level nodes for expanded schools (when years tab is visible)
+  if (visibleLevels?.has('years') && companyData?.schools) {
     companyData.schools.forEach((school: any) => {
       const schoolId = `school-${school.id}`;
       const schoolNode = nodes.get(schoolId);
@@ -345,20 +347,23 @@ export function buildTreeFromData(
           });
         });
         
-        // Add grade children to school node (alongside branches if visible)
+        // Grades are separate from branches - they coexist as children of schools
         if (visibleLevels?.has('branches')) {
           // If branches are also visible, combine children
-          schoolNode.children = [...(schoolNode.children || []), ...gradeChildren];
+          // Put branches first, then grades
+          const existingBranches = schoolNode.children.filter(id => id.startsWith('branch-'));
+          schoolNode.children = [...existingBranches, ...gradeChildren];
         } else {
-          // If only grades are visible, replace children
+          // If only grades are visible, show only grades
           schoolNode.children = gradeChildren;
         }
       }
     });
   }
 
-  // Add class section nodes for expanded grade levels (when class_sections is visible)
-  if (visibleLevels?.has('class_sections') && companyData?.schools) {
+  // FIXED: Changed 'class_sections' to 'sections' to match the tab ID
+  // Add class section nodes for expanded grade levels (when sections tab is visible)
+  if (visibleLevels?.has('sections') && companyData?.schools) {
     companyData.schools.forEach((school: any) => {
       if (school.grade_levels) {
         school.grade_levels.forEach((grade: any) => {
