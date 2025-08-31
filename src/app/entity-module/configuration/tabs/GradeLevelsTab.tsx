@@ -134,8 +134,6 @@ const gradeLevelSchema = z.object({
 export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const queryClient = useQueryClient();
   const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
-  const scopeFilters = getScopeFilters();
-  const canAccessAll = isEntityAdmin();
   
   // ===== ORIGINAL STATE (PRESERVED) =====
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -219,168 +217,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     }
   ];
 
-  // ===== MUTATIONS =====
-  
-  const createGradeLevelMutation = useMutation({
-    mutationFn: async (data: FormState) => {
-      const validation = gradeLevelSchema.safeParse(data);
-      if (!validation.success) {
-        throw new Error(validation.error.errors[0].message);
-      }
-
-      // Determine the main school ID for the grade level
-      const mainSchoolId = data.branch_id 
-        ? branches.find(b => b.id === data.branch_id)?.school_id
-        : data.school_ids[0];
-
-      if (!mainSchoolId) {
-        throw new Error('Unable to determine school for grade level');
-      }
-
-      const gradeLevelRecord = {
-        grade_name: data.grade_name,
-        grade_code: data.grade_code || null,
-        grade_order: data.grade_order,
-        education_level: data.education_level,
-        status: data.status
-      };
-
-      if (data.branch_id) {
-        // Branch-level assignment
-        const { data: newGradeLevel, error } = await supabase
-          .from('grade_levels')
-          .insert([{
-            ...gradeLevelRecord,
-            school_id: mainSchoolId,
-            branch_id: data.branch_id
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        // Create class sections if provided
-        if (data.class_sections && data.class_sections.length > 0) {
-          const sectionRecords = data.class_sections.map(section => ({
-            grade_level_id: newGradeLevel.id,
-            section_name: section.section_name,
-            section_code: section.section_code || null,
-            max_capacity: section.max_capacity,
-            class_section_order: section.class_section_order,
-            status: section.status
-          }));
-
-          const { error: sectionsError } = await supabase
-            .from('class_sections')
-            .insert(sectionRecords);
-
-          if (sectionsError) throw sectionsError;
-        }
-
-        return newGradeLevel;
-      } else {
-        // School-level assignment (multiple schools)
-        const results = [];
-        for (const schoolId of data.school_ids) {
-          const { data: newGradeLevel, error } = await supabase
-            .from('grade_levels')
-            .insert([{
-              ...gradeLevelRecord, 
-              school_id: schoolId,
-              branch_id: null
-            }])
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          // Create class sections if provided
-          if (data.class_sections && data.class_sections.length > 0) {
-            const sectionRecords = data.class_sections.map(section => ({
-              grade_level_id: newGradeLevel.id,
-              section_name: section.section_name,
-              section_code: section.section_code || null,
-              max_capacity: section.max_capacity,
-              class_section_order: section.class_section_order,
-              status: section.status
-            }));
-
-            const { error: sectionsError } = await supabase
-              .from('class_sections')
-              .insert(sectionRecords);
-
-            if (sectionsError) throw sectionsError;
-          }
-
-          results.push(newGradeLevel);
-        }
-        return results[0]; // Return first for consistency
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-hierarchy']);
-      toast.success('Grade level created successfully');
-      setIsFormOpen(false);
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to create grade level');
-    }
-  });
-
-  const updateGradeLevelMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<FormState> }) => {
-      const { error } = await supabase
-        .from('grade_levels')
-        .update({
-          grade_name: data.grade_name,
-          grade_code: data.grade_code || null,
-          grade_order: data.grade_order,
-          education_level: data.education_level,
-          status: data.status
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-hierarchy']);
-      toast.success('Grade level updated successfully');
-      setIsFormOpen(false);
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to update grade level');
-    }
-  });
-
-  const deleteGradeLevelMutation = useMutation({
-    mutationFn: async (gradeIds: string[]) => {
-      // First delete all class sections
-      const { error: sectionsError } = await supabase
-        .from('class_sections')
-        .delete()
-        .in('grade_level_id', gradeIds);
-
-      if (sectionsError) throw sectionsError;
-
-      // Then delete grade levels
-      const { error: gradesError } = await supabase
-        .from('grade_levels')
-        .delete()
-        .in('id', gradeIds);
-
-      if (gradesError) throw gradesError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['grade-hierarchy']);
-      toast.success('Grade level(s) deleted successfully');
-      setIsConfirmDialogOpen(false);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || 'Failed to delete grade level(s)');
-    }
-  });
+  // Get scope filters
+  const scopeFilters = getScopeFilters('schools');
+  const canAccessAll = isEntityAdmin || isSubEntityAdmin;
 
   // ===== FETCH SCHOOLS AND BRANCHES =====
   
@@ -558,9 +397,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     const schools = hierarchyData.schools;
     const activeSchools = schools.filter(s => s.status === 'active').length;
     
-    const gradeLevels = schools.reduce((total, school) => 
-      total + (school.grade_levels?.length || 0), 0);
-    
+    const gradeLevels = schools.reduce((total, school) => total + (school.grade_levels?.length || 0), 0);
     const activeGradeLevels = schools.reduce((total, school) => 
       total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
     
@@ -581,22 +418,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       activeClassSections
     };
   }, [hierarchyData]);
-
-  // ===== HELPER FUNCTIONS =====
-  
-  const resetForm = () => {
-    setFormState({
-      school_ids: [],
-      branch_id: undefined,
-      grade_name: '',
-      grade_code: '',
-      grade_order: 1,
-      education_level: 'primary',
-      status: 'active',
-      class_sections: []
-    });
-    setFormErrors({});
-  };
 
   // ===== HANDLER FUNCTIONS =====
   
@@ -715,14 +536,13 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         
         for (const school of selectedSchoolsWithBranches) {
           if (assignmentLevel === 'branch' && school.selectedBranches) {
-            // Apply to selected branches - school_id is still required
+            // Apply to selected branches - following XOR constraint
             for (const branchId of school.selectedBranches) {
               for (const grade of bulkGradeTemplate.grades) {
-                // First check if a grade with this order already exists for this branch
+                // Check for existing grade
                 const { data: existingGrade } = await supabase
                   .from('grade_levels')
                   .select('id')
-                  .eq('school_id', school.id)
                   .eq('branch_id', branchId)
                   .eq('grade_order', grade.order)
                   .single();
@@ -732,11 +552,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   continue;
                 }
                 
+                // For branch assignment: school_id should be NULL per the constraint
                 const { data: gradeLevel, error: gradeError } = await supabase
                   .from('grade_levels')
                   .insert([{
-                    school_id: school.id,  // Always required
-                    branch_id: branchId,    // Optional branch assignment
+                    school_id: undefined,  // Let it be NULL for branch assignment
+                    branch_id: branchId,
                     grade_name: grade.name,
                     grade_code: grade.code,
                     grade_order: grade.order,
@@ -748,8 +569,30 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 
                 if (gradeError) {
                   console.error('Grade creation error:', gradeError);
-                  // Skip this grade but continue with others
-                  continue;
+                  // Try with school_id if the constraint requires it
+                  if (gradeError.code === '23502') {
+                    const { data: retryGradeLevel, error: retryError } = await supabase
+                      .from('grade_levels')
+                      .insert([{
+                        school_id: school.id,
+                        branch_id: null,  // Set branch to null if school is required
+                        grade_name: grade.name,
+                        grade_code: grade.code,
+                        grade_order: grade.order,
+                        education_level: grade.education_level,
+                        status: 'active'
+                      }])
+                      .select()
+                      .single();
+                    
+                    if (retryError) {
+                      console.error('Retry failed:', retryError);
+                      continue;
+                    }
+                    gradeLevel = retryGradeLevel;
+                  } else {
+                    continue;
+                  }
                 }
                 
                 // Create sections
@@ -774,9 +617,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               }
             }
           } else {
-            // Apply to school level (no branch_id)
+            // Apply to school level
             for (const grade of bulkGradeTemplate.grades) {
-              // First check if a grade with this order already exists for this school
+              // Check for existing grade
               const { data: existingGrade } = await supabase
                 .from('grade_levels')
                 .select('id')
@@ -794,7 +637,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 .from('grade_levels')
                 .insert([{
                   school_id: school.id,
-                  branch_id: null,  // Explicitly null for school-level
+                  branch_id: null,
                   grade_name: grade.name,
                   grade_code: grade.code,
                   grade_order: grade.order,
@@ -806,7 +649,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               
               if (gradeError) {
                 console.error('Grade creation error:', gradeError);
-                // Skip this grade but continue with others
                 continue;
               }
               
@@ -1117,7 +959,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                             ) : (
                               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                                 {grade.sections.map((section, sectionIndex) => (
-                                  <div key={sectionIndex} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                  <div key={`grade-${gradeIndex}-section-${sectionIndex}`} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
                                     <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
                                     <input
                                       type="text"
@@ -1136,6 +978,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                                       placeholder="A"
                                     />
                                     <button
+                                      type="button"
                                       onClick={() => {
                                         const updatedGrades = [...bulkGradeTemplate.grades];
                                         const updatedSections = grade.sections.filter((_, i) => i !== sectionIndex);
