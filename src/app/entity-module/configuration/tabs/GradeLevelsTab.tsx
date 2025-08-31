@@ -1152,6 +1152,53 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     );
   };
 
+  // ===== HANDLER FUNCTIONS =====
+  
+  // Tree action handlers
+  const handleAddGrade = (schoolId: string) => {
+    setFormType('grade');
+    setContextSchoolId(schoolId);
+    setEditingGradeLevel(null);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
+    setFormType('grade');
+    setContextSchoolId(schoolId);
+    setEditingGradeLevel(grade);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
+    setItemsToDelete({ type: 'grade', items: [grade] });
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleAddSection = (gradeId: string, schoolId: string) => {
+    setFormType('section');
+    setContextSchoolId(schoolId);
+    setContextGradeId(gradeId);
+    setEditingGradeLevel(null);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    setFormType('section');
+    setContextSchoolId(schoolId);
+    setContextGradeId(gradeId);
+    setEditingGradeLevel(null);
+    setEditingSection(section);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    setItemsToDelete({ type: 'section', items: [section] });
+    setIsConfirmDialogOpen(true);
+  };
+
   // ===== MAIN RENDER =====
   
   if (isLoading) {
