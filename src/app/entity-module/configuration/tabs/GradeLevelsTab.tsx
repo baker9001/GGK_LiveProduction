@@ -542,7 +542,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 const { data: gradeLevel, error: gradeError } = await supabase
                   .from('grade_levels')
                   .insert([{
-                    school_id: school.id,  // Include school_id even for branch-level assignment
+                    school_id: null,  // Set to null for branch-level assignment
                     branch_id: branchId,
                     grade_name: grade.name,
                     grade_code: grade.code,
