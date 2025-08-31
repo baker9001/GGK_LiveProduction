@@ -6,6 +6,7 @@
  * - System green color theme (#8CC63F)
  * - Preserves all original functionality
  * - Database schema supports branch_id
+ * - FIXED: Removed duplicate function declarations
  */
 
 'use client';
@@ -417,6 +418,53 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       activeClassSections
     };
   }, [hierarchyData]);
+
+  // ===== HANDLER FUNCTIONS =====
+  
+  // Tree action handlers
+  const handleAddGrade = (schoolId: string) => {
+    setFormType('grade');
+    setContextSchoolId(schoolId);
+    setEditingGradeLevel(null);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
+    setFormType('grade');
+    setContextSchoolId(schoolId);
+    setEditingGradeLevel(grade);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
+    setItemsToDelete({ type: 'grade', items: [grade] });
+    setIsConfirmDialogOpen(true);
+  };
+
+  const handleAddSection = (gradeId: string, schoolId: string) => {
+    setFormType('section');
+    setContextSchoolId(schoolId);
+    setContextGradeId(gradeId);
+    setEditingGradeLevel(null);
+    setEditingSection(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    setFormType('section');
+    setContextSchoolId(schoolId);
+    setContextGradeId(gradeId);
+    setEditingGradeLevel(null);
+    setEditingSection(section);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    setItemsToDelete({ type: 'section', items: [section] });
+    setIsConfirmDialogOpen(true);
+  };
 
   // ===== BULK CREATION WIZARD COMPONENT =====
   
@@ -1152,53 +1200,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     );
   };
 
-  // ===== HANDLER FUNCTIONS =====
-  
-  // Tree action handlers
-  const handleAddGrade = (schoolId: string) => {
-    setFormType('grade');
-    setContextSchoolId(schoolId);
-    setEditingGradeLevel(null);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
-    setFormType('grade');
-    setContextSchoolId(schoolId);
-    setEditingGradeLevel(grade);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
-    setItemsToDelete({ type: 'grade', items: [grade] });
-    setIsConfirmDialogOpen(true);
-  };
-
-  const handleAddSection = (gradeId: string, schoolId: string) => {
-    setFormType('section');
-    setContextSchoolId(schoolId);
-    setContextGradeId(gradeId);
-    setEditingGradeLevel(null);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
-    setFormType('section');
-    setContextSchoolId(schoolId);
-    setContextGradeId(gradeId);
-    setEditingGradeLevel(null);
-    setEditingSection(section);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
-    setItemsToDelete({ type: 'section', items: [section] });
-    setIsConfirmDialogOpen(true);
-  };
-
   // ===== MAIN RENDER =====
   
   if (isLoading) {
@@ -1397,49 +1398,4 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       {showBulkWizard && <BulkCreationWizard />}
     </div>
   );
-  
-  // Tree action handlers and other functions remain the same
-  const handleAddGrade = (schoolId: string) => {
-    setFormType('grade');
-    setContextSchoolId(schoolId);
-    setEditingGradeLevel(null);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
-    setFormType('grade');
-    setContextSchoolId(schoolId);
-    setEditingGradeLevel(grade);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
-    setItemsToDelete({ type: 'grade', items: [grade] });
-    setIsConfirmDialogOpen(true);
-  };
-
-  const handleAddSection = (gradeId: string, schoolId: string) => {
-    setFormType('section');
-    setContextSchoolId(schoolId);
-    setContextGradeId(gradeId);
-    setEditingGradeLevel(null);
-    setEditingSection(null);
-    setIsFormOpen(true);
-  };
-
-  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
-    setFormType('section');
-    setContextSchoolId(schoolId);
-    setContextGradeId(gradeId);
-    setEditingGradeLevel(null);
-    setEditingSection(section);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
-    setItemsToDelete({ type: 'section', items: [section] });
-    setIsConfirmDialogOpen(true);
-  };
 }
