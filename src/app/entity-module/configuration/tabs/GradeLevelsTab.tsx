@@ -1711,4 +1711,976 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       />
     </div>
   );
+}/**
+ * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
+ * 
+ * IMPROVED VERSION - Template-Based Bulk Creation System
+ * - Template-based grade structure creation
+ * - Bulk assignment to multiple schools
+ * - Wizard-style workflow
+ * - Branch-level support preparation
+ * - Efficient data management
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  Plus, 
+  GraduationCap, 
+  School, 
+  Users, 
+  Building2, 
+  AlertTriangle, 
+  Loader2, 
+  Trash2,
+  Copy,
+  Save,
+  ChevronRight,
+  ChevronLeft,
+  Check,
+  X,
+  FileText,
+  Settings,
+  Layers,
+  Target,
+  Sparkles,
+  Package,
+  Edit,
+  Eye,
+  Download,
+  Upload
+} from 'lucide-react';
+import { z } from 'zod';
+
+// Mock imports (replace with actual imports)
+const supabase = {
+  from: (table) => ({
+    select: () => ({ 
+      eq: () => ({ 
+        order: () => Promise.resolve({ data: [], error: null }) 
+      }),
+      in: () => ({ 
+        order: () => Promise.resolve({ data: [], error: null }) 
+      })
+    }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => ({ 
+      eq: () => Promise.resolve({ data: null, error: null }) 
+    }),
+    delete: () => ({ 
+      in: () => Promise.resolve({ error: null }) 
+    })
+  })
+};
+
+const useAccessControl = () => ({
+  getScopeFilters: () => ({}),
+  isEntityAdmin: true,
+  isSubEntityAdmin: false
+});
+
+const toast = {
+  success: (msg) => console.log('Success:', msg),
+  error: (msg) => console.error('Error:', msg)
+};
+
+// Components (simplified versions)
+const Button = ({ children, onClick, leftIcon, variant = 'primary', size = 'md', disabled = false, className = '' }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`
+      inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+      ${variant === 'primary' ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}
+      ${variant === 'secondary' ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : ''}
+      ${variant === 'outline' ? 'border border-gray-300 text-gray-700 hover:bg-gray-50' : ''}
+      ${variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700' : ''}
+      ${size === 'sm' ? 'text-sm px-3 py-1' : ''}
+      ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+      ${className}
+    `}
+  >
+    {leftIcon}
+    {children}
+  </button>
+);
+
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const StatusBadge = ({ status }) => (
+  <span className={`
+    inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+    ${status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}
+  `}>
+    {status}
+  </span>
+);
+
+const ToggleSwitch = ({ checked, onChange, label }) => (
+  <label className="flex items-center cursor-pointer">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="sr-only"
+    />
+    <div className={`
+      relative w-10 h-6 rounded-full transition-colors
+      ${checked ? 'bg-blue-600' : 'bg-gray-300'}
+    `}>
+      <div className={`
+        absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform
+        ${checked ? 'transform translate-x-4' : ''}
+      `} />
+    </div>
+    {label && <span className="ml-2 text-sm">{label}</span>}
+  </label>
+);
+
+// Main Component
+export function GradeLevelsTab({ companyId }) {
+  const queryClient = useQueryClient();
+  const { getScopeFilters, isEntityAdmin, isSubEntityAdmin } = useAccessControl();
+  
+  // State Management
+  const [activeView, setActiveView] = useState('templates'); // 'templates' | 'assignments' | 'hierarchy'
+  const [wizardStep, setWizardStep] = useState(1);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedSchools, setSelectedSchools] = useState([]);
+  const [showWizard, setShowWizard] = useState(false);
+  
+  // Template State
+  const [gradeTemplate, setGradeTemplate] = useState({
+    name: '',
+    description: '',
+    grades: []
+  });
+  
+  // Pre-defined Templates
+  const preDefinedTemplates = [
+    {
+      id: 'elementary',
+      name: 'Elementary School (K-5)',
+      description: 'Standard elementary school structure',
+      grades: [
+        { name: 'Kindergarten', code: 'K', order: 1, education_level: 'kindergarten', sections: ['A', 'B'] },
+        { name: 'Grade 1', code: 'G1', order: 2, education_level: 'primary', sections: ['A', 'B', 'C'] },
+        { name: 'Grade 2', code: 'G2', order: 3, education_level: 'primary', sections: ['A', 'B', 'C'] },
+        { name: 'Grade 3', code: 'G3', order: 4, education_level: 'primary', sections: ['A', 'B', 'C'] },
+        { name: 'Grade 4', code: 'G4', order: 5, education_level: 'primary', sections: ['A', 'B', 'C'] },
+        { name: 'Grade 5', code: 'G5', order: 6, education_level: 'primary', sections: ['A', 'B', 'C'] }
+      ]
+    },
+    {
+      id: 'middle',
+      name: 'Middle School (6-8)',
+      description: 'Standard middle school structure',
+      grades: [
+        { name: 'Grade 6', code: 'G6', order: 7, education_level: 'middle', sections: ['A', 'B', 'C', 'D'] },
+        { name: 'Grade 7', code: 'G7', order: 8, education_level: 'middle', sections: ['A', 'B', 'C', 'D'] },
+        { name: 'Grade 8', code: 'G8', order: 9, education_level: 'middle', sections: ['A', 'B', 'C', 'D'] }
+      ]
+    },
+    {
+      id: 'high',
+      name: 'High School (9-12)',
+      description: 'Standard high school structure',
+      grades: [
+        { name: 'Grade 9', code: 'G9', order: 10, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
+        { name: 'Grade 10', code: 'G10', order: 11, education_level: 'secondary', sections: ['A', 'B', 'C', 'D', 'E'] },
+        { name: 'Grade 11', code: 'G11', order: 12, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] },
+        { name: 'Grade 12', code: 'G12', order: 13, education_level: 'senior', sections: ['A', 'B', 'C', 'D', 'E'] }
+      ]
+    },
+    {
+      id: 'k12',
+      name: 'Complete K-12',
+      description: 'Full K-12 education structure',
+      grades: [] // Combination of all above
+    }
+  ];
+  
+  // Fetch schools
+  const { data: schools = [] } = useQuery(
+    ['schools', companyId],
+    async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, code, status')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    { enabled: !!companyId }
+  );
+  
+  // Wizard Component
+  const GradeTemplateWizard = () => {
+    const steps = [
+      { id: 1, name: 'Choose Template', icon: <FileText className="w-5 h-5" /> },
+      { id: 2, name: 'Customize Structure', icon: <Settings className="w-5 h-5" /> },
+      { id: 3, name: 'Select Schools', icon: <School className="w-5 h-5" /> },
+      { id: 4, name: 'Review & Apply', icon: <Check className="w-5 h-5" /> }
+    ];
+    
+    const handleTemplateSelect = (template) => {
+      setGradeTemplate({
+        name: template.name,
+        description: template.description,
+        grades: [...template.grades]
+      });
+      setSelectedTemplate(template.id);
+      setWizardStep(2);
+    };
+    
+    const addGradeToTemplate = () => {
+      const newGrade = {
+        name: '',
+        code: '',
+        order: gradeTemplate.grades.length + 1,
+        education_level: 'primary',
+        sections: ['A']
+      };
+      setGradeTemplate({
+        ...gradeTemplate,
+        grades: [...gradeTemplate.grades, newGrade]
+      });
+    };
+    
+    const updateGradeInTemplate = (index, field, value) => {
+      const updatedGrades = [...gradeTemplate.grades];
+      updatedGrades[index] = { ...updatedGrades[index], [field]: value };
+      setGradeTemplate({ ...gradeTemplate, grades: updatedGrades });
+    };
+    
+    const removeGradeFromTemplate = (index) => {
+      const updatedGrades = gradeTemplate.grades.filter((_, i) => i !== index);
+      setGradeTemplate({ ...gradeTemplate, grades: updatedGrades });
+    };
+    
+    const addSectionToGrade = (gradeIndex, sectionName) => {
+      const updatedGrades = [...gradeTemplate.grades];
+      updatedGrades[gradeIndex].sections.push(sectionName);
+      setGradeTemplate({ ...gradeTemplate, grades: updatedGrades });
+    };
+    
+    const removeSectionFromGrade = (gradeIndex, sectionIndex) => {
+      const updatedGrades = [...gradeTemplate.grades];
+      updatedGrades[gradeIndex].sections = updatedGrades[gradeIndex].sections.filter((_, i) => i !== sectionIndex);
+      setGradeTemplate({ ...gradeTemplate, grades: updatedGrades });
+    };
+    
+    const applyTemplateToSchools = async () => {
+      try {
+        // Show loading state
+        toast.success('Applying template to selected schools...');
+        
+        for (const schoolId of selectedSchools) {
+          for (const grade of gradeTemplate.grades) {
+            // Create grade level for each school
+            const { data: gradeLevel, error: gradeError } = await supabase
+              .from('grade_levels')
+              .insert([{
+                school_id: schoolId,
+                grade_name: grade.name,
+                grade_code: grade.code,
+                grade_order: grade.order,
+                education_level: grade.education_level,
+                status: 'active'
+              }])
+              .select()
+              .single();
+            
+            if (gradeError) throw gradeError;
+            
+            // Create sections for each grade
+            for (const sectionName of grade.sections) {
+              const { error: sectionError } = await supabase
+                .from('class_sections')
+                .insert([{
+                  grade_level_id: gradeLevel.id,
+                  section_name: `Section ${sectionName}`,
+                  section_code: sectionName,
+                  max_capacity: 30,
+                  class_section_order: grade.sections.indexOf(sectionName) + 1,
+                  status: 'active'
+                }]);
+              
+              if (sectionError) throw sectionError;
+            }
+          }
+        }
+        
+        queryClient.invalidateQueries(['grade-hierarchy']);
+        toast.success(`Template applied to ${selectedSchools.length} school(s) successfully!`);
+        setShowWizard(false);
+        resetWizard();
+      } catch (error) {
+        console.error('Error applying template:', error);
+        toast.error('Failed to apply template. Please try again.');
+      }
+    };
+    
+    const resetWizard = () => {
+      setWizardStep(1);
+      setSelectedTemplate(null);
+      setSelectedSchools([]);
+      setGradeTemplate({ name: '', description: '', grades: [] });
+    };
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Grade Structure Setup Wizard</h2>
+                <p className="text-blue-100 mt-1">Create and apply grade structures to multiple schools at once</p>
+              </div>
+              <button
+                onClick={() => setShowWizard(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Steps Indicator */}
+            <div className="flex items-center justify-between mt-6">
+              {steps.map((step, index) => (
+                <div key={step.id} className="flex items-center flex-1">
+                  <div className={`
+                    flex items-center justify-center w-10 h-10 rounded-full
+                    ${wizardStep >= step.id ? 'bg-white text-blue-600' : 'bg-blue-500 text-blue-200'}
+                  `}>
+                    {wizardStep > step.id ? <Check className="w-5 h-5" /> : step.icon}
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <p className={`text-sm font-medium ${wizardStep >= step.id ? 'text-white' : 'text-blue-200'}`}>
+                      {step.name}
+                    </p>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`
+                      h-1 flex-1 mx-4
+                      ${wizardStep > step.id ? 'bg-white' : 'bg-blue-500'}
+                    `} />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 250px)' }}>
+            {/* Step 1: Choose Template */}
+            {wizardStep === 1 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Choose a Template</h3>
+                  <p className="text-gray-600 mb-6">
+                    Select a pre-defined template or start from scratch to create your grade structure.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Custom Template Option */}
+                  <div
+                    onClick={() => {
+                      setGradeTemplate({ name: 'Custom Structure', description: '', grades: [] });
+                      setWizardStep(2);
+                    }}
+                    className="p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Plus className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Create Custom</h4>
+                        <p className="text-sm text-gray-600">Build your own grade structure from scratch</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Pre-defined Templates */}
+                  {preDefinedTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      onClick={() => handleTemplateSelect(template)}
+                      className={`
+                        p-6 border-2 rounded-lg cursor-pointer transition-all
+                        ${selectedTemplate === template.id 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
+                        }
+                      `}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
+                          <GraduationCap className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{template.name}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                          {template.grades.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1">
+                              {template.grades.slice(0, 3).map((grade, i) => (
+                                <span key={i} className="px-2 py-1 bg-gray-100 text-xs rounded">
+                                  {grade.name}
+                                </span>
+                              ))}
+                              {template.grades.length > 3 && (
+                                <span className="px-2 py-1 bg-gray-100 text-xs rounded">
+                                  +{template.grades.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Step 2: Customize Structure */}
+            {wizardStep === 2 && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Customize Grade Structure</h3>
+                    <p className="text-gray-600 mt-1">
+                      Add, remove, or modify grades and their sections
+                    </p>
+                  </div>
+                  <Button
+                    onClick={addGradeToTemplate}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                    variant="outline"
+                  >
+                    Add Grade Level
+                  </Button>
+                </div>
+                
+                {gradeTemplate.grades.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600">No grades added yet</p>
+                    <p className="text-sm text-gray-500 mt-1">Click "Add Grade Level" to start building your structure</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {gradeTemplate.grades.map((grade, gradeIndex) => (
+                      <div key={gradeIndex} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Grade Name
+                              </label>
+                              <input
+                                type="text"
+                                value={grade.name}
+                                onChange={(e) => updateGradeInTemplate(gradeIndex, 'name', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="e.g., Grade 1"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Code
+                              </label>
+                              <input
+                                type="text"
+                                value={grade.code}
+                                onChange={(e) => updateGradeInTemplate(gradeIndex, 'code', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="e.g., G1"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Order
+                              </label>
+                              <input
+                                type="number"
+                                value={grade.order}
+                                onChange={(e) => updateGradeInTemplate(gradeIndex, 'order', parseInt(e.target.value))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                min="1"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Education Level
+                              </label>
+                              <select
+                                value={grade.education_level}
+                                onChange={(e) => updateGradeInTemplate(gradeIndex, 'education_level', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                <option value="kindergarten">Kindergarten</option>
+                                <option value="primary">Primary</option>
+                                <option value="middle">Middle</option>
+                                <option value="secondary">Secondary</option>
+                                <option value="senior">Senior</option>
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => removeGradeFromTemplate(gradeIndex)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        
+                        {/* Sections */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              Class Sections ({grade.sections.length})
+                            </label>
+                            <button
+                              onClick={() => {
+                                const nextLetter = String.fromCharCode(65 + grade.sections.length);
+                                addSectionToGrade(gradeIndex, nextLetter);
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-700"
+                            >
+                              + Add Section
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {grade.sections.map((section, sectionIndex) => (
+                              <div
+                                key={sectionIndex}
+                                className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-lg"
+                              >
+                                <span className="text-sm">Section {section}</span>
+                                <button
+                                  onClick={() => removeSectionFromGrade(gradeIndex, sectionIndex)}
+                                  className="ml-1 text-gray-500 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Step 3: Select Schools */}
+            {wizardStep === 3 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Select Schools</h3>
+                  <p className="text-gray-600">
+                    Choose which schools should receive this grade structure
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setSelectedSchools(schools.map(s => s.id))}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => setSelectedSchools([])}
+                      className="text-sm text-gray-600 hover:text-gray-700"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                  <span className="text-sm text-gray-600">
+                    {selectedSchools.length} of {schools.length} selected
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {schools.map((school) => (
+                    <div
+                      key={school.id}
+                      onClick={() => {
+                        if (selectedSchools.includes(school.id)) {
+                          setSelectedSchools(selectedSchools.filter(id => id !== school.id));
+                        } else {
+                          setSelectedSchools([...selectedSchools, school.id]);
+                        }
+                      }}
+                      className={`
+                        p-4 border-2 rounded-lg cursor-pointer transition-all
+                        ${selectedSchools.includes(school.id)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                        }
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`
+                          w-5 h-5 rounded border-2 flex items-center justify-center
+                          ${selectedSchools.includes(school.id)
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-gray-300'
+                          }
+                        `}>
+                          {selectedSchools.includes(school.id) && (
+                            <Check className="w-3 h-3 text-white" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">{school.name}</h4>
+                          {school.code && (
+                            <p className="text-sm text-gray-500">{school.code}</p>
+                          )}
+                        </div>
+                        <StatusBadge status={school.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Step 4: Review & Apply */}
+            {wizardStep === 4 && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Review & Apply</h3>
+                  <p className="text-gray-600">
+                    Review your configuration before applying it to the selected schools
+                  </p>
+                </div>
+                
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <GraduationCap className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-blue-600">Grade Levels</p>
+                        <p className="text-2xl font-semibold text-blue-900">
+                          {gradeTemplate.grades.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <Users className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-green-600">Total Sections</p>
+                        <p className="text-2xl font-semibold text-green-900">
+                          {gradeTemplate.grades.reduce((sum, g) => sum + g.sections.length, 0)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <School className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-purple-600">Schools</p>
+                        <p className="text-2xl font-semibold text-purple-900">
+                          {selectedSchools.length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Structure Preview */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Grade Structure Preview</h4>
+                  <div className="space-y-2">
+                    {gradeTemplate.grades.map((grade, index) => (
+                      <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-gray-700">
+                            {grade.name} ({grade.code})
+                          </span>
+                          <span className="px-2 py-1 bg-gray-100 text-xs rounded">
+                            {grade.education_level}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {grade.sections.map((section, i) => (
+                            <span key={i} className="px-2 py-1 bg-blue-100 text-xs text-blue-700 rounded">
+                              Section {section}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Selected Schools */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Selected Schools</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSchools.map(schoolId => {
+                      const school = schools.find(s => s.id === schoolId);
+                      return school ? (
+                        <span key={schoolId} className="px-3 py-1 bg-gray-100 text-sm rounded-lg">
+                          {school.name}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+                
+                {/* Action Summary */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-medium text-amber-900">This action will create:</h4>
+                      <ul className="mt-2 space-y-1 text-sm text-amber-800">
+                        <li>• {gradeTemplate.grades.length * selectedSchools.length} grade levels</li>
+                        <li>• {gradeTemplate.grades.reduce((sum, g) => sum + g.sections.length, 0) * selectedSchools.length} class sections</li>
+                        <li>• All items will be created with "Active" status</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Footer */}
+          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex items-center justify-between">
+            <Button
+              onClick={() => {
+                if (wizardStep > 1) {
+                  setWizardStep(wizardStep - 1);
+                } else {
+                  setShowWizard(false);
+                }
+              }}
+              variant="outline"
+              leftIcon={<ChevronLeft className="w-4 h-4" />}
+            >
+              {wizardStep === 1 ? 'Cancel' : 'Back'}
+            </Button>
+            
+            <div className="flex items-center gap-3">
+              {wizardStep === 4 ? (
+                <Button
+                  onClick={applyTemplateToSchools}
+                  leftIcon={<Check className="w-4 h-4" />}
+                  disabled={selectedSchools.length === 0 || gradeTemplate.grades.length === 0}
+                >
+                  Apply to {selectedSchools.length} School{selectedSchools.length !== 1 ? 's' : ''}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setWizardStep(wizardStep + 1)}
+                  disabled={
+                    (wizardStep === 2 && gradeTemplate.grades.length === 0) ||
+                    (wizardStep === 3 && selectedSchools.length === 0)
+                  }
+                  rightIcon={<ChevronRight className="w-4 h-4" />}
+                >
+                  Next
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Main Render
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Grade Levels Management</h2>
+          <p className="text-gray-600 mt-1">
+            Create and manage grade structures across your schools efficiently
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setShowWizard(true)}
+            leftIcon={<Sparkles className="w-4 h-4" />}
+            variant="primary"
+          >
+            Setup Wizard
+          </Button>
+        </div>
+      </div>
+      
+      {/* View Tabs */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <div className="flex items-center gap-1 p-1">
+            <button
+              onClick={() => setActiveView('templates')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+                ${activeView === 'templates' 
+                  ? 'bg-blue-50 text-blue-600' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
+              `}
+            >
+              <Package className="w-4 h-4" />
+              Templates
+            </button>
+            <button
+              onClick={() => setActiveView('assignments')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+                ${activeView === 'assignments' 
+                  ? 'bg-blue-50 text-blue-600' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
+              `}
+            >
+              <Target className="w-4 h-4" />
+              Assignments
+            </button>
+            <button
+              onClick={() => setActiveView('hierarchy')}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+                ${activeView === 'hierarchy' 
+                  ? 'bg-blue-50 text-blue-600' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
+              `}
+            >
+              <Layers className="w-4 h-4" />
+              Hierarchy View
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-6">
+          {/* Templates View */}
+          {activeView === 'templates' && (
+            <div className="space-y-6">
+              <div className="text-center py-12">
+                <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Grade Structure Templates
+                </h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Create reusable grade structures that can be applied to multiple schools at once
+                </p>
+                <Button
+                  onClick={() => setShowWizard(true)}
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  size="lg"
+                >
+                  Create New Template
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {/* Assignments View */}
+          {activeView === 'assignments' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">School Grade Assignments</h3>
+                <Button
+                  onClick={() => setShowWizard(true)}
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  variant="outline"
+                >
+                  Bulk Assign
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {schools.map((school) => (
+                  <Card key={school.id} className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{school.name}</h4>
+                        <p className="text-sm text-gray-500">{school.code}</p>
+                      </div>
+                      <StatusBadge status={school.status} />
+                    </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                      <span className="text-sm text-gray-600">No grades assigned</span>
+                      <Button
+                        onClick={() => {
+                          setSelectedSchools([school.id]);
+                          setShowWizard(true);
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Assign
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Hierarchy View */}
+          {activeView === 'hierarchy' && (
+            <div className="space-y-6">
+              <div className="text-center py-12">
+                <Layers className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Academic Hierarchy
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  View and manage the complete academic structure
+                </p>
+                <Button
+                  onClick={() => setShowWizard(true)}
+                  leftIcon={<Plus className="w-4 h-4" />}
+                >
+                  Setup Grade Structure
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Wizard Modal */}
+      {showWizard && <GradeTemplateWizard />}
+    </div>
+  );
 }
