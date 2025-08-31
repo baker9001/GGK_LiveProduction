@@ -201,7 +201,7 @@ export function ClassSectionFormItem({
             type="number"
             min="0"
             max="20"
-            value={data.floor.toString()}
+            value={String(data.floor ?? '')}
             onChange={(e) => handleFieldChange('floor', parseInt(e.target.value) || 1)}
             placeholder="1"
             disabled={disabled}
