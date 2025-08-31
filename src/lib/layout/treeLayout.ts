@@ -322,8 +322,72 @@ export function buildTreeFromData(
     });
   }
 
-  // Add year nodes only for expanded branches (if implemented)
-  // Add section nodes only for expanded years (if implemented)
+  // Add grade level nodes for expanded schools (when grade_levels is visible)
+  if (visibleLevels?.has('grade_levels') && companyData?.schools) {
+    companyData.schools.forEach((school: any) => {
+      const schoolId = `school-${school.id}`;
+      const schoolNode = nodes.get(schoolId);
+      
+      // Add grade levels if school is expanded and has grade levels
+      if (schoolNode && expandedNodes.has(schoolId) && school.grade_levels) {
+        const gradeChildren: string[] = [];
+        
+        school.grade_levels.forEach((grade: any) => {
+          const gradeId = `grade-${grade.id}`;
+          gradeChildren.push(gradeId);
+          
+          nodes.set(gradeId, {
+            id: gradeId,
+            type: 'year',
+            parentId: schoolId,
+            children: [],
+            data: grade
+          });
+        });
+        
+        // Add grade children to school node (alongside branches if visible)
+        if (visibleLevels?.has('branches')) {
+          // If branches are also visible, combine children
+          schoolNode.children = [...(schoolNode.children || []), ...gradeChildren];
+        } else {
+          // If only grades are visible, replace children
+          schoolNode.children = gradeChildren;
+        }
+      }
+    });
+  }
+
+  // Add class section nodes for expanded grade levels (when class_sections is visible)
+  if (visibleLevels?.has('class_sections') && companyData?.schools) {
+    companyData.schools.forEach((school: any) => {
+      if (school.grade_levels) {
+        school.grade_levels.forEach((grade: any) => {
+          const gradeId = `grade-${grade.id}`;
+          const gradeNode = nodes.get(gradeId);
+          
+          // Add class sections if grade is expanded and has sections
+          if (gradeNode && expandedNodes.has(gradeId) && grade.class_sections) {
+            const sectionChildren: string[] = [];
+            
+            grade.class_sections.forEach((section: any) => {
+              const sectionId = `section-${section.id}`;
+              sectionChildren.push(sectionId);
+              
+              nodes.set(sectionId, {
+                id: sectionId,
+                type: 'section',
+                parentId: gradeId,
+                children: [],
+                data: section
+              });
+            });
+            
+            gradeNode.children = sectionChildren;
+          }
+        });
+      }
+    });
+  }
 
   return nodes;
 }
