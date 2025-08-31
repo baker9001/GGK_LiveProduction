@@ -356,15 +356,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               id: grade.id,
               grade_name: grade.grade_name,
               grade_code: grade.grade_code,
+              grade_order: grade.grade_order,
+              education_level: grade.education_level,
               status: grade.status,
               class_sections: gradeSections
             };
           });
-
-        // Ensure we have at least one school selected
-        if (!validatedData.school_ids || validatedData.school_ids.length === 0) {
-          throw new Error('At least one school must be selected');
-        }
 
         return {
           id: school.id,
@@ -545,6 +542,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 const { data: gradeLevel, error: gradeError } = await supabase
                   .from('grade_levels')
                   .insert([{
+                    school_id: school.id,  // Include school_id even for branch-level assignment
                     branch_id: branchId,
                     grade_name: grade.name,
                     grade_code: grade.code,
@@ -577,12 +575,13 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               }
             }
           } else {
-            // Apply to school level
+            // Apply to school level (no branch_id)
             for (const grade of bulkGradeTemplate.grades) {
               const { data: gradeLevel, error: gradeError } = await supabase
                 .from('grade_levels')
                 .insert([{
                   school_id: school.id,
+                  branch_id: null,  // Explicitly set to null for school-level
                   grade_name: grade.name,
                   grade_code: grade.code,
                   grade_order: grade.order,
