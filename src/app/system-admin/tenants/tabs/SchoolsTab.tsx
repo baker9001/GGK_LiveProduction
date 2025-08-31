@@ -13,6 +13,7 @@ import { ImageUpload } from '../../../../components/shared/ImageUpload';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
+import { Users, GraduationCap, Grid3x3 } from 'lucide-react';
 
 const schoolSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -42,6 +43,13 @@ type School = {
   notes: string | null;
   status: 'active' | 'inactive';
   created_at: string;
+  // Enhanced statistics
+  branches_count?: number;
+  students_count?: number;
+  teachers_count?: number;
+  admin_users_count?: number;
+  grade_levels_count?: number;
+  class_sections_count?: number;
 };
 
 type Company = {
@@ -227,14 +235,74 @@ export default function SchoolsTab() {
       const regionMap = new Map(regionsData.data?.map(r => [r.id, r.name]) || []);
       const companyMap = new Map(companiesData.data?.map(c => [c.id, { name: c.name, region_id: c.region_id }]) || []);
 
-      return data.map(school => {
+      // Enhanced data fetching with statistics for each school
+      const enhancedSchools = await Promise.all(data.map(async (school) => {
         const company = companyMap.get(school.company_id);
+        
+        // Fetch additional statistics for each school
+        const [branchesCount, studentsCount, teachersCount, adminUsersCount, gradeLevelsCount, classSectionsCount] = await Promise.all([
+          // Count branches
+          supabase
+            .from('branches')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', school.id)
+            .eq('status', 'active'),
+          
+          // Count students
+          supabase
+            .from('students')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', school.id)
+            .eq('is_active', true),
+          
+          // Count teachers
+          supabase
+            .from('teachers')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', school.id)
+            .eq('is_active', true),
+          
+          // Count admin users assigned to this school
+          supabase
+            .from('entity_admin_scope')
+            .select('id', { count: 'exact', head: true })
+            .eq('scope_type', 'school')
+            .eq('scope_id', school.id)
+            .eq('is_active', true),
+          
+          // Count grade levels
+          supabase
+            .from('grade_levels')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', school.id)
+            .eq('status', 'active'),
+          
+          // Count class sections (through grade levels)
+          supabase
+            .from('class_sections')
+            .select(`
+              id,
+              grade_levels!inner(school_id)
+            `, { count: 'exact', head: true })
+            .eq('grade_levels.school_id', school.id)
+            .eq('status', 'active')
+        ]);
+        
         return {
           ...school,
           company_name: company?.name ?? 'Unknown Company',
-          region_name: company ? regionMap.get(company.region_id) ?? 'Unknown Region' : 'Unknown Region'
+          region_name: company ? regionMap.get(company.region_id) ?? 'Unknown Region' : 'Unknown Region',
+          // Enhanced statistics
+          branches_count: branchesCount.count || 0,
+          students_count: studentsCount.count || 0,
+          teachers_count: teachersCount.count || 0,
+          admin_users_count: adminUsersCount.count || 0,
+          grade_levels_count: gradeLevelsCount.count || 0,
+          class_sections_count: classSectionsCount.count || 0
         };
-      });
+      }));
+      
+      return enhancedSchools;
     },
     {
       keepPreviousData: true,
@@ -383,49 +451,91 @@ export default function SchoolsTab() {
     {
       id: 'name',
       header: 'Name',
-      accessorKey: 'name',
-      enableSorting: true,
-    },
-    {
-      id: 'code',
-      header: 'Code',
-      accessorKey: 'code',
       enableSorting: true,
       cell: (row: School) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {row.code || '-'}
-        </span>
-      ),
-    },
-    {
-      id: 'company',
-      header: 'Company',
-      accessorKey: 'company_name',
-      enableSorting: true,
-    },
-    {
-      id: 'region',
-      header: 'Region',
-      accessorKey: 'region_name',
-      enableSorting: true,
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      enableSorting: true,
-      cell: (row: School) => (
-        <StatusBadge status={row.status} />
-      ),
-    },
-    {
-      id: 'created_at',
-      header: 'Created At',
-      accessorKey: 'created_at',
-      enableSorting: true,
-      cell: (row: School) => (
-        <span className="text-sm text-gray-900 dark:text-gray-100">
-          {new Date(row.created_at).toLocaleDateString()}
-        </span>
+        <div className="space-y-3">
+          {/* School Header */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="font-semibold text-gray-900 dark:text-white text-lg">
+                {row.name}
+              </div>
+              {row.code && (
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Code: {row.code}
+                </div>
+              )}
+            </div>
+            <StatusBadge status={row.status} />
+          </div>
+          
+          {/* Enhanced Statistics Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            {/* Branches */}
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center border border-purple-200 dark:border-purple-800">
+              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                {row.branches_count || 0}
+              </div>
+              <div className="text-xs text-purple-700 dark:text-purple-300">Branches</div>
+            </div>
+            
+            {/* Students */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center border border-blue-200 dark:border-blue-800">
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {row.students_count || 0}
+              </div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">Students</div>
+            </div>
+            
+            {/* Teachers */}
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center border border-green-200 dark:border-green-800">
+              <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                {row.teachers_count || 0}
+              </div>
+              <div className="text-xs text-green-700 dark:text-green-300">Teachers</div>
+            </div>
+            
+            {/* Admin Users */}
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 text-center border border-indigo-200 dark:border-indigo-800">
+              <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                {row.admin_users_count || 0}
+              </div>
+              <div className="text-xs text-indigo-700 dark:text-indigo-300 flex items-center justify-center gap-1">
+                <Users className="w-3 h-3" />
+                Users
+              </div>
+            </div>
+            
+            {/* Grade Levels */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 text-center border border-orange-200 dark:border-orange-800">
+              <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                {row.grade_levels_count || 0}
+              </div>
+              <div className="text-xs text-orange-700 dark:text-orange-300 flex items-center justify-center gap-1">
+                <GraduationCap className="w-3 h-3" />
+                Grades
+              </div>
+            </div>
+            
+            {/* Class Sections */}
+            <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-3 text-center border border-teal-200 dark:border-teal-800">
+              <div className="text-lg font-bold text-teal-600 dark:text-teal-400">
+                {row.class_sections_count || 0}
+              </div>
+              <div className="text-xs text-teal-700 dark:text-teal-300 flex items-center justify-center gap-1">
+                <Grid3x3 className="w-3 h-3" />
+                Sections
+              </div>
+            </div>
+          </div>
+          
+          {/* School Details */}
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div>Company: {row.company_name}</div>
+            <div>Region: {row.region_name}</div>
+            <div>Created: {new Date(row.created_at).toLocaleDateString()}</div>
+          </div>
+        </div>
       ),
     },
   ];
@@ -507,6 +617,7 @@ export default function SchoolsTab() {
         }}
         onDelete={handleDelete}
         emptyMessage="No schools found"
+        getRowClassName={() => "!p-0"}
       />
 
       <SlideInForm
