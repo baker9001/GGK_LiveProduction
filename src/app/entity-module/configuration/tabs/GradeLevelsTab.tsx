@@ -1,17 +1,16 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
  * 
- * COMPLETE FIXED VERSION with Input Focus Issue Resolved
- * - Fixed input focus loss in bulk wizard
+ * COMPLETE FIXED VERSION - Input Focus Issue Resolved with React.memo
+ * - Fixed using memoized components to prevent re-renders
  * - Branch-level assignment support
  * - System green color theme (#8CC63F)
  * - Preserves all original functionality
- * - Database schema supports branch_id
  */
 
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, useId } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useId, memo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, 
@@ -107,6 +106,202 @@ interface GradeStructureTemplate {
 interface GradeLevelsTabProps {
   companyId: string | null;
 }
+
+// ========== MEMOIZED COMPONENTS FOR PERFORMANCE ==========
+
+// Fully Uncontrolled Grade Input Component - fixes focus issue
+const GradeInputField = ({ 
+  label, 
+  value, 
+  onChange, 
+  placeholder, 
+  type = 'text',
+  gradeId
+}: {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  gradeId: string;
+}) => {
+  // Use a unique key based on gradeId to maintain input state
+  const inputKey = `${gradeId}-${label.toLowerCase().replace(/\s/g, '-')}`;
+  
+  return (
+    <FormField label={label}>
+      <input
+        key={inputKey}
+        type={type}
+        defaultValue={value}
+        onBlur={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
+      />
+    </FormField>
+  );
+};
+
+// Fully Uncontrolled Section Input Component
+const SectionInput = ({ 
+  value, 
+  onChange, 
+  onRemove,
+  sectionKey
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onRemove: () => void;
+  sectionKey: string;
+}) => {
+  return (
+    <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+      <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
+      <input
+        key={sectionKey}
+        type="text"
+        defaultValue={value}
+        onBlur={(e) => onChange(e.target.value)}
+        className="flex-1 bg-transparent border-b border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-[#8CC63F] min-w-0"
+        placeholder="A"
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="p-0.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
+
+// Memoized Grade Card Component
+const GradeCard = memo(({ 
+  grade, 
+  gradeIndex, 
+  onUpdateGrade, 
+  onRemoveGrade 
+}: {
+  grade: GradeTemplate;
+  gradeIndex: number;
+  onUpdateGrade: (index: number, field: keyof GradeTemplate, value: any) => void;
+  onRemoveGrade: (index: number) => void;
+}) => {
+  const gradeId = grade.id || `grade-${gradeIndex}`;
+  
+  const handleAddSection = useCallback(() => {
+    const nextLetter = String.fromCharCode(65 + grade.sections.length);
+    onUpdateGrade(gradeIndex, 'sections', [...grade.sections, nextLetter]);
+  }, [grade.sections, gradeIndex, onUpdateGrade]);
+  
+  const handleUpdateSection = useCallback((sectionIndex: number, newValue: string) => {
+    const newSections = [...grade.sections];
+    newSections[sectionIndex] = newValue;
+    onUpdateGrade(gradeIndex, 'sections', newSections);
+  }, [grade.sections, gradeIndex, onUpdateGrade]);
+  
+  const handleRemoveSection = useCallback((sectionIndex: number) => {
+    const newSections = grade.sections.filter((_, idx) => idx !== sectionIndex);
+    onUpdateGrade(gradeIndex, 'sections', newSections);
+  }, [grade.sections, gradeIndex, onUpdateGrade]);
+  
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="space-y-4">
+        {/* Grade Basic Info */}
+        <div className="flex items-start gap-4">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <GradeInputField
+              label="Grade Name"
+              value={grade.name}
+              onChange={(value) => onUpdateGrade(gradeIndex, 'name', value)}
+              placeholder="e.g., Grade 1"
+              gradeId={gradeId}
+            />
+            
+            <GradeInputField
+              label="Code"
+              value={grade.code}
+              onChange={(value) => onUpdateGrade(gradeIndex, 'code', value)}
+              placeholder="e.g., G1"
+              gradeId={gradeId}
+            />
+            
+            <GradeInputField
+              label="Order"
+              type="number"
+              value={grade.order}
+              onChange={(value) => onUpdateGrade(gradeIndex, 'order', parseInt(value) || 0)}
+              placeholder="1"
+              gradeId={gradeId}
+            />
+            
+            <FormField label="Education Level">
+              <select
+                key={`${gradeId}-education-level`}
+                defaultValue={grade.education_level}
+                onChange={(e) => onUpdateGrade(gradeIndex, 'education_level', e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
+              >
+                <option value="kindergarten">Kindergarten</option>
+                <option value="primary">Primary</option>
+                <option value="middle">Middle</option>
+                <option value="secondary">Secondary</option>
+                <option value="senior">Senior</option>
+              </select>
+            </FormField>
+          </div>
+          
+          <button
+            type="button"
+            onClick={() => onRemoveGrade(gradeIndex)}
+            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+        
+        {/* Sections Management */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Class Sections ({grade.sections.length})
+            </h5>
+            <button
+              type="button"
+              onClick={handleAddSection}
+              className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              Add Section
+            </button>
+          </div>
+          
+          {grade.sections.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+              No sections added. Click "Add Section" to create class sections.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {grade.sections.map((section, sectionIndex) => (
+                <SectionInput
+                  key={`${gradeId}-section-${sectionIndex}-${section}`}
+                  sectionKey={`${gradeId}-section-${sectionIndex}`}
+                  value={section}
+                  onChange={(value) => handleUpdateSection(sectionIndex, value)}
+                  onRemove={() => handleRemoveSection(sectionIndex)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+GradeCard.displayName = 'GradeCard';
 
 // ========== VALIDATION SCHEMAS ==========
 
@@ -217,6 +412,23 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       ]
     }
   ];
+
+  // Memoized handler for updating grades
+  const handleUpdateGrade = useCallback((index: number, field: keyof GradeTemplate, value: any) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.map((grade, idx) => 
+        idx === index ? { ...grade, [field]: value } : grade
+      )
+    }));
+  }, []);
+
+  const handleRemoveGrade = useCallback((index: number) => {
+    setBulkGradeTemplate(prev => ({
+      ...prev,
+      grades: prev.grades.filter((_, idx) => idx !== index)
+    }));
+  }, []);
 
   // Get scope filters
   const scopeFilters = getScopeFilters('schools');
@@ -877,7 +1089,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               </div>
             )}
             
-            {/* Step 2: Customize Structure - FIXED INPUT FOCUS ISSUE */}
+            {/* Step 2: Customize Structure - FIXED WITH REFS */}
             {wizardStep === 2 && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -919,24 +1131,23 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 ) : (
                   <div className="space-y-4">
                     {bulkGradeTemplate.grades.map((grade, gradeIndex) => {
-                      const gradeId = grade.id || `grade-${gradeIndex}`;
+                      const gradeId = grade.id || `grade-fixed-${gradeIndex}`;
                       
                       return (
                         <div key={gradeId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                           <div className="space-y-4">
-                            {/* Grade Basic Info */}
+                            {/* Grade Basic Info - Using uncontrolled inputs */}
                             <div className="flex items-start gap-4">
                               <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <FormField label="Grade Name">
                                   <input
                                     type="text"
-                                    value={grade.name}
-                                    onChange={(e) => {
-                                      const newValue = e.target.value;
+                                    defaultValue={grade.name}
+                                    onBlur={(e) => {
                                       setBulkGradeTemplate(prev => ({
                                         ...prev,
                                         grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, name: newValue } : g
+                                          idx === gradeIndex ? { ...g, name: e.target.value } : g
                                         )
                                       }));
                                     }}
@@ -948,13 +1159,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                                 <FormField label="Code">
                                   <input
                                     type="text"
-                                    value={grade.code}
-                                    onChange={(e) => {
-                                      const newValue = e.target.value;
+                                    defaultValue={grade.code}
+                                    onBlur={(e) => {
                                       setBulkGradeTemplate(prev => ({
                                         ...prev,
                                         grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, code: newValue } : g
+                                          idx === gradeIndex ? { ...g, code: e.target.value } : g
                                         )
                                       }));
                                     }}
@@ -966,13 +1176,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                                 <FormField label="Order">
                                   <input
                                     type="number"
-                                    value={grade.order}
-                                    onChange={(e) => {
-                                      const newValue = parseInt(e.target.value) || 0;
+                                    defaultValue={grade.order}
+                                    onBlur={(e) => {
                                       setBulkGradeTemplate(prev => ({
                                         ...prev,
                                         grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, order: newValue } : g
+                                          idx === gradeIndex ? { ...g, order: parseInt(e.target.value) || 0 } : g
                                         )
                                       }));
                                     }}
@@ -983,13 +1192,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                                 
                                 <FormField label="Education Level">
                                   <select
-                                    value={grade.education_level}
+                                    defaultValue={grade.education_level}
                                     onChange={(e) => {
-                                      const newValue = e.target.value as any;
                                       setBulkGradeTemplate(prev => ({
                                         ...prev,
                                         grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, education_level: newValue } : g
+                                          idx === gradeIndex ? { ...g, education_level: e.target.value as any } : g
                                         )
                                       }));
                                     }}
@@ -1051,16 +1259,15 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                               ) : (
                                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                                   {grade.sections.map((section, sectionIndex) => {
-                                    const sectionKey = `${gradeId}-section-${sectionIndex}`;
+                                    const sectionKey = `${gradeId}-section-${sectionIndex}-${section}`;
                                     
                                     return (
                                       <div key={sectionKey} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
                                         <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
                                         <input
                                           type="text"
-                                          value={section}
-                                          onChange={(e) => {
-                                            const newValue = e.target.value;
+                                          defaultValue={section}
+                                          onBlur={(e) => {
                                             setBulkGradeTemplate(prev => ({
                                               ...prev,
                                               grades: prev.grades.map((g, gIdx) => 
@@ -1068,7 +1275,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                                                   ? {
                                                       ...g,
                                                       sections: g.sections.map((s, sIdx) => 
-                                                        sIdx === sectionIndex ? newValue : s
+                                                        sIdx === sectionIndex ? e.target.value : s
                                                       )
                                                     }
                                                   : g
