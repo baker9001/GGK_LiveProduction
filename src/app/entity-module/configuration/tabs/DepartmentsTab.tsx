@@ -487,6 +487,33 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Sanitize form data before validation
+    const sanitizedData = {
+      ...formState,
+      parent_department_id: formState.parent_department_id || null,
+      head_id: formState.head_id || null,
+      branch_ids: formState.branch_ids.length > 0 ? formState.branch_ids : undefined,
+      code: formState.code || null,
+      description: formState.description || null
+    };
+
+    // Client-side validation
+    const validation = departmentSchema.safeParse(sanitizedData);
+    
+    if (!validation.success) {
+      const errors: Record<string, string> = {};
+      validation.error.errors.forEach((err) => {
+        if (err.path.length > 0) {
+          errors[err.path[0]] = err.message;
+        }
+      });
+      setFormErrors(errors);
+      return;
+    }
+
+    // Clear any previous errors and proceed with mutation
+    setFormErrors({});
     departmentMutation.mutate(formState);
   };
 
