@@ -1,13 +1,11 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
  * 
- * COMPLETE FIXED VERSION - Duplicate ConfirmationDialog Removed
- * - Fixed JSX tag mismatch error
- * - Removed duplicate ConfirmationDialog section
- * - Fixed input focus issue with React.memo
- * - Branch-level assignment support
- * - System green color theme (#8CC63F)
- * - Preserves all original functionality
+ * FIXED VERSION - Proper Hierarchical Structure with Branches
+ * - Fixed hierarchical data structure to show branches
+ * - School → Branches → Grade Levels → Class Sections
+ * - Properly organized branch-level and school-level grades
+ * - All original functionality preserved
  */
 
 'use client';
@@ -52,6 +50,11 @@ import { CollapsibleSection } from '../../../../components/shared/CollapsibleSec
 import { toast } from '../../../../components/shared/Toast';
 
 // ========== TYPE DEFINITIONS ==========
+
+// Enhanced SchoolNode to include branches
+interface EnhancedSchoolNode extends SchoolNode {
+  branches?: BranchNode[];
+}
 
 // Extended interface to include branch properties
 interface ExtendedGradeLevelNode extends GradeLevelNode {
@@ -502,7 +505,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     }));
   }, [schools, branches]);
 
-  // Fetch hierarchical data
+  // FIXED: Fetch hierarchical data with proper branch structure
   const { 
     data: hierarchyData, 
     isLoading, 
@@ -532,25 +535,27 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         return { schools: [] };
       }
 
+      const schoolIds = schoolsData.map(s => s.id);
+
+      // Fetch branches for these schools
+      const { data: branchData, error: branchError } = await supabase
+        .from('branches')
+        .select('id, name, code, school_id, status')
+        .in('school_id', schoolIds)
+        .order('name');
+      
+      if (branchError) throw branchError;
+      
+      const branchIds = branchData?.map(b => b.id) || [];
+
       // Fetch grade levels
       let gradeLevelsQuery = supabase
         .from('grade_levels')
         .select('id, school_id, branch_id, grade_name, grade_code, grade_order, education_level, status')
         .order('grade_order');
 
-      const schoolIds = schoolsData.map(s => s.id);
-      
-      // Get branch IDs for these schools
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('id')
-        .in('school_id', schoolIds);
-      
-      const branchIds = branchData?.map(b => b.id) || [];
-
       // Get grades that belong to these schools OR their branches
       if (schoolIds.length > 0 || branchIds.length > 0) {
-        // Build the OR condition properly - grades can belong to school (school_id set) OR branch (branch_id set)
         const conditions = [];
         
         if (schoolIds.length > 0) {
@@ -582,21 +587,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         classSectionsData = sectionsData || [];
       }
 
-      // Build hierarchical structure
-      const schools: SchoolNode[] = schoolsData.map(school => {
-        const schoolGrades = (gradeLevelsData || [])
-          .filter(grade => {
-            // Grade belongs directly to this school (school-level grade)
-            if (grade.school_id === school.id) {
-              return true;
-            }
-            // Grade belongs to a branch of this school (branch-level grade)
-            if (grade.branch_id) {
-              const branch = branches.find(b => b.id === grade.branch_id);
-              return branch && branch.school_id === school.id;
-            }
-            return false;
-          })
+      // FIXED: Build proper hierarchical structure with branches
+      const schools: EnhancedSchoolNode[] = schoolsData.map(school => {
+        // Get branches for this school
+        const schoolBranches = (branchData || []).filter(branch => branch.school_id === school.id);
+        
+        // Get school-level grades (grades without branch_id)
+        const schoolLevelGrades = (gradeLevelsData || [])
+          .filter(grade => grade.school_id === school.id && !grade.branch_id)
           .map(grade => {
             const gradeSections = classSectionsData
               .filter(section => section.grade_level_id === grade.id)
@@ -610,7 +608,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 current_students: 0
               }));
 
-            let gradeInfo: any = {
+            return {
               id: grade.id,
               grade_name: grade.grade_name,
               grade_code: grade.grade_code,
@@ -619,25 +617,52 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               status: grade.status,
               class_sections: gradeSections
             };
-
-            // If this is a branch-level grade, add branch information
-            if (grade.branch_id) {
-              const branch = branches.find(b => b.id === grade.branch_id);
-              if (branch) {
-                gradeInfo.branch_name = branch.name;
-                gradeInfo.branch_id = branch.id;
-              }
-            }
-
-            return gradeInfo;
           });
+
+        // Build branch nodes with their grades
+        const branchNodes: BranchNode[] = schoolBranches.map(branch => {
+          const branchGrades = (gradeLevelsData || [])
+            .filter(grade => grade.branch_id === branch.id)
+            .map(grade => {
+              const gradeSections = classSectionsData
+                .filter(section => section.grade_level_id === grade.id)
+                .map(section => ({
+                  id: section.id,
+                  section_name: section.section_name,
+                  section_code: section.section_code,
+                  max_capacity: section.max_capacity,
+                  class_section_order: section.class_section_order,
+                  status: section.status,
+                  current_students: 0
+                }));
+
+              return {
+                id: grade.id,
+                grade_name: grade.grade_name,
+                grade_code: grade.grade_code,
+                grade_order: grade.grade_order,
+                education_level: grade.education_level,
+                status: grade.status,
+                class_sections: gradeSections
+              };
+            });
+
+          return {
+            id: branch.id,
+            name: branch.name,
+            code: branch.code,
+            status: branch.status,
+            grade_levels: branchGrades
+          };
+        });
 
         return {
           id: school.id,
           name: school.name,
           code: school.code,
           status: school.status,
-          grade_levels: schoolGrades
+          grade_levels: schoolLevelGrades, // School-level grades
+          branches: branchNodes // Branches with their grades
         };
       });
 
@@ -650,12 +675,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     }
   );
 
-  // Calculate summary statistics
+  // FIXED: Calculate summary statistics including branches
   const summaryStats = useMemo(() => {
     if (!hierarchyData?.schools) {
       return {
         schools: 0,
         activeSchools: 0,
+        branches: 0,
+        activeBranches: 0,
         gradeLevels: 0,
         activeGradeLevels: 0,
         classSections: 0,
@@ -663,24 +690,56 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       };
     }
 
-    const schools = hierarchyData.schools;
+    const schools = hierarchyData.schools as EnhancedSchoolNode[];
     const activeSchools = schools.filter(s => s.status === 'active').length;
     
-    const gradeLevels = schools.reduce((total, school) => total + (school.grade_levels?.length || 0), 0);
-    const activeGradeLevels = schools.reduce((total, school) => 
-      total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
+    // Count branches
+    const allBranches = schools.reduce((total, school) => 
+      total + (school.branches?.length || 0), 0);
+    const activeBranches = schools.reduce((total, school) => 
+      total + (school.branches?.filter(b => b.status === 'active').length || 0), 0);
     
-    const classSections = schools.reduce((total, school) => 
+    // Count grade levels (school-level + branch-level)
+    const schoolLevelGrades = schools.reduce((total, school) => 
+      total + (school.grade_levels?.length || 0), 0);
+    const branchLevelGrades = schools.reduce((total, school) => 
+      total + (school.branches?.reduce((branchTotal, branch) => 
+        branchTotal + (branch.grade_levels?.length || 0), 0) || 0), 0);
+    const gradeLevels = schoolLevelGrades + branchLevelGrades;
+    
+    // Count active grade levels
+    const activeSchoolLevelGrades = schools.reduce((total, school) => 
+      total + (school.grade_levels?.filter(g => g.status === 'active').length || 0), 0);
+    const activeBranchLevelGrades = schools.reduce((total, school) => 
+      total + (school.branches?.reduce((branchTotal, branch) => 
+        branchTotal + (branch.grade_levels?.filter(g => g.status === 'active').length || 0), 0) || 0), 0);
+    const activeGradeLevels = activeSchoolLevelGrades + activeBranchLevelGrades;
+    
+    // Count class sections
+    const schoolLevelSections = schools.reduce((total, school) => 
       total + (school.grade_levels?.reduce((gradeTotal, grade) => 
         gradeTotal + (grade.class_sections?.length || 0), 0) || 0), 0);
+    const branchLevelSections = schools.reduce((total, school) => 
+      total + (school.branches?.reduce((branchTotal, branch) => 
+        branchTotal + (branch.grade_levels?.reduce((gradeTotal, grade) => 
+          gradeTotal + (grade.class_sections?.length || 0), 0) || 0), 0) || 0), 0);
+    const classSections = schoolLevelSections + branchLevelSections;
     
-    const activeClassSections = schools.reduce((total, school) => 
+    // Count active class sections
+    const activeSchoolLevelSections = schools.reduce((total, school) => 
       total + (school.grade_levels?.reduce((gradeTotal, grade) => 
         gradeTotal + (grade.class_sections?.filter(s => s.status === 'active').length || 0), 0) || 0), 0);
+    const activeBranchLevelSections = schools.reduce((total, school) => 
+      total + (school.branches?.reduce((branchTotal, branch) => 
+        branchTotal + (branch.grade_levels?.reduce((gradeTotal, grade) => 
+          gradeTotal + (grade.class_sections?.filter(s => s.status === 'active').length || 0), 0) || 0), 0) || 0), 0);
+    const activeClassSections = activeSchoolLevelSections + activeBranchLevelSections;
 
     return {
       schools: schools.length,
       activeSchools,
+      branches: allBranches,
+      activeBranches,
       gradeLevels,
       activeGradeLevels,
       classSections,
@@ -1577,7 +1636,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Academic Structure</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Manage schools, grade levels, and class sections in a hierarchical view
+            Manage schools, branches, grade levels, and class sections in a hierarchical view
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1607,8 +1666,8 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
         </div>
       </div>
 
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Summary Statistics - Enhanced to show branches */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1623,6 +1682,23 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             {summaryStats.activeSchools} active
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Branches</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {summaryStats.branches}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {summaryStats.activeBranches} active
           </div>
         </div>
 
