@@ -1639,15 +1639,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             Manage schools, branches, grade levels, and class sections in a hierarchical view
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Bulk Creation Button */}
-          <Button
-            onClick={() => setShowBulkWizard(true)}
-            leftIcon={<Sparkles className="h-4 w-4" />}
-            className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-          >
-            Bulk Create
-          </Button>
           
           {/* Add Grade Level Button */}
           <Button
