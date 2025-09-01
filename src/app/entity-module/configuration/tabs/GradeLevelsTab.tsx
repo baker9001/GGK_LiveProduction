@@ -550,9 +550,20 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       // Get grades that belong to these schools OR their branches
       if (schoolIds.length > 0 || branchIds.length > 0) {
-        gradeLevelsQuery = gradeLevelsQuery.or(
-          `school_id.in.(${schoolIds.join(',')}),branch_id.in.(${branchIds.join(',')})`
-        );
+        // Build the OR condition properly - grades can belong to school (school_id set) OR branch (branch_id set)
+        const conditions = [];
+        
+        if (schoolIds.length > 0) {
+          conditions.push(`school_id.in.(${schoolIds.join(',')})`);
+        }
+        
+        if (branchIds.length > 0) {
+          conditions.push(`branch_id.in.(${branchIds.join(',')})`);
+        }
+        
+        if (conditions.length > 0) {
+          gradeLevelsQuery = gradeLevelsQuery.or(conditions.join(','));
+        }
       }
 
       const { data: gradeLevelsData, error: gradeLevelsError } = await gradeLevelsQuery;
@@ -575,15 +586,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       const schools: SchoolNode[] = schoolsData.map(school => {
         const schoolGrades = (gradeLevelsData || [])
           .filter(grade => {
-            if (grade.school_id === school.id && !grade.branch_id) {
+            // Grade belongs directly to this school (school-level grade)
+            if (grade.school_id === school.id) {
               return true;
             }
+            // Grade belongs to a branch of this school (branch-level grade)
             if (grade.branch_id) {
               const branch = branches.find(b => b.id === grade.branch_id);
               return branch && branch.school_id === school.id;
-            }
-            if (grade.school_id === school.id && grade.branch_id) {
-              return true;
             }
             return false;
           })
@@ -610,6 +620,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               class_sections: gradeSections
             };
 
+            // If this is a branch-level grade, add branch information
             if (grade.branch_id) {
               const branch = branches.find(b => b.id === grade.branch_id);
               if (branch) {
@@ -867,7 +878,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 const { data: existingGrade } = await supabase
                   .from('grade_levels')
                   .select('id')
-                  .eq('school_id', school.id)
                   .eq('branch_id', branchId)
                   .eq('grade_order', grade.order)
                   .maybeSingle();
@@ -877,8 +887,9 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   continue;
                 }
                 
+                // For branch-level grades, only set branch_id (NOT school_id)
                 const gradeData = {
-                  school_id: school.id,
+                  school_id: null,  // Must be null for branch-level grades
                   branch_id: branchId,
                   grade_name: grade.name,
                   grade_code: grade.code || null,
@@ -1782,17 +1793,30 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                 toast.success('Grade level updated successfully');
               } else {
                 // Create new grade
+                // Determine if this is a school-level or branch-level grade
+                const gradeData = formState.branch_id 
+                  ? {
+                      school_id: null,  // Must be null for branch-level grades
+                      branch_id: formState.branch_id,
+                      grade_name: formState.grade_name,
+                      grade_code: formState.grade_code,
+                      grade_order: formState.grade_order,
+                      education_level: formState.education_level,
+                      status: formState.status
+                    }
+                  : {
+                      school_id: contextSchoolId || formState.school_ids[0],
+                      branch_id: null,  // Must be null for school-level grades
+                      grade_name: formState.grade_name,
+                      grade_code: formState.grade_code,
+                      grade_order: formState.grade_order,
+                      education_level: formState.education_level,
+                      status: formState.status
+                    };
+                
                 const { error } = await supabase
                   .from('grade_levels')
-                  .insert({
-                    school_id: contextSchoolId || formState.school_ids[0],
-                    branch_id: formState.branch_id,
-                    grade_name: formState.grade_name,
-                    grade_code: formState.grade_code,
-                    grade_order: formState.grade_order,
-                    education_level: formState.education_level,
-                    status: formState.status
-                  });
+                  .insert(gradeData);
 
                 if (error) throw error;
                 toast.success('Grade level created successfully');
@@ -1855,25 +1879,54 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
             <>
               {/* Grade Level Form Fields */}
               {!editingGradeLevel && (
-                <FormField
-                  id="school_id"
-                  label="School"
-                  required
-                  error={formErrors.school_ids}
-                >
-                  <Select
+                <>
+                  <FormField
                     id="school_id"
-                    options={[
-                      { value: '', label: 'Select school...' },
-                      ...schools.map(school => ({
-                        value: school.id,
-                        label: school.name
-                      }))
-                    ]}
-                    value={contextSchoolId || formState.school_ids[0] || ''}
-                    onChange={(value) => setFormState({ ...formState, school_ids: [value] })}
-                  />
-                </FormField>
+                    label="School"
+                    required
+                    error={formErrors.school_ids}
+                  >
+                    <Select
+                      id="school_id"
+                      options={[
+                        { value: '', label: 'Select school...' },
+                        ...schools.map(school => ({
+                          value: school.id,
+                          label: school.name
+                        }))
+                      ]}
+                      value={contextSchoolId || formState.school_ids[0] || ''}
+                      onChange={(value) => {
+                        setFormState({ ...formState, school_ids: [value], branch_id: undefined });
+                        setContextSchoolId(value);
+                      }}
+                    />
+                  </FormField>
+
+                  {/* Branch Selection - Optional for branch-level grades */}
+                  {(contextSchoolId || formState.school_ids[0]) && (
+                    <FormField
+                      id="branch_id"
+                      label="Branch (Optional - Leave empty for school-level grade)"
+                      error={formErrors.branch_id}
+                    >
+                      <Select
+                        id="branch_id"
+                        options={[
+                          { value: '', label: 'School Level (No Branch)' },
+                          ...branches
+                            .filter(branch => branch.school_id === (contextSchoolId || formState.school_ids[0]))
+                            .map(branch => ({
+                              value: branch.id,
+                              label: branch.name
+                            }))
+                        ]}
+                        value={formState.branch_id || ''}
+                        onChange={(value) => setFormState({ ...formState, branch_id: value || undefined })}
+                      />
+                    </FormField>
+                  )}
+                </>
               )}
 
               <FormField
