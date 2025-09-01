@@ -31,11 +31,19 @@ const departmentSchema = z.object({
   company_id: z.string().uuid(),
   school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   branch_ids: z.array(z.string().uuid()).optional(),
-  parent_department_id: z.string().uuid().optional().nullable(),
+  parent_department_id: z.union([
+    z.string().uuid(),
+    z.literal(''),
+    z.null()
+  ]).optional().transform(val => val === '' ? null : val),
   name: z.string().min(1, 'Department name is required'),
-  code: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-  head_id: z.string().uuid().optional().nullable(),
+  code: z.string().optional().nullable().transform(val => val === '' ? null : val),
+  description: z.string().optional().nullable().transform(val => val === '' ? null : val),
+  head_id: z.union([
+    z.string().uuid(),
+    z.literal(''),
+    z.null()
+  ]).optional().transform(val => val === '' ? null : val),
   status: z.enum(['active', 'inactive'])
 });
 
@@ -89,6 +97,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'details' | 'assignments'>('details');
+  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
   
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -195,35 +204,43 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   );
 
+  // Loading state for edit mode
+  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
+
   // Populate formState when editing
   useEffect(() => {
     if (isFormOpen) {
       if (editingDepartment) {
+        setIsLoadingEditData(true);
         // Load existing department data
         const loadDepartmentData = async () => {
-          // Get associated schools from junction table
-          const { data: schoolLinks } = await supabase
-            .from('department_schools')
-            .select('school_id')
-            .eq('department_id', editingDepartment.id);
+          try {
+            // Get associated schools from junction table
+            const { data: schoolLinks } = await supabase
+              .from('department_schools')
+              .select('school_id')
+              .eq('department_id', editingDepartment.id);
 
-          const assignedSchools = schoolLinks?.map(s => s.school_id) || 
-                                 (editingDepartment.school_id ? [editingDepartment.school_id] : []);
+            const assignedSchools = schoolLinks?.map(s => s.school_id) || 
+                                   (editingDepartment.school_id ? [editingDepartment.school_id] : []);
 
-          // Get associated branches if any
-          const assignedBranches = editingDepartment.branch_id ? [editingDepartment.branch_id] : [];
+            // Get associated branches if any
+            const assignedBranches = editingDepartment.branch_id ? [editingDepartment.branch_id] : [];
 
-          setFormState({
-            company_id: editingDepartment.company_id || companyId || '',
-            school_ids: assignedSchools,
-            branch_ids: assignedBranches,
-            parent_department_id: editingDepartment.parent_department_id || '',
-            name: editingDepartment.name || '',
-            code: editingDepartment.code || '',
-            description: editingDepartment.description || '',
-            head_id: editingDepartment.head_id || '',
-            status: editingDepartment.status || 'active',
-          });
+            setFormState({
+              company_id: editingDepartment.company_id || companyId || '',
+              school_ids: assignedSchools.length > 0 ? assignedSchools : [],
+              branch_ids: assignedBranches,
+              parent_department_id: editingDepartment.parent_department_id || '',
+              name: editingDepartment.name || '',
+              code: editingDepartment.code || '',
+              description: editingDepartment.description || '',
+              head_id: editingDepartment.head_id || '',
+              status: editingDepartment.status || 'active',
+            });
+          } finally {
+            setIsLoadingEditData(false);
+          }
         };
         
         loadDepartmentData();
@@ -240,6 +257,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           head_id: '',
           status: 'active'
         });
+        setIsLoadingEditData(false);
       }
       setFormErrors({});
       setActiveTab('details');
@@ -336,26 +354,25 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Create/update mutation
   const departmentMutation = useMutation(
     async (data: FormState) => {
-      // Sanitize form data before validation
-      const sanitizedData = {
+      // Transform empty strings to null before validation
+      const dataToValidate = {
         ...data,
         parent_department_id: data.parent_department_id || null,
         head_id: data.head_id || null,
-        branch_ids: data.branch_ids.length > 0 ? data.branch_ids : undefined,
         code: data.code || null,
         description: data.description || null
       };
 
-      const validatedData = departmentSchema.parse(sanitizedData);
+      const validatedData = departmentSchema.parse(dataToValidate);
 
       if (editingDepartment) {
         // Update existing department
         const updateData: any = {
           name: validatedData.name,
-          code: validatedData.code || null,
-          description: validatedData.description || null,
-          head_id: validatedData.head_id || null,
-          parent_department_id: validatedData.parent_department_id || null,
+          code: validatedData.code,
+          description: validatedData.description,
+          head_id: validatedData.head_id,
+          parent_department_id: validatedData.parent_department_id,
           status: validatedData.status,
           school_id: validatedData.school_ids[0] || null,
           branch_id: validatedData.branch_ids?.[0] || null
@@ -395,10 +412,10 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           school_id: validatedData.school_ids[0] || null,
           branch_id: validatedData.branch_ids?.[0] || null,
           name: validatedData.name,
-          code: validatedData.code || null,
-          description: validatedData.description || null,
-          head_id: validatedData.head_id || null,
-          parent_department_id: validatedData.parent_department_id || null,
+          code: validatedData.code,
+          description: validatedData.description,
+          head_id: validatedData.head_id,
+          parent_department_id: validatedData.parent_department_id,
           status: validatedData.status
         };
 
@@ -442,6 +459,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             }
           });
           setFormErrors(errors);
+          toast.error('Please fill in all required fields');
         } else {
           console.error('Error saving department:', error);
           setFormErrors({ form: 'Failed to save department. Please try again.' });
@@ -488,32 +506,23 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    // Sanitize form data before validation
-    const sanitizedData = {
-      ...formState,
-      parent_department_id: formState.parent_department_id || null,
-      head_id: formState.head_id || null,
-      branch_ids: formState.branch_ids.length > 0 ? formState.branch_ids : undefined,
-      code: formState.code || null,
-      description: formState.description || null
-    };
-
-    // Client-side validation
-    const validation = departmentSchema.safeParse(sanitizedData);
+    // Basic validation before submission
+    const errors: Record<string, string> = {};
     
-    if (!validation.success) {
-      const errors: Record<string, string> = {};
-      validation.error.errors.forEach((err) => {
-        if (err.path.length > 0) {
-          errors[err.path[0]] = err.message;
-        }
-      });
+    if (!formState.name.trim()) {
+      errors.name = 'Department name is required';
+    }
+    
+    if (formState.school_ids.length === 0) {
+      errors.school_ids = 'Please select at least one school';
+    }
+    
+    if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      toast.error('Please fill in all required fields');
       return;
     }
-
-    // Clear any previous errors and proceed with mutation
-    setFormErrors({});
+    
     departmentMutation.mutate(formState);
   };
 
@@ -727,187 +736,199 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setIsFormOpen(false);
           setEditingDepartment(null);
           setFormErrors({});
+          setIsLoadingEditData(false);
         }}
         onSave={() => {
-          const form = document.querySelector('form');
-          if (form) form.requestSubmit();
+          // Only trigger save if not loading and form is valid
+          if (!isLoadingEditData) {
+            const form = document.getElementById('department-form') as HTMLFormElement;
+            if (form) {
+              form.requestSubmit();
+            }
+          }
         }}
-        loading={departmentMutation.isLoading}
+        loading={departmentMutation.isLoading || isLoadingEditData}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="department-form" onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
               {formErrors.form}
             </div>
           )}
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-            <TabsList>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="assignments">Assignments</TabsTrigger>
-            </TabsList>
+          {isLoadingEditData ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-gray-500">Loading department data...</div>
+            </div>
+          ) : (
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+              <TabsList>
+                <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="assignments">Assignments</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="details" className="space-y-4">
-              <FormField
-                id="name"
-                label="Department Name"
-                required
-                error={formErrors.name}
-              >
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="e.g., Mathematics, Human Resources"
-                  value={formState.name}
-                  onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
-                  leftIcon={<Building2 className="h-5 w-5 text-gray-400" />}
-                />
-              </FormField>
-
-              <FormField
-                id="code"
-                label="Department Code"
-                error={formErrors.code}
-              >
-                <Input
-                  id="code"
-                  name="code"
-                  placeholder="e.g., MATH, HR"
-                  value={formState.code}
-                  onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
-                />
-              </FormField>
-
-              <FormField
-                id="description"
-                label="Description"
-                error={formErrors.description}
-              >
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Enter department description..."
-                  value={formState.description}
-                  onChange={(e) => setFormState(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                />
-              </FormField>
-
-              <FormField
-                id="parent_department"
-                label="Parent Department (Optional)"
-              >
-                <Select
-                  id="parent_department"
-                  options={[
-                    { value: '', label: 'No Parent Department' },
-                    ...departments
-                      .filter(d => d.id !== editingDepartment?.id)
-                      .map(d => ({ value: d.id, label: d.name }))
-                  ]}
-                  value={formState.parent_department_id}
-                  onChange={(e) => setFormState(prev => ({ ...prev, parent_department_id: e.target.value }))}
-                />
-              </FormField>
-
-              <FormField
-                id="status"
-                label="Status"
-                required
-                error={formErrors.status}
-              >
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Department Status
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formState.status === 'active'
-                        ? 'Department is currently active' 
-                        : 'Department is currently inactive'}
-                    </p>
-                  </div>
-                  <ToggleSwitch
-                    checked={formState.status === 'active'}
-                    onChange={(checked) => {
-                      setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
-                    }}
-                    label="Active"
-                  />
-                </div>
-              </FormField>
-            </TabsContent>
-
-            <TabsContent value="assignments" className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-4">
-                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-                  Department Assignment
-                </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  Assign this department to one or more schools. Optionally, you can assign it to specific branches within those schools.
-                </p>
-              </div>
-
-              <FormField
-                id="school_ids"
-                label="Assigned Schools"
-                required
-                error={formErrors.school_ids}
-              >
-                <SearchableMultiSelect
-                  label=""
-                  options={schools.map(school => ({
-                    value: school.id,
-                    label: school.name
-                  }))}
-                  selectedValues={formState.school_ids}
-                  onChange={(values) => {
-                    setFormState(prev => ({ 
-                      ...prev, 
-                      school_ids: values,
-                      branch_ids: [] // Reset branches when schools change
-                    }));
-                  }}
-                  placeholder="Select schools..."
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Select one or more schools where this department operates
-                </p>
-              </FormField>
-
-              {formState.school_ids.length > 0 && branches.length > 0 && (
+              <TabsContent value="details" className="space-y-4">
                 <FormField
-                  id="branch_ids"
-                  label="Assigned Branches (Optional)"
-                  error={formErrors.branch_ids}
+                  id="name"
+                  label="Department Name"
+                  required
+                  error={formErrors.name}
+                >
+                  <Input
+                    id="name"
+                    name="name"
+                    placeholder="e.g., Mathematics, Human Resources"
+                    value={formState.name}
+                    onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
+                    leftIcon={<Building2 className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="code"
+                  label="Department Code"
+                  error={formErrors.code}
+                >
+                  <Input
+                    id="code"
+                    name="code"
+                    placeholder="e.g., MATH, HR"
+                    value={formState.code}
+                    onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
+                  />
+                </FormField>
+
+                <FormField
+                  id="description"
+                  label="Description"
+                  error={formErrors.description}
+                >
+                  <Textarea
+                    id="description"
+                    name="description"
+                    placeholder="Enter department description..."
+                    value={formState.description}
+                    onChange={(e) => setFormState(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                  />
+                </FormField>
+
+                <FormField
+                  id="parent_department"
+                  label="Parent Department (Optional)"
+                >
+                  <Select
+                    id="parent_department"
+                    options={[
+                      { value: '', label: 'No Parent Department' },
+                      ...departments
+                        .filter(d => d.id !== editingDepartment?.id)
+                        .map(d => ({ value: d.id, label: d.name }))
+                    ]}
+                    value={formState.parent_department_id}
+                    onChange={(e) => setFormState(prev => ({ ...prev, parent_department_id: e.target.value }))}
+                  />
+                </FormField>
+
+                <FormField
+                  id="status"
+                  label="Status"
+                  required
+                  error={formErrors.status}
+                >
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Department Status
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {formState.status === 'active'
+                          ? 'Department is currently active' 
+                          : 'Department is currently inactive'}
+                      </p>
+                    </div>
+                    <ToggleSwitch
+                      checked={formState.status === 'active'}
+                      onChange={(checked) => {
+                        setFormState(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
+                      }}
+                      label="Active"
+                    />
+                  </div>
+                </FormField>
+              </TabsContent>
+
+              <TabsContent value="assignments" className="space-y-4">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-4">
+                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                    Department Assignment
+                  </h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Assign this department to one or more schools. Optionally, you can assign it to specific branches within those schools.
+                  </p>
+                </div>
+
+                <FormField
+                  id="school_ids"
+                  label="Assigned Schools"
+                  required
+                  error={formErrors.school_ids}
                 >
                   <SearchableMultiSelect
                     label=""
-                    options={branches.map(branch => ({
-                      value: branch.id,
-                      label: branch.name
+                    options={schools.map(school => ({
+                      value: school.id,
+                      label: school.name
                     }))}
-                    selectedValues={formState.branch_ids}
+                    selectedValues={formState.school_ids}
                     onChange={(values) => {
-                      setFormState(prev => ({ ...prev, branch_ids: values }));
+                      setFormState(prev => ({ 
+                        ...prev, 
+                        school_ids: values,
+                        branch_ids: [] // Reset branches when schools change
+                      }));
                     }}
-                    placeholder="Select branches (optional)..."
+                    placeholder="Select schools..."
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Optionally, limit this department to specific branches within the selected schools
+                    Select one or more schools where this department operates
                   </p>
                 </FormField>
-              )}
 
-              {formState.school_ids.length === 0 && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Please select at least one school to assign this department to.
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                {formState.school_ids.length > 0 && branches.length > 0 && (
+                  <FormField
+                    id="branch_ids"
+                    label="Assigned Branches (Optional)"
+                    error={formErrors.branch_ids}
+                  >
+                    <SearchableMultiSelect
+                      label=""
+                      options={branches.map(branch => ({
+                        value: branch.id,
+                        label: branch.name
+                      }))}
+                      selectedValues={formState.branch_ids}
+                      onChange={(values) => {
+                        setFormState(prev => ({ ...prev, branch_ids: values }));
+                      }}
+                      placeholder="Select branches (optional)..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Optionally, limit this department to specific branches within the selected schools
+                    </p>
+                  </FormField>
+                )}
+
+                {formState.school_ids.length === 0 && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Please select at least one school to assign this department to.
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </form>
       </SlideInForm>
 
