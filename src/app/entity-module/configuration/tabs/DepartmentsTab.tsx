@@ -1,17 +1,18 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/DepartmentsTab.tsx
  * 
- * Departments Management Tab - CORRECTED FOR ACTUAL DATABASE SCHEMA
- * - Fixed to match actual database columns
- * - Uses head_id instead of head_of_department
- * - Proper multi-school support via junction table
+ * Enhanced Departments Management Tab - COMPLETE VERSION
+ * - Maintains 100% database compatibility
+ * - Restores all original UI/UX features
+ * - Stores additional metadata in description field
+ * - Includes department type, contact info, and head name
  */
 
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Building2, Users, Phone, Mail, School, MapPin, Building } from 'lucide-react';
+import { Plus, Building2, Users, Phone, Mail, School, MapPin, Building, Filter } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
@@ -27,6 +28,56 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../components/shared/Tabs';
 import { toast } from '../../../../components/shared/Toast';
 
+// Metadata structure stored in description field
+interface DepartmentMetadata {
+  userDescription?: string;
+  departmentType?: 'academic' | 'administrative' | 'support' | 'operations' | 'other';
+  headName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
+// Helper functions to manage metadata
+const parseMetadata = (description: string | null): { metadata: DepartmentMetadata; userDescription: string } => {
+  if (!description) {
+    return { metadata: {}, userDescription: '' };
+  }
+
+  try {
+    // Check if description contains JSON metadata
+    const metadataMatch = description.match(/<!--METADATA:(.+?)-->/);
+    if (metadataMatch) {
+      const metadata = JSON.parse(metadataMatch[1]);
+      const userDescription = description.replace(/<!--METADATA:.+?-->/, '').trim();
+      return { metadata, userDescription };
+    }
+  } catch (e) {
+    // If parsing fails, treat entire description as user text
+  }
+
+  return { metadata: {}, userDescription: description };
+};
+
+const buildDescription = (userDescription: string, metadata: DepartmentMetadata): string => {
+  const cleanedMetadata = {
+    ...metadata,
+    userDescription: undefined // Remove userDescription from metadata
+  };
+  
+  // Only add metadata if there are actual values
+  const hasMetadata = Object.values(cleanedMetadata).some(v => v);
+  if (!hasMetadata && !userDescription) {
+    return '';
+  }
+  
+  if (!hasMetadata) {
+    return userDescription;
+  }
+  
+  const metadataStr = `<!--METADATA:${JSON.stringify(cleanedMetadata)}-->`;
+  return userDescription ? `${userDescription}\n${metadataStr}` : metadataStr;
+};
+
 const departmentSchema = z.object({
   company_id: z.string().uuid(),
   school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
@@ -38,19 +89,25 @@ const departmentSchema = z.object({
   ]).optional().transform(val => val === '' ? null : val),
   name: z.string().min(1, 'Department name is required'),
   code: z.string().optional().nullable().transform(val => val === '' ? null : val),
-  description: z.string().optional().nullable().transform(val => val === '' ? null : val),
+  description: z.string().optional().nullable(),
   head_id: z.union([
     z.string().uuid(),
     z.literal(''),
     z.null()
   ]).optional().transform(val => val === '' ? null : val),
-  status: z.enum(['active', 'inactive'])
+  status: z.enum(['active', 'inactive']),
+  // Virtual fields for UI
+  department_type: z.enum(['academic', 'administrative', 'support', 'operations', 'other']).optional(),
+  head_name: z.string().optional(),
+  contact_email: z.string().email('Invalid email').optional().or(z.literal('')),
+  contact_phone: z.string().optional()
 });
 
 interface FilterState {
   search: string;
   school_ids: string[];
   branch_ids: string[];
+  department_type: string[];
   status: string[];
 }
 
@@ -64,6 +121,11 @@ interface FormState {
   description: string;
   head_id: string;
   status: 'active' | 'inactive';
+  // Virtual fields
+  department_type: 'academic' | 'administrative' | 'support' | 'operations' | 'other';
+  head_name: string;
+  contact_email: string;
+  contact_phone: string;
 }
 
 type Department = {
@@ -83,6 +145,12 @@ type Department = {
   branches?: { name: string };
   school_names?: string[];
   branch_names?: string[];
+  // Virtual fields from metadata
+  department_type?: 'academic' | 'administrative' | 'support' | 'operations' | 'other';
+  head_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  user_description?: string;
 };
 
 interface DepartmentsTabProps {
@@ -96,13 +164,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'details' | 'assignments'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'assignments' | 'contact'>('details');
   const [isLoadingEditData, setIsLoadingEditData] = useState(false);
   
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     school_ids: [],
     branch_ids: [],
+    department_type: [],
     status: []
   });
 
@@ -116,6 +185,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     description: '',
     head_id: '',
     status: 'active',
+    // Virtual fields
+    department_type: 'academic',
+    head_name: '',
+    contact_email: '',
+    contact_phone: ''
   });
 
   // Confirmation dialog state
@@ -204,15 +278,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   );
 
-  // Loading state for edit mode
-  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
-
   // Populate formState when editing
   useEffect(() => {
     if (isFormOpen) {
       if (editingDepartment) {
         setIsLoadingEditData(true);
-        // Load existing department data
         const loadDepartmentData = async () => {
           try {
             // Get associated schools from junction table
@@ -224,19 +294,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             const assignedSchools = schoolLinks?.map(s => s.school_id) || 
                                    (editingDepartment.school_id ? [editingDepartment.school_id] : []);
 
-            // Get associated branches if any
-            const assignedBranches = editingDepartment.branch_id ? [editingDepartment.branch_id] : [];
+            // Parse metadata from description
+            const { metadata, userDescription } = parseMetadata(editingDepartment.description);
 
             setFormState({
               company_id: editingDepartment.company_id || companyId || '',
               school_ids: assignedSchools.length > 0 ? assignedSchools : [],
-              branch_ids: assignedBranches,
+              branch_ids: editingDepartment.branch_id ? [editingDepartment.branch_id] : [],
               parent_department_id: editingDepartment.parent_department_id || '',
               name: editingDepartment.name || '',
               code: editingDepartment.code || '',
-              description: editingDepartment.description || '',
+              description: userDescription,
               head_id: editingDepartment.head_id || '',
               status: editingDepartment.status || 'active',
+              // Virtual fields from metadata
+              department_type: metadata.departmentType || 'academic',
+              head_name: metadata.headName || '',
+              contact_email: metadata.contactEmail || '',
+              contact_phone: metadata.contactPhone || ''
             });
           } finally {
             setIsLoadingEditData(false);
@@ -255,7 +330,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           code: '',
           description: '',
           head_id: '',
-          status: 'active'
+          status: 'active',
+          department_type: 'academic',
+          head_name: '',
+          contact_email: '',
+          contact_phone: ''
         });
         setIsLoadingEditData(false);
       }
@@ -298,7 +377,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         .order('name');
 
       // Filter by company
-      query = query.or(`company_id.eq.${companyId},school_id.in.(${schools.map(s => s.id).join(',')})`);
+      if (schools.length > 0) {
+        query = query.or(`company_id.eq.${companyId},school_id.in.(${schools.map(s => s.id).join(',')})`);
+      } else {
+        query = query.eq('company_id', companyId);
+      }
 
       // Apply filters
       if (filters.search) {
@@ -320,7 +403,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Process departments and get multi-school assignments
+      // Process departments and extract metadata
       const processedDepartments = await Promise.all((data || []).map(async (dept) => {
         // Get schools from junction table
         const { data: schoolLinks } = await supabase
@@ -333,16 +416,45 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           .filter(s => schoolIds.includes(s.id))
           .map(s => s.name);
 
+        // Parse metadata from description
+        const { metadata, userDescription } = parseMetadata(dept.description);
+
         return {
           ...dept,
           school_name: dept.schools?.name || '-',
           branch_name: dept.branches?.name || '-',
           school_names: schoolNames.length > 0 ? schoolNames : [dept.schools?.name || '-'],
-          department_level: dept.branch_id ? 'Branch' : dept.school_id ? 'School' : 'Company'
+          department_level: dept.branch_id ? 'Branch' : dept.school_id ? 'School' : 'Company',
+          // Virtual fields from metadata
+          department_type: metadata.departmentType,
+          head_name: metadata.headName,
+          contact_email: metadata.contactEmail,
+          contact_phone: metadata.contactPhone,
+          user_description: userDescription
         };
       }));
 
-      return processedDepartments;
+      // Apply department type filter on processed data
+      let filteredDepartments = processedDepartments;
+      if (filters.department_type.length > 0) {
+        filteredDepartments = filteredDepartments.filter(
+          dept => dept.department_type && filters.department_type.includes(dept.department_type)
+        );
+      }
+
+      // Apply head name search
+      if (filters.search) {
+        filteredDepartments = filteredDepartments.filter(dept => {
+          const searchLower = filters.search.toLowerCase();
+          return (
+            dept.name.toLowerCase().includes(searchLower) ||
+            (dept.code && dept.code.toLowerCase().includes(searchLower)) ||
+            (dept.head_name && dept.head_name.toLowerCase().includes(searchLower))
+          );
+        });
+      }
+
+      return filteredDepartments;
     },
     {
       enabled: !!companyId,
@@ -354,13 +466,23 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Create/update mutation
   const departmentMutation = useMutation(
     async (data: FormState) => {
-      // Transform empty strings to null before validation
+      // Build metadata-enriched description
+      const metadata: DepartmentMetadata = {
+        departmentType: data.department_type,
+        headName: data.head_name || undefined,
+        contactEmail: data.contact_email || undefined,
+        contactPhone: data.contact_phone || undefined
+      };
+      
+      const fullDescription = buildDescription(data.description, metadata);
+
+      // Transform data for database
       const dataToValidate = {
         ...data,
+        description: fullDescription,
         parent_department_id: data.parent_department_id || null,
         head_id: data.head_id || null,
-        code: data.code || null,
-        description: data.description || null
+        code: data.code || null
       };
 
       const validatedData = departmentSchema.parse(dataToValidate);
@@ -387,13 +509,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
         // Update junction table for multi-school assignment
         if (validatedData.school_ids.length > 0) {
-          // Delete existing links
           await supabase
             .from('department_schools')
             .delete()
             .eq('department_id', editingDepartment.id);
 
-          // Create new links
           const junctionRecords = validatedData.school_ids.map(schoolId => ({
             department_id: editingDepartment.id,
             school_id: schoolId
@@ -427,7 +547,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
         if (error) throw error;
 
-        // Create junction table entries for multi-school assignment
+        // Create junction table entries
         if (validatedData.school_ids.length > 0) {
           const junctionRecords = validatedData.school_ids.map(schoolId => ({
             department_id: newDepartment.id,
@@ -472,13 +592,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Delete mutation
   const deleteMutation = useMutation(
     async (departments: Department[]) => {
-      // First delete from junction table
       await supabase
         .from('department_schools')
         .delete()
         .in('department_id', departments.map(d => d.id));
 
-      // Then delete departments
       const { error } = await supabase
         .from('departments')
         .delete()
@@ -506,14 +624,17 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    // Basic validation before submission
+    if (isLoadingEditData) {
+      return;
+    }
+    
     const errors: Record<string, string> = {};
     
     if (!formState.name.trim()) {
       errors.name = 'Department name is required';
     }
     
-    if (formState.school_ids.length === 0) {
+    if (!formState.school_ids || formState.school_ids.length === 0) {
       errors.school_ids = 'Please select at least one school';
     }
     
@@ -523,6 +644,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       return;
     }
     
+    setFormErrors({});
     departmentMutation.mutate(formState);
   };
 
@@ -573,16 +695,18 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       ),
     },
     {
-      id: 'level',
-      header: 'Level',
-      accessorKey: 'department_level',
+      id: 'type',
+      header: 'Type',
+      accessorKey: 'department_type',
       enableSorting: true,
       cell: (row: Department) => (
-        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
-          ${row.department_level === 'Company' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-            row.department_level === 'School' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}`}>
-          {row.department_level}
+        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize
+          ${row.department_type === 'academic' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+            row.department_type === 'administrative' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+            row.department_type === 'support' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+            row.department_type === 'operations' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
+            'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'}`}>
+          {row.department_type || 'Other'}
         </span>
       ),
     },
@@ -609,19 +733,35 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       ),
     },
     {
-      id: 'branch',
-      header: 'Branch',
-      accessorKey: 'branch_name',
+      id: 'head',
+      header: 'Head of Department',
+      accessorKey: 'head_name',
       enableSorting: true,
-      cell: (row: Department) => row.branch_name || '-',
+      cell: (row: Department) => (
+        <span className="text-sm text-gray-900 dark:text-gray-100">
+          {row.head_name || '-'}
+        </span>
+      ),
     },
     {
-      id: 'description',
-      header: 'Description',
+      id: 'contact',
+      header: 'Contact',
       cell: (row: Department) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-          {row.description || '-'}
-        </span>
+        <div className="text-sm space-y-1">
+          {row.contact_email && (
+            <div className="flex items-center gap-1">
+              <Mail className="h-3 w-3 text-gray-400" />
+              <span className="text-gray-900 dark:text-gray-100">{row.contact_email}</span>
+            </div>
+          )}
+          {row.contact_phone && (
+            <div className="flex items-center gap-1">
+              <Phone className="h-3 w-3 text-gray-400" />
+              <span className="text-gray-900 dark:text-gray-100">{row.contact_phone}</span>
+            </div>
+          )}
+          {!row.contact_email && !row.contact_phone && '-'}
+        </div>
       ),
     },
     {
@@ -662,15 +802,16 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             search: '',
             school_ids: [],
             branch_ids: [],
+            department_type: [],
             status: []
           });
         }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <FormField id="search" label="Search">
             <Input
               id="search"
-              placeholder="Search by name or code..."
+              placeholder="Search name, code, or head..."
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
             />
@@ -699,6 +840,20 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           />
 
           <SearchableMultiSelect
+            label="Department Type"
+            options={[
+              { value: 'academic', label: 'Academic' },
+              { value: 'administrative', label: 'Administrative' },
+              { value: 'support', label: 'Support' },
+              { value: 'operations', label: 'Operations' },
+              { value: 'other', label: 'Other' }
+            ]}
+            selectedValues={filters.department_type}
+            onChange={(values) => setFilters({ ...filters, department_type: values })}
+            placeholder="Select types..."
+          />
+
+          <SearchableMultiSelect
             label="Status"
             options={[
               { value: 'active', label: 'Active' },
@@ -715,7 +870,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         data={departments}
         columns={columns}
         keyField="id"
-        caption="List of departments with their details and assignments"
+        caption="List of departments with their details and contact information"
         ariaLabel="Departments data table"
         loading={isLoading}
         isFetching={isFetching}
@@ -739,7 +894,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setIsLoadingEditData(false);
         }}
         onSave={() => {
-          // Only trigger save if not loading and form is valid
           if (!isLoadingEditData) {
             const form = document.getElementById('department-form') as HTMLFormElement;
             if (form) {
@@ -765,6 +919,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               <TabsList>
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="assignments">Assignments</TabsTrigger>
+                <TabsTrigger value="contact">Contact</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details" className="space-y-4">
@@ -784,17 +939,55 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   />
                 </FormField>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    id="code"
+                    label="Department Code"
+                    error={formErrors.code}
+                  >
+                    <Input
+                      id="code"
+                      name="code"
+                      placeholder="e.g., MATH, HR"
+                      value={formState.code}
+                      onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
+                    />
+                  </FormField>
+
+                  <FormField
+                    id="department_type"
+                    label="Department Type"
+                    required
+                    error={formErrors.department_type}
+                  >
+                    <Select
+                      id="department_type"
+                      name="department_type"
+                      options={[
+                        { value: 'academic', label: 'Academic' },
+                        { value: 'administrative', label: 'Administrative' },
+                        { value: 'support', label: 'Support' },
+                        { value: 'operations', label: 'Operations' },
+                        { value: 'other', label: 'Other' }
+                      ]}
+                      value={formState.department_type}
+                      onChange={(e) => setFormState(prev => ({ ...prev, department_type: e.target.value as any }))}
+                    />
+                  </FormField>
+                </div>
+
                 <FormField
-                  id="code"
-                  label="Department Code"
-                  error={formErrors.code}
+                  id="head_name"
+                  label="Head of Department"
+                  error={formErrors.head_name}
                 >
                   <Input
-                    id="code"
-                    name="code"
-                    placeholder="e.g., MATH, HR"
-                    value={formState.code}
-                    onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
+                    id="head_name"
+                    name="head_name"
+                    placeholder="Enter name of department head"
+                    value={formState.head_name}
+                    onChange={(e) => setFormState(prev => ({ ...prev, head_name: e.target.value }))}
+                    leftIcon={<Users className="h-5 w-5 text-gray-400" />}
                   />
                 </FormField>
 
@@ -864,7 +1057,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     Department Assignment
                   </h4>
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Assign this department to one or more schools. Optionally, you can assign it to specific branches within those schools.
+                    Assign this department to one or more schools. Optionally, you can assign it to specific branches.
                   </p>
                 </div>
 
@@ -885,7 +1078,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                       setFormState(prev => ({ 
                         ...prev, 
                         school_ids: values,
-                        branch_ids: [] // Reset branches when schools change
+                        branch_ids: []
                       }));
                     }}
                     placeholder="Select schools..."
@@ -914,18 +1107,53 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                       placeholder="Select branches (optional)..."
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Optionally, limit this department to specific branches within the selected schools
+                      Optionally, limit this department to specific branches
                     </p>
                   </FormField>
                 )}
+              </TabsContent>
 
-                {formState.school_ids.length === 0 && (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Please select at least one school to assign this department to.
-                    </p>
-                  </div>
-                )}
+              <TabsContent value="contact" className="space-y-4">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-4">
+                  <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">
+                    Contact Information
+                  </h4>
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    Add contact details for this department.
+                  </p>
+                </div>
+
+                <FormField
+                  id="contact_email"
+                  label="Contact Email"
+                  error={formErrors.contact_email}
+                >
+                  <Input
+                    id="contact_email"
+                    name="contact_email"
+                    type="email"
+                    placeholder="department@school.edu"
+                    value={formState.contact_email}
+                    onChange={(e) => setFormState(prev => ({ ...prev, contact_email: e.target.value }))}
+                    leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="contact_phone"
+                  label="Contact Phone"
+                  error={formErrors.contact_phone}
+                >
+                  <Input
+                    id="contact_phone"
+                    name="contact_phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    value={formState.contact_phone}
+                    onChange={(e) => setFormState(prev => ({ ...prev, contact_phone: e.target.value }))}
+                    leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
               </TabsContent>
             </Tabs>
           )}
