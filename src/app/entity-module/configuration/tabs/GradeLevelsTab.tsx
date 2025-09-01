@@ -1,8 +1,10 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/GradeLevelsTab.tsx
  * 
- * COMPLETE FIXED VERSION - Input Focus Issue Resolved with React.memo
- * - Fixed using memoized components to prevent re-renders
+ * COMPLETE FIXED VERSION - Duplicate ConfirmationDialog Removed
+ * - Fixed JSX tag mismatch error
+ * - Removed duplicate ConfirmationDialog section
+ * - Fixed input focus issue with React.memo
  * - Branch-level assignment support
  * - System green color theme (#8CC63F)
  * - Preserves all original functionality
@@ -50,6 +52,12 @@ import { CollapsibleSection } from '../../../../components/shared/CollapsibleSec
 import { toast } from '../../../../components/shared/Toast';
 
 // ========== TYPE DEFINITIONS ==========
+
+// Extended interface to include branch properties
+interface ExtendedGradeLevelNode extends GradeLevelNode {
+  branch_name?: string;
+  branch_id?: string;
+}
 
 interface Branch {
   id: string;
@@ -1138,7 +1146,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
               </div>
             )}
             
-            {/* Step 2: Customize Structure - FIXED WITH REFS */}
+            {/* Step 2: Customize Structure */}
             {wizardStep === 2 && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -1179,190 +1187,15 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {bulkGradeTemplate.grades.map((grade, gradeIndex) => {
-                      const gradeId = grade.id || `grade-fixed-${gradeIndex}`;
-                      
-                      return (
-                        <div key={gradeId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                          <div className="space-y-4">
-                            {/* Grade Basic Info - Using uncontrolled inputs */}
-                            <div className="flex items-start gap-4">
-                              <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <FormField label="Grade Name">
-                                  <input
-                                    type="text"
-                                    defaultValue={grade.name}
-                                    onBlur={(e) => {
-                                      setBulkGradeTemplate(prev => ({
-                                        ...prev,
-                                        grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, name: e.target.value } : g
-                                        )
-                                      }));
-                                    }}
-                                    placeholder="e.g., Grade 1"
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
-                                  />
-                                </FormField>
-                                
-                                <FormField label="Code">
-                                  <input
-                                    type="text"
-                                    defaultValue={grade.code}
-                                    onBlur={(e) => {
-                                      setBulkGradeTemplate(prev => ({
-                                        ...prev,
-                                        grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, code: e.target.value } : g
-                                        )
-                                      }));
-                                    }}
-                                    placeholder="e.g., G1"
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
-                                  />
-                                </FormField>
-                                
-                                <FormField label="Order">
-                                  <input
-                                    type="number"
-                                    defaultValue={grade.order}
-                                    onBlur={(e) => {
-                                      setBulkGradeTemplate(prev => ({
-                                        ...prev,
-                                        grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, order: parseInt(e.target.value) || 0 } : g
-                                        )
-                                      }));
-                                    }}
-                                    min="1"
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
-                                  />
-                                </FormField>
-                                
-                                <FormField label="Education Level">
-                                  <select
-                                    defaultValue={grade.education_level}
-                                    onChange={(e) => {
-                                      setBulkGradeTemplate(prev => ({
-                                        ...prev,
-                                        grades: prev.grades.map((g, idx) => 
-                                          idx === gradeIndex ? { ...g, education_level: e.target.value as any } : g
-                                        )
-                                      }));
-                                    }}
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-transparent"
-                                  >
-                                    <option value="kindergarten">Kindergarten</option>
-                                    <option value="primary">Primary</option>
-                                    <option value="middle">Middle</option>
-                                    <option value="secondary">Secondary</option>
-                                    <option value="senior">Senior</option>
-                                  </select>
-                                </FormField>
-                              </div>
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setBulkGradeTemplate(prev => ({
-                                    ...prev,
-                                    grades: prev.grades.filter((_, idx) => idx !== gradeIndex)
-                                  }));
-                                }}
-                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                            
-                            {/* Sections Management */}
-                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                  Class Sections ({grade.sections.length})
-                                </h5>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextLetter = String.fromCharCode(65 + grade.sections.length);
-                                    setBulkGradeTemplate(prev => ({
-                                      ...prev,
-                                      grades: prev.grades.map((g, idx) => 
-                                        idx === gradeIndex 
-                                          ? { ...g, sections: [...g.sections, nextLetter] }
-                                          : g
-                                      )
-                                    }));
-                                  }}
-                                  className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center gap-1"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  Add Section
-                                </button>
-                              </div>
-                              
-                              {grade.sections.length === 0 ? (
-                                <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-                                  No sections added. Click "Add Section" to create class sections.
-                                </p>
-                              ) : (
-                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                  {grade.sections.map((section, sectionIndex) => {
-                                    const sectionKey = `${gradeId}-section-${sectionIndex}-${section}`;
-                                    
-                                    return (
-                                      <div key={sectionKey} className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">Section</span>
-                                        <input
-                                          type="text"
-                                          defaultValue={section}
-                                          onBlur={(e) => {
-                                            setBulkGradeTemplate(prev => ({
-                                              ...prev,
-                                              grades: prev.grades.map((g, gIdx) => 
-                                                gIdx === gradeIndex 
-                                                  ? {
-                                                      ...g,
-                                                      sections: g.sections.map((s, sIdx) => 
-                                                        sIdx === sectionIndex ? e.target.value : s
-                                                      )
-                                                    }
-                                                  : g
-                                              )
-                                            }));
-                                          }}
-                                          className="flex-1 bg-transparent border-b border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:border-[#8CC63F] min-w-0"
-                                          placeholder="A"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setBulkGradeTemplate(prev => ({
-                                              ...prev,
-                                              grades: prev.grades.map((g, gIdx) => 
-                                                gIdx === gradeIndex 
-                                                  ? {
-                                                      ...g,
-                                                      sections: g.sections.filter((_, sIdx) => sIdx !== sectionIndex)
-                                                    }
-                                                  : g
-                                              )
-                                            }));
-                                          }}
-                                          className="p-0.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {bulkGradeTemplate.grades.map((grade, gradeIndex) => (
+                      <GradeCard
+                        key={grade.id || `grade-${gradeIndex}`}
+                        grade={grade}
+                        gradeIndex={gradeIndex}
+                        onUpdateGrade={handleUpdateGrade}
+                        onRemoveGrade={handleRemoveGrade}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -1894,294 +1727,6 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       {/* Edit/Add Form for Grades and Sections */}
       <SlideInForm
-        title={
-          formType === 'grade' 
-            ? (editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level')
-            : (editingSection ? 'Edit Section' : 'Create Section')
-        }
-        isOpen={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingGradeLevel(null);
-          setEditingSection(null);
-          setFormErrors({});
-          // Reset form state
-          setFormState({
-            school_ids: [],
-            branch_id: undefined,
-            grade_name: '',
-            grade_code: '',
-            grade_order: 1,
-            education_level: 'primary',
-            status: 'active',
-            class_sections: []
-          });
-        }}
-        onSave={async () => {
-          try {
-            if (formType === 'grade') {
-              // Validate grade form
-              const result = gradeLevelSchema.safeParse(formState);
-              if (!result.success) {
-                const errors: Record<string, string> = {};
-                result.error.issues.forEach(issue => {
-                  errors[issue.path[0]] = issue.message;
-                });
-                setFormErrors(errors);
-                return;
-              }
-
-              // Save grade level
-              if (editingGradeLevel) {
-                // Update existing grade
-                const { error } = await supabase
-                  .from('grade_levels')
-                  .update({
-                    grade_name: formState.grade_name,
-                    grade_code: formState.grade_code,
-                    grade_order: formState.grade_order,
-                    education_level: formState.education_level,
-                    status: formState.status
-                  })
-                  .eq('id', editingGradeLevel.id);
-
-                if (error) throw error;
-                toast.success('Grade level updated successfully');
-              } else {
-                // Create new grade
-                const { error } = await supabase
-                  .from('grade_levels')
-                  .insert({
-                    school_id: contextSchoolId || formState.school_ids[0],
-                    branch_id: formState.branch_id,
-                    grade_name: formState.grade_name,
-                    grade_code: formState.grade_code,
-                    grade_order: formState.grade_order,
-                    education_level: formState.education_level,
-                    status: formState.status
-                  });
-
-                if (error) throw error;
-                toast.success('Grade level created successfully');
-              }
-            } else {
-              // Save section
-              if (editingSection) {
-                // Update existing section
-                const { error } = await supabase
-                  .from('class_sections')
-                  .update({
-                    section_name: formState.grade_name, // Using grade_name field for section name
-                    section_code: formState.grade_code,
-                    max_capacity: 30,
-                    class_section_order: formState.grade_order,
-                    status: formState.status
-                  })
-                  .eq('id', editingSection.id);
-
-                if (error) throw error;
-                toast.success('Section updated successfully');
-              } else {
-                // Create new section
-                const { error } = await supabase
-                  .from('class_sections')
-                  .insert({
-                    grade_level_id: contextGradeId,
-                    section_name: formState.grade_name,
-                    section_code: formState.grade_code,
-                    max_capacity: 30,
-                    class_section_order: formState.grade_order,
-                    status: formState.status
-                  });
-
-                if (error) throw error;
-                toast.success('Section created successfully');
-              }
-            }
-
-            // Refresh data
-            await queryClient.invalidateQueries(['grade-hierarchy']);
-            setIsFormOpen(false);
-            setEditingGradeLevel(null);
-            setEditingSection(null);
-          } catch (error) {
-            console.error('Error saving:', error);
-            toast.error('Failed to save. Please try again.');
-          }
-        }}
-        loading={false}
-      >
-        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
-              {formErrors.form}
-            </div>
-          )}
-
-          {formType === 'grade' ? (
-            <>
-              {/* Grade Level Form Fields */}
-              {!editingGradeLevel && (
-                <FormField
-                  id="school_id"
-                  label="School"
-                  required
-                  error={formErrors.school_ids}
-                >
-                  <Select
-                    id="school_id"
-                    options={[
-                      { value: '', label: 'Select school...' },
-                      ...schools.map(school => ({
-                        value: school.id,
-                        label: school.name
-                      }))
-                    ]}
-                    value={contextSchoolId || formState.school_ids[0] || ''}
-                    onChange={(value) => setFormState({ ...formState, school_ids: [value] })}
-                  />
-                </FormField>
-              )}
-
-              <FormField
-                id="grade_name"
-                label="Grade Name"
-                required
-                error={formErrors.grade_name}
-              >
-                <Input
-                  id="grade_name"
-                  placeholder="e.g., Grade 1, Year 7"
-                  value={formState.grade_name}
-                  onChange={(e) => setFormState({ ...formState, grade_name: e.target.value })}
-                />
-              </FormField>
-
-              <FormField
-                id="grade_code"
-                label="Grade Code"
-                error={formErrors.grade_code}
-              >
-                <Input
-                  id="grade_code"
-                  placeholder="e.g., G1, Y7"
-                  value={formState.grade_code}
-                  onChange={(e) => setFormState({ ...formState, grade_code: e.target.value })}
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  id="grade_order"
-                  label="Grade Order"
-                  required
-                  error={formErrors.grade_order}
-                >
-                  <Input
-                    id="grade_order"
-                    type="number"
-                    min="1"
-                    value={formState.grade_order.toString()}
-                    onChange={(e) => setFormState({ ...formState, grade_order: parseInt(e.target.value) || 1 })}
-                  />
-                </FormField>
-
-                <FormField
-                  id="education_level"
-                  label="Education Level"
-                  required
-                  error={formErrors.education_level}
-                >
-                  <Select
-                    id="education_level"
-                    options={[
-                      { value: 'kindergarten', label: 'Kindergarten' },
-                      { value: 'primary', label: 'Primary' },
-                      { value: 'middle', label: 'Middle' },
-                      { value: 'secondary', label: 'Secondary' },
-                      { value: 'senior', label: 'Senior' }
-                    ]}
-                    value={formState.education_level}
-                    onChange={(value) => setFormState({ ...formState, education_level: value as any })}
-                  />
-                </FormField>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Section Form Fields */}
-              <FormField
-                id="section_name"
-                label="Section Name"
-                required
-                error={formErrors.grade_name}
-              >
-                <Input
-                  id="section_name"
-                  placeholder="e.g., Section A"
-                  value={formState.grade_name}
-                  onChange={(e) => setFormState({ ...formState, grade_name: e.target.value })}
-                />
-              </FormField>
-
-              <FormField
-                id="section_code"
-                label="Section Code"
-                error={formErrors.grade_code}
-              >
-                <Input
-                  id="section_code"
-                  placeholder="e.g., A, B, C"
-                  value={formState.grade_code}
-                  onChange={(e) => setFormState({ ...formState, grade_code: e.target.value })}
-                />
-              </FormField>
-
-              <FormField
-                id="section_order"
-                label="Section Order"
-                required
-                error={formErrors.grade_order}
-              >
-                <Input
-                  id="section_order"
-                  type="number"
-                  min="1"
-                  value={formState.grade_order.toString()}
-                  onChange={(e) => setFormState({ ...formState, grade_order: parseInt(e.target.value) || 1 })}
-                />
-              </FormField>
-            </>
-          )}
-
-          <FormField
-            id="status"
-            label="Status"
-            required
-          >
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {formType === 'grade' ? 'Grade Level' : 'Section'} Status
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {formState.status === 'active'
-                    ? `${formType === 'grade' ? 'Grade level' : 'Section'} is currently active` 
-                    : `${formType === 'grade' ? 'Grade level' : 'Section'} is currently inactive`}
-                </p>
-              </div>
-              <ToggleSwitch
-                checked={formState.status === 'active'}
-                onChange={(checked) => setFormState({ ...formState, status: checked ? 'active' : 'inactive' })}
-                label="Active"
-              />
-            </div>
-          </FormField>
-        </form>
-      </SlideInForm>
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
         title={
           formType === 'grade' 
             ? (editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level')
