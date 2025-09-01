@@ -336,7 +336,17 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Create/update mutation
   const departmentMutation = useMutation(
     async (data: FormState) => {
-      const validatedData = departmentSchema.parse(data);
+      // Sanitize form data before validation
+      const sanitizedData = {
+        ...data,
+        parent_department_id: data.parent_department_id || null,
+        head_id: data.head_id || null,
+        branch_ids: data.branch_ids.length > 0 ? data.branch_ids : undefined,
+        code: data.code || null,
+        description: data.description || null
+      };
+
+      const validatedData = departmentSchema.parse(sanitizedData);
 
       if (editingDepartment) {
         // Update existing department
