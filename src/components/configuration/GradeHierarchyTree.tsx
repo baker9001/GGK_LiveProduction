@@ -11,7 +11,7 @@
  * - Action buttons for each node type
  * - Responsive design
  * 
- * FIXED: Made entire cards clickable for expand/collapse
+ * COMPLETE FIXED VERSION with proper expand/collapse functionality
  */
 
 import React, { useState } from 'react';
@@ -238,7 +238,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onAddGrade(schoolId, branch.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddGrade(schoolId, branch.id);
+                }}
                 leftIcon={<Plus className="h-3 w-3" />}
               >
                 Add Grade
@@ -248,7 +251,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => onEditBranch(branch, schoolId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditBranch(branch, schoolId);
+                }}
                 leftIcon={<Edit className="h-3 w-3" />}
               >
                 Edit
@@ -258,7 +264,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => onDeleteBranch(branch, schoolId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteBranch(branch, schoolId);
+                }}
                 leftIcon={<Trash2 className="h-3 w-3" />}
                 className="text-red-600 hover:text-red-700 dark:text-red-400"
               >
@@ -291,7 +300,7 @@ export function GradeHierarchyTree({
   const SchoolNode: React.FC<{ school: SchoolNode }> = ({ school }) => {
     const isExpanded = expandedSchools.has(school.id);
     const hasBranches = (school.branches?.length || 0) > 0;
-    const hasSchoolLevelGrades = school.grade_levels.filter(g => !g.branch_id).length > 0;
+    const hasSchoolLevelGrades = school.grade_levels.length > 0;
     const hasContent = hasBranches || hasSchoolLevelGrades;
 
     // Calculate totals
@@ -359,21 +368,14 @@ export function GradeHierarchyTree({
 
           {/* School Actions - Stop propagation to prevent expand/collapse */}
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {onAddBranch && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onAddBranch(school.id)}
-                leftIcon={<Plus className="h-3 w-3" />}
-              >
-                Add Branch
-              </Button>
-            )}
             {onAddGrade && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onAddGrade(school.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddGrade(school.id);
+                }}
                 leftIcon={<Plus className="h-3 w-3" />}
               >
                 Add Grade
@@ -383,7 +385,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => onEditSchool(school)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditSchool(school);
+                }}
                 leftIcon={<Edit className="h-3 w-3" />}
               >
                 Edit
@@ -413,7 +418,6 @@ export function GradeHierarchyTree({
                   </div>
                 )}
                 {school.grade_levels
-                  .filter(g => !g.branch_id)
                   .sort((a, b) => a.grade_order - b.grade_order)
                   .map(grade => (
                     <GradeNode 
@@ -498,7 +502,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onAddSection(grade.id, schoolId, branchId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddSection(grade.id, schoolId, branchId);
+                }}
                 leftIcon={<Plus className="h-3 w-3" />}
               >
                 Add Section
@@ -508,7 +515,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => onEditGrade(grade, schoolId, branchId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditGrade(grade, schoolId, branchId);
+                }}
                 leftIcon={<Edit className="h-3 w-3" />}
               >
                 Edit
@@ -518,7 +528,10 @@ export function GradeHierarchyTree({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => onDeleteGrade(grade, schoolId, branchId)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteGrade(grade, schoolId, branchId);
+                }}
                 leftIcon={<Trash2 className="h-3 w-3" />}
                 className="text-red-600 hover:text-red-700 dark:text-red-400"
               >
