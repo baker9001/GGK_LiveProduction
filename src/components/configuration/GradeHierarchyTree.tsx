@@ -6,12 +6,12 @@
  * 
  * Features:
  * - Branch-level organization
- * - Collapsible/expandable nodes
+ * - Collapsible/expandable nodes (click card to expand/collapse)
  * - Status indicators
  * - Action buttons for each node type
  * - Responsive design
  * 
- * UPDATED: Added branches as intermediate level in hierarchy
+ * FIXED: Made entire cards clickable for expand/collapse
  */
 
 import React, { useState } from 'react';
@@ -179,15 +179,19 @@ export function GradeHierarchyTree({
 
     return (
       <div className="mb-2">
-        {/* Branch Header */}
-        <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
-          <div className="flex items-center gap-3 flex-1">
-            {/* Expand/Collapse Button */}
-            <button
-              onClick={() => toggleBranch(branch.id)}
-              className="p-1 hover:bg-purple-200 dark:hover:bg-purple-800 rounded transition-colors"
-              disabled={!hasGrades}
-            >
+        {/* Branch Header - CLICKABLE */}
+        <div 
+          className={cn(
+            "flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 transition-colors",
+            hasGrades && "cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
+          )}
+        >
+          <div 
+            className="flex items-center gap-3 flex-1"
+            onClick={() => hasGrades && toggleBranch(branch.id)}
+          >
+            {/* Expand/Collapse Icon */}
+            <div className="p-1">
               {hasGrades ? (
                 isExpanded ? (
                   <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -197,7 +201,7 @@ export function GradeHierarchyTree({
               ) : (
                 <div className="h-4 w-4" />
               )}
-            </button>
+            </div>
 
             {/* Branch Icon and Info */}
             <div className="flex items-center gap-3 flex-1">
@@ -228,8 +232,8 @@ export function GradeHierarchyTree({
             </div>
           </div>
 
-          {/* Branch Actions */}
-          <div className="flex items-center gap-2">
+          {/* Branch Actions - Stop propagation to prevent expand/collapse */}
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             {onAddGrade && (
               <Button
                 size="sm"
@@ -297,15 +301,19 @@ export function GradeHierarchyTree({
 
     return (
       <div className="mb-2">
-        {/* School Header */}
-        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-3 flex-1">
-            {/* Expand/Collapse Button */}
-            <button
-              onClick={() => toggleSchool(school.id)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-              disabled={!hasContent}
-            >
+        {/* School Header - CLICKABLE */}
+        <div 
+          className={cn(
+            "flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 transition-shadow",
+            hasContent && "cursor-pointer hover:shadow-md"
+          )}
+        >
+          <div 
+            className="flex items-center gap-3 flex-1"
+            onClick={() => hasContent && toggleSchool(school.id)}
+          >
+            {/* Expand/Collapse Icon */}
+            <div className="p-1">
               {hasContent ? (
                 isExpanded ? (
                   <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -315,7 +323,7 @@ export function GradeHierarchyTree({
               ) : (
                 <div className="h-4 w-4" />
               )}
-            </button>
+            </div>
 
             {/* School Icon and Info */}
             <div className="flex items-center gap-3 flex-1">
@@ -349,8 +357,8 @@ export function GradeHierarchyTree({
             </div>
           </div>
 
-          {/* School Actions */}
-          <div className="flex items-center gap-2">
+          {/* School Actions - Stop propagation to prevent expand/collapse */}
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             {onAddBranch && (
               <Button
                 size="sm"
@@ -433,15 +441,19 @@ export function GradeHierarchyTree({
 
     return (
       <div className="mb-2">
-        {/* Grade Header */}
-        <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors">
-          <div className="flex items-center gap-3 flex-1">
-            {/* Expand/Collapse Button */}
-            <button
-              onClick={() => toggleGrade(grade.id)}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-              disabled={!hasSections}
-            >
+        {/* Grade Header - CLICKABLE */}
+        <div 
+          className={cn(
+            "flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors",
+            hasSections && "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/50"
+          )}
+        >
+          <div 
+            className="flex items-center gap-3 flex-1"
+            onClick={() => hasSections && toggleGrade(grade.id)}
+          >
+            {/* Expand/Collapse Icon */}
+            <div className="p-1">
               {hasSections ? (
                 isExpanded ? (
                   <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -451,7 +463,7 @@ export function GradeHierarchyTree({
               ) : (
                 <div className="h-4 w-4" />
               )}
-            </button>
+            </div>
 
             {/* Grade Icon and Info */}
             <div className="flex items-center gap-3 flex-1">
@@ -480,8 +492,8 @@ export function GradeHierarchyTree({
             </div>
           </div>
 
-          {/* Grade Actions */}
-          <div className="flex items-center gap-1">
+          {/* Grade Actions - Stop propagation to prevent expand/collapse */}
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {onAddSection && (
               <Button
                 size="sm"
