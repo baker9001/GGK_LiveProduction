@@ -361,6 +361,15 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [itemsToDelete, setItemsToDelete] = useState<{ type: 'grade' | 'section'; items: any[] }>({ type: 'grade', items: [] });
 
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('Form Open State Changed:', isFormOpen);
+  }, [isFormOpen]);
+
+  useEffect(() => {
+    console.log('Confirm Dialog State Changed:', isConfirmDialogOpen);
+  }, [isConfirmDialogOpen]);
+
   // ===== BULK CREATION STATE =====
   const [showBulkWizard, setShowBulkWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -672,47 +681,107 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
   // ===== HANDLER FUNCTIONS =====
   
   const handleAddGrade = (schoolId: string) => {
+    console.log('handleAddGrade called with schoolId:', schoolId);
     setFormType('grade');
     setContextSchoolId(schoolId);
     setEditingGradeLevel(null);
     setEditingSection(null);
+    setFormState({
+      school_ids: [schoolId],
+      branch_id: undefined,
+      grade_name: '',
+      grade_code: '',
+      grade_order: 1,
+      education_level: 'primary',
+      status: 'active',
+      class_sections: []
+    });
     setIsFormOpen(true);
   };
 
   const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
+    console.log('handleEditGrade called:', { grade, schoolId });
+    
+    // Type cast to ExtendedGradeLevelNode to access branch properties
+    const extendedGrade = grade as ExtendedGradeLevelNode;
+    
     setFormType('grade');
     setContextSchoolId(schoolId);
-    setEditingGradeLevel(grade);
+    setEditingGradeLevel(extendedGrade);
     setEditingSection(null);
+    
+    // Populate form with existing grade data
+    setFormState({
+      school_ids: [schoolId],
+      branch_id: extendedGrade.branch_id,
+      grade_name: extendedGrade.grade_name,
+      grade_code: extendedGrade.grade_code || '',
+      grade_order: extendedGrade.grade_order,
+      education_level: (extendedGrade.education_level || 'primary') as any,
+      status: extendedGrade.status,
+      class_sections: []
+    });
+    
     setIsFormOpen(true);
+    console.log('Form should be open now, isFormOpen:', true);
   };
 
   const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
+    console.log('handleDeleteGrade called:', { grade, schoolId });
     setItemsToDelete({ type: 'grade', items: [grade] });
     setIsConfirmDialogOpen(true);
+    console.log('Delete dialog should be open now');
   };
 
   const handleAddSection = (gradeId: string, schoolId: string) => {
+    console.log('handleAddSection called:', { gradeId, schoolId });
     setFormType('section');
     setContextSchoolId(schoolId);
     setContextGradeId(gradeId);
     setEditingGradeLevel(null);
     setEditingSection(null);
+    setFormState({
+      school_ids: [schoolId],
+      branch_id: undefined,
+      grade_name: '',
+      grade_code: '',
+      grade_order: 1,
+      education_level: 'primary',
+      status: 'active',
+      class_sections: []
+    });
     setIsFormOpen(true);
   };
 
   const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    console.log('handleEditSection called:', { section, gradeId, schoolId });
     setFormType('section');
     setContextSchoolId(schoolId);
     setContextGradeId(gradeId);
     setEditingGradeLevel(null);
     setEditingSection(section);
+    
+    // Populate form with existing section data
+    setFormState({
+      school_ids: [schoolId],
+      branch_id: undefined,
+      grade_name: section.section_name,
+      grade_code: section.section_code || '',
+      grade_order: section.class_section_order,
+      education_level: 'primary',
+      status: section.status,
+      class_sections: []
+    });
+    
     setIsFormOpen(true);
+    console.log('Section form should be open now');
   };
 
   const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+    console.log('handleDeleteSection called:', { section, gradeId, schoolId });
     setItemsToDelete({ type: 'section', items: [section] });
     setIsConfirmDialogOpen(true);
+    console.log('Delete section dialog should be open now');
   };
 
   // ===== BULK CREATION WIZARD COMPONENT =====
@@ -1842,6 +1911,359 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
       {/* Bulk Creation Wizard */}
       {showBulkWizard && <BulkCreationWizard />}
+
+      {/* DEBUG: Test if state is working */}
+      {isFormOpen && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white p-4 z-[100] rounded shadow-lg">
+          <p>FORM IS OPEN - Type: {formType}</p>
+          <button onClick={() => setIsFormOpen(false)} className="mt-2 bg-white text-red-500 px-2 py-1 rounded">
+            Close Test
+          </button>
+        </div>
+      )}
+      
+      {isConfirmDialogOpen && (
+        <div className="fixed top-20 right-4 bg-blue-500 text-white p-4 z-[100] rounded shadow-lg">
+          <p>DELETE DIALOG IS OPEN</p>
+          <button onClick={() => setIsConfirmDialogOpen(false)} className="mt-2 bg-white text-blue-500 px-2 py-1 rounded">
+            Close Test
+          </button>
+        </div>
+      )}
+
+      {/* Edit/Add Form for Grades and Sections */}
+      <SlideInForm
+        title={
+          formType === 'grade' 
+            ? (editingGradeLevel ? 'Edit Grade Level' : 'Create Grade Level')
+            : (editingSection ? 'Edit Section' : 'Create Section')
+        }
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingGradeLevel(null);
+          setEditingSection(null);
+          setFormErrors({});
+          // Reset form state
+          setFormState({
+            school_ids: [],
+            branch_id: undefined,
+            grade_name: '',
+            grade_code: '',
+            grade_order: 1,
+            education_level: 'primary',
+            status: 'active',
+            class_sections: []
+          });
+        }}
+        onSave={async () => {
+          try {
+            if (formType === 'grade') {
+              // Validate grade form
+              const result = gradeLevelSchema.safeParse(formState);
+              if (!result.success) {
+                const errors: Record<string, string> = {};
+                result.error.issues.forEach(issue => {
+                  errors[issue.path[0]] = issue.message;
+                });
+                setFormErrors(errors);
+                return;
+              }
+
+              // Save grade level
+              if (editingGradeLevel) {
+                // Update existing grade
+                const { error } = await supabase
+                  .from('grade_levels')
+                  .update({
+                    grade_name: formState.grade_name,
+                    grade_code: formState.grade_code,
+                    grade_order: formState.grade_order,
+                    education_level: formState.education_level,
+                    status: formState.status
+                  })
+                  .eq('id', editingGradeLevel.id);
+
+                if (error) throw error;
+                toast.success('Grade level updated successfully');
+              } else {
+                // Create new grade
+                const { error } = await supabase
+                  .from('grade_levels')
+                  .insert({
+                    school_id: contextSchoolId || formState.school_ids[0],
+                    branch_id: formState.branch_id,
+                    grade_name: formState.grade_name,
+                    grade_code: formState.grade_code,
+                    grade_order: formState.grade_order,
+                    education_level: formState.education_level,
+                    status: formState.status
+                  });
+
+                if (error) throw error;
+                toast.success('Grade level created successfully');
+              }
+            } else {
+              // Save section
+              if (editingSection) {
+                // Update existing section
+                const { error } = await supabase
+                  .from('class_sections')
+                  .update({
+                    section_name: formState.grade_name, // Using grade_name field for section name
+                    section_code: formState.grade_code,
+                    max_capacity: 30,
+                    class_section_order: formState.grade_order,
+                    status: formState.status
+                  })
+                  .eq('id', editingSection.id);
+
+                if (error) throw error;
+                toast.success('Section updated successfully');
+              } else {
+                // Create new section
+                const { error } = await supabase
+                  .from('class_sections')
+                  .insert({
+                    grade_level_id: contextGradeId,
+                    section_name: formState.grade_name,
+                    section_code: formState.grade_code,
+                    max_capacity: 30,
+                    class_section_order: formState.grade_order,
+                    status: formState.status
+                  });
+
+                if (error) throw error;
+                toast.success('Section created successfully');
+              }
+            }
+
+            // Refresh data
+            await queryClient.invalidateQueries(['grade-hierarchy']);
+            setIsFormOpen(false);
+            setEditingGradeLevel(null);
+            setEditingSection(null);
+          } catch (error) {
+            console.error('Error saving:', error);
+            toast.error('Failed to save. Please try again.');
+          }
+        }}
+        loading={false}
+      >
+        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {formErrors.form}
+            </div>
+          )}
+
+          {formType === 'grade' ? (
+            <>
+              {/* Grade Level Form Fields */}
+              {!editingGradeLevel && (
+                <FormField
+                  id="school_id"
+                  label="School"
+                  required
+                  error={formErrors.school_ids}
+                >
+                  <Select
+                    id="school_id"
+                    options={[
+                      { value: '', label: 'Select school...' },
+                      ...schools.map(school => ({
+                        value: school.id,
+                        label: school.name
+                      }))
+                    ]}
+                    value={contextSchoolId || formState.school_ids[0] || ''}
+                    onChange={(value) => setFormState({ ...formState, school_ids: [value] })}
+                  />
+                </FormField>
+              )}
+
+              <FormField
+                id="grade_name"
+                label="Grade Name"
+                required
+                error={formErrors.grade_name}
+              >
+                <Input
+                  id="grade_name"
+                  placeholder="e.g., Grade 1, Year 7"
+                  value={formState.grade_name}
+                  onChange={(e) => setFormState({ ...formState, grade_name: e.target.value })}
+                />
+              </FormField>
+
+              <FormField
+                id="grade_code"
+                label="Grade Code"
+                error={formErrors.grade_code}
+              >
+                <Input
+                  id="grade_code"
+                  placeholder="e.g., G1, Y7"
+                  value={formState.grade_code}
+                  onChange={(e) => setFormState({ ...formState, grade_code: e.target.value })}
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  id="grade_order"
+                  label="Grade Order"
+                  required
+                  error={formErrors.grade_order}
+                >
+                  <Input
+                    id="grade_order"
+                    type="number"
+                    min="1"
+                    value={formState.grade_order.toString()}
+                    onChange={(e) => setFormState({ ...formState, grade_order: parseInt(e.target.value) || 1 })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="education_level"
+                  label="Education Level"
+                  required
+                  error={formErrors.education_level}
+                >
+                  <Select
+                    id="education_level"
+                    options={[
+                      { value: 'kindergarten', label: 'Kindergarten' },
+                      { value: 'primary', label: 'Primary' },
+                      { value: 'middle', label: 'Middle' },
+                      { value: 'secondary', label: 'Secondary' },
+                      { value: 'senior', label: 'Senior' }
+                    ]}
+                    value={formState.education_level}
+                    onChange={(value) => setFormState({ ...formState, education_level: value as any })}
+                  />
+                </FormField>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Section Form Fields */}
+              <FormField
+                id="section_name"
+                label="Section Name"
+                required
+                error={formErrors.grade_name}
+              >
+                <Input
+                  id="section_name"
+                  placeholder="e.g., Section A"
+                  value={formState.grade_name}
+                  onChange={(e) => setFormState({ ...formState, grade_name: e.target.value })}
+                />
+              </FormField>
+
+              <FormField
+                id="section_code"
+                label="Section Code"
+                error={formErrors.grade_code}
+              >
+                <Input
+                  id="section_code"
+                  placeholder="e.g., A, B, C"
+                  value={formState.grade_code}
+                  onChange={(e) => setFormState({ ...formState, grade_code: e.target.value })}
+                />
+              </FormField>
+
+              <FormField
+                id="section_order"
+                label="Section Order"
+                required
+                error={formErrors.grade_order}
+              >
+                <Input
+                  id="section_order"
+                  type="number"
+                  min="1"
+                  value={formState.grade_order.toString()}
+                  onChange={(e) => setFormState({ ...formState, grade_order: parseInt(e.target.value) || 1 })}
+                />
+              </FormField>
+            </>
+          )}
+
+          <FormField
+            id="status"
+            label="Status"
+            required
+          >
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {formType === 'grade' ? 'Grade Level' : 'Section'} Status
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {formState.status === 'active'
+                    ? `${formType === 'grade' ? 'Grade level' : 'Section'} is currently active` 
+                    : `${formType === 'grade' ? 'Grade level' : 'Section'} is currently inactive`}
+                </p>
+              </div>
+              <ToggleSwitch
+                checked={formState.status === 'active'}
+                onChange={(checked) => setFormState({ ...formState, status: checked ? 'active' : 'inactive' })}
+                label="Active"
+              />
+            </div>
+          </FormField>
+        </form>
+      </SlideInForm>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={isConfirmDialogOpen}
+        onConfirm={async () => {
+          try {
+            if (itemsToDelete.type === 'grade') {
+              for (const grade of itemsToDelete.items) {
+                const { error } = await supabase
+                  .from('grade_levels')
+                  .delete()
+                  .eq('id', grade.id);
+                
+                if (error) throw error;
+              }
+              toast.success('Grade level(s) deleted successfully');
+            } else {
+              for (const section of itemsToDelete.items) {
+                const { error } = await supabase
+                  .from('class_sections')
+                  .delete()
+                  .eq('id', section.id);
+                
+                if (error) throw error;
+              }
+              toast.success('Section(s) deleted successfully');
+            }
+            
+            // Refresh data
+            await queryClient.invalidateQueries(['grade-hierarchy']);
+            setIsConfirmDialogOpen(false);
+            setItemsToDelete({ type: 'grade', items: [] });
+          } catch (error) {
+            console.error('Error deleting:', error);
+            toast.error('Failed to delete. Please try again.');
+          }
+        }}
+        onCancel={() => {
+          setIsConfirmDialogOpen(false);
+          setItemsToDelete({ type: 'grade', items: [] });
+        }}
+        title={`Delete ${itemsToDelete.type === 'grade' ? 'Grade Level' : 'Section'}?`}
+        message={`Are you sure you want to delete ${itemsToDelete.items.length} ${itemsToDelete.type}${itemsToDelete.items.length > 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmText="Delete"
+        confirmVariant="destructive"
+      />
     </div>
   );
 }
