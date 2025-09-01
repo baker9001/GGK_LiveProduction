@@ -38,7 +38,7 @@ import {
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
-import { GradeHierarchyTree, type HierarchyData, type SchoolNode, type GradeLevelNode, type ClassSectionNode } from '../../../../components/configuration/GradeHierarchyTree';
+import { GradeHierarchyTree, type HierarchyData, type SchoolNode, type BranchNode, type GradeLevelNode, type ClassSectionNode } from '../../../../components/configuration/GradeHierarchyTree';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
@@ -690,14 +690,14 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
 
   // ===== HANDLER FUNCTIONS =====
   
-  const handleAddGrade = (schoolId: string) => {
+  const handleAddGrade = (schoolId: string, branchId?: string) => {
     setFormType('grade');
     setContextSchoolId(schoolId);
     setEditingGradeLevel(null);
     setEditingSection(null);
     setFormState({
       school_ids: [schoolId],
-      branch_id: undefined,
+      branch_id: branchId,
       grade_name: '',
       grade_code: '',
       grade_order: 1,
@@ -708,7 +708,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setIsFormOpen(true);
   };
 
-  const handleEditGrade = (grade: GradeLevelNode, schoolId: string) => {
+  const handleEditGrade = (grade: GradeLevelNode, schoolId: string, branchId?: string) => {
     // Type cast to ExtendedGradeLevelNode to access branch properties
     const extendedGrade = grade as ExtendedGradeLevelNode;
     
@@ -720,7 +720,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     // Populate form with existing grade data
     setFormState({
       school_ids: [schoolId],
-      branch_id: extendedGrade.branch_id,
+      branch_id: branchId || extendedGrade.branch_id,
       grade_name: extendedGrade.grade_name,
       grade_code: extendedGrade.grade_code || '',
       grade_order: extendedGrade.grade_order,
@@ -732,12 +732,12 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setIsFormOpen(true);
   };
 
-  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string) => {
+  const handleDeleteGrade = (grade: GradeLevelNode, schoolId: string, branchId?: string) => {
     setItemsToDelete({ type: 'grade', items: [grade] });
     setIsConfirmDialogOpen(true);
   };
 
-  const handleAddSection = (gradeId: string, schoolId: string) => {
+  const handleAddSection = (gradeId: string, schoolId: string, branchId?: string) => {
     setFormType('section');
     setContextSchoolId(schoolId);
     setContextGradeId(gradeId);
@@ -745,7 +745,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setEditingSection(null);
     setFormState({
       school_ids: [schoolId],
-      branch_id: undefined,
+      branch_id: branchId,
       grade_name: '',
       grade_code: '',
       grade_order: 1,
@@ -756,7 +756,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setIsFormOpen(true);
   };
 
-  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+  const handleEditSection = (section: ClassSectionNode, gradeId: string, schoolId: string, branchId?: string) => {
     setFormType('section');
     setContextSchoolId(schoolId);
     setContextGradeId(gradeId);
@@ -766,7 +766,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     // Populate form with existing section data
     setFormState({
       school_ids: [schoolId],
-      branch_id: undefined,
+      branch_id: branchId,
       grade_name: section.section_name,
       grade_code: section.section_code || '',
       grade_order: section.class_section_order,
@@ -778,7 +778,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
     setIsFormOpen(true);
   };
 
-  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string) => {
+  const handleDeleteSection = (section: ClassSectionNode, gradeId: string, schoolId: string, branchId?: string) => {
     setItemsToDelete({ type: 'section', items: [section] });
     setIsConfirmDialogOpen(true);
   };
