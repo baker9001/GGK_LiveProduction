@@ -886,6 +886,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
       } else {
         setSelectedSchoolsWithBranches(prev => [...prev, { 
           ...school, 
+          isExpanded: true, // Set expanded by default
           selectedBranches: assignmentLevel === 'branch' ? school.branches.map(b => b.id) : []
         }]);
       }
@@ -1323,6 +1324,7 @@ export function GradeLevelsTab({ companyId }: GradeLevelsTabProps) {
                       onClick={() => {
                         const allSchoolsWithBranches = schoolsWithBranches.map(school => ({
                           ...school,
+                          isExpanded: true, // Set expanded by default for all
                           selectedBranches: assignmentLevel === 'branch' ? school.branches.map(b => b.id) : []
                         }));
                         setSelectedSchoolsWithBranches(allSchoolsWithBranches);
