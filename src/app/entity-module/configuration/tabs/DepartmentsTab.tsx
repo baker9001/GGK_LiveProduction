@@ -1,23 +1,17 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/DepartmentsTab.tsx
  * 
- * Enhanced Departments Management Tab
- * - Fixed database schema alignment issues
- * - Added hierarchical department support (Company/School/Branch levels)
- * - Implemented proper multi-school/branch assignment
- * - Enhanced UI/UX with visual hierarchy
- * - Added department templates and bulk operations
+ * Departments Management Tab - CORRECTED FOR ACTUAL DATABASE SCHEMA
+ * - Fixed to match actual database columns
+ * - Uses head_id instead of head_of_department
+ * - Proper multi-school support via junction table
  */
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Plus, Building2, Users, Phone, Mail, ChevronRight, 
-  ChevronDown, Layers, School, MapPin, Copy, FileText,
-  Building, GitBranch
-} from 'lucide-react';
+import { Plus, Building2, Users, Phone, Mail, School, MapPin, Building } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '../../../../lib/supabase';
 import { useAccessControl } from '../../../../hooks/useAccessControl';
@@ -33,120 +27,54 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../components/shared/Tabs';
 import { toast } from '../../../../components/shared/Toast';
 
-// Enhanced schema with proper database fields
 const departmentSchema = z.object({
   company_id: z.string().uuid(),
-  department_level: z.enum(['company', 'school', 'branch']),
-  school_ids: z.array(z.string().uuid()).optional(),
+  school_ids: z.array(z.string().uuid()).min(1, 'Please select at least one school'),
   branch_ids: z.array(z.string().uuid()).optional(),
-  parent_department_id: z.string().uuid().optional(),
+  parent_department_id: z.string().uuid().optional().nullable(),
   name: z.string().min(1, 'Department name is required'),
-  code: z.string().optional(),
-  department_type: z.enum(['academic', 'administrative', 'support', 'operations', 'other']),
-  head_id: z.string().uuid().optional(),
-  head_of_department: z.string().optional(),
-  head_email: z.string().email('Invalid email').optional().or(z.literal('')),
-  contact_email: z.string().email('Invalid email').optional().or(z.literal('')),
-  contact_phone: z.string().optional(),
-  description: z.string().optional(),
+  code: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  head_id: z.string().uuid().optional().nullable(),
   status: z.enum(['active', 'inactive'])
-}).refine(data => {
-  // Validation: School-level requires at least one school
-  if (data.department_level === 'school' && (!data.school_ids || data.school_ids.length === 0)) {
-    return false;
-  }
-  // Validation: Branch-level requires at least one branch
-  if (data.department_level === 'branch' && (!data.branch_ids || data.branch_ids.length === 0)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Please select at least one school/branch for the selected level",
-  path: ["department_level"]
 });
-
-// Department Templates
-const DEPARTMENT_TEMPLATES = {
-  academic: [
-    { name: 'Mathematics', code: 'MATH', type: 'academic' },
-    { name: 'Science', code: 'SCI', type: 'academic' },
-    { name: 'English', code: 'ENG', type: 'academic' },
-    { name: 'Social Studies', code: 'SOC', type: 'academic' },
-    { name: 'Physical Education', code: 'PE', type: 'academic' },
-    { name: 'Arts', code: 'ART', type: 'academic' },
-    { name: 'Music', code: 'MUS', type: 'academic' },
-    { name: 'Computer Science', code: 'CS', type: 'academic' }
-  ],
-  administrative: [
-    { name: 'Administration', code: 'ADMIN', type: 'administrative' },
-    { name: 'Human Resources', code: 'HR', type: 'administrative' },
-    { name: 'Finance', code: 'FIN', type: 'administrative' },
-    { name: 'Admissions', code: 'ADM', type: 'administrative' },
-    { name: 'Student Affairs', code: 'SA', type: 'administrative' }
-  ],
-  support: [
-    { name: 'IT Support', code: 'IT', type: 'support' },
-    { name: 'Facilities', code: 'FAC', type: 'support' },
-    { name: 'Library', code: 'LIB', type: 'support' },
-    { name: 'Counseling', code: 'COUN', type: 'support' },
-    { name: 'Health Services', code: 'HEALTH', type: 'support' }
-  ]
-};
 
 interface FilterState {
   search: string;
-  department_level: string[];
   school_ids: string[];
   branch_ids: string[];
-  department_type: string[];
   status: string[];
-  show_hierarchy: boolean;
 }
 
 interface FormState {
   company_id: string;
-  department_level: 'company' | 'school' | 'branch';
   school_ids: string[];
   branch_ids: string[];
   parent_department_id: string;
   name: string;
   code: string;
-  department_type: 'academic' | 'administrative' | 'support' | 'operations' | 'other';
-  head_id: string;
-  head_of_department: string;
-  head_email: string;
-  contact_email: string;
-  contact_phone: string;
   description: string;
+  head_id: string;
   status: 'active' | 'inactive';
 }
 
 type Department = {
   id: string;
-  company_id: string;
+  company_id: string | null;
   school_id: string | null;
   branch_id: string | null;
   parent_department_id: string | null;
   name: string;
   code: string | null;
-  department_type: string;
-  head_id: string | null;
-  head_of_department: string | null;
-  head_email: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
   description: string | null;
+  head_id: string | null;
   status: 'active' | 'inactive';
   created_at: string;
   // Joined data
-  school_name?: string;
-  branch_name?: string;
-  parent_department_name?: string;
-  // Multi-assignment data
-  assigned_schools?: string[];
-  assigned_branches?: string[];
-  department_level?: 'company' | 'school' | 'branch';
-  children?: Department[];
+  schools?: { name: string };
+  branches?: { name: string };
+  school_names?: string[];
+  branch_names?: string[];
 };
 
 interface DepartmentsTabProps {
@@ -160,35 +88,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'details' | 'assignments' | 'hierarchy'>('details');
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'details' | 'assignments'>('details');
   
   const [filters, setFilters] = useState<FilterState>({
     search: '',
-    department_level: [],
     school_ids: [],
     branch_ids: [],
-    department_type: [],
-    status: [],
-    show_hierarchy: false
+    status: []
   });
 
   const [formState, setFormState] = useState<FormState>({
     company_id: companyId || '',
-    department_level: 'school',
     school_ids: [],
     branch_ids: [],
     parent_department_id: '',
     name: '',
     code: '',
-    department_type: 'academic',
-    head_id: '',
-    head_of_department: '',
-    head_email: '',
-    contact_email: '',
-    contact_phone: '',
     description: '',
+    head_id: '',
     status: 'active',
   });
 
@@ -227,15 +144,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   );
 
-  // Fetch branches for dropdown
+  // Fetch branches based on selected schools
   const { data: branches = [] } = useQuery(
-    ['branches-for-departments', companyId, formState.school_ids],
+    ['branches-for-departments', formState.school_ids],
     async () => {
-      if (!companyId || formState.school_ids.length === 0) return [];
+      if (formState.school_ids.length === 0) return [];
 
       const { data, error } = await supabase
         .from('branches')
-        .select('id, name, school_id, status')
+        .select('id, name, school_id')
         .in('school_id', formState.school_ids)
         .eq('status', 'active')
         .order('name');
@@ -244,14 +161,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       return data || [];
     },
     {
-      enabled: !!companyId && formState.school_ids.length > 0,
+      enabled: formState.school_ids.length > 0,
       staleTime: 5 * 60 * 1000,
     }
   );
 
   // Fetch all branches for filtering
   const { data: allBranches = [] } = useQuery(
-    ['all-branches-for-departments', companyId],
+    ['all-branches-for-filtering', companyId],
     async () => {
       if (!companyId) return [];
 
@@ -293,29 +210,18 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           const assignedSchools = schoolLinks?.map(s => s.school_id) || 
                                  (editingDepartment.school_id ? [editingDepartment.school_id] : []);
 
-          // Determine department level
-          let level: 'company' | 'school' | 'branch' = 'company';
-          if (editingDepartment.branch_id) {
-            level = 'branch';
-          } else if (editingDepartment.school_id) {
-            level = 'school';
-          }
+          // Get associated branches if any
+          const assignedBranches = editingDepartment.branch_id ? [editingDepartment.branch_id] : [];
 
           setFormState({
             company_id: editingDepartment.company_id || companyId || '',
-            department_level: level,
             school_ids: assignedSchools,
-            branch_ids: editingDepartment.branch_id ? [editingDepartment.branch_id] : [],
+            branch_ids: assignedBranches,
             parent_department_id: editingDepartment.parent_department_id || '',
             name: editingDepartment.name || '',
             code: editingDepartment.code || '',
-            department_type: (editingDepartment.department_type as any) || 'academic',
-            head_id: editingDepartment.head_id || '',
-            head_of_department: editingDepartment.head_of_department || '',
-            head_email: editingDepartment.head_email || '',
-            contact_email: editingDepartment.contact_email || '',
-            contact_phone: editingDepartment.contact_phone || '',
             description: editingDepartment.description || '',
+            head_id: editingDepartment.head_id || '',
             status: editingDepartment.status || 'active',
           });
         };
@@ -325,19 +231,13 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         // Reset for new department
         setFormState({
           company_id: companyId || '',
-          department_level: 'school',
           school_ids: [],
           branch_ids: [],
           parent_department_id: '',
           name: '',
           code: '',
-          department_type: 'academic',
-          head_id: '',
-          head_of_department: '',
-          head_email: '',
-          contact_email: '',
-          contact_phone: '',
           description: '',
+          head_id: '',
           status: 'active'
         });
       }
@@ -346,7 +246,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   }, [isFormOpen, editingDepartment, companyId]);
 
-  // Fetch departments with hierarchy
+  // Fetch departments
   const { 
     data: departments = [], 
     isLoading, 
@@ -356,7 +256,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     async () => {
       if (!companyId) return [];
 
-      // Base query with all necessary joins
       let query = supabase
         .from('departments')
         .select(`
@@ -367,12 +266,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           parent_department_id,
           name,
           code,
-          head_id,
-          head_of_department,
-          head_email,
-          contact_email,
-          contact_phone,
           description,
+          head_id,
           status,
           created_at,
           schools!departments_school_id_fkey (
@@ -382,12 +277,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             name
           )
         `)
-        .eq('company_id', companyId)
         .order('name');
+
+      // Filter by company
+      query = query.or(`company_id.eq.${companyId},school_id.in.(${schools.map(s => s.id).join(',')})`);
 
       // Apply filters
       if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%,head_of_department.ilike.%${filters.search}%`);
+        query = query.or(`name.ilike.%${filters.search}%,code.ilike.%${filters.search}%`);
       }
 
       if (filters.school_ids.length > 0) {
@@ -405,35 +302,27 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Process and add metadata
-      const processedDepartments = (data || []).map(dept => {
-        // Determine department level
-        let level: 'company' | 'school' | 'branch' = 'company';
-        if (dept.branch_id) {
-          level = 'branch';
-        } else if (dept.school_id) {
-          level = 'school';
-        }
+      // Process departments and get multi-school assignments
+      const processedDepartments = await Promise.all((data || []).map(async (dept) => {
+        // Get schools from junction table
+        const { data: schoolLinks } = await supabase
+          .from('department_schools')
+          .select('school_id')
+          .eq('department_id', dept.id);
 
-        // Determine department type from description or default
-        let deptType = 'academic';
-        if (dept.description?.includes('administrative')) deptType = 'administrative';
-        else if (dept.description?.includes('support')) deptType = 'support';
-        else if (dept.description?.includes('operations')) deptType = 'operations';
+        const schoolIds = schoolLinks?.map(s => s.school_id) || [];
+        const schoolNames = schools
+          .filter(s => schoolIds.includes(s.id))
+          .map(s => s.name);
 
         return {
           ...dept,
           school_name: dept.schools?.name || '-',
           branch_name: dept.branches?.name || '-',
-          department_level: level,
-          department_type: deptType
+          school_names: schoolNames.length > 0 ? schoolNames : [dept.schools?.name || '-'],
+          department_level: dept.branch_id ? 'Branch' : dept.school_id ? 'School' : 'Company'
         };
-      });
-
-      // Build hierarchy if requested
-      if (filters.show_hierarchy) {
-        return buildDepartmentHierarchy(processedDepartments);
-      }
+      }));
 
       return processedDepartments;
     },
@@ -444,35 +333,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   );
 
-  // Build hierarchical structure
-  const buildDepartmentHierarchy = (depts: Department[]): Department[] => {
-    const departmentMap = new Map<string, Department>();
-    const rootDepartments: Department[] = [];
-
-    // First pass: create map
-    depts.forEach(dept => {
-      departmentMap.set(dept.id, { ...dept, children: [] });
-    });
-
-    // Second pass: build hierarchy
-    depts.forEach(dept => {
-      const currentDept = departmentMap.get(dept.id)!;
-      if (dept.parent_department_id) {
-        const parentDept = departmentMap.get(dept.parent_department_id);
-        if (parentDept) {
-          parentDept.children = parentDept.children || [];
-          parentDept.children.push(currentDept);
-        } else {
-          rootDepartments.push(currentDept);
-        }
-      } else {
-        rootDepartments.push(currentDept);
-      }
-    });
-
-    return rootDepartments;
-  };
-
   // Create/update mutation
   const departmentMutation = useMutation(
     async (data: FormState) => {
@@ -482,30 +342,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         // Update existing department
         const updateData: any = {
           name: validatedData.name,
-          code: validatedData.code,
-          parent_department_id: validatedData.parent_department_id || null,
+          code: validatedData.code || null,
+          description: validatedData.description || null,
           head_id: validatedData.head_id || null,
-          head_of_department: validatedData.head_of_department,
-          head_email: validatedData.head_email,
-          contact_email: validatedData.contact_email,
-          contact_phone: validatedData.contact_phone,
-          description: validatedData.description,
-          status: validatedData.status
+          parent_department_id: validatedData.parent_department_id || null,
+          status: validatedData.status,
+          school_id: validatedData.school_ids[0] || null,
+          branch_id: validatedData.branch_ids?.[0] || null
         };
-
-        // Update level-specific fields
-        if (validatedData.department_level === 'company') {
-          updateData.school_id = null;
-          updateData.branch_id = null;
-        } else if (validatedData.department_level === 'school') {
-          updateData.school_id = validatedData.school_ids?.[0] || null;
-          updateData.branch_id = null;
-        } else if (validatedData.department_level === 'branch') {
-          updateData.branch_id = validatedData.branch_ids?.[0] || null;
-          // Get school_id from branch
-          const branch = branches.find(b => b.id === updateData.branch_id);
-          updateData.school_id = branch?.school_id || null;
-        }
 
         const { error } = await supabase
           .from('departments')
@@ -515,7 +359,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         if (error) throw error;
 
         // Update junction table for multi-school assignment
-        if (validatedData.department_level === 'school' && validatedData.school_ids && validatedData.school_ids.length > 1) {
+        if (validatedData.school_ids.length > 0) {
           // Delete existing links
           await supabase
             .from('department_schools')
@@ -538,31 +382,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         // Create new department
         const insertData: any = {
           company_id: validatedData.company_id,
+          school_id: validatedData.school_ids[0] || null,
+          branch_id: validatedData.branch_ids?.[0] || null,
           name: validatedData.name,
-          code: validatedData.code,
-          parent_department_id: validatedData.parent_department_id || null,
+          code: validatedData.code || null,
+          description: validatedData.description || null,
           head_id: validatedData.head_id || null,
-          head_of_department: validatedData.head_of_department,
-          head_email: validatedData.head_email,
-          contact_email: validatedData.contact_email,
-          contact_phone: validatedData.contact_phone,
-          description: validatedData.description,
+          parent_department_id: validatedData.parent_department_id || null,
           status: validatedData.status
         };
-
-        // Set level-specific fields
-        if (validatedData.department_level === 'company') {
-          insertData.school_id = null;
-          insertData.branch_id = null;
-        } else if (validatedData.department_level === 'school') {
-          insertData.school_id = validatedData.school_ids?.[0] || null;
-          insertData.branch_id = null;
-        } else if (validatedData.department_level === 'branch') {
-          insertData.branch_id = validatedData.branch_ids?.[0] || null;
-          // Get school_id from branch
-          const branch = branches.find(b => b.id === insertData.branch_id);
-          insertData.school_id = branch?.school_id || null;
-        }
 
         const { data: newDepartment, error } = await supabase
           .from('departments')
@@ -573,7 +401,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         if (error) throw error;
 
         // Create junction table entries for multi-school assignment
-        if (validatedData.department_level === 'school' && validatedData.school_ids && validatedData.school_ids.length > 1) {
+        if (validatedData.school_ids.length > 0) {
           const junctionRecords = validatedData.school_ids.map(schoolId => ({
             department_id: newDepartment.id,
             school_id: schoolId
@@ -613,45 +441,16 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   );
 
-  // Bulk create mutation for templates
-  const bulkCreateMutation = useMutation(
-    async (templateType: string) => {
-      const templates = DEPARTMENT_TEMPLATES[templateType as keyof typeof DEPARTMENT_TEMPLATES];
-      if (!templates) return;
-
-      const departments = templates.map(template => ({
-        company_id: companyId,
-        school_id: formState.school_ids[0] || null,
-        branch_id: formState.branch_ids[0] || null,
-        name: template.name,
-        code: template.code,
-        description: `${template.type} department`,
-        status: 'active' as const
-      }));
-
-      const { error } = await supabase
-        .from('departments')
-        .insert(departments);
-
-      if (error) throw error;
-      return departments;
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['departments']);
-        setShowTemplates(false);
-        toast.success('Departments created from template successfully');
-      },
-      onError: (error) => {
-        console.error('Error creating departments from template:', error);
-        toast.error('Failed to create departments from template');
-      }
-    }
-  );
-
   // Delete mutation
   const deleteMutation = useMutation(
     async (departments: Department[]) => {
+      // First delete from junction table
+      await supabase
+        .from('department_schools')
+        .delete()
+        .in('department_id', departments.map(d => d.id));
+
+      // Then delete departments
       const { error } = await supabase
         .from('departments')
         .delete()
@@ -698,95 +497,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Department Level Icon Component
   const DepartmentLevelIcon = ({ level }: { level: string }) => {
     switch (level) {
-      case 'company':
+      case 'Company':
         return <Building className="h-4 w-4 text-purple-500" />;
-      case 'school':
+      case 'School':
         return <School className="h-4 w-4 text-blue-500" />;
-      case 'branch':
+      case 'Branch':
         return <MapPin className="h-4 w-4 text-green-500" />;
       default:
         return <Building2 className="h-4 w-4 text-gray-500" />;
     }
-  };
-
-  // Hierarchical Department Row Component
-  const HierarchicalDepartmentRow = ({ 
-    department, 
-    level = 0 
-  }: { 
-    department: Department; 
-    level?: number;
-  }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const hasChildren = department.children && department.children.length > 0;
-
-    return (
-      <>
-        <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
-          <td className="px-4 py-3">
-            <div className="flex items-center" style={{ paddingLeft: `${level * 24}px` }}>
-              {hasChildren && (
-                <button
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="mr-2 text-gray-500 hover:text-gray-700"
-                >
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </button>
-              )}
-              <DepartmentLevelIcon level={department.department_level || 'company'} />
-              <span className="ml-2 font-medium">{department.name}</span>
-              {department.code && (
-                <span className="ml-2 text-xs text-gray-500">({department.code})</span>
-              )}
-            </div>
-          </td>
-          <td className="px-4 py-3">
-            <span className="text-sm text-gray-600">{department.department_type}</span>
-          </td>
-          <td className="px-4 py-3">
-            <span className="text-sm">{department.school_name}</span>
-          </td>
-          <td className="px-4 py-3">
-            <span className="text-sm">{department.branch_name}</span>
-          </td>
-          <td className="px-4 py-3">
-            <span className="text-sm">{department.head_of_department || '-'}</span>
-          </td>
-          <td className="px-4 py-3">
-            <StatusBadge status={department.status} />
-          </td>
-          <td className="px-4 py-3">
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setEditingDepartment(department);
-                  setIsFormOpen(true);
-                }}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete([department])}
-                className="text-red-600 hover:text-red-700"
-              >
-                Delete
-              </Button>
-            </div>
-          </td>
-        </tr>
-        {isExpanded && hasChildren && department.children!.map(child => (
-          <HierarchicalDepartmentRow
-            key={child.id}
-            department={child}
-            level={level + 1}
-          />
-        ))}
-      </>
-    );
   };
 
   const columns = [
@@ -797,7 +516,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       enableSorting: true,
       cell: (row: Department) => (
         <div className="flex items-center gap-2">
-          <DepartmentLevelIcon level={row.department_level || 'company'} />
+          <DepartmentLevelIcon level={row.department_level || 'School'} />
           <div>
             <span className="font-medium">{row.name}</span>
             {row.code && (
@@ -814,71 +533,49 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       enableSorting: true,
       cell: (row: Department) => (
         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
-          ${row.department_level === 'company' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-            row.department_level === 'school' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+          ${row.department_level === 'Company' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+            row.department_level === 'School' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
             'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}`}>
-          {row.department_level || 'Company'}
+          {row.department_level}
         </span>
       ),
     },
     {
-      id: 'type',
-      header: 'Type',
-      accessorKey: 'department_type',
-      enableSorting: true,
+      id: 'schools',
+      header: 'Schools',
       cell: (row: Department) => (
-        <span className="capitalize text-sm">{row.department_type || 'academic'}</span>
+        <div className="text-sm">
+          {row.school_names && row.school_names.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {row.school_names.slice(0, 2).map((name, idx) => (
+                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
+                  {name}
+                </span>
+              ))}
+              {row.school_names.length > 2 && (
+                <span className="text-xs text-gray-500">+{row.school_names.length - 2} more</span>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
       ),
-    },
-    {
-      id: 'school',
-      header: 'School',
-      accessorKey: 'school_name',
-      enableSorting: true,
     },
     {
       id: 'branch',
       header: 'Branch',
       accessorKey: 'branch_name',
       enableSorting: true,
+      cell: (row: Department) => row.branch_name || '-',
     },
     {
-      id: 'head',
-      header: 'Head of Department',
-      accessorKey: 'head_of_department',
-      enableSorting: true,
+      id: 'description',
+      header: 'Description',
       cell: (row: Department) => (
-        <div className="text-sm">
-          {row.head_of_department ? (
-            <div>
-              <div>{row.head_of_department}</div>
-              {row.head_email && (
-                <div className="text-xs text-gray-500">{row.head_email}</div>
-              )}
-            </div>
-          ) : '-'}
-        </div>
-      ),
-    },
-    {
-      id: 'contact',
-      header: 'Contact',
-      cell: (row: Department) => (
-        <div className="text-sm space-y-1">
-          {row.contact_email && (
-            <div className="flex items-center gap-1">
-              <Mail className="h-3 w-3 text-gray-400" />
-              <span>{row.contact_email}</span>
-            </div>
-          )}
-          {row.contact_phone && (
-            <div className="flex items-center gap-1">
-              <Phone className="h-3 w-3 text-gray-400" />
-              <span>{row.contact_phone}</span>
-            </div>
-          )}
-          {!row.contact_email && !row.contact_phone && '-'}
-        </div>
+        <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+          {row.description || '-'}
+        </span>
       ),
     },
     {
@@ -900,24 +597,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             Manage academic and administrative departments across your organization
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowTemplates(true)}
-            leftIcon={<Copy className="h-4 w-4" />}
-          >
-            Use Templates
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingDepartment(null);
-              setIsFormOpen(true);
-            }}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            Add Department
-          </Button>
-        </div>
+        <Button
+          onClick={() => {
+            setEditingDepartment(null);
+            setIsFormOpen(true);
+          }}
+          leftIcon={<Plus className="h-4 w-4" />}
+        >
+          Add Department
+        </Button>
       </div>
 
       <FilterCard
@@ -926,149 +614,72 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         onClear={() => {
           setFilters({
             search: '',
-            department_level: [],
             school_ids: [],
             branch_ids: [],
-            department_type: [],
-            status: [],
-            show_hierarchy: false
+            status: []
           });
         }}
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <FormField id="search" label="Search">
-              <Input
-                id="search"
-                placeholder="Search by name, code, or head..."
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              />
-            </FormField>
-
-            <SearchableMultiSelect
-              label="Department Level"
-              options={[
-                { value: 'company', label: 'Company' },
-                { value: 'school', label: 'School' },
-                { value: 'branch', label: 'Branch' }
-              ]}
-              selectedValues={filters.department_level}
-              onChange={(values) => setFilters({ ...filters, department_level: values })}
-              placeholder="Select levels..."
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <FormField id="search" label="Search">
+            <Input
+              id="search"
+              placeholder="Search by name or code..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
             />
+          </FormField>
 
-            <SearchableMultiSelect
-              label="School"
-              options={schools.map(s => ({
-                value: s.id,
-                label: s.name
-              }))}
-              selectedValues={filters.school_ids}
-              onChange={(values) => setFilters({ ...filters, school_ids: values })}
-              placeholder="Select schools..."
-            />
+          <SearchableMultiSelect
+            label="School"
+            options={schools.map(s => ({
+              value: s.id,
+              label: s.name
+            }))}
+            selectedValues={filters.school_ids}
+            onChange={(values) => setFilters({ ...filters, school_ids: values })}
+            placeholder="Select schools..."
+          />
 
-            <SearchableMultiSelect
-              label="Branch"
-              options={allBranches.map(b => ({
-                value: b.id,
-                label: b.name
-              }))}
-              selectedValues={filters.branch_ids}
-              onChange={(values) => setFilters({ ...filters, branch_ids: values })}
-              placeholder="Select branches..."
-            />
+          <SearchableMultiSelect
+            label="Branch"
+            options={allBranches.map(b => ({
+              value: b.id,
+              label: b.name
+            }))}
+            selectedValues={filters.branch_ids}
+            onChange={(values) => setFilters({ ...filters, branch_ids: values })}
+            placeholder="Select branches..."
+          />
 
-            <SearchableMultiSelect
-              label="Department Type"
-              options={[
-                { value: 'academic', label: 'Academic' },
-                { value: 'administrative', label: 'Administrative' },
-                { value: 'support', label: 'Support' },
-                { value: 'operations', label: 'Operations' },
-                { value: 'other', label: 'Other' }
-              ]}
-              selectedValues={filters.department_type}
-              onChange={(values) => setFilters({ ...filters, department_type: values })}
-              placeholder="Select types..."
-            />
-
-            <SearchableMultiSelect
-              label="Status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              selectedValues={filters.status}
-              onChange={(values) => setFilters({ ...filters, status: values })}
-              placeholder="Select status..."
-            />
-          </div>
-
-          <div className="flex items-center gap-4">
-            <ToggleSwitch
-              checked={filters.show_hierarchy}
-              onChange={(checked) => setFilters({ ...filters, show_hierarchy: checked })}
-              label="Show Hierarchical View"
-            />
-          </div>
+          <SearchableMultiSelect
+            label="Status"
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+            selectedValues={filters.status}
+            onChange={(values) => setFilters({ ...filters, status: values })}
+            placeholder="Select status..."
+          />
         </div>
       </FilterCard>
 
-      {/* Hierarchical View */}
-      {filters.show_hierarchy ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  School
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Branch
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Head
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {departments.map(department => (
-                <HierarchicalDepartmentRow key={department.id} department={department} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <DataTable
-          data={departments}
-          columns={columns}
-          keyField="id"
-          caption="List of departments with their details and hierarchy"
-          ariaLabel="Departments data table"
-          loading={isLoading}
-          isFetching={isFetching}
-          onEdit={(department) => {
-            setEditingDepartment(department);
-            setIsFormOpen(true);
-          }}
-          onDelete={handleDelete}
-          emptyMessage="No departments found"
-        />
-      )}
+      <DataTable
+        data={departments}
+        columns={columns}
+        keyField="id"
+        caption="List of departments with their details and assignments"
+        ariaLabel="Departments data table"
+        loading={isLoading}
+        isFetching={isFetching}
+        onEdit={(department) => {
+          setEditingDepartment(department);
+          setIsFormOpen(true);
+        }}
+        onDelete={handleDelete}
+        emptyMessage="No departments found"
+      />
 
       {/* Department Form */}
       <SlideInForm
@@ -1097,37 +708,9 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="assignments">Assignments</TabsTrigger>
-              <TabsTrigger value="hierarchy">Hierarchy</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="space-y-4">
-              <FormField
-                id="department_level"
-                label="Department Level"
-                required
-                error={formErrors.department_level}
-              >
-                <Select
-                  id="department_level"
-                  name="department_level"
-                  options={[
-                    { value: 'company', label: 'Company Level (All Schools)' },
-                    { value: 'school', label: 'School Level' },
-                    { value: 'branch', label: 'Branch Level' }
-                  ]}
-                  value={formState.department_level}
-                  onChange={(e) => {
-                    const level = e.target.value as any;
-                    setFormState(prev => ({ 
-                      ...prev, 
-                      department_level: level,
-                      school_ids: [],
-                      branch_ids: []
-                    }));
-                  }}
-                />
-              </FormField>
-
               <FormField
                 id="name"
                 label="Department Name"
@@ -1144,107 +727,19 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 />
               </FormField>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
+              <FormField
+                id="code"
+                label="Department Code"
+                error={formErrors.code}
+              >
+                <Input
                   id="code"
-                  label="Department Code"
-                  error={formErrors.code}
-                >
-                  <Input
-                    id="code"
-                    name="code"
-                    placeholder="e.g., MATH, HR"
-                    value={formState.code}
-                    onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
-                  />
-                </FormField>
-
-                <FormField
-                  id="department_type"
-                  label="Department Type"
-                  required
-                  error={formErrors.department_type}
-                >
-                  <Select
-                    id="department_type"
-                    name="department_type"
-                    options={[
-                      { value: 'academic', label: 'Academic' },
-                      { value: 'administrative', label: 'Administrative' },
-                      { value: 'support', label: 'Support' },
-                      { value: 'operations', label: 'Operations' },
-                      { value: 'other', label: 'Other' }
-                    ]}
-                    value={formState.department_type}
-                    onChange={(e) => setFormState(prev => ({ ...prev, department_type: e.target.value as any }))}
-                  />
-                </FormField>
-              </div>
-
-              <FormField
-                id="head_of_department"
-                label="Head of Department"
-                error={formErrors.head_of_department}
-              >
-                <Input
-                  id="head_of_department"
-                  name="head_of_department"
-                  placeholder="Enter name of department head"
-                  value={formState.head_of_department}
-                  onChange={(e) => setFormState(prev => ({ ...prev, head_of_department: e.target.value }))}
-                  leftIcon={<Users className="h-5 w-5 text-gray-400" />}
+                  name="code"
+                  placeholder="e.g., MATH, HR"
+                  value={formState.code}
+                  onChange={(e) => setFormState(prev => ({ ...prev, code: e.target.value }))}
                 />
               </FormField>
-
-              <FormField
-                id="head_email"
-                label="Head Email"
-                error={formErrors.head_email}
-              >
-                <Input
-                  id="head_email"
-                  name="head_email"
-                  type="email"
-                  placeholder="head@school.edu"
-                  value={formState.head_email}
-                  onChange={(e) => setFormState(prev => ({ ...prev, head_email: e.target.value }))}
-                  leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
-                />
-              </FormField>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  id="contact_email"
-                  label="Contact Email"
-                  error={formErrors.contact_email}
-                >
-                  <Input
-                    id="contact_email"
-                    name="contact_email"
-                    type="email"
-                    placeholder="department@school.edu"
-                    value={formState.contact_email}
-                    onChange={(e) => setFormState(prev => ({ ...prev, contact_email: e.target.value }))}
-                    leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
-                  />
-                </FormField>
-
-                <FormField
-                  id="contact_phone"
-                  label="Contact Phone"
-                  error={formErrors.contact_phone}
-                >
-                  <Input
-                    id="contact_phone"
-                    name="contact_phone"
-                    type="tel"
-                    placeholder="+1 (555) 123-4567"
-                    value={formState.contact_phone}
-                    onChange={(e) => setFormState(prev => ({ ...prev, contact_phone: e.target.value }))}
-                    leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
-                  />
-                </FormField>
-              </div>
 
               <FormField
                 id="description"
@@ -1258,6 +753,23 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   value={formState.description}
                   onChange={(e) => setFormState(prev => ({ ...prev, description: e.target.value }))}
                   rows={3}
+                />
+              </FormField>
+
+              <FormField
+                id="parent_department"
+                label="Parent Department (Optional)"
+              >
+                <Select
+                  id="parent_department"
+                  options={[
+                    { value: '', label: 'No Parent Department' },
+                    ...departments
+                      .filter(d => d.id !== editingDepartment?.id)
+                      .map(d => ({ value: d.id, label: d.name }))
+                  ]}
+                  value={formState.parent_department_id}
+                  onChange={(e) => setFormState(prev => ({ ...prev, parent_department_id: e.target.value }))}
                 />
               </FormField>
 
@@ -1290,147 +802,21 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             </TabsContent>
 
             <TabsContent value="assignments" className="space-y-4">
-              {formState.department_level === 'school' && (
-                <FormField
-                  id="school_ids"
-                  label="Assigned Schools"
-                  required
-                  error={formErrors.school_ids}
-                >
-                  <SearchableMultiSelect
-                    label=""
-                    options={schools.map(school => ({
-                      value: school.id,
-                      label: school.name
-                    }))}
-                    selectedValues={formState.school_ids}
-                    onChange={(values) => {
-                      setFormState(prev => ({ ...prev, school_ids: values }));
-                    }}
-                    placeholder="Select schools..."
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Select one or more schools where this department operates
-                  </p>
-                </FormField>
-              )}
-
-              {formState.department_level === 'branch' && (
-                <>
-                  <FormField
-                    id="school_ids_for_branch"
-                    label="Select School First"
-                    required
-                  >
-                    <SearchableMultiSelect
-                      label=""
-                      options={schools.map(school => ({
-                        value: school.id,
-                        label: school.name
-                      }))}
-                      selectedValues={formState.school_ids}
-                      onChange={(values) => {
-                        setFormState(prev => ({ 
-                          ...prev, 
-                          school_ids: values,
-                          branch_ids: [] // Reset branches when school changes
-                        }));
-                      }}
-                      isMulti={false}
-                      placeholder="Select school..."
-                    />
-                  </FormField>
-
-                  {formState.school_ids.length > 0 && (
-                    <FormField
-                      id="branch_ids"
-                      label="Assigned Branches"
-                      required
-                      error={formErrors.branch_ids}
-                    >
-                      <SearchableMultiSelect
-                        label=""
-                        options={branches.map(branch => ({
-                          value: branch.id,
-                          label: branch.name
-                        }))}
-                        selectedValues={formState.branch_ids}
-                        onChange={(values) => {
-                          setFormState(prev => ({ ...prev, branch_ids: values }));
-                        }}
-                        placeholder="Select branches..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Select one or more branches where this department operates
-                      </p>
-                    </FormField>
-                  )}
-                </>
-              )}
-
-              {formState.department_level === 'company' && (
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                    <h4 className="font-medium text-purple-900 dark:text-purple-100">Company-Level Department</h4>
-                  </div>
-                  <p className="text-sm text-purple-700 dark:text-purple-300">
-                    This department will be available across all schools and branches in the company.
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="hierarchy" className="space-y-4">
-              <FormField
-                id="parent_department_id"
-                label="Parent Department"
-                error={formErrors.parent_department_id}
-              >
-                <Select
-                  id="parent_department_id"
-                  name="parent_department_id"
-                  options={[
-                    { value: '', label: 'No Parent (Top Level)' },
-                    ...departments
-                      .filter(d => d.id !== editingDepartment?.id)
-                      .map(dept => ({
-                        value: dept.id,
-                        label: `${dept.name} (${dept.department_level || 'Company'})`
-                      }))
-                  ]}
-                  value={formState.parent_department_id}
-                  onChange={(e) => setFormState(prev => ({ ...prev, parent_department_id: e.target.value }))}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Select a parent department to create a hierarchical structure
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-4">
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                  Department Assignment
+                </h4>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Assign this department to one or more schools. Optionally, you can assign it to specific branches within those schools.
                 </p>
-              </FormField>
+              </div>
 
-              {formState.parent_department_id && (
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <GitBranch className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    <h4 className="font-medium text-blue-900 dark:text-blue-100">Hierarchical Structure</h4>
-                  </div>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    This department will be a sub-department of the selected parent.
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </form>
-      </SlideInForm>
-
-      {/* Templates Dialog */}
-      {showTemplates && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-auto">
-            <h3 className="text-lg font-semibold mb-4">Department Templates</h3>
-            
-            <div className="space-y-4 mb-6">
-              <FormField id="template_school" label="Select School for Templates">
+              <FormField
+                id="school_ids"
+                label="Assigned Schools"
+                required
+                error={formErrors.school_ids}
+              >
                 <SearchableMultiSelect
                   label=""
                   options={schools.map(school => ({
@@ -1439,54 +825,54 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   }))}
                   selectedValues={formState.school_ids}
                   onChange={(values) => {
-                    setFormState(prev => ({ ...prev, school_ids: values }));
+                    setFormState(prev => ({ 
+                      ...prev, 
+                      school_ids: values,
+                      branch_ids: [] // Reset branches when schools change
+                    }));
                   }}
-                  isMulti={false}
-                  placeholder="Select school..."
+                  placeholder="Select schools..."
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Select one or more schools where this department operates
+                </p>
               </FormField>
-            </div>
 
-            <div className="grid gap-4">
-              {Object.entries(DEPARTMENT_TEMPLATES).map(([key, templates]) => (
-                <div key={key} className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <h4 className="font-medium capitalize mb-2">{key} Departments</h4>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {templates.map(t => (
-                      <span key={t.code} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                        {t.name}
-                      </span>
-                    ))}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (!formState.school_ids[0]) {
-                        toast.error('Please select a school first');
-                        return;
-                      }
-                      bulkCreateMutation.mutate(key);
+              {formState.school_ids.length > 0 && branches.length > 0 && (
+                <FormField
+                  id="branch_ids"
+                  label="Assigned Branches (Optional)"
+                  error={formErrors.branch_ids}
+                >
+                  <SearchableMultiSelect
+                    label=""
+                    options={branches.map(branch => ({
+                      value: branch.id,
+                      label: branch.name
+                    }))}
+                    selectedValues={formState.branch_ids}
+                    onChange={(values) => {
+                      setFormState(prev => ({ ...prev, branch_ids: values }));
                     }}
-                    disabled={!formState.school_ids[0] || bulkCreateMutation.isLoading}
-                  >
-                    Create {templates.length} Departments
-                  </Button>
-                </div>
-              ))}
-            </div>
+                    placeholder="Select branches (optional)..."
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Optionally, limit this department to specific branches within the selected schools
+                  </p>
+                </FormField>
+              )}
 
-            <div className="flex justify-end gap-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => setShowTemplates(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+              {formState.school_ids.length === 0 && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Please select at least one school to assign this department to.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </form>
+      </SlideInForm>
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
