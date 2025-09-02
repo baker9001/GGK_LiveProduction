@@ -68,6 +68,9 @@ export function SearchableMultiSelect({
   );
 
   const filteredOptions = options.filter(option =>
+    option && 
+    option.label && 
+    option.value &&
     option.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
     (!isMulti ? !safeSelectedValues.includes(option.value) : true)
   );
