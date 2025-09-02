@@ -8,11 +8,13 @@
  *   - @/components/shared/SlideInForm
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * FIXED: Grid layout for large sibling groups
- * - Sections now display in grid formation (max 6 per row)
- * - Branches display in grid when > 6
- * - Proper connection lines for all nodes
- * - Optimized spacing to prevent horizontal sprawl
+ * UPDATED FEATURES:
+ *   - Properly integrated with GradeLevelsTab.tsx database structure
+ *   - Grade levels can now be at school-level OR branch-level
+ *   - Fixed data fetching to match actual database schema
+ *   - Updated tree building logic for proper hierarchy
+ *   - Grades and branches appear side-by-side when both at school level
+ *   - Branch-level grades appear under their respective branches
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -52,125 +54,6 @@ export interface OrgStructureProps {
   onEditClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
   onItemClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
   refreshData?: () => void;
-}
-
-// ===== ENHANCED LAYOUT ENGINE WITH GRID SUPPORT =====
-class GridAwareTreeLayoutEngine extends TreeLayoutEngine {
-  private maxSiblingsPerRow: number;
-  private compactGapX: number;
-  private gridRowGapY: number;
-
-  constructor(
-    nodes: Map<string, any>,
-    dimensions: Map<string, NodeDimensions>,
-    config: LayoutConfig & { maxSiblingsPerRow?: number; compactGapX?: number; gridRowGapY?: number }
-  ) {
-    super(nodes, dimensions, config);
-    this.maxSiblingsPerRow = config.maxSiblingsPerRow || 6;
-    this.compactGapX = config.compactGapX || 20;
-    this.gridRowGapY = config.gridRowGapY || 30;
-  }
-
-  public layout(rootId: string): any {
-    const nodes = this.getNodes();
-    const positions = new Map<string, NodePosition>();
-    const processedNodes = new Set<string>();
-    
-    // Start with company at center top
-    this.positionNode(rootId, 800, 0, positions, processedNodes, 0);
-    
-    // Normalize positions
-    let minX = Infinity, minY = Infinity;
-    positions.forEach(pos => {
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-    });
-    
-    const normalizedPositions = new Map<string, NodePosition>();
-    positions.forEach((pos, nodeId) => {
-      normalizedPositions.set(nodeId, {
-        x: pos.x - minX + 50,
-        y: pos.y - minY + 50
-      });
-    });
-    
-    // Calculate canvas size
-    let maxX = 0, maxY = 0;
-    normalizedPositions.forEach(pos => {
-      maxX = Math.max(maxX, pos.x + 300);
-      maxY = Math.max(maxY, pos.y + 200);
-    });
-    
-    return {
-      positions: normalizedPositions,
-      totalSize: { width: maxX, height: maxY },
-      levelHeights: new Map()
-    };
-  }
-
-  private getNodes(): Map<string, any> {
-    // Access the nodes from parent class (may need adjustment based on actual implementation)
-    return (this as any).nodes;
-  }
-
-  private positionNode(
-    nodeId: string,
-    x: number,
-    y: number,
-    positions: Map<string, NodePosition>,
-    processedNodes: Set<string>,
-    level: number
-  ): void {
-    if (processedNodes.has(nodeId)) return;
-    
-    positions.set(nodeId, { x, y });
-    processedNodes.add(nodeId);
-    
-    const nodes = this.getNodes();
-    const node = nodes.get(nodeId);
-    if (!node || !node.children || node.children.length === 0) return;
-    
-    const childCount = node.children.length;
-    const nextY = y + 180; // Vertical gap between levels
-    
-    // Determine if we need grid layout
-    if (childCount > this.maxSiblingsPerRow) {
-      // GRID LAYOUT for many children
-      const cols = this.maxSiblingsPerRow;
-      const rows = Math.ceil(childCount / cols);
-      const cellWidth = 280; // Width per card + gap
-      const cellHeight = 180; // Height per card + gap
-      
-      const totalWidth = cols * cellWidth;
-      const startX = x - (totalWidth / 2) + (cellWidth / 2);
-      
-      node.children.forEach((childId: string, index: number) => {
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-        
-        // For last row with fewer items, center them
-        const itemsInRow = (row === rows - 1) ? 
-          (childCount % cols || cols) : cols;
-        const rowOffset = (row === rows - 1 && itemsInRow < cols) ? 
-          ((cols - itemsInRow) * cellWidth / 2) : 0;
-        
-        const childX = startX + (col * cellWidth) + rowOffset;
-        const childY = nextY + (row * cellHeight);
-        
-        this.positionNode(childId, childX, childY, positions, processedNodes, level + 1);
-      });
-    } else {
-      // LINEAR LAYOUT for few children
-      const gap = 300; // Horizontal gap between siblings
-      const totalWidth = childCount * 260 + (childCount - 1) * (gap - 260);
-      const startX = x - (totalWidth / 2) + 130;
-      
-      node.children.forEach((childId: string, index: number) => {
-        const childX = startX + (index * gap);
-        this.positionNode(childId, childX, nextY, positions, processedNodes, level + 1);
-      });
-    }
-  }
 }
 
 // ===== SKELETON LOADER COMPONENT =====
@@ -366,7 +249,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         onClick={handleCardClick}
         className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
                    hover:shadow-lg transition-all duration-200 cursor-pointer
-                   min-w-[240px] max-w-[260px] flex-grow p-4 relative`}
+                   min-w-[260px] max-w-[300px] flex-grow p-4 relative`}
         data-card-id={`${type}-${item.id}`}
         data-card-type={type}
       >
@@ -761,17 +644,14 @@ export default function OrganizationStructureTab({
     return cardRefs.current.get(id)!;
   }, []);
 
-  // UPDATED Layout configuration with grid support
+  // Layout configuration
   const layoutConfig: LayoutConfig = useMemo(() => ({
-    gapX: 25,
-    gapY: 50,
+    gapX: 48,
+    gapY: 80,
     centerParents: true,
-    minCardWidth: 240,
-    maxCardWidth: 260,
-    maxSiblingsPerRow: 6,   // Trigger grid layout after 6 siblings
-    compactGapX: 20,        // Tighter spacing in grid
-    gridRowGapY: 30         // Vertical gap between grid rows
-  } as any), []);
+    minCardWidth: 260,
+    maxCardWidth: 300
+  }), []);
 
   // Measure node dimensions
   const nodeDimensions = useNodeMeasurements(
@@ -799,7 +679,7 @@ export default function OrganizationStructureTab({
     );
   }, [companyData, processedSchoolData, expandedNodes, visibleLevels]);
 
-  // UPDATED: Layout calculation with grid-aware engine
+  // Layout calculation with debouncing
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
@@ -811,15 +691,27 @@ export default function OrganizationStructureTab({
       const dimensionsToUse = new Map<string, NodeDimensions>();
       treeNodes.forEach((node, nodeId) => {
         const measured = nodeDimensions.get(nodeId);
-        dimensionsToUse.set(nodeId, measured || { width: 240, height: 140 });
+        dimensionsToUse.set(nodeId, measured || { width: 260, height: 140 });
       });
 
-      // Use the grid-aware layout engine
-      const layoutEngine = new GridAwareTreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
+      const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      setLayoutPositions(result.positions);
-      setCanvasSize(result.totalSize);
+      const paddedSize = {
+        width: result.totalSize.width + 100,
+        height: result.totalSize.height + 100
+      };
+      
+      const shiftedPositions = new Map<string, NodePosition>();
+      result.positions.forEach((pos, nodeId) => {
+        shiftedPositions.set(nodeId, {
+          x: pos.x + 50,
+          y: pos.y + 50
+        });
+      });
+      
+      setLayoutPositions(shiftedPositions);
+      setCanvasSize(paddedSize);
       
       if (!hasInitialized) {
         setTimeout(() => {
@@ -1246,7 +1138,7 @@ export default function OrganizationStructureTab({
         {/* Render all nodes with absolute positioning */}
         {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
           const position = layoutPositions.get(nodeId);
-          const dimensions = nodeDimensions.get(nodeId) || { width: 240, height: 140 };
+          const dimensions = nodeDimensions.get(nodeId) || { width: 260, height: 140 };
           
           if (!position) return null;
 
@@ -1468,8 +1360,8 @@ export default function OrganizationStructureTab({
               const parentDim = nodeDimensions.get(node.parentId);
               const childDim = nodeDimensions.get(nodeId);
 
-              const parentDimensions = parentDim || { width: 240, height: 140 };
-              const childDimensions = childDim || { width: 240, height: 140 };
+              const parentDimensions = parentDim || { width: 260, height: 140 };
+              const childDimensions = childDim || { width: 260, height: 140 };
               
               if (!parentPos || !childPos) return null;
 
