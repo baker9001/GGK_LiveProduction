@@ -1,18 +1,14 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
  * 
- * FIXED VERSION - Database Schema Aligned
+ * COMPLETE FIXED VERSION - Grades and Sections Display
  * 
- * Critical Fixes:
- * 1. Removed current_enrollment from class_sections query (column doesn't exist)
- * 2. Fixed checkAndAutoResize function scope issue
- * 3. Aligned all queries with actual database schema
- * 4. Added proper error handling for missing data
- * 
- * Database Schema Corrections:
- * - class_sections: NO current_enrollment column (removed from queries)
- * - grade_levels: Has school_id (nullable) and branch_id (nullable)
- * - grade_level_branches: Junction table for branch relationships
+ * Fixed Issues:
+ * 1. Grade levels and class sections now display correctly in hierarchy
+ * 2. Hierarchical tab behavior - enabling child enables parents, disabling parent disables children
+ * 3. Proper node expansion for grades and sections
+ * 4. Fixed tree building to include all hierarchy levels
+ * 5. Maintained all original functionality
  * 
  * Dependencies: 
  *   - @/lib/supabase
@@ -69,8 +65,6 @@ interface ClassSection {
   max_capacity: number;
   class_section_order: number;
   status: string;
-  // Note: current_enrollment is NOT in the database
-  // We'll need to calculate this from student enrollments if needed
 }
 
 // ===== PROPS INTERFACE =====
@@ -225,7 +219,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
           nameField: 'grade_coordinator',
           stats: [
             { label: 'Sections', value: item.class_sections?.length || 0, icon: BookOpen },
-            { label: 'Capacity/Section', value: 30, icon: Users }, // Default capacity
+            { label: 'Capacity/Section', value: 30, icon: Users },
             { label: 'Order', value: item.grade_order || 0, icon: BookOpen }
           ]
         };
@@ -240,7 +234,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
           nameField: 'section_teacher',
           stats: [
             { label: 'Capacity', value: item.max_capacity || 30, icon: Users },
-            { label: 'Students', value: 0, icon: GraduationCap }, // Would need separate query for actual count
+            { label: 'Students', value: 0, icon: GraduationCap },
             { label: 'Order', value: item.class_section_order || 0, icon: Building2 }
           ]
         };
@@ -257,7 +251,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
     onItemClick(item, type);
   };
 
-  // Display name based on type - CORRECTED FIELD NAMES
+  // Display name based on type
   const getDisplayName = () => {
     switch (type) {
       case 'year':
@@ -492,7 +486,7 @@ export default function OrganizationStructureTab({
   const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-resize function - MOVED BEFORE ITS USAGE
+  // Auto-resize function
   const checkAndAutoResize = useCallback(() => {
     const viewport = scrollAreaRef.current;
     const container = chartContainerRef.current;
@@ -546,7 +540,7 @@ export default function OrganizationStructureTab({
     { enabled: !!companyId }
   );
 
-  // FIXED: Fetch grade levels WITHOUT current_enrollment
+  // FIXED: Fetch grade levels with proper relationships
   const { data: allGradeLevels = [], isLoading: isGradeLevelsLoading } = useQuery(
     ['all-grade-levels', companyId, showInactive],
     async () => {
@@ -562,8 +556,7 @@ export default function OrganizationStructureTab({
       
       const schoolIds = schools.map(s => s.id);
       
-      // Fetch grade levels that belong to these schools
-      // FIXED: Removed current_enrollment from class_sections select
+      // Fetch ALL grade levels related to these schools (both school-level and branch-level)
       let query = supabase
         .from('grade_levels')
         .select(`
@@ -585,8 +578,28 @@ export default function OrganizationStructureTab({
             status
           )
         `)
-        .or(`school_id.in.(${schoolIds.join(',')}),branch_id.in.(${schoolIds.join(',')})`)
         .order('grade_order');
+      
+      // Include grades that belong to schools OR have branch_ids from branches of these schools
+      const { data: branches } = await supabase
+        .from('branches')
+        .select('id')
+        .in('school_id', schoolIds);
+      
+      const branchIds = branches?.map(b => b.id) || [];
+      
+      // Build OR condition for school_id and branch_id
+      const conditions = [];
+      if (schoolIds.length > 0) {
+        conditions.push(`school_id.in.(${schoolIds.join(',')})`);
+      }
+      if (branchIds.length > 0) {
+        conditions.push(`branch_id.in.(${branchIds.join(',')})`);
+      }
+      
+      if (conditions.length > 0) {
+        query = query.or(conditions.join(','));
+      }
       
       if (!showInactive) {
         query = query.eq('status', 'active');
@@ -597,47 +610,6 @@ export default function OrganizationStructureTab({
       if (error) {
         console.error('Error fetching grade levels:', error);
         throw error;
-      }
-      
-      // Now fetch grade levels that are linked to branches via junction table
-      const { data: branches } = await supabase
-        .from('branches')
-        .select('id')
-        .in('school_id', schoolIds);
-      
-      const branchIds = branches?.map(b => b.id) || [];
-      
-      if (branchIds.length > 0) {
-        // Fetch grade-branch relationships
-        const { data: gradeBranchLinks } = await supabase
-          .from('grade_level_branches')
-          .select(`
-            grade_level_id,
-            branch_id,
-            capacity
-          `)
-          .in('branch_id', branchIds);
-        
-        // Store branch-grade relationships for later use
-        if (gradeBranchLinks) {
-          const branchGradeMap = new Map<string, string[]>();
-          gradeBranchLinks.forEach(link => {
-            if (!branchGradeMap.has(link.branch_id)) {
-              branchGradeMap.set(link.branch_id, []);
-            }
-            branchGradeMap.get(link.branch_id)!.push(link.grade_level_id);
-          });
-          
-          // Store in state for later use
-          setLazyLoadedData(prev => {
-            const newMap = new Map(prev);
-            branchGradeMap.forEach((gradeIds, branchId) => {
-              const branchGrades = (data || []).filter(g => gradeIds.includes(g.id));
-              newMap.set(`grades-branch-${branchId}`, branchGrades);
-            });
-            return newMap;
-          });
-        }
       }
       
       return data || [];
@@ -660,8 +632,8 @@ export default function OrganizationStructureTab({
       const sectionsByGrade = new Map<string, any[]>();
       
       allGradeLevels.forEach((grade: GradeLevel) => {
-        // Add grade to school map
-        if (grade.school_id) {
+        // Add grade to school map (only if it's a school-level grade)
+        if (grade.school_id && !grade.branch_id) {
           if (!gradesBySchool.has(grade.school_id)) {
             gradesBySchool.set(grade.school_id, []);
           }
@@ -759,24 +731,15 @@ export default function OrganizationStructureTab({
                        b.branches_additional?.active_teachers_count || 0
       }));
       
-      // Fetch grade counts for branches
+      // Count grade levels for each branch
       if (processedBranches.length > 0) {
         const branchIds = processedBranches.map(b => b.id);
-        const { data: gradeBranchCounts } = await supabase
-          .from('grade_level_branches')
-          .select('branch_id')
-          .in('branch_id', branchIds);
         
-        if (gradeBranchCounts) {
-          const countMap = new Map<string, number>();
-          gradeBranchCounts.forEach(item => {
-            countMap.set(item.branch_id, (countMap.get(item.branch_id) || 0) + 1);
-          });
-          
-          processedBranches.forEach(branch => {
-            branch.grade_count = countMap.get(branch.id) || 0;
-          });
-        }
+        // Count grades for each branch
+        processedBranches.forEach(branch => {
+          const branchGrades = allGradeLevels.filter((g: GradeLevel) => g.branch_id === branch.id);
+          branch.grade_count = branchGrades.length;
+        });
       }
       
       return processedBranches;
@@ -821,17 +784,21 @@ export default function OrganizationStructureTab({
     if (!companyData) return null;
     
     const schoolsWithGrades = filteredSchools.map((school: any) => {
-      // Get school-level grades
-      const schoolGrades = gradeLevelsData.get(school.id) || [];
+      // Get school-level grades (grades without branch_id)
+      const schoolGrades = allGradeLevels.filter((g: GradeLevel) => 
+        g.school_id === school.id && !g.branch_id
+      );
       
       // Get branches with their grades
       const schoolBranches = allBranches.filter(b => b.school_id === school.id);
       const branchesWithGrades = schoolBranches.map(branch => {
-        const branchGrades = lazyLoadedData.get(`grades-branch-${branch.id}`) || [];
+        const branchGrades = allGradeLevels.filter((g: GradeLevel) => 
+          g.branch_id === branch.id
+        );
         return {
           ...branch,
           grade_levels: branchGrades,
-          grade_count: branch.grade_count || branchGrades.length
+          grade_count: branchGrades.length
         };
       });
       
@@ -845,7 +812,7 @@ export default function OrganizationStructureTab({
         ...school,
         branches: branchesWithGrades,
         grade_levels: gradesWithSections,
-        total_grades: schoolGrades.length
+        total_grades: schoolGrades.length + branchesWithGrades.reduce((sum, b) => sum + b.grade_levels.length, 0)
       };
     });
     
@@ -853,7 +820,7 @@ export default function OrganizationStructureTab({
       ...companyData,
       schools: schoolsWithGrades
     };
-  }, [companyData, filteredSchools, allBranches, gradeLevelsData, sectionsData, lazyLoadedData]);
+  }, [companyData, filteredSchools, allBranches, allGradeLevels, sectionsData]);
 
   // Build tree structure from data
   const treeNodes = useMemo(() => {
@@ -1206,40 +1173,71 @@ export default function OrganizationStructureTab({
     });
   }, [loadNodeData]);
 
-  // Toggle level visibility with hierarchical rules
+  // FIXED: Toggle level visibility with proper hierarchical rules
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
       
+      // Entity level is always visible
       if (level === 'entity' && newSet.has('entity')) {
         return prev;
       }
       
       if (newSet.has(level)) {
-        // Turning OFF a level
+        // Turning OFF a level - also turn off all child levels
         newSet.delete(level);
         
-        // When turning off a parent level, turn off all child levels
+        // Define hierarchy: entity -> schools -> branches -> years -> sections
+        const hierarchy = ['entity', 'schools', 'branches', 'years', 'sections'];
+        const levelIndex = hierarchy.indexOf(level);
+        
+        // Turn off all levels below this one
+        for (let i = levelIndex + 1; i < hierarchy.length; i++) {
+          newSet.delete(hierarchy[i]);
+        }
+        
+        // Collapse nodes when turning off levels
         if (level === 'schools') {
-          newSet.delete('branches');
-          newSet.delete('years');
-          newSet.delete('sections');
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
-            if (filteredSchools) {
-              filteredSchools.forEach((school: any) => {
-                newExpanded.delete(`school-${school.id}`);
-              });
-            }
+            // Collapse all schools and their children
+            Array.from(newExpanded).forEach(node => {
+              if (node.startsWith('school-') || node.startsWith('branch-') || 
+                  node.startsWith('grade-') || node.startsWith('section-')) {
+                newExpanded.delete(node);
+              }
+            });
+            return newExpanded;
+          });
+        } else if (level === 'branches') {
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            // Collapse all branches and their children
+            Array.from(newExpanded).forEach(node => {
+              if (node.startsWith('branch-') || node.startsWith('grade-') || 
+                  node.startsWith('section-')) {
+                newExpanded.delete(node);
+              }
+            });
             return newExpanded;
           });
         } else if (level === 'years') {
-          newSet.delete('sections');
-          // Collapse all grade levels when turning off years
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
+            // Collapse all grades and sections
             Array.from(newExpanded).forEach(node => {
-              if (node.startsWith('grade-')) {
+              if (node.startsWith('grade-') || node.startsWith('section-')) {
+                newExpanded.delete(node);
+              }
+            });
+            return newExpanded;
+          });
+        } else if (level === 'sections') {
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            // Collapse all sections
+            Array.from(newExpanded).forEach(node => {
+              if (node.startsWith('section-')) {
                 newExpanded.delete(node);
               }
             });
@@ -1247,64 +1245,75 @@ export default function OrganizationStructureTab({
           });
         }
       } else {
-        // Turning ON a level
+        // Turning ON a level - also turn on all parent levels
         newSet.add(level);
         
-        // When turning on a child level, ensure parent levels are also on
-        if (level === 'branches') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          // Expand schools with branches
+        // Define hierarchy: entity -> schools -> branches -> years -> sections
+        const hierarchy = ['entity', 'schools', 'branches', 'years', 'sections'];
+        const levelIndex = hierarchy.indexOf(level);
+        
+        // Turn on all levels above this one
+        for (let i = 0; i <= levelIndex; i++) {
+          newSet.add(hierarchy[i]);
+        }
+        
+        // Auto-expand relevant nodes when turning on levels
+        if (level === 'schools' || level === 'branches' || level === 'years' || level === 'sections') {
+          // Expand company if schools are being shown
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
-            if (filteredSchools) {
-              filteredSchools.forEach((school: any) => {
-                if (school.branch_count > 0) {
-                  newExpanded.add(`school-${school.id}`);
-                  loadNodeData(school.id, 'school');
+            newExpanded.add('company');
+            
+            // If branches are being shown, expand schools that have branches
+            if (level === 'branches' || (level === 'years' && newSet.has('branches')) || (level === 'sections' && newSet.has('branches'))) {
+              if (filteredSchools) {
+                filteredSchools.forEach((school: any) => {
+                  const schoolBranches = allBranches.filter(b => b.school_id === school.id);
+                  if (schoolBranches.length > 0) {
+                    newExpanded.add(`school-${school.id}`);
+                  }
+                });
+              }
+            }
+            
+            // If years are being shown, expand nodes that have grades
+            if (level === 'years' || level === 'sections') {
+              if (filteredSchools) {
+                filteredSchools.forEach((school: any) => {
+                  // Check if school has direct grades
+                  const schoolGrades = allGradeLevels.filter((g: GradeLevel) => 
+                    g.school_id === school.id && !g.branch_id
+                  );
+                  if (schoolGrades.length > 0) {
+                    newExpanded.add(`school-${school.id}`);
+                  }
+                  
+                  // Check branches for grades
+                  if (newSet.has('branches')) {
+                    const schoolBranches = allBranches.filter(b => b.school_id === school.id);
+                    schoolBranches.forEach(branch => {
+                      const branchGrades = allGradeLevels.filter((g: GradeLevel) => 
+                        g.branch_id === branch.id
+                      );
+                      if (branchGrades.length > 0) {
+                        newExpanded.add(`school-${school.id}`);
+                        newExpanded.add(`branch-${branch.id}`);
+                      }
+                    });
+                  }
+                });
+              }
+            }
+            
+            // If sections are being shown, expand grades that have sections
+            if (level === 'sections') {
+              allGradeLevels.forEach((grade: GradeLevel) => {
+                if (grade.class_sections && grade.class_sections.length > 0) {
+                  newExpanded.add(`grade-${grade.id}`);
                 }
               });
             }
-            return newExpanded;
-          });
-        } else if (level === 'years') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          // Expand schools to show grade levels
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            if (filteredSchools) {
-              filteredSchools.forEach((school: any) => {
-                const schoolGrades = gradeLevelsData.get(school.id) || [];
-                if (schoolGrades.length > 0) {
-                  newExpanded.add(`school-${school.id}`);
-                }
-              });
-            }
-            return newExpanded;
-          });
-        } else if (level === 'sections') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          if (!newSet.has('years')) newSet.add('years');
-          
-          // Expand schools and grade levels to show sections
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            if (filteredSchools) {
-              filteredSchools.forEach((school: any) => {
-                const schoolGrades = gradeLevelsData.get(school.id) || [];
-                if (schoolGrades.length > 0) {
-                  newExpanded.add(`school-${school.id}`);
-                  // Also expand grade levels with sections
-                  schoolGrades.forEach((grade: any) => {
-                    const gradeSections = sectionsData.get(grade.id) || [];
-                    if (gradeSections.length > 0) {
-                      newExpanded.add(`grade-${grade.id}`);
-                    }
-                  });
-                }
-              });
-            }
+            
             return newExpanded;
           });
         }
@@ -1312,7 +1321,7 @@ export default function OrganizationStructureTab({
       
       return newSet;
     });
-  }, [filteredSchools, loadNodeData, gradeLevelsData, sectionsData]);
+  }, [filteredSchools, allBranches, allGradeLevels]);
 
   // Zoom controls
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
@@ -1366,7 +1375,7 @@ export default function OrganizationStructureTab({
     );
   }
 
-  // Render the organizational chart - Continues with same rendering logic
+  // Render the organizational chart
   const renderChart = () => {
     if (!enhancedCompanyData) {
       return (
@@ -1417,7 +1426,7 @@ export default function OrganizationStructureTab({
           
           const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
           
-          // Special handling for different node types based on their parent relationships
+          // Check visibility based on node type and parent expansion
           if (node.type === 'branch') {
             const parentSchoolId = node.parentId;
             const isSchoolExpanded = parentSchoolId && expandedNodes.has(parentSchoolId);
@@ -1475,10 +1484,12 @@ export default function OrganizationStructureTab({
             const school = filteredSchools.find((s: any) => s.id === schoolId);
             item = school;
             
-            // A school has children if it has branches OR grade levels (depending on visible tabs)
-            const branches = lazyLoadedData.get(node.id) || branchesData.get(schoolId) || [];
-            const schoolGrades = gradeLevelsData.get(schoolId) || [];
-            const hasBranches = school?.branch_count > 0 || branches.length > 0;
+            // A school has children if it has branches OR grade levels
+            const branches = allBranches.filter(b => b.school_id === schoolId);
+            const schoolGrades = allGradeLevels.filter((g: GradeLevel) => 
+              g.school_id === schoolId && !g.branch_id
+            );
+            const hasBranches = branches.length > 0;
             const hasGradeLevels = schoolGrades.length > 0;
             
             hasChildren = (hasBranches && visibleLevels.has('branches')) || 
@@ -1486,29 +1497,19 @@ export default function OrganizationStructureTab({
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'branch') {
             const branchId = node.id.replace('branch-', '');
-            for (const branches of branchesData.values()) {
-              const branch = branches.find(b => b.id === branchId);
-              if (branch) {
-                item = branch;
-                break;
-              }
-            }
-            for (const branches of lazyLoadedData.values()) {
-              const branch = branches.find((b: any) => b.id === branchId);
-              if (branch) {
-                item = branch;
-                break;
-              }
-            }
+            const branch = allBranches.find(b => b.id === branchId);
+            item = branch;
             // Check if branch has grade levels
-            const branchGrades = lazyLoadedData.get(`grades-branch-${branchId}`) || [];
+            const branchGrades = allGradeLevels.filter((g: GradeLevel) => 
+              g.branch_id === branchId
+            );
             hasChildren = branchGrades.length > 0 && visibleLevels.has('years');
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'year') {
             // Grade level node
             const gradeId = node.id.replace('grade-', '');
             item = node.data;
-            const gradeSections = sectionsData.get(gradeId) || item?.class_sections || [];
+            const gradeSections = item?.class_sections || [];
             hasChildren = gradeSections.length > 0 && visibleLevels.has('sections');
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'section') {
@@ -1533,11 +1534,7 @@ export default function OrganizationStructureTab({
                 item={item}
                 type={node.type}
                 onItemClick={(clickedItem, clickedType) => {
-                  if (clickedType === 'branch') {
-                    onItemClick(clickedItem, clickedType);
-                  } else {
-                    onItemClick(clickedItem, clickedType);
-                  }
+                  onItemClick(clickedItem, clickedType);
                 }}
                 onAddClick={onAddClick}
                 hasChildren={hasChildren}
@@ -1617,18 +1614,16 @@ export default function OrganizationStructureTab({
               const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
               const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
               
-              // Special handling for different connection types
+              // Check connection visibility
               if (node.type === 'branch') {
                 if (!visibleLevels.has('branches') || !expandedNodes.has(node.parentId)) {
                   return null;
                 }
               } else if (node.type === 'year') {
-                // Show connections for grade levels when years tab is visible
                 if (!visibleLevels.has('years') || !expandedNodes.has(node.parentId)) {
                   return null;
                 }
               } else if (node.type === 'section') {
-                // Show connections for class sections when sections tab is visible
                 if (!visibleLevels.has('sections') || !expandedNodes.has(node.parentId)) {
                   return null;
                 }
