@@ -52,7 +52,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Info, Loader2, Search,
   Calendar, Clock, Activity, TrendingUp, BarChart3, Eye, Edit2,
   Trash2, Archive, RefreshCw, Settings, ChevronDown, ChevronUp,
-  FileText, Shield, Star, GitBranch, Layers
+  FileText, Shield, Star, GitBranch, Layers, BookOpen
 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
@@ -170,7 +170,7 @@ const DepartmentSkeleton = () => (
 
 // Department type configuration
 const DEPARTMENT_TYPES = [
-  { value: 'academic', label: 'Academic', icon: GraduationCap, color: 'blue' },
+  { value: 'academic', label: 'Academic', icon: BookOpen, color: 'blue' },
   { value: 'administrative', label: 'Administrative', icon: Building2, color: 'purple' },
   { value: 'support', label: 'Support', icon: Users, color: 'green' },
   { value: 'operations', label: 'Operations', icon: Settings, color: 'orange' },
