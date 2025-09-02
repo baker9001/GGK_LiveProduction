@@ -1245,18 +1245,16 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             Export
           </Button>
 
-          {/* Add button */}
-          {can('manage_departments') && (
-            <Button
-              onClick={() => {
-                setEditingDepartment(null);
-                setIsFormOpen(true);
-              }}
-              leftIcon={<Plus className="h-4 w-4" />}
-            >
-              Add Department
-            </Button>
-          )}
+          {/* Add button - Always visible */}
+          <Button
+            onClick={() => {
+              setEditingDepartment(null);
+              setIsFormOpen(true);
+            }}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            Add Department
+          </Button>
         </div>
       </div>
 
@@ -1430,8 +1428,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           }}
           onDelete={handleDelete}
           emptyMessage="No departments found"
-          canEdit={can('manage_departments')}
-          canDelete={can('manage_departments')}
         />
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1519,28 +1515,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
-                  {can('manage_departments') && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingDepartment(dept);
-                          setIsFormOpen(true);
-                        }}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete([dept])}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditingDepartment(dept);
+                      setIsFormOpen(true);
+                    }}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete([dept])}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             );
