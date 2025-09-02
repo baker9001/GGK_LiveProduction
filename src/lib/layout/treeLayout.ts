@@ -270,7 +270,7 @@ export function buildTreeFromData(
     const schoolChildren: string[] = [];
 
     companyData.schools.forEach((school: any) => {
-      const schoolId = school-${school.id};
+      const schoolId = `school-${school.id}`;
       schoolChildren.push(schoolId);
 
       nodes.set(schoolId, {
@@ -291,7 +291,7 @@ export function buildTreeFromData(
   // Process each school for branches and grade levels
   if (companyData?.schools) {
     companyData.schools.forEach((school: any) => {
-      const schoolId = school-${school.id};
+      const schoolId = `school-${school.id}`;
       const schoolNode = nodes.get(schoolId);
 
       if (schoolNode && expandedNodes.has(schoolId)) {
@@ -302,7 +302,7 @@ export function buildTreeFromData(
           const branches = school.branches || lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
 
           branches.forEach((branch: any) => {
-            const branchId = branch-${branch.id};
+            const branchId = `branch-${branch.id}`;
             children.push(branchId);
 
             nodes.set(branchId, {
@@ -315,14 +315,14 @@ export function buildTreeFromData(
 
             // Add branch-level grades if years tab is visible and branch is expanded
             if (visibleLevels?.has('years') && expandedNodes.has(branchId)) {
-              const branchGrades = lazyLoadedData.get(grades-branch-${branch.id}) || branch.grade_levels || [];
+              const branchGrades = lazyLoadedData.get(`grades-branch-${branch.id}`) || branch.grade_levels || [];
 
               if (branchGrades.length > 0) {
                 const branchNode = nodes.get(branchId);
                 const branchGradeChildren: string[] = [];
 
                 branchGrades.forEach((grade: any) => {
-                  const gradeId = grade-${grade.id};
+                  const gradeId = `grade-${grade.id}`;
                   branchGradeChildren.push(gradeId);
 
                   nodes.set(gradeId, {
@@ -335,14 +335,14 @@ export function buildTreeFromData(
 
                   // Add sections if sections tab is visible and grade is expanded
                   if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
-                    const sections = lazyLoadedData.get(sections-grade-${grade.id}) || grade.class_sections || [];
+                    const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
 
                     if (sections.length > 0) {
                       const gradeNode = nodes.get(gradeId);
                       const sectionChildren: string[] = [];
 
                       sections.forEach((section: any) => {
-                        const sectionId = section-${section.id};
+                        const sectionId = `section-${section.id}`;
                         sectionChildren.push(sectionId);
 
                         nodes.set(sectionId, {
@@ -372,10 +372,10 @@ export function buildTreeFromData(
         // Add school-level grades if years tab is visible
         // These are grades assigned directly to schools (not through branches)
         if (visibleLevels?.has('years')) {
-          const schoolGrades = lazyLoadedData.get(grades-school-${school.id}) || school.grade_levels || [];
+          const schoolGrades = lazyLoadedData.get(`grades-school-${school.id}`) || school.grade_levels || [];
 
           schoolGrades.forEach((grade: any) => {
-            const gradeId = grade-${grade.id};
+            const gradeId = `grade-${grade.id}`;
 
             // Check if this grade is already added under a branch
             if (!nodes.has(gradeId)) {
@@ -393,13 +393,13 @@ export function buildTreeFromData(
             // Add sections if sections tab is visible and grade is expanded
             if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
               const gradeNode = nodes.get(gradeId);
-              const sections = lazyLoadedData.get(sections-grade-${grade.id}) || grade.class_sections || [];
+              const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
 
               if (sections.length > 0 && gradeNode && gradeNode.children.length === 0) {
                 const sectionChildren: string[] = [];
 
                 sections.forEach((section: any) => {
-                  const sectionId = section-${section.id};
+                  const sectionId = `section-${section.id}`;
                   sectionChildren.push(sectionId);
 
                   nodes.set(sectionId, {
@@ -442,5 +442,5 @@ export function generateConnectionPath(
   const childCenterX = childPos.x;
 
   // Create smooth orthogonal path
-  return M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop};
+  return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
 }
