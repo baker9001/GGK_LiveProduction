@@ -1,6 +1,6 @@
 // src/lib/layout/treeLayout.ts
 // Tidy tree layout algorithm for organizational charts with variable card sizes
-// FIXED: Grade levels and class sections now properly display when tabs are toggled
+// FIXED: Added buildTreeFromDataFixed function for proper grade level support
 
 export interface TreeNode {
   id: string;
@@ -243,7 +243,7 @@ export class TreeLayoutEngine {
   }
 }
 
-// Utility function to build tree from flat data with visibility control
+// Original utility function to build tree from flat data with visibility control
 export function buildTreeFromData(
   companyData: any,
   expandedNodes: Set<string>,
@@ -390,6 +390,170 @@ export function buildTreeFromData(
             gradeNode.children = sectionChildren;
           }
         });
+      }
+    });
+  }
+
+  return nodes;
+}
+
+// FIXED: New enhanced tree building function with proper grade level support
+export function buildTreeFromDataFixed(
+  companyData: any,
+  expandedNodes: Set<string>,
+  lazyLoadedData: Map<string, any[]>,
+  branchesData: Map<string, any[]>,
+  visibleLevels?: Set<string>
+): Map<string, TreeNode> {
+  const nodes = new Map<string, TreeNode>();
+
+  if (!companyData) {
+    return nodes;
+  }
+
+  // Add company node
+  nodes.set('company', {
+    id: 'company',
+    type: 'company',
+    children: [],
+    data: companyData
+  });
+
+  // Only add school children if company is expanded
+  if (expandedNodes.has('company') && companyData?.schools) {
+    const schoolChildren: string[] = [];
+    
+    companyData.schools.forEach((school: any) => {
+      const schoolId = `school-${school.id}`;
+      schoolChildren.push(schoolId);
+      
+      nodes.set(schoolId, {
+        id: schoolId,
+        type: 'school',
+        parentId: 'company',
+        children: [],
+        data: school
+      });
+    });
+
+    const companyNode = nodes.get('company');
+    if (companyNode) {
+      companyNode.children = schoolChildren;
+    }
+  }
+
+  // Process each school for branches and grade levels
+  if (companyData?.schools) {
+    companyData.schools.forEach((school: any) => {
+      const schoolId = `school-${school.id}`;
+      const schoolNode = nodes.get(schoolId);
+      
+      if (schoolNode && expandedNodes.has(schoolId)) {
+        const children: string[] = [];
+        
+        // Add branches if branches tab is visible
+        if (visibleLevels?.has('branches')) {
+          const branches = school.branches || [];
+          branches.forEach((branch: any) => {
+            const branchId = `branch-${branch.id}`;
+            children.push(branchId);
+            
+            nodes.set(branchId, {
+              id: branchId,
+              type: 'branch',
+              parentId: schoolId,
+              children: [],
+              data: branch
+            });
+            
+            // Add branch-level grades if years tab is visible and branch is expanded
+            if (visibleLevels?.has('years') && expandedNodes.has(branchId) && branch.grade_levels) {
+              const branchNode = nodes.get(branchId);
+              const branchGradeChildren: string[] = [];
+              
+              branch.grade_levels.forEach((grade: any) => {
+                const gradeId = `grade-${grade.id}`;
+                branchGradeChildren.push(gradeId);
+                
+                nodes.set(gradeId, {
+                  id: gradeId,
+                  type: 'year',
+                  parentId: branchId,
+                  children: [],
+                  data: grade
+                });
+                
+                // Add sections if sections tab is visible and grade is expanded
+                if (visibleLevels?.has('sections') && expandedNodes.has(gradeId) && grade.class_sections) {
+                  const gradeNode = nodes.get(gradeId);
+                  const sectionChildren: string[] = [];
+                  
+                  grade.class_sections.forEach((section: any) => {
+                    const sectionId = `section-${section.id}`;
+                    sectionChildren.push(sectionId);
+                    
+                    nodes.set(sectionId, {
+                      id: sectionId,
+                      type: 'section',
+                      parentId: gradeId,
+                      children: [],
+                      data: section
+                    });
+                  });
+                  
+                  if (gradeNode) {
+                    gradeNode.children = sectionChildren;
+                  }
+                }
+              });
+              
+              if (branchNode) {
+                branchNode.children = branchGradeChildren;
+              }
+            }
+          });
+        }
+        
+        // Add school-level grades if years tab is visible (not assigned to branches)
+        if (visibleLevels?.has('years') && school.grade_levels) {
+          school.grade_levels.forEach((grade: any) => {
+            const gradeId = `grade-${grade.id}`;
+            children.push(gradeId);
+            
+            nodes.set(gradeId, {
+              id: gradeId,
+              type: 'year',
+              parentId: schoolId,
+              children: [],
+              data: grade
+            });
+            
+            // Add sections if sections tab is visible and grade is expanded
+            if (visibleLevels?.has('sections') && expandedNodes.has(gradeId) && grade.class_sections) {
+              const gradeNode = nodes.get(gradeId);
+              const sectionChildren: string[] = [];
+              
+              grade.class_sections.forEach((section: any) => {
+                const sectionId = `section-${section.id}`;
+                sectionChildren.push(sectionId);
+                
+                nodes.set(sectionId, {
+                  id: sectionId,
+                  type: 'section',
+                  parentId: gradeId,
+                  children: [],
+                  data: section
+                });
+              });
+              
+              if (gradeNode) {
+                gradeNode.children = sectionChildren;
+              }
+            }
+          });
+        }
+        
+        schoolNode.children = children;
       }
     });
   }
