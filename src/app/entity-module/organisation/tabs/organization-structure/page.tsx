@@ -729,6 +729,30 @@ export default function OrganizationStructureTab({
     }
   );
 
+  // Helper to get or create card ref - MUST BE DEFINED EARLY
+  const getCardRef = useCallback((id: string) => {
+    if (!cardRefs.current.has(id)) {
+      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
+    }
+    return cardRefs.current.get(id)!;
+  }, []);
+
+  // Layout configuration - MUST BE DEFINED EARLY
+  const layoutConfig: LayoutConfig = useMemo(() => ({
+    gapX: 48,
+    gapY: 80,
+    centerParents: true,
+    minCardWidth: 260,
+    maxCardWidth: 300
+  }), []);
+
+  // Measure node dimensions - MUST BE DEFINED BEFORE BEING USED
+  const nodeDimensions = useNodeMeasurements(
+    cardRefs,
+    zoomLevel,
+    [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, allGradeLevels.length, showInactive]
+  );
+
   // Enhanced company data with proper structure for tree building
   const enhancedCompanyData = useMemo(() => {
     if (!companyData) return null;
@@ -849,9 +873,6 @@ export default function OrganizationStructureTab({
       }
     };
   }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, checkAndAutoResize]);
-
-  // Calculate hierarchical data
-  const hierarchicalData = useMemo(() => {
     if (!enhancedCompanyData?.schools) {
       return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
     }
@@ -872,30 +893,6 @@ export default function OrganizationStructureTab({
     
     return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
   }, [enhancedCompanyData, companyData]);
-
-  // Helper to get or create card ref
-  const getCardRef = useCallback((id: string) => {
-    if (!cardRefs.current.has(id)) {
-      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
-    }
-    return cardRefs.current.get(id)!;
-  }, []);
-
-  // Layout configuration - moved BEFORE nodeDimensions to avoid hoisting issue
-  const layoutConfig: LayoutConfig = useMemo(() => ({
-    gapX: 48,
-    gapY: 80,
-    centerParents: true,
-    minCardWidth: 260,
-    maxCardWidth: 300
-  }), []);
-
-  // Measure node dimensions - now layoutConfig is available
-  const nodeDimensions = useNodeMeasurements(
-    cardRefs,
-    zoomLevel,
-    [expandedNodes, visibleLevels, filteredSchools.length, allBranches.length, allGradeLevels.length, showInactive]
-  );
 
   // Handle branch editing from diagram
   const handleBranchEdit = useCallback(async (branch: any) => {
@@ -1043,6 +1040,44 @@ export default function OrganizationStructureTab({
     return () => clearTimeout(timer);
   }, []);
 
+  // Load data for expanded nodes
+  const loadNodeData = useCallback(async (nodeId: string, nodeType: string) => {
+    const key = `${nodeType}-${nodeId}`;
+    
+    // Skip if already loaded or loading
+    if (lazyLoadedData.has(key) || loadingNodes.has(key)) return;
+
+    setLoadingNodes(prev => new Set(prev).add(key));
+
+    try {
+      let data = [];
+
+      if (nodeType === 'school') {
+        // For schools, we already have branches in allBranches
+        const schoolBranches = allBranches.filter(b => b.school_id === nodeId);
+        data = schoolBranches;
+      } else if (nodeType === 'branch') {
+        // For branches, we already have grades in allGradeLevels
+        const branchGrades = allGradeLevels.filter((g: GradeLevel) => g.branch_id === nodeId);
+        data = branchGrades;
+      }
+
+      setLazyLoadedData(prev => {
+        const newMap = new Map(prev);
+        newMap.set(key, data);
+        return newMap;
+      });
+    } catch (error) {
+      console.error(`Error loading ${nodeType} data:`, error);
+    } finally {
+      setLoadingNodes(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
+    }
+  }, [allBranches, allGradeLevels, lazyLoadedData, loadingNodes]);
+
   // Toggle node expansion
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
@@ -1053,10 +1088,16 @@ export default function OrganizationStructureTab({
         newSet.delete(key);
       } else {
         newSet.add(key);
+        // Load data when expanding nodes
+        if (nodeType === 'school' && nodeId) {
+          loadNodeData(nodeId, nodeType);
+        } else if (nodeType === 'branch' && nodeId) {
+          loadNodeData(nodeId, nodeType);
+        }
       }
       return newSet;
     });
-  }, []);
+  }, [loadNodeData]);
 
   // Toggle level visibility with hierarchical rules
   const toggleLevel = useCallback((level: string) => {
