@@ -297,6 +297,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             // Parse metadata from description
             const { metadata, userDescription } = parseMetadata(editingDepartment.description);
 
+            // Set form state without triggering any submissions
             setFormState({
               company_id: editingDepartment.company_id || companyId || '',
               school_ids: assignedSchools.length > 0 ? assignedSchools : [],
@@ -313,8 +314,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               contact_email: metadata.contactEmail || '',
               contact_phone: metadata.contactPhone || ''
             });
+            
+            // Clear any errors
+            setFormErrors({});
           } finally {
-            setIsLoadingEditData(false);
+            // Small delay to ensure form is fully loaded
+            setTimeout(() => {
+              setIsLoadingEditData(false);
+            }, 100);
           }
         };
         
@@ -623,11 +630,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     
+    // Don't submit if still loading edit data
     if (isLoadingEditData) {
       return;
     }
     
+    // Basic validation
     const errors: Record<string, string> = {};
     
     if (!formState.name.trim()) {
@@ -636,6 +646,10 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     
     if (!formState.school_ids || formState.school_ids.length === 0) {
       errors.school_ids = 'Please select at least one school';
+    }
+    
+    if (formState.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.contact_email)) {
+      errors.contact_email = 'Invalid email format';
     }
     
     if (Object.keys(errors).length > 0) {
@@ -894,16 +908,27 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setIsLoadingEditData(false);
         }}
         onSave={() => {
-          if (!isLoadingEditData) {
+          // Only trigger save if not loading and form is valid
+          if (!isLoadingEditData && !departmentMutation.isLoading) {
             const form = document.getElementById('department-form') as HTMLFormElement;
             if (form) {
-              form.requestSubmit();
+              // Create and dispatch a submit event
+              const submitEvent = new Event('submit', { 
+                bubbles: true, 
+                cancelable: true 
+              });
+              form.dispatchEvent(submitEvent);
             }
           }
         }}
         loading={departmentMutation.isLoading || isLoadingEditData}
       >
-        <form id="department-form" onSubmit={handleSubmit} className="space-y-4">
+        <form 
+          id="department-form" 
+          onSubmit={handleSubmit} 
+          className="space-y-4"
+          autoComplete="off"
+        >
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
               {formErrors.form}
