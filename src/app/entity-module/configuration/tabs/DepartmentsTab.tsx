@@ -1382,7 +1382,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             <Select
               id="parent"
               value={filters.parent_id}
-              onChange={(e) => setFilters(prev => ({ ...prev, parent_id: e.target.value }))}
+              onChange={(value) => setFilters(prev => ({ ...prev, parent_id: value }))}
               options={[
                 { value: '', label: 'All departments' },
                 ...parentDepartments.map(d => ({ value: d.id, label: d.name }))
@@ -1395,7 +1395,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               id="date_from"
               type="date"
               value={filters.date_from}
-              onChange={(e) => setFilters(prev => ({ ...prev, date_from: e.target.value }))}
+              onChange={(e) => setFilters(prev => ({ ...prev, date_from: e.target ? e.target.value : e }))}
             />
           </FormField>
 
@@ -1404,7 +1404,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               id="date_to"
               type="date"
               value={filters.date_to}
-              onChange={(e) => setFilters(prev => ({ ...prev, date_to: e.target.value }))}
+              onChange={(e) => setFilters(prev => ({ ...prev, date_to: e.target ? e.target.value : e }))}
             />
           </FormField>
         </div>
@@ -1629,9 +1629,9 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   <Select
                     id="department_type"
                     value={formData.department_type}
-                    onChange={(e) => setFormData(prev => ({ 
+                    onChange={(value) => setFormData(prev => ({ 
                       ...prev, 
-                      department_type: e.target.value as Department['department_type']
+                      department_type: value as Department['department_type']
                     }))}
                     options={DEPARTMENT_TYPES.map(t => ({ 
                       value: t.value, 
@@ -1668,9 +1668,9 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 <Select
                   id="parent_department"
                   value={formData.parent_department_id || ''}
-                  onChange={(e) => setFormData(prev => ({ 
+                  onChange={(value) => setFormData(prev => ({ 
                     ...prev, 
-                    parent_department_id: e.target.value || null 
+                    parent_department_id: value || null 
                   }))}
                   options={[
                     { value: '', label: 'No Parent (Top Level)' },
