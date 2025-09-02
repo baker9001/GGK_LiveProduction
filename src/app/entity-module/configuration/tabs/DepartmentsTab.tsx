@@ -258,6 +258,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [viewMode, setViewMode] = useState<'table' | 'cards' | 'hierarchy'>('table');
+  const [isSaving, setIsSaving] = useState(false); // Add flag to track intentional saves
 
   // Tab error tracking
   const [tabErrors, setTabErrors] = useState({
@@ -573,6 +574,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       settings: false
     });
     setActiveTab('details');
+    setIsSaving(false); // Reset saving flag
   }, [companyId]);
 
   // Load department for editing
@@ -743,9 +745,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       setIsFormOpen(false);
       resetForm();
+      setIsSaving(false); // Reset flag
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to create department');
+      setIsSaving(false); // Reset flag on error
     }
   });
 
@@ -832,9 +836,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       setIsFormOpen(false);
       setEditingDepartment(null);
       resetForm();
+      setIsSaving(false); // Reset flag
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to update department');
+      setIsSaving(false); // Reset flag on error
     }
   });
 
@@ -887,7 +893,19 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   // Handle form submission
   const handleSubmit = useCallback((e?: React.FormEvent) => {
-    e?.preventDefault();
+    // Always prevent default form submission
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Only proceed if this is an intentional save (button click or Enter key)
+    if (!isSaving) {
+      return;
+    }
+    
+    // Reset the saving flag immediately
+    setIsSaving(false);
     
     if (!validateForm()) {
       toast.error('Please fix the errors before submitting');
@@ -899,7 +917,35 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     } else {
       createMutation.mutate(formData);
     }
-  }, [formData, editingDepartment, validateForm, createMutation, updateMutation]);
+  }, [formData, editingDepartment, validateForm, createMutation, updateMutation, isSaving]);
+
+  // Handle intentional save (button click)
+  const handleSaveClick = useCallback(() => {
+    setIsSaving(true);
+    // Use setTimeout to ensure state update happens before form submission
+    setTimeout(() => {
+      const form = document.querySelector('#department-form') as HTMLFormElement;
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 0);
+  }, []);
+
+  // Handle Enter key press for save
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Only save on Enter if we're in an input field (not textarea)
+    if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsSaving(true);
+      setTimeout(() => {
+        const form = document.querySelector('#department-form') as HTMLFormElement;
+        if (form) {
+          form.requestSubmit();
+        }
+      }, 0);
+    }
+  }, []);
 
   // Handle delete
   const handleDelete = useCallback((departments: Department[]) => {
@@ -1552,12 +1598,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setIsFormOpen(false);
           setEditingDepartment(null);
           resetForm();
+          setIsSaving(false); // Reset saving flag on close
         }}
-        onSave={handleSubmit}
+        onSave={handleSaveClick} // Use the click handler, not the submit handler
         loading={createMutation.isPending || updateMutation.isPending}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <form 
+          id="department-form"
+          onSubmit={handleSubmit} 
+          className="space-y-4"
+          onKeyDown={handleKeyDown} // Add keyboard handler
+        >
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(v) => {
+              // Just change the tab, don't trigger any saves
+              setActiveTab(v as any);
+            }}
+          >
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="details" className="relative">
                 Details
