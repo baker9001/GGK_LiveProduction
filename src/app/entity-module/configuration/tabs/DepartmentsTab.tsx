@@ -166,6 +166,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'details' | 'assignments' | 'contact'>('details');
   const [isLoadingEditData, setIsLoadingEditData] = useState(false);
+  const [isManualSave, setIsManualSave] = useState(false);
   
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -575,9 +576,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         setIsFormOpen(false);
         setEditingDepartment(null);
         setFormErrors({});
+        setIsManualSave(false);
         toast.success(`Department ${editingDepartment ? 'updated' : 'created'} successfully`);
       },
       onError: (error) => {
+        setIsManualSave(false);
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
@@ -632,8 +635,14 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     e.preventDefault();
     e.stopPropagation();
     
+    // Only process if this is a manual save triggered by the Save button
+    if (!isManualSave) {
+      return;
+    }
+    
     // Don't submit if still loading edit data
     if (isLoadingEditData) {
+      setIsManualSave(false);
       return;
     }
     
@@ -655,16 +664,36 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       toast.error('Please fill in all required fields');
+      setIsManualSave(false);
       return;
     }
     
     setFormErrors({});
     departmentMutation.mutate(formState);
+    setIsManualSave(false);
   };
 
-  const handleDelete = (departments: Department[]) => {
-    setDepartmentsToDelete(departments);
-    setIsConfirmDialogOpen(true);
+  const handleSaveClick = () => {
+    // Only allow save if not loading and form is valid
+    if (isLoadingEditData || departmentMutation.isLoading) {
+      return;
+    }
+    
+    // Set manual save flag and submit
+    setIsManualSave(true);
+    
+    // Use a small delay to ensure flag is set
+    requestAnimationFrame(() => {
+      const form = document.getElementById('department-form') as HTMLFormElement;
+      if (form) {
+        // Create submit event that won't be prevented
+        const event = new Event('submit', { 
+          bubbles: false,  // Don't bubble to prevent other handlers
+          cancelable: true 
+        });
+        form.dispatchEvent(event);
+      }
+    });
   };
 
   const confirmDelete = () => {
@@ -896,7 +925,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         emptyMessage="No departments found"
       />
 
-      {/* Department Form */}
+      {/* Department Form - with Enter key disabled */}
       <SlideInForm
         key={editingDepartment?.id || 'new'}
         title={editingDepartment ? 'Edit Department' : 'Create Department'}
@@ -906,29 +935,37 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setEditingDepartment(null);
           setFormErrors({});
           setIsLoadingEditData(false);
+          setIsManualSave(false);
         }}
-        onSave={() => {
-          // Only trigger save if not loading and form is valid
-          if (!isLoadingEditData && !departmentMutation.isLoading) {
-            const form = document.getElementById('department-form') as HTMLFormElement;
-            if (form) {
-              // Create and dispatch a submit event
-              const submitEvent = new Event('submit', { 
-                bubbles: true, 
-                cancelable: true 
-              });
-              form.dispatchEvent(submitEvent);
-            }
-          }
-        }}
+        onSave={handleSaveClick}
         loading={departmentMutation.isLoading || isLoadingEditData}
+        saveButtonText={isLoadingEditData ? 'Loading...' : 'Save'}
       >
-        <form 
-          id="department-form" 
-          onSubmit={handleSubmit} 
-          className="space-y-4"
-          autoComplete="off"
+        <div 
+          onKeyDown={(e) => {
+            // Block Enter key from triggering the SlideInForm's save handler
+            if (e.key === 'Enter') {
+              e.stopPropagation();
+              // Allow Enter only in textareas for new lines
+              if (!(e.target instanceof HTMLTextAreaElement)) {
+                e.preventDefault();
+              }
+            }
+          }}
         >
+          <form 
+            id="department-form" 
+            onSubmit={handleSubmit} 
+            className="space-y-4"
+            autoComplete="off"
+            onKeyPress={(e) => {
+              // Additional safeguard: prevent Enter from submitting form
+              if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
+                e.preventDefault();
+                return false;
+              }
+            }}
+          >
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
               {formErrors.form}
@@ -1183,6 +1220,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             </Tabs>
           )}
         </form>
+        </div>
       </SlideInForm>
 
       {/* Confirmation Dialog */}
