@@ -1,6 +1,6 @@
 // src/lib/layout/treeLayout.ts
 // Tidy tree layout algorithm for organizational charts with variable card sizes
-// FIXED: Added buildTreeFromDataFixed function for proper grade level support
+// UNIFIED VERSION: Single function that properly handles all hierarchies
 
 export interface TreeNode {
   id: string;
@@ -243,162 +243,8 @@ export class TreeLayoutEngine {
   }
 }
 
-// Original utility function to build tree from flat data with visibility control
+// UNIFIED tree building function that properly handles all hierarchy scenarios
 export function buildTreeFromData(
-  companyData: any,
-  expandedNodes: Set<string>,
-  lazyLoadedData: Map<string, any[]>,
-  branchesData: Map<string, any[]>,
-  visibleLevels?: Set<string>
-): Map<string, TreeNode> {
-  const nodes = new Map<string, TreeNode>();
-
-  // Early return if no company data
-  if (!companyData) {
-    return nodes;
-  }
-
-  // Add company node - always include for tree structure
-  nodes.set('company', {
-    id: 'company',
-    type: 'company',
-    children: [],
-    data: companyData
-  });
-
-  // Only add school children if company is expanded
-  if (expandedNodes.has('company') && companyData?.schools) {
-    const schoolChildren: string[] = [];
-    
-    // Process schools that are in the filtered data
-    companyData.schools.forEach((school: any) => {
-      const schoolId = `school-${school.id}`;
-      schoolChildren.push(schoolId);
-      
-      nodes.set(schoolId, {
-        id: schoolId,
-        type: 'school',
-        parentId: 'company',
-        children: [],
-        data: school
-      });
-    });
-
-    // Update company children
-    const companyNode = nodes.get('company');
-    if (companyNode) {
-      companyNode.children = schoolChildren;
-    }
-  }
-
-  // Add branch nodes only for expanded schools
-  if (companyData?.schools) {
-    companyData.schools.forEach((school: any) => {
-      const schoolId = `school-${school.id}`;
-      const schoolNode = nodes.get(schoolId);
-      
-      // Only add branches if:
-      // 1. The school node exists
-      // 2. The school is expanded
-      // 3. We have branch data
-      if (schoolNode && expandedNodes.has(schoolId)) {
-        const branches = lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
-        const branchChildren: string[] = [];
-
-        branches.forEach((branch: any) => {
-          const branchId = `branch-${branch.id}`;
-          branchChildren.push(branchId);
-          
-          nodes.set(branchId, {
-            id: branchId,
-            type: 'branch',
-            parentId: schoolId,
-            children: [],
-            data: branch
-          });
-        });
-
-        schoolNode.children = branchChildren;
-      }
-    });
-  }
-
-  // FIXED: Changed 'grade_levels' to 'years' to match the tab ID
-  // Add grade level nodes for expanded schools (when years tab is visible)
-  if (visibleLevels?.has('years') && companyData?.schools) {
-    companyData.schools.forEach((school: any) => {
-      const schoolId = `school-${school.id}`;
-      const schoolNode = nodes.get(schoolId);
-      
-      // Add grade levels if school is expanded and has grade levels
-      if (schoolNode && expandedNodes.has(schoolId) && school.grade_levels) {
-        const gradeChildren: string[] = [];
-        
-        school.grade_levels.forEach((grade: any) => {
-          const gradeId = `grade-${grade.id}`;
-          gradeChildren.push(gradeId);
-          
-          nodes.set(gradeId, {
-            id: gradeId,
-            type: 'year',
-            parentId: schoolId,
-            children: [],
-            data: grade
-          });
-        });
-        
-        // Grades are separate from branches - they coexist as children of schools
-        if (visibleLevels?.has('branches')) {
-          // If branches are also visible, combine children
-          // Put branches first, then grades
-          const existingBranches = schoolNode.children.filter(id => id.startsWith('branch-'));
-          schoolNode.children = [...existingBranches, ...gradeChildren];
-        } else {
-          // If only grades are visible, show only grades
-          schoolNode.children = gradeChildren;
-        }
-      }
-    });
-  }
-
-  // FIXED: Changed 'class_sections' to 'sections' to match the tab ID
-  // Add class section nodes for expanded grade levels (when sections tab is visible)
-  if (visibleLevels?.has('sections') && companyData?.schools) {
-    companyData.schools.forEach((school: any) => {
-      if (school.grade_levels) {
-        school.grade_levels.forEach((grade: any) => {
-          const gradeId = `grade-${grade.id}`;
-          const gradeNode = nodes.get(gradeId);
-          
-          // Add class sections if grade is expanded and has sections
-          if (gradeNode && expandedNodes.has(gradeId) && grade.class_sections) {
-            const sectionChildren: string[] = [];
-            
-            grade.class_sections.forEach((section: any) => {
-              const sectionId = `section-${section.id}`;
-              sectionChildren.push(sectionId);
-              
-              nodes.set(sectionId, {
-                id: sectionId,
-                type: 'section',
-                parentId: gradeId,
-                children: [],
-                data: section
-              });
-            });
-            
-            gradeNode.children = sectionChildren;
-          }
-        });
-      }
-    });
-  }
-
-  return nodes;
-}
-
-// FIXED: New enhanced tree building function with proper grade level support
-export function buildTreeFromDataFixed(
   companyData: any,
   expandedNodes: Set<string>,
   lazyLoadedData: Map<string, any[]>,
@@ -453,7 +299,8 @@ export function buildTreeFromDataFixed(
         
         // Add branches if branches tab is visible
         if (visibleLevels?.has('branches')) {
-          const branches = school.branches || [];
+          const branches = school.branches || lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
+          
           branches.forEach((branch: any) => {
             const branchId = `branch-${branch.id}`;
             children.push(branchId);
@@ -467,86 +314,103 @@ export function buildTreeFromDataFixed(
             });
             
             // Add branch-level grades if years tab is visible and branch is expanded
-            if (visibleLevels?.has('years') && expandedNodes.has(branchId) && branch.grade_levels) {
-              const branchNode = nodes.get(branchId);
-              const branchGradeChildren: string[] = [];
+            if (visibleLevels?.has('years') && expandedNodes.has(branchId)) {
+              const branchGrades = lazyLoadedData.get(`grades-branch-${branch.id}`) || branch.grade_levels || [];
               
-              branch.grade_levels.forEach((grade: any) => {
-                const gradeId = `grade-${grade.id}`;
-                branchGradeChildren.push(gradeId);
+              if (branchGrades.length > 0) {
+                const branchNode = nodes.get(branchId);
+                const branchGradeChildren: string[] = [];
                 
-                nodes.set(gradeId, {
-                  id: gradeId,
-                  type: 'year',
-                  parentId: branchId,
-                  children: [],
-                  data: grade
-                });
-                
-                // Add sections if sections tab is visible and grade is expanded
-                if (visibleLevels?.has('sections') && expandedNodes.has(gradeId) && grade.class_sections) {
-                  const gradeNode = nodes.get(gradeId);
-                  const sectionChildren: string[] = [];
+                branchGrades.forEach((grade: any) => {
+                  const gradeId = `grade-${grade.id}`;
+                  branchGradeChildren.push(gradeId);
                   
-                  grade.class_sections.forEach((section: any) => {
-                    const sectionId = `section-${section.id}`;
-                    sectionChildren.push(sectionId);
-                    
-                    nodes.set(sectionId, {
-                      id: sectionId,
-                      type: 'section',
-                      parentId: gradeId,
-                      children: [],
-                      data: section
-                    });
+                  nodes.set(gradeId, {
+                    id: gradeId,
+                    type: 'year',
+                    parentId: branchId,
+                    children: [],
+                    data: grade
                   });
                   
-                  if (gradeNode) {
-                    gradeNode.children = sectionChildren;
+                  // Add sections if sections tab is visible and grade is expanded
+                  if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
+                    const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
+                    
+                    if (sections.length > 0) {
+                      const gradeNode = nodes.get(gradeId);
+                      const sectionChildren: string[] = [];
+                      
+                      sections.forEach((section: any) => {
+                        const sectionId = `section-${section.id}`;
+                        sectionChildren.push(sectionId);
+                        
+                        nodes.set(sectionId, {
+                          id: sectionId,
+                          type: 'section',
+                          parentId: gradeId,
+                          children: [],
+                          data: section
+                        });
+                      });
+                      
+                      if (gradeNode) {
+                        gradeNode.children = sectionChildren;
+                      }
+                    }
                   }
+                });
+                
+                if (branchNode) {
+                  branchNode.children = branchGradeChildren;
                 }
-              });
-              
-              if (branchNode) {
-                branchNode.children = branchGradeChildren;
               }
             }
           });
         }
         
-        // Add school-level grades if years tab is visible (not assigned to branches)
-        if (visibleLevels?.has('years') && school.grade_levels) {
-          school.grade_levels.forEach((grade: any) => {
+        // Add school-level grades if years tab is visible
+        // These are grades assigned directly to schools (not through branches)
+        if (visibleLevels?.has('years')) {
+          const schoolGrades = lazyLoadedData.get(`grades-school-${school.id}`) || school.grade_levels || [];
+          
+          schoolGrades.forEach((grade: any) => {
             const gradeId = `grade-${grade.id}`;
-            children.push(gradeId);
             
-            nodes.set(gradeId, {
-              id: gradeId,
-              type: 'year',
-              parentId: schoolId,
-              children: [],
-              data: grade
-            });
+            // Check if this grade is already added under a branch
+            if (!nodes.has(gradeId)) {
+              children.push(gradeId);
+              
+              nodes.set(gradeId, {
+                id: gradeId,
+                type: 'year',
+                parentId: schoolId,
+                children: [],
+                data: grade
+              });
+            }
             
             // Add sections if sections tab is visible and grade is expanded
-            if (visibleLevels?.has('sections') && expandedNodes.has(gradeId) && grade.class_sections) {
+            if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
               const gradeNode = nodes.get(gradeId);
-              const sectionChildren: string[] = [];
+              const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
               
-              grade.class_sections.forEach((section: any) => {
-                const sectionId = `section-${section.id}`;
-                sectionChildren.push(sectionId);
+              if (sections.length > 0 && gradeNode && gradeNode.children.length === 0) {
+                const sectionChildren: string[] = [];
                 
-                nodes.set(sectionId, {
-                  id: sectionId,
-                  type: 'section',
-                  parentId: gradeId,
-                  children: [],
-                  data: section
+                sections.forEach((section: any) => {
+                  const sectionId = `section-${section.id}`;
+                  sectionChildren.push(sectionId);
+                  
+                  nodes.set(sectionId, {
+                    id: sectionId,
+                    type: 'section',
+                    parentId: gradeId,
+                    children: [],
+                    data: section
+                  });
                 });
-              });
-              
-              if (gradeNode) {
+                
                 gradeNode.children = sectionChildren;
               }
             }
