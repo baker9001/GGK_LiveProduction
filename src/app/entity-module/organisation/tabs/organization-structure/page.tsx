@@ -881,7 +881,7 @@ export default function OrganizationStructureTab({
     return cardRefs.current.get(id)!;
   }, []);
 
-  // Layout configuration
+  // Layout configuration - moved BEFORE nodeDimensions to avoid hoisting issue
   const layoutConfig: LayoutConfig = useMemo(() => ({
     gapX: 48,
     gapY: 80,
@@ -890,7 +890,7 @@ export default function OrganizationStructureTab({
     maxCardWidth: 300
   }), []);
 
-  // Measure node dimensions
+  // Measure node dimensions - now layoutConfig is available
   const nodeDimensions = useNodeMeasurements(
     cardRefs,
     zoomLevel,
