@@ -1,6 +1,6 @@
 // src/lib/layout/treeLayout.ts
-// Enhanced tree layout algorithm with grid support for large sibling groups
-// Prevents horizontal sprawl by arranging many siblings in a grid formation
+// Enhanced tree layout algorithm with WORKING grid support for large sibling groups
+// This version properly implements grid layout to prevent horizontal sprawl
 
 export interface TreeNode {
   id: string;
@@ -26,9 +26,9 @@ export interface LayoutConfig {
   centerParents: boolean;        // Whether to center parents over children
   minCardWidth: number;          // Minimum card width
   maxCardWidth: number;          // Maximum card width
-  maxSiblingsPerRow?: number;    // Maximum siblings before wrapping to grid (default: 8)
-  compactGapX?: number;          // Tighter horizontal gap for large groups (default: 20)
-  gridRowGapY?: number;          // Vertical gap between grid rows (default: 20)
+  maxSiblingsPerRow?: number;    // Maximum siblings before wrapping to grid
+  compactGapX?: number;          // Tighter horizontal gap for large groups
+  gridRowGapY?: number;          // Vertical gap between grid rows
 }
 
 export interface LayoutResult {
@@ -37,21 +37,13 @@ export interface LayoutResult {
   levelHeights: Map<number, number>;
 }
 
-interface GridLayout {
-  rows: number;
-  cols: number;
-  width: number;
-  height: number;
-}
-
 export class TreeLayoutEngine {
-  private nodes: Map<string, TreeNode>;
-  private dimensions: Map<string, NodeDimensions>;
-  private config: LayoutConfig;
+  protected nodes: Map<string, TreeNode>;
+  protected dimensions: Map<string, NodeDimensions>;
+  protected config: LayoutConfig;
   private subtreeWidths: Map<string, number> = new Map();
   private subtreeHeights: Map<string, number> = new Map();
   private nodeLevels: Map<string, number> = new Map();
-  private gridLayouts: Map<string, GridLayout> = new Map();
 
   constructor(
     nodes: Map<string, TreeNode>,
@@ -60,12 +52,12 @@ export class TreeLayoutEngine {
   ) {
     this.nodes = nodes;
     this.dimensions = dimensions;
-    // Set defaults for new config options
+    // Set defaults for grid layout
     this.config = {
       ...config,
-      maxSiblingsPerRow: config.maxSiblingsPerRow || 8,
+      maxSiblingsPerRow: config.maxSiblingsPerRow || 6,
       compactGapX: config.compactGapX || 20,
-      gridRowGapY: config.gridRowGapY || 20
+      gridRowGapY: config.gridRowGapY || 30
     };
   }
 
@@ -74,24 +66,24 @@ export class TreeLayoutEngine {
     this.subtreeWidths.clear();
     this.subtreeHeights.clear();
     this.nodeLevels.clear();
-    this.gridLayouts.clear();
 
     // Step 1: Calculate node levels
     this.calculateLevels(rootId, 0);
 
-    // Step 2: Calculate subtree dimensions (width and height for grid layouts)
+    // Step 2: Calculate subtree dimensions with grid support
     this.calculateSubtreeDimensions(rootId);
 
-    // Step 3: Position nodes
+    // Step 3: Position nodes with grid support
     const positions = new Map<string, NodePosition>();
-    const levelHeights = this.calculateLevelHeights();
-    
-    this.positionNodes(rootId, 0, 0, positions, levelHeights);
+    this.positionNodesWithGrid(rootId, 0, 0, positions);
 
     // Step 4: Normalize positions
     const normalizedPositions = this.normalizePositions(positions);
 
-    // Step 5: Calculate total canvas size
+    // Step 5: Calculate level heights
+    const levelHeights = this.calculateLevelHeights();
+
+    // Step 6: Calculate total canvas size
     const totalSize = this.calculateTotalSize(normalizedPositions);
 
     return {
@@ -111,19 +103,6 @@ export class TreeLayoutEngine {
     }
   }
 
-  private calculateOptimalGrid(childCount: number): { rows: number; cols: number } {
-    if (childCount <= this.config.maxSiblingsPerRow!) {
-      return { rows: 1, cols: childCount };
-    }
-
-    // Calculate optimal grid dimensions
-    // Aim for a roughly square layout, slightly wider than tall
-    const cols = this.config.maxSiblingsPerRow!;
-    const rows = Math.ceil(childCount / cols);
-    
-    return { rows, cols };
-  }
-
   private calculateSubtreeDimensions(nodeId: string): { width: number; height: number } {
     const node = this.nodes.get(nodeId);
     if (!node) return { width: this.config.minCardWidth, height: 140 };
@@ -139,50 +118,43 @@ export class TreeLayoutEngine {
       return { width: cardWidth, height: cardHeight };
     }
 
-    // Calculate children dimensions
+    // Calculate children dimensions recursively
     const childDimensions = node.children.map(childId => 
       this.calculateSubtreeDimensions(childId)
     );
 
-    // Determine if we need grid layout
+    // Check if we need grid layout
     const useGrid = node.children.length > this.config.maxSiblingsPerRow!;
     
     if (useGrid) {
-      // Grid layout for many children
-      const grid = this.calculateOptimalGrid(node.children.length);
+      // GRID LAYOUT CALCULATION
+      const cols = this.config.maxSiblingsPerRow!;
+      const rows = Math.ceil(node.children.length / cols);
       const gap = this.config.compactGapX!;
+      const rowGap = this.config.gridRowGapY!;
       
-      // Calculate grid dimensions
+      // Find max child dimensions
       const maxChildWidth = Math.max(...childDimensions.map(d => d.width));
       const maxChildHeight = Math.max(...childDimensions.map(d => d.height));
       
-      const gridWidth = (maxChildWidth * grid.cols) + (gap * (grid.cols - 1));
-      const gridHeight = (maxChildHeight * grid.rows) + (this.config.gridRowGapY! * (grid.rows - 1));
-      
-      // Store grid layout info
-      this.gridLayouts.set(nodeId, {
-        rows: grid.rows,
-        cols: grid.cols,
-        width: gridWidth,
-        height: gridHeight
-      });
+      // Calculate total grid size
+      const gridWidth = (maxChildWidth * cols) + (gap * (cols - 1));
+      const gridHeight = (maxChildHeight * rows) + (rowGap * (rows - 1));
       
       const subtreeWidth = Math.max(cardWidth, gridWidth);
-      const subtreeHeight = cardHeight + this.config.gapY + gridHeight;
+      const subtreeHeight = cardHeight; // Just the card height, children are positioned below
       
       this.subtreeWidths.set(nodeId, subtreeWidth);
       this.subtreeHeights.set(nodeId, subtreeHeight);
       
       return { width: subtreeWidth, height: subtreeHeight };
     } else {
-      // Linear layout for few children
+      // LINEAR LAYOUT CALCULATION
       const totalChildrenWidth = childDimensions.reduce((sum, d) => sum + d.width, 0) +
                                 (childDimensions.length - 1) * this.config.gapX;
       
-      const maxChildHeight = Math.max(...childDimensions.map(d => d.height));
-      
       const subtreeWidth = Math.max(cardWidth, totalChildrenWidth);
-      const subtreeHeight = cardHeight + this.config.gapY + maxChildHeight;
+      const subtreeHeight = cardHeight;
       
       this.subtreeWidths.set(nodeId, subtreeWidth);
       this.subtreeHeights.set(nodeId, subtreeHeight);
@@ -191,181 +163,113 @@ export class TreeLayoutEngine {
     }
   }
 
+  private positionNodesWithGrid(
+    nodeId: string,
+    x: number,
+    y: number,
+    positions: Map<string, NodePosition>
+  ): void {
+    const node = this.nodes.get(nodeId);
+    if (!node) return;
+
+    // Position current node
+    positions.set(nodeId, { x, y });
+
+    // If no children, we're done
+    if (node.children.length === 0) return;
+
+    // Calculate Y position for children (below current node)
+    const cardHeight = this.dimensions.get(nodeId)?.height || 140;
+    const childY = y + cardHeight + this.config.gapY;
+
+    // Determine layout type
+    const useGrid = node.children.length > this.config.maxSiblingsPerRow!;
+
+    if (useGrid) {
+      // GRID LAYOUT FOR MANY CHILDREN
+      const cols = this.config.maxSiblingsPerRow!;
+      const rows = Math.ceil(node.children.length / cols);
+      const gap = this.config.compactGapX!;
+      const rowGap = this.config.gridRowGapY!;
+      
+      // Get max child dimensions for uniform grid
+      const childDimensions = node.children.map(childId => 
+        this.dimensions.get(childId) || { width: this.config.minCardWidth, height: 140 }
+      );
+      const maxChildWidth = Math.max(...childDimensions.map(d => d.width));
+      const maxChildHeight = Math.max(...childDimensions.map(d => d.height));
+      
+      // Calculate total grid width
+      const totalGridWidth = (maxChildWidth * cols) + (gap * (cols - 1));
+      
+      // Starting X position to center grid under parent
+      const gridStartX = x - (totalGridWidth / 2) + (maxChildWidth / 2);
+      
+      // Position each child in grid
+      node.children.forEach((childId, index) => {
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+        
+        // For the last row with fewer items, center them
+        const itemsInLastRow = node.children.length % cols || cols;
+        const isLastRow = row === rows - 1;
+        const itemsInRow = isLastRow ? itemsInLastRow : cols;
+        
+        let childX: number;
+        if (isLastRow && itemsInRow < cols) {
+          // Center the last row
+          const lastRowWidth = (maxChildWidth * itemsInRow) + (gap * (itemsInRow - 1));
+          const lastRowStartX = x - (lastRowWidth / 2) + (maxChildWidth / 2);
+          childX = lastRowStartX + (col * (maxChildWidth + gap));
+        } else {
+          // Normal grid positioning
+          childX = gridStartX + (col * (maxChildWidth + gap));
+        }
+        
+        const childYPos = childY + (row * (maxChildHeight + rowGap));
+        
+        // Recursively position this child's subtree
+        this.positionNodesWithGrid(childId, childX, childYPos, positions);
+      });
+      
+    } else {
+      // LINEAR LAYOUT FOR FEW CHILDREN
+      const childWidths = node.children.map(childId => 
+        this.subtreeWidths.get(childId) || this.config.minCardWidth
+      );
+      
+      // Calculate total width needed
+      const totalWidth = childWidths.reduce((sum, w) => sum + w, 0) + 
+                        (childWidths.length - 1) * this.config.gapX;
+      
+      // Starting X position to center children under parent
+      let currentX = x - (totalWidth / 2);
+      
+      // Position each child
+      node.children.forEach((childId, index) => {
+        const childWidth = childWidths[index];
+        const childX = currentX + (childWidth / 2);
+        
+        // Recursively position this child's subtree
+        this.positionNodesWithGrid(childId, childX, childY, positions);
+        
+        currentX += childWidth + this.config.gapX;
+      });
+    }
+  }
+
   private calculateLevelHeights(): Map<number, number> {
     const levelHeights = new Map<number, number>();
-    const levelExtraHeights = new Map<number, number>();
 
-    // First pass: get base heights
     this.nodeLevels.forEach((level, nodeId) => {
       const dimensions = this.dimensions.get(nodeId);
       const height = dimensions?.height || 140;
       
       const currentMaxHeight = levelHeights.get(level) || 0;
       levelHeights.set(level, Math.max(currentMaxHeight, height));
-      
-      // Check if this node uses grid layout
-      const gridLayout = this.gridLayouts.get(nodeId);
-      if (gridLayout && gridLayout.rows > 1) {
-        // Need extra space for grid rows at the next level
-        const nextLevel = level + 1;
-        const extraHeight = gridLayout.height - (dimensions?.height || 140);
-        const currentExtra = levelExtraHeights.get(nextLevel) || 0;
-        levelExtraHeights.set(nextLevel, Math.max(currentExtra, extraHeight));
-      }
-    });
-
-    // Second pass: add extra heights for grid layouts
-    levelExtraHeights.forEach((extraHeight, level) => {
-      const currentHeight = levelHeights.get(level) || 140;
-      levelHeights.set(level, currentHeight + extraHeight);
     });
 
     return levelHeights;
-  }
-
-  private positionNodes(
-    nodeId: string,
-    parentX: number,
-    parentY: number,
-    positions: Map<string, NodePosition>,
-    levelHeights: Map<number, number>
-  ): void {
-    const node = this.nodes.get(nodeId);
-    if (!node) return;
-
-    const level = this.nodeLevels.get(nodeId) || 0;
-    const cardDimensions = this.dimensions.get(nodeId);
-    const cardWidth = cardDimensions?.width || this.config.minCardWidth;
-
-    // Calculate Y position
-    let yPosition = 0;
-    for (let i = 0; i < level; i++) {
-      const levelHeight = levelHeights.get(i) || 140;
-      yPosition += levelHeight + this.config.gapY;
-    }
-
-    // Handle leaf nodes
-    if (node.children.length === 0) {
-      positions.set(nodeId, { x: parentX, y: yPosition });
-      return;
-    }
-
-    // Check for grid layout
-    const gridLayout = this.gridLayouts.get(nodeId);
-    const useGrid = gridLayout && node.children.length > this.config.maxSiblingsPerRow!;
-
-    if (useGrid) {
-      // Position children in grid
-      this.positionChildrenInGrid(
-        node,
-        nodeId,
-        parentX,
-        yPosition,
-        positions,
-        levelHeights,
-        gridLayout
-      );
-    } else {
-      // Position children linearly
-      this.positionChildrenLinearly(
-        node,
-        nodeId,
-        parentX,
-        yPosition,
-        positions,
-        levelHeights
-      );
-    }
-
-    // Position parent (centering logic remains the same)
-    if (this.config.centerParents && node.children.length > 0) {
-      const childPositions = node.children.map(childId => positions.get(childId)).filter(p => p);
-      if (childPositions.length > 0) {
-        const minX = Math.min(...childPositions.map(p => p!.x));
-        const maxX = Math.max(...childPositions.map(p => p!.x));
-        const centerX = (minX + maxX) / 2;
-        positions.set(nodeId, { x: centerX, y: yPosition });
-      } else {
-        positions.set(nodeId, { x: parentX, y: yPosition });
-      }
-    } else {
-      positions.set(nodeId, { x: parentX, y: yPosition });
-    }
-  }
-
-  private positionChildrenInGrid(
-    node: TreeNode,
-    nodeId: string,
-    parentX: number,
-    parentY: number,
-    positions: Map<string, NodePosition>,
-    levelHeights: Map<number, number>,
-    gridLayout: GridLayout
-  ): void {
-    const level = this.nodeLevels.get(nodeId) || 0;
-    const gap = this.config.compactGapX!;
-    const rowGap = this.config.gridRowGapY!;
-    
-    // Calculate child level Y
-    let childBaseY = parentY;
-    for (let i = 0; i <= level; i++) {
-      const levelHeight = levelHeights.get(i) || 140;
-      if (i <= level) {
-        childBaseY += levelHeight + this.config.gapY;
-      }
-    }
-
-    // Get max dimensions for uniform grid cells
-    const childDimensions = node.children.map(childId => 
-      this.dimensions.get(childId) || { width: this.config.minCardWidth, height: 140 }
-    );
-    const maxChildWidth = Math.max(...childDimensions.map(d => d.width));
-    const maxChildHeight = Math.max(...childDimensions.map(d => d.height));
-
-    // Calculate starting position to center grid under parent
-    const gridStartX = parentX - gridLayout.width / 2;
-
-    // Position each child in the grid
-    node.children.forEach((childId, index) => {
-      const row = Math.floor(index / gridLayout.cols);
-      const col = index % gridLayout.cols;
-      
-      const childX = gridStartX + (col * (maxChildWidth + gap)) + maxChildWidth / 2;
-      const childY = childBaseY + (row * (maxChildHeight + rowGap));
-      
-      // Recursively position this child's subtree
-      this.positionNodes(childId, childX, childY, positions, levelHeights);
-    });
-  }
-
-  private positionChildrenLinearly(
-    node: TreeNode,
-    nodeId: string,
-    parentX: number,
-    parentY: number,
-    positions: Map<string, NodePosition>,
-    levelHeights: Map<number, number>
-  ): void {
-    const subtreeWidth = this.subtreeWidths.get(nodeId) || this.config.minCardWidth;
-    const childWidths = node.children.map(childId => 
-      this.subtreeWidths.get(childId) || this.config.minCardWidth
-    );
-
-    // Calculate total width and starting position
-    const totalChildrenWidth = childWidths.reduce((sum, width) => sum + width, 0) +
-                              (childWidths.length - 1) * this.config.gapX;
-    
-    const childrenStartX = parentX - totalChildrenWidth / 2;
-
-    // Position each child
-    let currentX = childrenStartX;
-    node.children.forEach((childId, index) => {
-      const childWidth = childWidths[index];
-      const childCenterX = currentX + childWidth / 2;
-      
-      this.positionNodes(childId, childCenterX, parentY, positions, levelHeights);
-      currentX += childWidth + this.config.gapX;
-    });
   }
 
   private normalizePositions(positions: Map<string, NodePosition>): Map<string, NodePosition> {
@@ -380,8 +284,8 @@ export class TreeLayoutEngine {
     const normalized = new Map<string, NodePosition>();
     positions.forEach((pos, nodeId) => {
       normalized.set(nodeId, {
-        x: pos.x - minX,
-        y: pos.y - minY
+        x: pos.x - minX + 100, // Add padding
+        y: pos.y - minY + 50
       });
     });
 
@@ -402,13 +306,13 @@ export class TreeLayoutEngine {
     });
 
     return {
-      width: maxX + this.config.gapX,
-      height: maxY + this.config.gapY
+      width: maxX + 100, // Add padding
+      height: maxY + 50
     };
   }
 }
 
-// Tree building function remains the same - no changes needed
+// Tree building function remains the same
 export function buildTreeFromData(
   companyData: any,
   expandedNodes: Set<string>,
@@ -464,7 +368,7 @@ export function buildTreeFromData(
         
         // Add branches if branches tab is visible
         if (visibleLevels?.has('branches')) {
-          const branches = school.branches || lazyLoadedData.get(schoolId) || branchesData.get(school.id) || [];
+          const branches = school.branches || [];
           
           branches.forEach((branch: any) => {
             const branchId = `branch-${branch.id}`;
@@ -480,7 +384,7 @@ export function buildTreeFromData(
             
             // Add branch-level grades if years tab is visible and branch is expanded
             if (visibleLevels?.has('years') && expandedNodes.has(branchId)) {
-              const branchGrades = lazyLoadedData.get(`grades-branch-${branch.id}`) || branch.grade_levels || [];
+              const branchGrades = branch.grade_levels || [];
               
               if (branchGrades.length > 0) {
                 const branchNode = nodes.get(branchId);
@@ -500,7 +404,7 @@ export function buildTreeFromData(
                   
                   // Add sections if sections tab is visible and grade is expanded
                   if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
-                    const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
+                    const sections = grade.class_sections || [];
                     
                     if (sections.length > 0) {
                       const gradeNode = nodes.get(gradeId);
@@ -536,12 +440,12 @@ export function buildTreeFromData(
         
         // Add school-level grades if years tab is visible
         if (visibleLevels?.has('years')) {
-          const schoolGrades = lazyLoadedData.get(`grades-school-${school.id}`) || school.grade_levels || [];
+          const schoolGrades = school.grade_levels || [];
           
           schoolGrades.forEach((grade: any) => {
             const gradeId = `grade-${grade.id}`;
             
-            // Check if this grade is already added under a branch
+            // Only add if not already added under a branch
             if (!nodes.has(gradeId)) {
               children.push(gradeId);
               
@@ -557,7 +461,7 @@ export function buildTreeFromData(
             // Add sections if sections tab is visible and grade is expanded
             if (visibleLevels?.has('sections') && expandedNodes.has(gradeId)) {
               const gradeNode = nodes.get(gradeId);
-              const sections = lazyLoadedData.get(`sections-grade-${grade.id}`) || grade.class_sections || [];
+              const sections = grade.class_sections || [];
               
               if (sections.length > 0 && gradeNode && gradeNode.children.length === 0) {
                 const sectionChildren: string[] = [];
@@ -589,7 +493,7 @@ export function buildTreeFromData(
   return nodes;
 }
 
-// SVG path generation remains the same
+// SVG path generation for connections
 export function generateConnectionPath(
   parentPos: NodePosition,
   childPos: NodePosition,
@@ -599,10 +503,22 @@ export function generateConnectionPath(
 ): string {
   const parentBottom = parentPos.y + parentHeight;
   const childTop = childPos.y;
-  const midY = parentBottom + gapY / 2;
+  const midY = parentBottom + (gapY / 2);
 
   const parentCenterX = parentPos.x;
   const childCenterX = childPos.x;
   
-  return `M ${parentCenterX} ${parentBottom} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTop}`;
+  // Create orthogonal path with rounded corners
+  const cornerRadius = 5;
+  
+  if (Math.abs(parentCenterX - childCenterX) < 1) {
+    // Straight vertical line
+    return `M ${parentCenterX} ${parentBottom} L ${childCenterX} ${childTop}`;
+  }
+  
+  // L-shaped path with optional rounded corners
+  return `M ${parentCenterX} ${parentBottom} 
+          L ${parentCenterX} ${midY}
+          L ${childCenterX} ${midY}
+          L ${childCenterX} ${childTop}`;
 }
