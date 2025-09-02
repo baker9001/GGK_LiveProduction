@@ -705,6 +705,12 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     setDepartmentsToDelete([]);
   };
 
+  // Handle delete action
+  function handleDelete(selectedDepartments: Department[]) {
+    setDepartmentsToDelete(selectedDepartments);
+    setIsConfirmDialogOpen(true);
+  }
+
   // Department Level Icon Component
   const DepartmentLevelIcon = ({ level }: { level: string }) => {
     switch (level) {
