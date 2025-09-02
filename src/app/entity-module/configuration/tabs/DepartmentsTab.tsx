@@ -67,6 +67,7 @@ import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shared/Tabs';
+import { PhoneInput } from '@/components/shared/PhoneInput';
 import { toast } from '@/components/shared/Toast';
 import { cn } from '@/lib/utils';
 
