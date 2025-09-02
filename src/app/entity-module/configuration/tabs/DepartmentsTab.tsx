@@ -67,9 +67,11 @@ import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shared/Tabs';
-import { PhoneInput } from '@/components/shared/PhoneInput';
 import { toast } from '@/components/shared/Toast';
 import { cn } from '@/lib/utils';
+
+// Import PhoneInput directly (update path if needed)
+import { PhoneInput } from '@/components/shared/PhoneInput';
 
 // Enhanced Department interface with all fields
 interface Department {
@@ -124,7 +126,7 @@ const departmentSchema = z.object({
   head_email: z.string().email('Invalid email format').optional().nullable().or(z.literal('')),
   contact_email: z.string().email('Invalid email format').optional().nullable().or(z.literal('')),
   contact_phone: z.string()
-    .regex(/^[\d\s\-\+\(\)]+$/, 'Invalid phone number format')
+    .regex(/^(\+\d{1,4}\s?)?\d{4,}$/, 'Invalid phone number format')
     .optional()
     .nullable()
     .or(z.literal('')),
@@ -1865,16 +1867,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 error={formErrors.contact_phone}
                 description="Department phone number for inquiries"
               >
-                <Input
-                  id="contact_phone"
-                  type="tel"
+                <PhoneInput
                   value={formData.contact_phone || ''}
-                  onChange={(e) => setFormData(prev => ({ 
+                  onChange={(value: string) => setFormData(prev => ({ 
                     ...prev, 
-                    contact_phone: e.target.value || null 
+                    contact_phone: value || null 
                   }))}
-                  placeholder="+1 (555) 123-4567"
-                  leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
+                  placeholder="XXXX XXXX"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  className="w-full"
                 />
               </FormField>
             </TabsContent>
