@@ -1,644 +1,1315 @@
 /**
- * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
+ * File: /src/app/entity-module/organisation/tabs/schools/page.tsx
+ * COMPLETE FIXED VERSION - All UI Issues Resolved
  * 
- * Organization Structure Tab - Visual Tree View
- * Displays organizational hierarchy with interactive tree layout
+ * Fixes Applied:
+ * 1. ✅ Removed duplicate bottom buttons (kept only top icon buttons)
+ * 2. ✅ Enhanced logo size (80x80) and display with better background
+ * 3. ✅ Unified color scheme (purple for branches, blue for students, green for teachers)
+ * 4. ✅ View mode toggle moved to right side for consistency
  */
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Building2, School, MapPin, Plus, Edit, Trash2, 
-  ZoomIn, ZoomOut, RotateCcw, Maximize2, Eye,
-  Users, GraduationCap, Calendar, Grid3x3,
-  ChevronRight, ChevronDown, Info, AlertTriangle
+  Plus, Search, Edit2, Trash2, Building2, Users, MapPin,
+  Filter, X, AlertTriangle, Shield, Lock, Loader2,
+  CheckCircle2, XCircle, Info, School, Hash, Grid3X3, List
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/shared/Button';
+import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { cn } from '@/lib/utils';
-import { TreeLayoutEngine, buildTreeFromData, generateConnectionPath } from '@/lib/layout/treeLayout';
-import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
+import { SlideInForm } from '@/components/shared/SlideInForm';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { useUser } from '@/contexts/UserContext';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { SchoolFormContent } from '@/components/forms/SchoolFormContent';
 
-// Type definitions
-interface Company {
+// ===== INTERFACES =====
+interface SchoolData {
   id: string;
   name: string;
-  code?: string;
+  code: string;
+  company_id: string;
+  description?: string;
   status: 'active' | 'inactive';
-  schools?: School[];
-}
-
-interface School {
-  id: string;
-  name: string;
-  code?: string;
-  status: 'active' | 'inactive';
-  branches?: Branch[];
-  grade_levels?: GradeLevel[];
+  address?: string;
+  notes?: string;
+  logo?: string;
+  created_at: string;
+  additional?: SchoolAdditional;
+  branches?: any[];
   student_count?: number;
-  teachers_count?: number;
   branch_count?: number;
-}
-
-interface Branch {
-  id: string;
-  name: string;
-  code?: string;
-  status: 'active' | 'inactive';
-  student_count?: number;
   teachers_count?: number;
+  readOnly?: boolean;
 }
 
-interface GradeLevel {
-  id: string;
-  grade_name: string;
-  grade_code?: string;
-  status: 'active' | 'inactive';
-  class_sections?: ClassSection[];
+interface SchoolAdditional {
+  id?: string;
+  school_id: string;
+  school_type?: string;
+  curriculum_type?: string[];
+  total_capacity?: number;
+  teachers_count?: number;
+  student_count?: number;
+  active_teachers_count?: number;
+  principal_name?: string;
+  principal_email?: string;
+  principal_phone?: string;
+  campus_address?: string;
+  campus_city?: string;
+  campus_state?: string;
+  campus_postal_code?: string;
+  latitude?: number;
+  longitude?: number;
+  established_date?: string;
+  academic_year_start?: number;
+  academic_year_end?: number;
+  has_library?: boolean;
+  has_laboratory?: boolean;
+  has_sports_facilities?: boolean;
+  has_cafeteria?: boolean;
 }
 
-interface ClassSection {
-  id: string;
-  section_name: string;
-  section_code?: string;
-  status: 'active' | 'inactive';
-  max_capacity?: number;
-}
-
-interface OrganizationStructureTabProps {
-  companyData: Company;
+export interface SchoolsTabProps {
   companyId: string;
-  onAddClick?: (parent: any, type: string) => void;
-  onEditClick?: (item: any, type: string) => void;
-  onItemClick?: (item: any, type: string) => void;
   refreshData?: () => void;
 }
 
-export default function OrganizationStructureTab({
-  companyData,
-  companyId,
-  onAddClick,
-  onEditClick,
-  onItemClick,
-  refreshData
-}: OrganizationStructureTabProps) {
-  // State for tree visualization
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
-  const [visibleLevels, setVisibleLevels] = useState<Set<string>>(new Set(['schools', 'branches']));
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'tree' | 'cards'>('tree');
+export interface SchoolsTabRef {
+  openEditSchoolModal: (school: SchoolData) => void;
+}
 
-  // Refs for DOM measurements
-  const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
+// ===== MAIN COMPONENT =====
+const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
+  ({ companyId, refreshData }, ref) => {
+    const queryClient = useQueryClient();
+    const { user } = useUser();
+    const authenticatedUser = getAuthenticatedUser();
+    const {
+      canViewTab,
+      can,
+      getScopeFilters,
+      getUserContext,
+      isLoading: isAccessControlLoading,
+      isEntityAdmin,
+      isSubEntityAdmin,
+      isSchoolAdmin,
+      isBranchAdmin,
+      hasError: hasAccessError,
+      error: accessError
+    } = useAccessControl();
 
-  // Enhanced company data with statistics
-  const enhancedCompanyData = useMemo(() => {
-    if (!companyData) return null;
-
-    const enhanced = { ...companyData };
+    // State management
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+    const [formData, setFormData] = useState<any>({});
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+    const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
+    const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
+    const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     
-    if (enhanced.schools) {
-      enhanced.schools = enhanced.schools.map(school => ({
-        ...school,
-        branch_count: school.branches?.length || 0,
-        student_count: school.student_count || 0,
-        teachers_count: school.teachers_count || 0
-      }));
-    }
+    // Confirmation dialog state
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+    const [schoolToDelete, setSchoolToDelete] = useState<SchoolData | null>(null);
 
-    return enhanced;
-  }, [companyData]);
-
-  // Build tree structure
-  const treeNodes = useMemo(() => {
-    if (!enhancedCompanyData) return new Map();
-    
-    return buildTreeFromData(
-      enhancedCompanyData,
-      expandedNodes,
-      new Map(), // lazyLoadedData
-      new Map(), // branchesData
-      visibleLevels
-    );
-  }, [enhancedCompanyData, expandedNodes, visibleLevels]);
-
-  // Initialize card refs for all nodes
-  useEffect(() => {
-    const newCardRefs = new Map<string, React.RefObject<HTMLDivElement>>();
-    
-    treeNodes.forEach((node, nodeId) => {
-      if (!cardRefs.current.has(nodeId)) {
-        newCardRefs.set(nodeId, React.createRef<HTMLDivElement>());
-      } else {
-        newCardRefs.set(nodeId, cardRefs.current.get(nodeId)!);
+    // ACCESS CHECK: Block entry if user cannot view this tab
+    useEffect(() => {
+      if (!isAccessControlLoading && !canViewTab('schools')) {
+        toast.error('You do not have permission to view schools');
+        setTimeout(() => {
+          window.location.href = '/app/entity-module/dashboard';
+        }, 1000);
       }
-    });
-    
-    cardRefs.current = newCardRefs;
-  }, [treeNodes]);
+    }, [isAccessControlLoading, canViewTab]);
 
-  // FIXED: Initialize nodeDimensions before using it
-  const nodeDimensions = useMemo(() => {
-    const dimensions = new Map();
-    
-    // Set default dimensions for each node type
-    treeNodes.forEach((node, nodeId) => {
-      let width = 280;
-      let height = 140;
+    // Show access error if there's one
+    useEffect(() => {
+      if (hasAccessError && accessError) {
+        toast.error(`Access Control Error: ${accessError}`);
+      }
+    }, [hasAccessError, accessError]);
+
+    // Expose methods via ref
+    React.useImperativeHandle(ref, () => ({
+      openEditSchoolModal: (school: SchoolData) => {
+        handleEdit(school);
+      }
+    }), []);
+
+    // Helper to get school logo URL
+    const getSchoolLogoUrl = useCallback((path: string | null | undefined) => {
+      if (!path) return null;
       
-      switch (node.type) {
-        case 'company':
-          width = 320;
-          height = 160;
-          break;
-        case 'school':
-          width = 300;
-          height = 150;
-          break;
-        case 'branch':
-          width = 280;
-          height = 140;
-          break;
-        case 'year':
-          width = 260;
-          height = 120;
-          break;
-        case 'section':
-          width = 240;
-          height = 100;
-          break;
+      if (path.startsWith('http')) {
+        return path;
       }
       
-      dimensions.set(nodeId, { width, height });
-    });
-    
-    return dimensions;
-  }, [treeNodes]);
-
-  // Use node measurements hook
-  const measuredDimensions = useNodeMeasurements(
-    cardRefs,
-    zoomLevel,
-    [treeNodes, expandedNodes, visibleLevels]
-  );
-
-  // Calculate layout using tree engine
-  const layoutResult = useMemo(() => {
-    if (treeNodes.size === 0) return null;
-
-    const layoutEngine = new TreeLayoutEngine(
-      treeNodes,
-      measuredDimensions.size > 0 ? measuredDimensions : nodeDimensions,
-      {
-        gapX: 40,
-        gapY: 80,
-        centerParents: true,
-        minCardWidth: 240,
-        maxCardWidth: 320
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) {
+        console.warn('VITE_SUPABASE_URL is not defined');
+        return null;
       }
-    );
+      
+      return `${supabaseUrl}/storage/v1/object/public/school-logos/${path}`;
+    }, []);
 
-    return layoutEngine.layout('company');
-  }, [treeNodes, measuredDimensions, nodeDimensions]);
+    // SCOPED QUERIES: Apply getScopeFilters to all Supabase queries
+    const scopeFilters = getScopeFilters('schools');
 
-  // Calculate summary statistics
-  const summaryStats = useMemo(() => {
-    if (!enhancedCompanyData) {
-      return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
-    }
-
-    const totalSchools = enhancedCompanyData.schools?.length || 0;
-    const totalBranches = enhancedCompanyData.schools?.reduce((sum, school) => 
-      sum + (school.branches?.length || 0), 0) || 0;
-    const totalStudents = enhancedCompanyData.schools?.reduce((sum, school) => 
-      sum + (school.student_count || 0), 0) || 0;
-    const totalTeachers = enhancedCompanyData.schools?.reduce((sum, school) => 
-      sum + (school.teachers_count || 0), 0) || 0;
-    const totalUsers = totalStudents + totalTeachers;
-
-    return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
-  }, [enhancedCompanyData]);
-
-  // Handle branch editing from diagram
-  const handleBranchEdit = useCallback(async (branch: any) => {
-    if (onEditClick) {
-      onEditClick(branch, 'branch');
-    }
-  }, [onEditClick]);
-
-  // Handle school editing from diagram
-  const handleSchoolEdit = useCallback(async (school: any) => {
-    if (onEditClick) {
-      onEditClick(school, 'school');
-    }
-  }, [onEditClick]);
-
-  // Handle node expansion
-  const toggleNode = useCallback((nodeId: string) => {
-    setExpandedNodes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(nodeId)) {
-        newSet.delete(nodeId);
-      } else {
-        newSet.add(nodeId);
-      }
-      return newSet;
-    });
-  }, []);
-
-  // Handle zoom controls
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev * 1.2, 3));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev / 1.2, 0.3));
-  const handleZoomReset = () => setZoomLevel(1);
-
-  // Handle level visibility
-  const toggleLevel = (level: string) => {
-    setVisibleLevels(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(level)) {
-        newSet.delete(level);
-      } else {
-        newSet.add(level);
-      }
-      return newSet;
-    });
-  };
-
-  // Render organization card
-  const renderCard = (nodeId: string, node: any) => {
-    const ref = cardRefs.current.get(nodeId);
-    const position = layoutResult?.positions.get(nodeId);
-    const isExpanded = expandedNodes.has(nodeId);
-    const isSelected = selectedNode === nodeId;
-
-    if (!position || !ref) return null;
-
-    const handleCardClick = () => {
-      setSelectedNode(nodeId);
-      if (onItemClick) {
-        onItemClick(node.data, node.type);
-      }
-    };
-
-    const handleExpandClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      toggleNode(nodeId);
-    };
-
-    return (
-      <div
-        key={nodeId}
-        ref={ref}
-        data-card-id={nodeId}
-        className={cn(
-          "absolute bg-white dark:bg-gray-800 rounded-lg shadow-md border-2 transition-all duration-200 cursor-pointer",
-          isSelected 
-            ? "border-[#8CC63F] shadow-lg" 
-            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600",
-          "hover:shadow-lg transform hover:-translate-y-1"
-        )}
-        style={{
-          left: `${position.x}px`,
-          top: `${position.y}px`,
-          transform: `scale(${zoomLevel})`,
-          transformOrigin: 'top left'
-        }}
-        onClick={handleCardClick}
-      >
-        {/* Card Header */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {node.type === 'company' && <Building2 className="h-5 w-5 text-blue-600" />}
-              {node.type === 'school' && <School className="h-5 w-5 text-green-600" />}
-              {node.type === 'branch' && <MapPin className="h-5 w-5 text-purple-600" />}
-              {node.type === 'year' && <GraduationCap className="h-5 w-5 text-orange-600" />}
-              {node.type === 'section' && <Users className="h-5 w-5 text-indigo-600" />}
-              
-              <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
-                  {node.data?.name || 'Unknown'}
-                </h3>
-                {node.data?.code && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {node.data.code}
-                  </p>
-                )}
-              </div>
-            </div>
+    // ===== FETCH SCHOOLS WITH PROPER JUNCTION TABLE HANDLING =====
+    const { data: schools = [], isLoading, error: fetchError, refetch } = useQuery(
+      ['schools-tab', companyId, isEntityAdmin, isSubEntityAdmin, isSchoolAdmin, isBranchAdmin, authenticatedUser?.id],
+      async () => {
+        // For Entity and Sub-Entity admins - fetch all company schools
+        if (isEntityAdmin || isSubEntityAdmin) {
+          let schoolsQuery = supabase
+            .from('schools')
+            .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
+            .eq('company_id', companyId);
+          
+          const { data: schoolsData, error: schoolsError } = await schoolsQuery.order('name');
+          
+          if (schoolsError) throw schoolsError;
+          
+          // Fetch additional data for each school
+          const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
+            const { data: additionalData } = await supabase
+              .from('schools_additional')
+              .select('*')
+              .eq('school_id', school.id)
+              .maybeSingle();
             
-            <div className="flex items-center gap-1">
-              <StatusBadge status={node.data?.status || 'active'} size="xs" />
-              
-              {node.children.length > 0 && (
-                <button
-                  onClick={handleExpandClick}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Card Content */}
-        <div className="p-4">
-          {/* Statistics */}
-          {node.type === 'company' && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                <div className="font-bold text-blue-600">{summaryStats.totalSchools}</div>
-                <div className="text-blue-700 dark:text-blue-300">Schools</div>
-              </div>
-              <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
-                <div className="font-bold text-purple-600">{summaryStats.totalBranches}</div>
-                <div className="text-purple-700 dark:text-purple-300">Branches</div>
-              </div>
-            </div>
-          )}
-
-          {node.type === 'school' && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
-                <div className="font-bold text-purple-600">{node.data?.branch_count || 0}</div>
-                <div className="text-purple-700 dark:text-purple-300">Branches</div>
-              </div>
-              <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
-                <div className="font-bold text-green-600">{node.data?.student_count || 0}</div>
-                <div className="text-green-700 dark:text-green-300">Students</div>
-              </div>
-            </div>
-          )}
-
-          {node.type === 'branch' && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
-                <div className="font-bold text-green-600">{node.data?.student_count || 0}</div>
-                <div className="text-green-700 dark:text-green-300">Students</div>
-              </div>
-              <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                <div className="font-bold text-blue-600">{node.data?.teachers_count || 0}</div>
-                <div className="text-blue-700 dark:text-blue-300">Teachers</div>
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-1 mt-3">
-            {onAddClick && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddClick(node.data, node.type);
-                }}
-                leftIcon={<Plus className="h-3 w-3" />}
-              >
-                Add
-              </Button>
-            )}
+            const { count: branchCount } = await supabase
+              .from('branches')
+              .select('*', { count: 'exact', head: true })
+              .eq('school_id', school.id)
+              .eq('status', 'active');
             
-            {onEditClick && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditClick(node.data, node.type);
-                }}
-                leftIcon={<Edit className="h-3 w-3" />}
-              >
-                Edit
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Render connections between nodes
-  const renderConnections = () => {
-    if (!layoutResult) return null;
-
-    const connections: JSX.Element[] = [];
-
-    treeNodes.forEach((node, nodeId) => {
-      if (node.children.length > 0 && expandedNodes.has(nodeId)) {
-        const parentPos = layoutResult.positions.get(nodeId);
-        const parentDimensions = measuredDimensions.get(nodeId) || nodeDimensions.get(nodeId);
-
-        if (parentPos && parentDimensions) {
-          node.children.forEach(childId => {
-            const childPos = layoutResult.positions.get(childId);
-            const childDimensions = measuredDimensions.get(childId) || nodeDimensions.get(childId);
-
-            if (childPos && childDimensions) {
-              const path = generateConnectionPath(
-                parentPos,
-                childPos,
-                parentDimensions.height,
-                childDimensions.height,
-                80
-              );
-
-              connections.push(
-                <path
-                  key={`${nodeId}-${childId}`}
-                  d={path}
-                  stroke="#e5e7eb"
-                  strokeWidth="2"
-                  fill="none"
-                  className="dark:stroke-gray-600"
-                />
-              );
+            let teacherCount = additionalData?.teachers_count || 0;
+            if (!teacherCount) {
+              const { count } = await supabase
+                .from('teachers')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', school.id)
+                .eq('is_active', true);
+              teacherCount = count || 0;
             }
-          });
+            
+            return {
+              ...school,
+              additional: additionalData || {},
+              branch_count: branchCount || 0,
+              student_count: additionalData?.student_count || 0,
+              teachers_count: teacherCount
+            };
+          }));
+          
+          return schoolsWithAdditional;
+        }
+        
+        // For School Admins - fetch assigned schools from entity_user_schools junction table
+        if (isSchoolAdmin && authenticatedUser?.id) {
+          const { data: entityUser, error: entityUserError } = await supabase
+            .from('entity_users')
+            .select('id')
+            .eq('user_id', authenticatedUser.id)
+            .single();
+          
+          if (entityUserError) {
+            console.error('Error fetching entity user:', entityUserError);
+            throw entityUserError;
+          }
+          
+          if (!entityUser) {
+            console.warn('No entity user found for school admin');
+            return [];
+          }
+          
+          const { data: assignedSchoolsData, error: assignedSchoolsError } = await supabase
+            .from('entity_user_schools')
+            .select(`
+              school_id,
+              schools!entity_user_schools_school_id_fkey (
+                id,
+                name,
+                code,
+                company_id,
+                description,
+                status,
+                address,
+                notes,
+                logo,
+                created_at
+              )
+            `)
+            .eq('entity_user_id', entityUser.id);
+          
+          if (assignedSchoolsError) {
+            console.error('Error fetching assigned schools:', assignedSchoolsError);
+            throw assignedSchoolsError;
+          }
+          
+          const schools = assignedSchoolsData?.map(item => item.schools).filter(Boolean) || [];
+          
+          const schoolsWithAdditional = await Promise.all(schools.map(async (school) => {
+            const { data: additionalData } = await supabase
+              .from('schools_additional')
+              .select('*')
+              .eq('school_id', school.id)
+              .maybeSingle();
+            
+            const { count: branchCount } = await supabase
+              .from('branches')
+              .select('*', { count: 'exact', head: true })
+              .eq('school_id', school.id)
+              .eq('status', 'active');
+            
+            let teacherCount = additionalData?.teachers_count || 0;
+            if (!teacherCount) {
+              const { count } = await supabase
+                .from('teachers')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', school.id)
+                .eq('is_active', true);
+              teacherCount = count || 0;
+            }
+            
+            return {
+              ...school,
+              additional: additionalData || {},
+              branch_count: branchCount || 0,
+              student_count: additionalData?.student_count || 0,
+              teachers_count: teacherCount
+            };
+          }));
+          
+          return schoolsWithAdditional;
+        }
+        
+        // For Branch Admins - fetch schools that contain their assigned branches
+        if (isBranchAdmin && authenticatedUser?.id) {
+          const { data: entityUser, error: entityUserError } = await supabase
+            .from('entity_users')
+            .select('id')
+            .eq('user_id', authenticatedUser.id)
+            .single();
+          
+          if (entityUserError || !entityUser) {
+            console.warn('No entity user found for branch admin');
+            return [];
+          }
+          
+          const { data: assignedBranchesData, error: assignedBranchesError } = await supabase
+            .from('entity_user_branches')
+            .select(`
+              branch_id,
+              branches!entity_user_branches_branch_id_fkey (
+                school_id
+              )
+            `)
+            .eq('entity_user_id', entityUser.id);
+          
+          if (assignedBranchesError) {
+            console.error('Error fetching assigned branches:', assignedBranchesError);
+            return [];
+          }
+          
+          const schoolIds = [...new Set(
+            assignedBranchesData?.map(item => item.branches?.school_id).filter(Boolean) || []
+          )];
+          
+          if (schoolIds.length === 0) {
+            return [];
+          }
+          
+          const { data: schoolsData, error: schoolsError } = await supabase
+            .from('schools')
+            .select('id, name, code, company_id, description, status, address, notes, logo, created_at')
+            .in('id', schoolIds)
+            .eq('company_id', companyId)
+            .order('name');
+          
+          if (schoolsError) throw schoolsError;
+          
+          const schoolsWithAdditional = await Promise.all((schoolsData || []).map(async (school) => {
+            const { data: additionalData } = await supabase
+              .from('schools_additional')
+              .select('*')
+              .eq('school_id', school.id)
+              .maybeSingle();
+            
+            const { count: branchCount } = await supabase
+              .from('branches')
+              .select('*', { count: 'exact', head: true })
+              .eq('school_id', school.id)
+              .eq('status', 'active');
+            
+            let teacherCount = additionalData?.teachers_count || 0;
+            if (!teacherCount) {
+              const { count } = await supabase
+                .from('teachers')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', school.id)
+                .eq('is_active', true);
+              teacherCount = count || 0;
+            }
+            
+            return {
+              ...school,
+              additional: additionalData || {},
+              branch_count: branchCount || 0,
+              student_count: additionalData?.student_count || 0,
+              teachers_count: teacherCount,
+              readOnly: true
+            };
+          }));
+          
+          return schoolsWithAdditional;
+        }
+        
+        return [];
+      },
+      {
+        enabled: !!companyId && !isAccessControlLoading,
+        staleTime: 60 * 1000,
+        retry: 2
+      }
+    );
+
+    // Check if user can access all schools
+    const canAccessAll = isEntityAdmin || isSubEntityAdmin;
+
+    // Create school mutation
+    const createSchoolMutation = useMutation(
+      async (data: any) => {
+        const schoolFields = ['name', 'code', 'description', 'status', 'address', 'notes', 'logo'];
+        
+        const additionalFieldsList = [
+          'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+          'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+          'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+          'campus_postal_code', 'latitude', 'longitude', 'established_date',
+          'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+          'has_sports_facilities', 'has_cafeteria'
+        ];
+        
+        const schoolData: any = { company_id: companyId };
+        const additionalData: any = {};
+        
+        Object.keys(data).forEach(key => {
+          if (schoolFields.includes(key)) {
+            schoolData[key] = data[key];
+          } else if (additionalFieldsList.includes(key)) {
+            additionalData[key] = data[key];
+          }
+        });
+        
+        const { data: newSchool, error: schoolError } = await supabase
+          .from('schools')
+          .insert([schoolData])
+          .select()
+          .single();
+        
+        if (schoolError) throw schoolError;
+        
+        if (Object.keys(additionalData).length > 0) {
+          const { error: additionalError } = await supabase
+            .from('schools_additional')
+            .insert([{ 
+              school_id: newSchool.id,
+              ...additionalData 
+            }]);
+          
+          if (additionalError && additionalError.code !== '23505') {
+            console.error('Additional data error:', additionalError);
+          }
+        }
+        
+        return newSchool;
+      },
+      {
+        onSuccess: () => {
+          toast.success('School created successfully');
+          setShowCreateModal(false);
+          setFormData({});
+          setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
+          setActiveTab('basic');
+          queryClient.invalidateQueries(['schools-tab']);
+          if (refreshData) refreshData();
+        },
+        onError: (error: any) => {
+          toast.error(error.message || 'Failed to create school');
         }
       }
-    });
+    );
 
-    return connections;
-  };
+    // Update school mutation
+    const updateSchoolMutation = useMutation(
+      async ({ id, data, deactivateAssociatedBranches }: { 
+        id: string; 
+        data: any; 
+        deactivateAssociatedBranches?: boolean 
+      }) => {
+        const schoolFields = ['name', 'code', 'description', 'status', 'address', 'notes', 'logo', 'company_id'];
+        
+        const additionalFieldsList = [
+          'school_type', 'curriculum_type', 'total_capacity', 'teachers_count',
+          'student_count', 'active_teachers_count', 'principal_name', 'principal_email',
+          'principal_phone', 'campus_address', 'campus_city', 'campus_state',
+          'campus_postal_code', 'latitude', 'longitude', 'established_date',
+          'academic_year_start', 'academic_year_end', 'has_library', 'has_laboratory',
+          'has_sports_facilities', 'has_cafeteria'
+        ];
+        
+        const schoolData: any = {};
+        const additionalData: any = {};
+        
+        Object.keys(data).forEach(key => {
+          if (schoolFields.includes(key)) {
+            schoolData[key] = data[key];
+          } else if (additionalFieldsList.includes(key)) {
+            additionalData[key] = data[key];
+          }
+        });
+        
+        if (Object.keys(schoolData).length > 0) {
+          const { error: schoolError } = await supabase
+            .from('schools')
+            .update(schoolData)
+            .eq('id', id);
+          
+          if (schoolError) throw schoolError;
+        }
+        
+        if (Object.keys(additionalData).length > 0) {
+          const { error: updateError } = await supabase
+            .from('schools_additional')
+            .update(additionalData)
+            .eq('school_id', id);
+          
+          if (updateError && updateError.code === 'PGRST116') {
+            const { error: insertError } = await supabase
+              .from('schools_additional')
+              .insert([{ 
+                school_id: id,
+                ...additionalData 
+              }]);
+            
+            if (insertError && insertError.code !== '23505') {
+              console.error('Additional insert error:', insertError);
+            }
+          } else if (updateError) {
+            console.error('Additional update error:', updateError);
+          }
+        }
+        
+        if (deactivateAssociatedBranches && schoolData.status === 'inactive') {
+          const { error: branchError } = await supabase
+            .from('branches')
+            .update({ status: 'inactive' })
+            .eq('school_id', id);
+          
+          if (branchError) throw branchError;
+        }
+        
+        return { id };
+      },
+      {
+        onSuccess: () => {
+          toast.success('School updated successfully');
+          setShowEditModal(false);
+          setSelectedSchool(null);
+          setFormData({});
+          setFormErrors({});
+          setTabErrors({ basic: false, additional: false, contact: false });
+          setActiveTab('basic');
+          queryClient.invalidateQueries(['schools-tab']);
+          if (refreshData) refreshData();
+        },
+        onError: (error: any) => {
+          toast.error(error.message || 'Failed to update school');
+        }
+      }
+    );
 
-  // Loading state
-  if (!companyData) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading organization structure...</p>
+    // Delete school mutation
+    const deleteSchoolMutation = useMutation(
+      async (id: string) => {
+        const { error } = await supabase
+          .from('schools')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+        return id;
+      },
+      {
+        onSuccess: () => {
+          toast.success('School deleted successfully');
+          queryClient.invalidateQueries(['schools-tab']);
+          setShowDeleteConfirmation(false);
+          setSchoolToDelete(null);
+          if (refreshData) refreshData();
+        },
+        onError: (error: any) => {
+          toast.error(error.message || 'Failed to delete school');
+          setShowDeleteConfirmation(false);
+          setSchoolToDelete(null);
+        }
+      }
+    );
+
+    // Fetch branches for deactivation check
+    const { data: branches = [] } = useQuery(
+      ['branches-for-schools', companyId],
+      async () => {
+        const { data: schoolsData, error: schoolsError } = await supabase
+          .from('schools')
+          .select('id')
+          .eq('company_id', companyId);
+        
+        if (schoolsError) throw schoolsError;
+        
+        const schoolIds = schoolsData?.map(s => s.id) || [];
+        
+        if (schoolIds.length === 0) return [];
+        
+        const { data: branchesData, error: branchesError } = await supabase
+          .from('branches')
+          .select('id, name, school_id, status')
+          .in('school_id', schoolIds);
+        
+        if (branchesError) throw branchesError;
+        
+        return branchesData || [];
+      },
+      {
+        enabled: !!companyId && !isAccessControlLoading
+      }
+    );
+
+    // Validation
+    const validateForm = useCallback(() => {
+      const errors: Record<string, string> = {};
+      
+      if (!formData.name) errors.name = 'Name is required';
+      if (!formData.code) errors.code = 'Code is required';
+      
+      if (formData.principal_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.principal_email)) {
+        errors.principal_email = 'Invalid email address';
+      }
+      
+      setFormErrors(errors);
+      return Object.keys(errors).length === 0;
+    }, [formData]);
+
+    // Handle form submission
+    const handleSubmit = useCallback(() => {
+      if (!validateForm()) {
+        toast.error('Please fix the errors before submitting');
+        return;
+      }
+
+      if (selectedSchool && 
+          formData.status === 'inactive' && 
+          selectedSchool.status === 'active') {
+        const activeBranches = branches.filter(
+          b => b.school_id === selectedSchool.id && b.status === 'active'
+        );
+        
+        if (activeBranches.length > 0) {
+          setBranchesToDeactivate(activeBranches);
+          setShowDeactivateConfirmation(true);
+          return;
+        }
+      }
+
+      if (selectedSchool) {
+        updateSchoolMutation.mutate({ 
+          id: selectedSchool.id, 
+          data: formData 
+        });
+      } else {
+        createSchoolMutation.mutate(formData);
+      }
+    }, [formData, selectedSchool, branches, validateForm, updateSchoolMutation, createSchoolMutation]);
+
+    // Handle deactivation confirmation
+    const handleConfirmDeactivation = useCallback(() => {
+      if (selectedSchool) {
+        updateSchoolMutation.mutate({ 
+          id: selectedSchool.id, 
+          data: formData,
+          deactivateAssociatedBranches: true
+        });
+      }
+      setShowDeactivateConfirmation(false);
+      setBranchesToDeactivate([]);
+    }, [selectedSchool, formData, updateSchoolMutation]);
+
+    // Handle edit
+    const handleEdit = useCallback((school: SchoolData) => {
+      const combinedData = {
+        ...school
+      };
+      
+      if (school.additional && typeof school.additional === 'object') {
+        Object.assign(combinedData, school.additional);
+      }
+      
+      delete combinedData.additional;
+      
+      setFormData(combinedData);
+      setSelectedSchool(school);
+      setActiveTab('basic');
+      setTabErrors({ basic: false, additional: false, contact: false });
+      setShowEditModal(true);
+    }, []);
+
+    const handleCreate = useCallback(() => {
+      setFormData({ 
+        status: 'active',
+        company_id: companyId 
+      });
+      setActiveTab('basic');
+      setTabErrors({ basic: false, additional: false, contact: false });
+      setShowCreateModal(true);
+    }, [companyId]);
+
+    // Handle delete confirmation
+    const handleDeleteClick = useCallback((school: SchoolData) => {
+      setSchoolToDelete(school);
+      setShowDeleteConfirmation(true);
+    }, []);
+
+    const handleConfirmDelete = useCallback(() => {
+      if (schoolToDelete) {
+        deleteSchoolMutation.mutate(schoolToDelete.id);
+      }
+    }, [schoolToDelete, deleteSchoolMutation]);
+
+    const handleCancelDelete = useCallback(() => {
+      setShowDeleteConfirmation(false);
+      setSchoolToDelete(null);
+    }, []);
+
+    // Filter schools based on search and status
+    const displayedSchools = useMemo(() => {
+      return schools.filter(school => {
+        const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             school.code.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = filterStatus === 'all' || school.status === filterStatus;
+        return matchesSearch && matchesStatus;
+      });
+    }, [schools, searchTerm, filterStatus]);
+
+    // Calculate stats
+    const stats = useMemo(() => ({
+      total: schools.length,
+      active: schools.filter(s => s.status === 'active').length,
+      students: schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
+      teachers: schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0)
+    }), [schools]);
+
+    // Get user context for display
+    const userContext = getUserContext();
+    const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
+
+    // Loading state
+    if (isLoading || isAccessControlLoading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-600 mx-auto mb-2" />
+            <p className="text-gray-600 dark:text-gray-400">Loading schools...</p>
+          </div>
         </div>
+      );
+    }
+
+    // Error state
+    if (fetchError) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="text-gray-600 dark:text-gray-400">Failed to load schools</p>
+            <p className="text-sm text-gray-500 mt-1">{fetchError instanceof Error ? fetchError.message : 'Unknown error'}</p>
+            <Button onClick={() => refetch()} className="mt-4">
+              Retry
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Form content rendering with SchoolFormContent component
+    const renderFormContent = () => {
+      return (
+        <div className="space-y-4">
+          {/* Tab Navigation with Green Theme and Error Indicators */}
+          <div className="flex space-x-4 border-b dark:border-gray-700">
+            <button
+              type="button"
+              onClick={() => setActiveTab('basic')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'basic' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Basic Info
+              {tabErrors.basic && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
+                />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('additional')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'additional' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Additional
+              {tabErrors.additional && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
+                />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('contact')}
+              className={`pb-2 px-1 flex items-center gap-2 transition-colors ${
+                activeTab === 'contact' 
+                  ? 'border-b-2 border-[#8CC63F] text-[#8CC63F] font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+              }`}
+            >
+              Contact
+              {tabErrors.contact && !selectedSchool && (
+                <span 
+                  className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" 
+                  title="Required fields missing" 
+                />
+              )}
+            </button>
+          </div>
+
+          {/* Form Content using SchoolFormContent component */}
+          <div className="mt-4">
+            <SchoolFormContent
+              formData={formData}
+              setFormData={setFormData}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              companyId={companyId}
+              isEditing={!!selectedSchool}
+              onTabErrorsChange={setTabErrors}
+            />
+          </div>
+        </div>
+      );
+    };
+
+    // ===== MAIN RENDER =====
+    return (
+      <div className="space-y-4">
+        {/* Header & Search */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search schools..."
+                  className="pl-10"
+                />
+              </div>
+              <Select
+                value={filterStatus}
+                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+                className="w-32"
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+              />
+              {/* View Mode Toggle - Moved to Right */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('card')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'card'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="Card View"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {can('create_school') ? (
+              <Button onClick={handleCreate}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add School
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <Lock className="w-4 h-4" />
+                <span>Read-only access</span>
+              </div>
+            )}
+          </div>
+
+          {/* Permission notices */}
+          {!canAccessAll && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    Limited Scope Access
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                    As a {adminLevelDisplay}, you're viewing schools within your assigned scope.
+                    {isSchoolAdmin && ' You can manage the schools you are assigned to.'}
+                    {isBranchAdmin && ' You can view schools that contain your assigned branches (read-only).'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Statistics Cards - Unified Colors */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {canAccessAll ? 'Total Schools' : 'Assigned Schools'}
+                  </p>
+                  <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {stats.total}
+                  </p>
+                </div>
+                <School className="w-8 h-8 text-gray-400" />
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Active</p>
+                  <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                    {stats.active}
+                  </p>
+                </div>
+                <CheckCircle2 className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
+                  <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
+                    {stats.students.toLocaleString()}
+                  </p>
+                </div>
+                <Users className="w-8 h-8 text-blue-400" />
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Total Teachers</p>
+                  <p className="text-xl font-semibold text-green-600 dark:text-green-400">
+                    {stats.teachers.toLocaleString()}
+                  </p>
+                </div>
+                <Users className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Schools Display */}
+        {viewMode === 'card' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayedSchools.length === 0 ? (
+            <div className="col-span-full text-center py-8">
+              <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-gray-400">
+                {searchTerm || filterStatus !== 'all'
+                  ? 'No schools match your filters'
+                  : 'No schools found'}
+              </p>
+            </div>
+          ) : (
+            displayedSchools.map((school) => {
+              const logoUrl = getSchoolLogoUrl(school.logo);
+              const canEdit = can('modify_school') && !school.readOnly;
+
+              return (
+                <div
+                  key={school.id}
+                  className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-[#8CC63F]/40 dark:hover:border-[#8CC63F]/40 transition-all duration-300 hover:-translate-y-2 overflow-hidden relative"
+                >
+                  {/* Hover overlay for actions */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                  
+                  <div className="relative p-6">
+                    {/* Header with ENHANCED logo, name, and status */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        {/* ENHANCED LOGO DISPLAY */}
+                        <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F]/20 to-[#8CC63F]/30 dark:from-[#8CC63F]/30 dark:to-[#8CC63F]/40 rounded-2xl flex items-center justify-center overflow-hidden shadow-xl border-2 border-[#8CC63F]/30 group-hover:border-[#8CC63F]/50 transition-all duration-300">
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl}
+                              alt={`${school.name} logo`}
+                              className="w-full h-full object-contain p-2"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = 'none';
+                                const fallback = target.nextSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
+                            <School className="w-10 h-10 text-[#8CC63F]/70" />
+                          </div>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-xl text-gray-900 dark:text-white group-hover:text-[#8CC63F] transition-colors">
+                            {school.name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                              {school.code}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={school.status} size="sm" />
+                        {/* Action buttons - floating on hover */}
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0">
+                          {canEdit && (
+                            <Button
+                              onClick={() => handleEdit(school)}
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-9 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200 shadow-md hover:shadow-lg"
+                              title="Edit school"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {can('delete_school') && (
+                            <Button
+                              onClick={() => handleDeleteClick(school)}
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-9 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 shadow-md hover:shadow-lg"
+                              title="Delete school"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {school.description && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 line-clamp-2 leading-relaxed">
+                        {school.description}
+                      </p>
+                    )}
+
+                    {/* Statistics - UNIFIED COLORS */}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-900/30 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div className="flex items-center justify-center mb-1">
+                          <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                          {school.branch_count || 0}
+                        </div>
+                        <div className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                          Branches
+                        </div>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center justify-center mb-1">
+                          <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                          {school.student_count || 0}
+                        </div>
+                        <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                          Students
+                        </div>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-900/30 rounded-xl border border-green-200 dark:border-green-800">
+                        <div className="flex items-center justify-center mb-1">
+                          <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div className="text-xl font-bold text-green-700 dark:text-green-300">
+                          {school.teachers_count || 0}
+                        </div>
+                        <div className="text-xs font-medium text-green-600 dark:text-green-400">
+                          Teachers
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer - NO DUPLICATE BUTTONS */}
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Created {new Date(school.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          </div>
+        ) : (
+          /* List View */
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">School</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Code</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branches</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Students</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Teachers</th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
+                    <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {displayedSchools.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center">
+                        <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-600 dark:text-gray-400">
+                          {searchTerm || filterStatus !== 'all'
+                            ? 'No schools match your filters'
+                            : 'No schools found'}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedSchools.map((school) => {
+                      const logoUrl = getSchoolLogoUrl(school.logo);
+                      const canEdit = can('modify_school') && !school.readOnly;
+
+                      return (
+                        <tr key={school.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              {/* ENHANCED LOGO IN LIST VIEW */}
+                              <div className="w-14 h-14 bg-gradient-to-br from-[#8CC63F]/10 to-[#8CC63F]/20 dark:from-[#8CC63F]/20 dark:to-[#8CC63F]/30 rounded-xl flex items-center justify-center overflow-hidden border border-[#8CC63F]/20">
+                                {logoUrl ? (
+                                  <img
+                                    src={logoUrl}
+                                    alt={`${school.name} logo`}
+                                    className="w-full h-full object-contain p-1"
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      target.style.display = 'none';
+                                      const fallback = target.nextSibling as HTMLElement;
+                                      if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <div className={logoUrl ? 'hidden' : 'flex'} style={{ display: logoUrl ? 'none' : 'flex' }}>
+                                  <School className="w-7 h-7 text-[#8CC63F]/60" />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900 dark:text-white">{school.name}</div>
+                                {school.description && (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
+                                    {school.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                              {school.code}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <StatusBadge status={school.status} size="sm" />
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4 text-purple-500" />
+                              <span className="font-medium">{school.branch_count || 0}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4 text-blue-500" />
+                              <span className="font-medium">{school.student_count || 0}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4 text-green-500" />
+                              <span className="font-medium">{school.teachers_count || 0}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(school.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {canEdit && (
+                                <Button
+                                  onClick={() => handleEdit(school)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 border-[#8CC63F]/30 text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white hover:border-[#8CC63F] transition-all duration-200"
+                                  title="Edit school"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {can('delete_school') && (
+                                <Button
+                                  onClick={() => handleDeleteClick(school)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 border-red-200 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200"
+                                  title="Delete school"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Create Modal */}
+        <SlideInForm
+          title="Create School"
+          isOpen={showCreateModal}
+          onClose={() => {
+            setShowCreateModal(false);
+            setFormData({});
+            setFormErrors({});
+            setTabErrors({ basic: false, additional: false, contact: false });
+          }}
+          onSave={handleSubmit}
+          loading={createSchoolMutation.isPending || createSchoolMutation.isLoading}
+        >
+          {renderFormContent()}
+        </SlideInForm>
+
+        {/* Edit Modal */}
+        <SlideInForm
+          title="Edit School"
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedSchool(null);
+            setFormData({});
+            setFormErrors({});
+            setTabErrors({ basic: false, additional: false, contact: false });
+          }}
+          onSave={handleSubmit}
+          loading={updateSchoolMutation.isPending || updateSchoolMutation.isLoading}
+        >
+          {renderFormContent()}
+        </SlideInForm>
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={showDeleteConfirmation}
+          title="Delete School"
+          message={`Are you sure you want to delete "${schoolToDelete?.name}"? This action cannot be undone and will also delete all associated branches.`}
+          confirmText="Delete School"
+          cancelText="Cancel"
+          confirmVariant="destructive"
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+
+        {/* Deactivation Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={showDeactivateConfirmation}
+          onClose={() => setShowDeactivateConfirmation(false)}
+          onConfirm={handleConfirmDeactivation}
+          title="Deactivate Associated Branches?"
+          message={`This school has ${branchesToDeactivate.length} active branch(es). Deactivating the school will also deactivate all its branches. Do you want to continue?`}
+          confirmText="Deactivate All"
+          cancelText="Cancel"
+          variant="warning"
+        />
       </div>
     );
   }
+);
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Organization Structure
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Visual representation of your organizational hierarchy
-          </p>
-        </div>
+SchoolsTab.displayName = 'SchoolsTab';
 
-        {/* Controls */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleZoomOut}
-            leftIcon={<ZoomOut className="h-4 w-4" />}
-          >
-            Zoom Out
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleZoomReset}
-            leftIcon={<RotateCcw className="h-4 w-4" />}
-          >
-            Reset
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleZoomIn}
-            leftIcon={<ZoomIn className="h-4 w-4" />}
-          >
-            Zoom In
-          </Button>
-        </div>
-      </div>
-
-      {/* Level Toggles */}
-      <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Show Levels:
-        </span>
-        
-        {[
-          { key: 'schools', label: 'Schools', icon: School },
-          { key: 'branches', label: 'Branches', icon: MapPin },
-          { key: 'years', label: 'Grades', icon: GraduationCap },
-          { key: 'sections', label: 'Sections', icon: Users }
-        ].map(({ key, label, icon: Icon }) => (
-          <Button
-            key={key}
-            variant={visibleLevels.has(key) ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => toggleLevel(key)}
-            leftIcon={<Icon className="h-3 w-3" />}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Tree Visualization */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div 
-          ref={containerRef}
-          className="relative overflow-auto"
-          style={{ height: '600px' }}
-        >
-          {layoutResult && (
-            <div
-              className="relative"
-              style={{
-                width: `${layoutResult.totalSize.width * zoomLevel}px`,
-                height: `${layoutResult.totalSize.height * zoomLevel}px`,
-                minWidth: '100%',
-                minHeight: '100%'
-              }}
-            >
-              {/* SVG for connections */}
-              <svg
-                ref={svgRef}
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  width: `${layoutResult.totalSize.width * zoomLevel}px`,
-                  height: `${layoutResult.totalSize.height * zoomLevel}px`
-                }}
-              >
-                <g transform={`scale(${zoomLevel})`}>
-                  {renderConnections()}
-                </g>
-              </svg>
-
-              {/* Render all cards */}
-              {Array.from(treeNodes.entries()).map(([nodeId, node]) => 
-                renderCard(nodeId, node)
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {summaryStats.totalSchools}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Schools</div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {summaryStats.totalBranches}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Branches</div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {summaryStats.totalStudents}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Students</div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-            {summaryStats.totalTeachers}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Teachers</div>
-        </div>
-        
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-            {summaryStats.totalUsers}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">Total Users</div>
-        </div>
-      </div>
-
-      {/* Development Status */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
-          <Info className="w-5 h-5" />
-          <span className="font-semibold">Organization Structure Visualization</span>
-        </div>
-        <p className="text-sm text-blue-600 dark:text-blue-400">
-          Interactive organizational chart with zoom, expand/collapse, and level filtering capabilities.
-        </p>
-      </div>
-    </div>
-  );
-}
+export default SchoolsTab;
