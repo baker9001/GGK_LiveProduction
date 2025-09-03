@@ -8,19 +8,19 @@
  *   - @/components/shared/SlideInForm
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * ENHANCED VERSION - Professional UX with Advanced Controls
+ * FINAL VERSION - All Features Complete
  * 
- * ✅ NEW FEATURES:
+ * ✅ Features:
  *   - Theme preservation in fullscreen (respects light/dark mode)
  *   - Mouse wheel zoom with focal point
- *   - Click-and-drag panning
+ *   - Auto click-and-drag panning on empty canvas
  *   - Trackpad pinch-to-zoom support
  *   - Comprehensive keyboard shortcuts
- *   - Visual cursor feedback
+ *   - Visual cursor feedback (auto grab cursor)
  *   - Smooth animations and transitions
- *   - Mini-map navigation (optional)
  *   - Zoom slider control
- *   - Performance optimizations
+ *   - Fixed tab hierarchy logic
+ *   - All original features preserved
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -162,10 +162,16 @@ const useZoomPan = (
     pinchDistanceRef.current = null;
   }, []);
 
-  // Mouse handlers for panning
+  // Mouse handlers for panning - AUTO PAN ON CANVAS
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left click
-    if (e.target !== e.currentTarget && !isSpacePressed) return; // Only on canvas or with space
+    
+    // Check if clicking on a card element
+    const target = e.target as HTMLElement;
+    const clickedCard = target.closest('[data-card-id]');
+    
+    // If clicking on a card, don't start panning (unless space is pressed)
+    if (clickedCard && !isSpacePressed) return;
     
     setIsPanning(true);
     setCursor('grabbing');
@@ -174,31 +180,49 @@ const useZoomPan = (
   }, [isSpacePressed]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    // Update cursor based on state
-    if (isSpacePressed && !isPanning) {
-      setCursor('grab');
-    } else if (isPanning) {
-      setCursor('grabbing');
-    } else {
-      setCursor('default');
+    if (isPanning) {
+      // Currently panning
+      const dx = e.clientX - lastMousePosRef.current.x;
+      const dy = e.clientY - lastMousePosRef.current.y;
+      
+      setPan(prevPan => ({
+        x: prevPan.x + dx,
+        y: prevPan.y + dy
+      }));
+      
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+      return; // Keep grabbing cursor while panning
     }
     
-    if (!isPanning) return;
+    // Not panning - update cursor based on hover target
+    const target = e.target as HTMLElement;
+    const hoveringCard = target.closest('[data-card-id]');
     
-    const dx = e.clientX - lastMousePosRef.current.x;
-    const dy = e.clientY - lastMousePosRef.current.y;
-    
-    setPan(prevPan => ({
-      x: prevPan.x + dx,
-      y: prevPan.y + dy
-    }));
-    
-    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    if (hoveringCard && !isSpacePressed) {
+      // Hovering over a card (and not forcing pan mode)
+      setCursor('default');
+    } else {
+      // Hovering over empty space or space is pressed
+      setCursor('grab');
+    }
   }, [isPanning, isSpacePressed]);
 
   const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-    setCursor(isSpacePressed ? 'grab' : 'default');
+    if (isPanning) {
+      setIsPanning(false);
+      // After releasing, update cursor based on current position
+      setCursor('grab'); // Default to grab since we're likely still over canvas
+    }
+  }, [isPanning]);
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent) => {
+    // When entering the chart area, set appropriate cursor
+    const target = e.target as HTMLElement;
+    const hoveringCard = target.closest('[data-card-id]');
+    
+    if (!hoveringCard || isSpacePressed) {
+      setCursor('grab');
+    }
   }, [isSpacePressed]);
 
   const handleMouseLeave = useCallback(() => {
@@ -298,6 +322,9 @@ const useZoomPan = (
     
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    
+    // Initialize cursor to grab when over canvas
+    setCursor('grab');
 
     return () => {
       // Cleanup
@@ -327,6 +354,7 @@ const useZoomPan = (
     setPan,
     resetView,
     fitToScreen,
+    handleMouseEnter,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
@@ -754,7 +782,8 @@ const KeyboardShortcuts = () => {
   
   const shortcuts = [
     { key: 'Ctrl/Cmd + Scroll', action: 'Zoom in/out' },
-    { key: 'Space + Drag', action: 'Pan mode' },
+    { key: 'Drag Canvas', action: 'Pan view' },
+    { key: 'Space + Drag', action: 'Force pan mode' },
     { key: 'Arrow Keys', action: 'Pan view' },
     { key: 'Ctrl/Cmd + 0', action: 'Reset zoom' },
     { key: 'Ctrl/Cmd + +/-', action: 'Zoom in/out' },
@@ -856,6 +885,7 @@ export default function OrganizationStructureTab({
     setZoom,
     resetView,
     fitToScreen,
+    handleMouseEnter,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
@@ -1286,24 +1316,27 @@ export default function OrganizationStructureTab({
     });
   }, []);
 
-  // Toggle level visibility with hierarchical rules
+  // FIXED: Toggle level visibility with proper hierarchical rules
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
       
+      // Entity tab can never be turned off
       if (level === 'entity' && newSet.has('entity')) {
         return prev;
       }
       
       if (newSet.has(level)) {
-        // Turning OFF a level
+        // Turning OFF a level - cascade down
         newSet.delete(level);
         
-        // When turning off a parent level, turn off all child levels
+        // Hierarchy: entity -> schools -> branches -> years -> sections
         if (level === 'schools') {
+          // Turn off all child levels
           newSet.delete('branches');
           newSet.delete('years');
           newSet.delete('sections');
+          // Collapse all schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1311,9 +1344,24 @@ export default function OrganizationStructureTab({
             });
             return newExpanded;
           });
-        } else if (level === 'years') {
+        } else if (level === 'branches') {
+          // Turn off grades and sections when turning off branches
+          newSet.delete('years');
           newSet.delete('sections');
-          // Collapse all grade levels when turning off years
+          // Collapse all branches
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            processedSchoolData.forEach((school: any) => {
+              school.branches?.forEach((branch: any) => {
+                newExpanded.delete(`branch-${branch.id}`);
+              });
+            });
+            return newExpanded;
+          });
+        } else if (level === 'years') {
+          // Turn off sections when turning off years/grades
+          newSet.delete('sections');
+          // Collapse all grade levels
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             Array.from(newExpanded).forEach(node => {
@@ -1325,42 +1373,17 @@ export default function OrganizationStructureTab({
           });
         }
       } else {
-        // Turning ON a level
+        // Turning ON a level - cascade up
         newSet.add(level);
         
-        // When turning on a child level, ensure parent levels are also on
-        if (level === 'branches') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          // Expand schools with branches
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              if (school.branches && school.branches.length > 0) {
-                newExpanded.add(`school-${school.id}`);
-              }
-            });
-            return newExpanded;
-          });
-        } else if (level === 'years') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          // Expand schools to show grade levels
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              if ((school.grade_levels && school.grade_levels.length > 0) || 
-                  (school.branches && school.branches.some((b: any) => b.grade_levels.length > 0))) {
-                newExpanded.add(`school-${school.id}`);
-              }
-            });
-            return newExpanded;
-          });
-        } else if (level === 'sections') {
-          if (!newSet.has('schools')) newSet.add('schools');
+        // Ensure parent levels are also on
+        if (level === 'sections') {
+          // Need years, branches, and schools
           if (!newSet.has('years')) newSet.add('years');
+          if (!newSet.has('branches')) newSet.add('branches');
+          if (!newSet.has('schools')) newSet.add('schools');
           
-          // Expand schools and grade levels to show sections
+          // Expand relevant nodes
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1369,13 +1392,13 @@ export default function OrganizationStructureTab({
               
               if (hasGradesWithSections) {
                 newExpanded.add(`school-${school.id}`);
-                // Also expand grade levels with sections
+                // Expand grades with sections
                 school.grade_levels?.forEach((grade: any) => {
                   if (grade.class_sections && grade.class_sections.length > 0) {
                     newExpanded.add(`grade-${grade.id}`);
                   }
                 });
-                // Expand branches with grades
+                // Expand branches with grades that have sections
                 school.branches?.forEach((branch: any) => {
                   if (branch.grade_levels && branch.grade_levels.length > 0) {
                     newExpanded.add(`branch-${branch.id}`);
@@ -1386,6 +1409,42 @@ export default function OrganizationStructureTab({
                     });
                   }
                 });
+              }
+            });
+            return newExpanded;
+          });
+        } else if (level === 'years') {
+          // Need branches and schools (grades can be under branches)
+          if (!newSet.has('branches')) newSet.add('branches');
+          if (!newSet.has('schools')) newSet.add('schools');
+          
+          // Expand schools and branches that have grades
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            processedSchoolData.forEach((school: any) => {
+              if ((school.grade_levels && school.grade_levels.length > 0) || 
+                  (school.branches && school.branches.some((b: any) => b.grade_levels.length > 0))) {
+                newExpanded.add(`school-${school.id}`);
+                // Also expand branches that have grades
+                school.branches?.forEach((branch: any) => {
+                  if (branch.grade_levels && branch.grade_levels.length > 0) {
+                    newExpanded.add(`branch-${branch.id}`);
+                  }
+                });
+              }
+            });
+            return newExpanded;
+          });
+        } else if (level === 'branches') {
+          // Need schools
+          if (!newSet.has('schools')) newSet.add('schools');
+          
+          // Expand schools with branches
+          setExpandedNodes(prevExpanded => {
+            const newExpanded = new Set(prevExpanded);
+            processedSchoolData.forEach((school: any) => {
+              if (school.branches && school.branches.length > 0) {
+                newExpanded.add(`school-${school.id}`);
               }
             });
             return newExpanded;
@@ -1447,7 +1506,7 @@ export default function OrganizationStructureTab({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [fitToScreen]);
+  }, [fitToScreen, toggleFullscreen]);
 
   if (!companyData) {
     return (
@@ -1862,37 +1921,41 @@ export default function OrganizationStructureTab({
             </div>
           </div>
           
-          {/* Pan Mode Indicator */}
-          {cursor !== 'default' && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-[#8CC63F]">
+          {/* Interactive Help Text */}
+          <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <span className="flex items-center gap-1">
+              <MousePointer className="w-3 h-3" />
+              Drag empty space to pan
+            </span>
+            <span className="flex items-center gap-1">
               <Move className="w-3 h-3" />
-              <span>Pan mode active - Click and drag to move the chart</span>
-            </div>
-          )}
+              Ctrl+Scroll to zoom
+            </span>
+            <span className="flex items-center gap-1">
+              Click cards to view details
+            </span>
+          </div>
         </div>
 
         {/* Chart Container with Enhanced Interactions */}
         <div 
           ref={scrollAreaRef}
           className={`
-            overflow-hidden relative
+            overflow-hidden relative select-none
             ${isFullscreen 
               ? 'h-[calc(100vh-73px)]' 
               : 'h-[calc(100vh-300px)]'} 
             ${isDarkMode || (isFullscreen && isDarkMode) 
               ? 'bg-gradient-to-b from-gray-900/50 to-gray-800' 
               : 'bg-gradient-to-b from-gray-50 to-white'}
-            ${getCursorStyle()}
-            select-none
           `}
+          style={{ cursor: cursor === 'grab' ? 'grab' : cursor === 'grabbing' ? 'grabbing' : 'default' }}
+          onMouseEnter={handleMouseEnter}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         >
-          {/* Mini-map (Optional - can be enabled later) */}
-          {/* <MiniMap /> */}
-          
           {/* Main Chart */}
           <div 
             ref={chartContainerRef}
