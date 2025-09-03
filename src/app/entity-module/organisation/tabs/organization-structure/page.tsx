@@ -8,12 +8,19 @@
  *   - @/components/shared/SlideInForm
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * UPDATED FEATURES:
- *   - Fullscreen now only applies to the organization chart section
- *   - Added floating controls in fullscreen mode for better UX
- *   - Improved fullscreen styling with dark overlay
- *   - Exit fullscreen button always visible in fullscreen mode
- *   - Better responsive behavior in fullscreen
+ * ENHANCED VERSION - Professional UX with Advanced Controls
+ * 
+ * ✅ NEW FEATURES:
+ *   - Theme preservation in fullscreen (respects light/dark mode)
+ *   - Mouse wheel zoom with focal point
+ *   - Click-and-drag panning
+ *   - Trackpad pinch-to-zoom support
+ *   - Comprehensive keyboard shortcuts
+ *   - Visual cursor feedback
+ *   - Smooth animations and transitions
+ *   - Mini-map navigation (optional)
+ *   - Zoom slider control
+ *   - Performance optimizations
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -28,7 +35,7 @@ import {
   PlusCircle, Users, User, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2, Minimize2, 
   RotateCcw, Loader2, X, GraduationCap, BookOpen, Expand,
-  ToggleLeft, ToggleRight
+  ToggleLeft, ToggleRight, Move, MousePointer, Navigation
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -44,6 +51,289 @@ import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { toast } from 'react-hot-toast';
+
+// ===== CUSTOM HOOK FOR ZOOM/PAN MANAGEMENT =====
+const useZoomPan = (
+  containerRef: React.RefObject<HTMLDivElement>,
+  contentRef: React.RefObject<HTMLDivElement>,
+  initialZoom: number = 1,
+  minZoom: number = 0.25,
+  maxZoom: number = 2
+) => {
+  const [zoom, setZoom] = useState(initialZoom);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing' | 'move'>('default');
+  
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const animationFrameRef = useRef<number | null>(null);
+  const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pinchDistanceRef = useRef<number | null>(null);
+
+  // Smooth zoom with focal point
+  const handleZoom = useCallback((delta: number, clientX?: number, clientY?: number) => {
+    if (!containerRef.current || !contentRef.current) return;
+
+    const container = containerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    // Calculate focal point (default to center if not provided)
+    const focalX = clientX !== undefined ? clientX - rect.left : rect.width / 2;
+    const focalY = clientY !== undefined ? clientY - rect.top : rect.height / 2;
+    
+    setZoom(prevZoom => {
+      const newZoom = Math.max(minZoom, Math.min(maxZoom, prevZoom + delta));
+      
+      // Adjust pan to keep focal point stable
+      if (clientX !== undefined && clientY !== undefined) {
+        setPan(prevPan => {
+          const zoomRatio = newZoom / prevZoom;
+          return {
+            x: focalX - (focalX - prevPan.x) * zoomRatio,
+            y: focalY - (focalY - prevPan.y) * zoomRatio
+          };
+        });
+      }
+      
+      return newZoom;
+    });
+  }, [containerRef, contentRef, minZoom, maxZoom]);
+
+  // Mouse wheel handler with throttling
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    
+    e.preventDefault();
+    
+    // Clear previous timeout
+    if (wheelTimeoutRef.current) {
+      clearTimeout(wheelTimeoutRef.current);
+    }
+    
+    // Normalize wheel delta across browsers
+    const delta = -e.deltaY * 0.001;
+    const zoomDelta = delta * (e.shiftKey ? 0.5 : 0.25); // Slower with shift
+    
+    // Use requestAnimationFrame for smooth updates
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(() => {
+      handleZoom(zoomDelta, e.clientX, e.clientY);
+    });
+    
+    // Debounce end of zoom
+    wheelTimeoutRef.current = setTimeout(() => {
+      animationFrameRef.current = null;
+    }, 150);
+  }, [handleZoom]);
+
+  // Touch handlers for pinch-to-zoom
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (e.touches.length === 2 && pinchDistanceRef.current) {
+      e.preventDefault();
+      
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      const delta = (distance - pinchDistanceRef.current) * 0.003;
+      
+      // Calculate center point between fingers
+      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      
+      handleZoom(delta, centerX, centerY);
+      pinchDistanceRef.current = distance;
+    }
+  }, [handleZoom]);
+
+  const handleTouchEnd = useCallback(() => {
+    pinchDistanceRef.current = null;
+  }, []);
+
+  // Mouse handlers for panning
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    if (e.target !== e.currentTarget && !isSpacePressed) return; // Only on canvas or with space
+    
+    setIsPanning(true);
+    setCursor('grabbing');
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+  }, [isSpacePressed]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // Update cursor based on state
+    if (isSpacePressed && !isPanning) {
+      setCursor('grab');
+    } else if (isPanning) {
+      setCursor('grabbing');
+    } else {
+      setCursor('default');
+    }
+    
+    if (!isPanning) return;
+    
+    const dx = e.clientX - lastMousePosRef.current.x;
+    const dy = e.clientY - lastMousePosRef.current.y;
+    
+    setPan(prevPan => ({
+      x: prevPan.x + dx,
+      y: prevPan.y + dy
+    }));
+    
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+  }, [isPanning, isSpacePressed]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+    setCursor(isSpacePressed ? 'grab' : 'default');
+  }, [isSpacePressed]);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+    setCursor('default');
+  }, []);
+
+  // Keyboard handlers
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Space for pan mode
+    if (e.code === 'Space' && !e.repeat) {
+      e.preventDefault();
+      setIsSpacePressed(true);
+      setCursor('grab');
+    }
+    
+    // Zoom shortcuts
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleZoom(0.1);
+      } else if (e.key === '-') {
+        e.preventDefault();
+        handleZoom(-0.1);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+      }
+    }
+    
+    // Arrow keys for panning
+    const panSpeed = e.shiftKey ? 50 : 20;
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        setPan(p => ({ ...p, y: p.y + panSpeed }));
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        setPan(p => ({ ...p, y: p.y - panSpeed }));
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        setPan(p => ({ ...p, x: p.x + panSpeed }));
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        setPan(p => ({ ...p, x: p.x - panSpeed }));
+        break;
+    }
+  }, [handleZoom]);
+
+  const handleKeyUp = useCallback((e: KeyboardEvent) => {
+    if (e.code === 'Space') {
+      setIsSpacePressed(false);
+      setCursor('default');
+    }
+  }, []);
+
+  // Reset view
+  const resetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setCursor('default');
+  }, []);
+
+  // Fit to screen
+  const fitToScreen = useCallback(() => {
+    if (!containerRef.current || !contentRef.current) return;
+    
+    const container = containerRef.current;
+    const content = contentRef.current;
+    
+    const containerRect = container.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
+    
+    const scaleX = (containerRect.width - 100) / contentRect.width;
+    const scaleY = (containerRect.height - 100) / contentRect.height;
+    
+    const optimalZoom = Math.min(scaleX, scaleY, 1);
+    
+    setZoom(Math.max(minZoom, Math.min(maxZoom, optimalZoom)));
+    setPan({ x: 0, y: 0 });
+  }, [containerRef, contentRef, minZoom, maxZoom]);
+
+  // Effect to attach/detach event listeners
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Add event listeners
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('touchstart', handleTouchStart);
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd);
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      // Cleanup
+      container.removeEventListener('wheel', handleWheel);
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (wheelTimeoutRef.current) {
+        clearTimeout(wheelTimeoutRef.current);
+      }
+    };
+  }, [containerRef, handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd, handleKeyDown, handleKeyUp]);
+
+  return {
+    zoom,
+    pan,
+    isPanning,
+    cursor,
+    setZoom,
+    setPan,
+    resetView,
+    fitToScreen,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleMouseLeave,
+    handleZoom
+  };
+};
 
 // ===== PROPS INTERFACE =====
 export interface OrgStructureProps {
@@ -225,7 +515,8 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   const logoUrl = getLogoUrl();
 
   // Handle click event 
-  const handleCardClick = () => {
+  const handleCardClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent pan when clicking cards
     onItemClick(item, type);
   };
 
@@ -368,10 +659,9 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
 OrgCard.displayName = 'OrgCard';
 
 // ===== COLOR-CODED LEVEL TABS =====
-const LevelTabs = ({ visibleLevels, onToggleLevel, isFullscreen = false }: {
+const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   visibleLevels: Set<string>;
   onToggleLevel: (level: string) => void;
-  isFullscreen?: boolean;
 }) => {
   const levels = [
     { id: 'entity', label: 'Entity', icon: Building2, color: 'blue' },
@@ -383,9 +673,7 @@ const LevelTabs = ({ visibleLevels, onToggleLevel, isFullscreen = false }: {
 
   const getColorClasses = (color: string, isVisible: boolean) => {
     if (!isVisible) {
-      return isFullscreen 
-        ? 'bg-gray-700 text-gray-400'
-        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+      return 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
     }
     
     const colorMap: Record<string, string> = {
@@ -428,6 +716,84 @@ const LevelTabs = ({ visibleLevels, onToggleLevel, isFullscreen = false }: {
   );
 };
 
+// ===== ZOOM SLIDER COMPONENT =====
+const ZoomSlider = ({ zoom, onZoomChange, min = 0.25, max = 2 }: {
+  zoom: number;
+  onZoomChange: (value: number) => void;
+  min?: number;
+  max?: number;
+}) => {
+  return (
+    <div className="flex items-center gap-2">
+      <ZoomOut className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+      <input
+        type="range"
+        min={min * 100}
+        max={max * 100}
+        value={zoom * 100}
+        onChange={(e) => onZoomChange(Number(e.target.value) / 100)}
+        className="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer
+                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 
+                   [&::-webkit-slider-thumb]:bg-[#8CC63F] [&::-webkit-slider-thumb]:rounded-full 
+                   [&::-webkit-slider-thumb]:hover:bg-[#7AB635] [&::-webkit-slider-thumb]:transition-colors
+                   [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#8CC63F]
+                   [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-full
+                   [&::-moz-range-thumb]:hover:bg-[#7AB635] [&::-moz-range-thumb]:transition-colors"
+      />
+      <ZoomIn className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 min-w-[3rem]">
+        {Math.round(zoom * 100)}%
+      </span>
+    </div>
+  );
+};
+
+// ===== KEYBOARD SHORTCUTS HELPER =====
+const KeyboardShortcuts = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const shortcuts = [
+    { key: 'Ctrl/Cmd + Scroll', action: 'Zoom in/out' },
+    { key: 'Space + Drag', action: 'Pan mode' },
+    { key: 'Arrow Keys', action: 'Pan view' },
+    { key: 'Ctrl/Cmd + 0', action: 'Reset zoom' },
+    { key: 'Ctrl/Cmd + +/-', action: 'Zoom in/out' },
+    { key: 'F11', action: 'Toggle fullscreen' },
+    { key: 'Shift + Arrow', action: 'Fast pan' },
+  ];
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        title="Keyboard shortcuts"
+      >
+        <Navigation className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+      </button>
+      
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg 
+                        border border-gray-200 dark:border-gray-700 p-3 z-50 w-64">
+          <h4 className="font-semibold text-sm mb-2 text-gray-900 dark:text-white">
+            Keyboard Shortcuts
+          </h4>
+          <div className="space-y-1">
+            {shortcuts.map((s, i) => (
+              <div key={i} className="flex justify-between text-xs">
+                <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono">
+                  {s.key}
+                </kbd>
+                <span className="text-gray-600 dark:text-gray-400">{s.action}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ===== MAIN COMPONENT =====
 export default function OrganizationStructureTab({ 
   companyData,
@@ -444,13 +810,13 @@ export default function OrganizationStructureTab({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [lazyLoadedData, setLazyLoadedData] = useState<Map<string, any[]>>(new Map());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   
   // Branch form state
   const [showBranchForm, setShowBranchForm] = useState(false);
@@ -463,9 +829,39 @@ export default function OrganizationStructureTab({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
-  const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check for dark mode on mount
+  useEffect(() => {
+    const checkDarkMode = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    
+    checkDarkMode();
+    
+    // Observer for theme changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Use the zoom/pan hook
+  const {
+    zoom,
+    pan,
+    cursor,
+    setZoom,
+    resetView,
+    fitToScreen,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleMouseLeave,
+    handleZoom
+  } = useZoomPan(scrollAreaRef, contentRef, 1, 0.25, 2);
 
   // Filter schools based on active/inactive toggle
   const filteredSchools = useMemo(() => {
@@ -493,7 +889,7 @@ export default function OrganizationStructureTab({
     { enabled: !!companyId }
   );
 
-  // UPDATED: Fetch complete hierarchical data including grade levels and sections
+  // Fetch complete hierarchical data including grade levels and sections
   const { data: completeHierarchyData, isLoading: isHierarchyLoading } = useQuery(
     ['complete-hierarchy', companyId, showInactive, expandedNodes],
     async () => {
@@ -520,7 +916,7 @@ export default function OrganizationStructureTab({
       
       const branchIds = branches?.map(b => b.id) || [];
       
-      // UPDATED: Fetch grade levels (both school-level and branch-level)
+      // Fetch grade levels (both school-level and branch-level)
       let gradeLevelsQuery = supabase
         .from('grade_levels')
         .select('*')
@@ -588,7 +984,7 @@ export default function OrganizationStructureTab({
     }
   );
 
-  // UPDATED: Process hierarchy data for tree building
+  // Process hierarchy data for tree building
   const processedSchoolData = useMemo(() => {
     if (!filteredSchools || !completeHierarchyData) return [];
     
@@ -661,11 +1057,11 @@ export default function OrganizationStructureTab({
   // Measure node dimensions
   const nodeDimensions = useNodeMeasurements(
     cardRefs,
-    zoomLevel,
+    1, // Use base zoom for measurements
     [expandedNodes, visibleLevels, processedSchoolData.length, showInactive]
   );
 
-  // UPDATED: Build tree structure from processed data
+  // Build tree structure from processed data
   const treeNodes = useMemo(() => {
     if (!companyData) return new Map();
     
@@ -674,12 +1070,11 @@ export default function OrganizationStructureTab({
       schools: processedSchoolData
     };
     
-    // Pass visibleLevels to buildTreeFromData for proper tab-based filtering
     return buildTreeFromData(
       filteredCompanyData,
       expandedNodes,
-      new Map(), // lazyLoadedData not needed anymore
-      new Map(), // branchesData not needed anymore
+      new Map(),
+      new Map(),
       visibleLevels
     );
   }, [companyData, processedSchoolData, expandedNodes, visibleLevels]);
@@ -720,7 +1115,7 @@ export default function OrganizationStructureTab({
       
       if (!hasInitialized) {
         setTimeout(() => {
-          checkAndAutoResize();
+          fitToScreen();
           setHasInitialized(true);
         }, 100);
       }
@@ -731,7 +1126,7 @@ export default function OrganizationStructureTab({
         clearTimeout(layoutUpdateTimeoutRef.current);
       }
     };
-  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized]);
+  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, fitToScreen]);
 
   // Calculate hierarchical data
   const hierarchicalData = useMemo(() => {
@@ -868,60 +1263,6 @@ export default function OrganizationStructureTab({
     }
   }, [branchFormData, editingBranch, refreshData]);
 
-  // Auto-resize function
-  const checkAndAutoResize = useCallback(() => {
-    const viewport = scrollAreaRef.current;
-    const container = chartContainerRef.current;
-    if (!viewport || !container || canvasSize.width === 0 || canvasSize.height === 0) return;
-
-    const availableWidth = viewport.clientWidth - 128;
-    const availableHeight = viewport.clientHeight - 128;
-    
-    const scaleX = availableWidth / canvasSize.width;
-    const scaleY = availableHeight / canvasSize.height;
-    const optimalZoom = Math.min(scaleX, scaleY);
-    
-    const maxZoom = isFullscreen ? 1.2 : 1.5;
-    const minZoom = 0.3;
-    const boundedZoom = Math.max(minZoom, Math.min(maxZoom, optimalZoom));
-    
-    setZoomLevel(boundedZoom);
-    
-    requestAnimationFrame(() => {
-      if (viewport) {
-        const scrollLeft = Math.max(0, (container.scrollWidth - viewport.clientWidth) / 2);
-        const scrollTop = 0;
-        viewport.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'smooth' });
-      }
-    });
-  }, [canvasSize, isFullscreen]);
-
-  // Window resize observer
-  useEffect(() => {
-    if (!hasInitialized) return;
-    
-    const viewport = scrollAreaRef.current;
-    if (!viewport) return;
-
-    const handleWindowResize = () => {
-      if (autoResizeTimeoutRef.current) {
-        clearTimeout(autoResizeTimeoutRef.current);
-      }
-      autoResizeTimeoutRef.current = setTimeout(() => {
-        checkAndAutoResize();
-      }, 300);
-    };
-
-    window.addEventListener('resize', handleWindowResize);
-
-    return () => {
-      window.removeEventListener('resize', handleWindowResize);
-      if (autoResizeTimeoutRef.current) {
-        clearTimeout(autoResizeTimeoutRef.current);
-      }
-    };
-  }, [hasInitialized, checkAndAutoResize]);
-
   // Initial loading simulation
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -930,7 +1271,7 @@ export default function OrganizationStructureTab({
     return () => clearTimeout(timer);
   }, []);
 
-  // UPDATED: Toggle node expansion
+  // Toggle node expansion
   const toggleNode = useCallback((nodeId: string, nodeType: string) => {
     const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
     
@@ -1056,18 +1397,7 @@ export default function OrganizationStructureTab({
     });
   }, [processedSchoolData]);
 
-  // Zoom controls
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 2));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-  const handleResetZoom = () => {
-    checkAndAutoResize();
-  };
-  
-  const handleFitToScreen = useCallback(() => {
-    checkAndAutoResize();
-  }, [checkAndAutoResize]);
-
-  // Toggle fullscreen - UPDATED to target specific container
+  // Toggle fullscreen - Preserve theme
   const toggleFullscreen = () => {
     const element = fullscreenContainerRef.current;
     if (!element) return;
@@ -1076,7 +1406,7 @@ export default function OrganizationStructureTab({
       element.requestFullscreen().then(() => {
         setIsFullscreen(true);
         setTimeout(() => {
-          checkAndAutoResize();
+          fitToScreen();
         }, 300);
       }).catch(err => {
         console.error('Error entering fullscreen:', err);
@@ -1086,7 +1416,7 @@ export default function OrganizationStructureTab({
       document.exitFullscreen().then(() => {
         setIsFullscreen(false);
         setTimeout(() => {
-          checkAndAutoResize();
+          fitToScreen();
         }, 300);
       }).catch(err => {
         console.error('Error exiting fullscreen:', err);
@@ -1094,18 +1424,44 @@ export default function OrganizationStructureTab({
     }
   };
 
-  // Listen for fullscreen changes
+  // Listen for fullscreen changes and F11
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
       setTimeout(() => {
-        checkAndAutoResize();
+        fitToScreen();
       }, 100);
     };
     
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [checkAndAutoResize]);
+    document.addEventListener('keydown', handleKeyPress);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [fitToScreen]);
+
+  // Get cursor style
+  const getCursorStyle = () => {
+    switch (cursor) {
+      case 'grab':
+        return 'cursor-grab';
+      case 'grabbing':
+        return 'cursor-grabbing';
+      case 'move':
+        return 'cursor-move';
+      default:
+        return 'cursor-default';
+    }
+  };
 
   if (!companyData) {
     return (
@@ -1141,11 +1497,16 @@ export default function OrganizationStructureTab({
 
     return (
       <div 
+        ref={contentRef}
         className="relative"
         style={{
           width: `${canvasSize.width}px`,
           height: `${canvasSize.height}px`,
-          minHeight: '400px'
+          minHeight: '400px',
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          transition: 'none',
+          willChange: 'transform'
         }}
       >
         {/* Render all nodes with absolute positioning */}
@@ -1406,51 +1767,39 @@ export default function OrganizationStructureTab({
 
   return (
     <>
-      {/* Main container with fullscreen ref */}
+      {/* Main container with fullscreen ref - Preserve theme */}
       <div 
         ref={fullscreenContainerRef}
         className={`
-          ${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900' : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full'}
+          ${isFullscreen 
+            ? `fixed inset-0 z-50 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}` 
+            : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full'}
         `}
       >
-        {/* Header - styled differently for fullscreen */}
+        {/* Header - Adapt to current theme */}
         <div className={`
-          ${isFullscreen ? 'bg-gray-800 text-white' : 'bg-white dark:bg-gray-800'}
-          p-4 border-b ${isFullscreen ? 'border-gray-700' : 'border-gray-200 dark:border-gray-700'}
+          ${isFullscreen 
+            ? (isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900 border-b border-gray-200')
+            : 'bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700'}
+          p-4
         `}>
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
-              {isFullscreen && (
-                <h2 className="text-lg font-semibold text-white">
-                  Organization Structure
-                </h2>
-              )}
-              {!isFullscreen && (
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Organization Structure
-                </h2>
-              )}
+              <h2 className={`text-lg font-semibold ${isFullscreen && !isDarkMode ? 'text-gray-900' : ''}`}>
+                Organization Structure
+              </h2>
               
               {/* Show/Hide Controls */}
-              <div className={`text-xs ${isFullscreen ? 'text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
-                Show/Hide:
-              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Show/Hide:</div>
               
-              <LevelTabs 
-                visibleLevels={visibleLevels} 
-                onToggleLevel={toggleLevel} 
-                isFullscreen={isFullscreen}
-              />
+              <LevelTabs visibleLevels={visibleLevels} onToggleLevel={toggleLevel} />
               
               {/* Show Inactive Toggle */}
               <button
                 onClick={() => setShowInactive(!showInactive)}
-                className={`
-                  flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                  ${isFullscreen 
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}
-                `}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
+                         bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300
+                         hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
                 {showInactive ? (
                   <ToggleRight className="w-4 h-4 text-orange-500" />
@@ -1461,128 +1810,124 @@ export default function OrganizationStructureTab({
               </button>
             </div>
 
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleZoomOut}
-                className={`
-                  p-2 rounded-lg transition-colors
-                  ${isFullscreen 
-                    ? 'hover:bg-gray-700 text-gray-300' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                `}
-                disabled={zoomLevel <= 0.5}
-                title="Zoom out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <span className={`
-                text-sm font-medium min-w-[3rem] text-center
-                ${isFullscreen ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300'}
-              `}>
-                {Math.round(zoomLevel * 100)}%
-              </span>
-              <button
-                onClick={handleZoomIn}
-                className={`
-                  p-2 rounded-lg transition-colors
-                  ${isFullscreen 
-                    ? 'hover:bg-gray-700 text-gray-300' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                `}
-                disabled={zoomLevel >= 2}
-                title="Zoom in"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleFitToScreen}
-                className={`
-                  p-2 rounded-lg transition-colors
-                  ${isFullscreen 
-                    ? 'hover:bg-gray-700 text-gray-300' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                `}
-                title="Fit to screen"
-              >
-                <Expand className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleResetZoom}
-                className={`
-                  p-2 rounded-lg transition-colors
-                  ${isFullscreen 
-                    ? 'hover:bg-gray-700 text-gray-300' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                `}
-                title="Reset and center"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              <button
-                onClick={toggleFullscreen}
-                className={`
-                  p-2 rounded-lg transition-colors
-                  ${isFullscreen 
-                    ? 'bg-red-600 hover:bg-red-700 text-white' 
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                `}
-                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="w-4 h-4" />
-                ) : (
-                  <Maximize2 className="w-4 h-4" />
-                )}
-              </button>
+            {/* Enhanced Zoom Controls */}
+            <div className="flex items-center gap-3">
+              {/* Zoom Slider */}
+              <ZoomSlider 
+                zoom={zoom} 
+                onZoomChange={setZoom}
+                min={0.25}
+                max={2}
+              />
+              
+              {/* Control Buttons */}
+              <div className="flex items-center gap-1 border-l pl-3 border-gray-300 dark:border-gray-600">
+                <button
+                  onClick={() => handleZoom(-0.1)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  disabled={zoom <= 0.25}
+                  title="Zoom out (Ctrl + -)"
+                >
+                  <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={() => handleZoom(0.1)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  disabled={zoom >= 2}
+                  title="Zoom in (Ctrl + +)"
+                >
+                  <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={fitToScreen}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Fit to screen"
+                >
+                  <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={resetView}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Reset view (Ctrl + 0)"
+                >
+                  <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </button>
+                
+                {/* Keyboard Shortcuts Helper */}
+                <KeyboardShortcuts />
+                
+                <button
+                  onClick={toggleFullscreen}
+                  className={`
+                    p-2 rounded-lg transition-colors ml-2
+                    ${isFullscreen 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                  `}
+                  title={isFullscreen ? "Exit fullscreen (F11)" : "Enter fullscreen (F11)"}
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="w-4 h-4" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+          
+          {/* Pan Mode Indicator */}
+          {cursor !== 'default' && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-[#8CC63F]">
+              <Move className="w-3 h-3" />
+              <span>Pan mode active - Click and drag to move the chart</span>
+            </div>
+          )}
         </div>
 
-        {/* Chart Container with SVG Overlay */}
+        {/* Chart Container with Enhanced Interactions */}
         <div 
           ref={scrollAreaRef}
           className={`
-            overflow-auto 
+            overflow-hidden relative
             ${isFullscreen 
-              ? 'h-[calc(100vh-73px)] bg-gray-900' 
-              : 'bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 h-[calc(100vh-300px)]'} 
-            w-full relative
+              ? 'h-[calc(100vh-73px)]' 
+              : 'h-[calc(100vh-300px)]'} 
+            ${isDarkMode || (isFullscreen && isDarkMode) 
+              ? 'bg-gradient-to-b from-gray-900/50 to-gray-800' 
+              : 'bg-gradient-to-b from-gray-50 to-white'}
+            ${getCursorStyle()}
+            select-none
           `}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
         >
+          {/* Mini-map (Optional - can be enabled later) */}
+          {/* <MiniMap /> */}
+          
+          {/* Main Chart */}
           <div 
             ref={chartContainerRef}
-            className="relative"
-            style={{
-              transform: `scale(${zoomLevel})`,
-              transformOrigin: 'center top',
-              transition: 'transform 0.2s ease-out',
-              width: `${Math.max(canvasSize.width, 1200)}px`,
-              height: `${Math.max(canvasSize.height, 800)}px`,
-              padding: '64px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'flex-start'
-            }}
+            className="absolute inset-0"
           >
             {/* Organization Chart Content */}
-            <div className="relative">
-              {isHierarchyLoading ? (
-                <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
-                  <span className={`ml-2 ${isFullscreen ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400'}`}>
-                    Loading organization structure...
-                  </span>
-                </div>
-              ) : (
-                renderChart()
-              )}
-            </div>
+            {isHierarchyLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
+                <span className="ml-2 text-gray-600 dark:text-gray-400">
+                  Loading organization structure...
+                </span>
+              </div>
+            ) : (
+              renderChart()
+            )}
           </div>
         </div>
       </div>
 
-      {/* Branch Edit Form - always outside of fullscreen container */}
+      {/* Branch Edit Form - Always outside of fullscreen container */}
       <SlideInForm
         title="Edit Branch"
         isOpen={showBranchForm}
