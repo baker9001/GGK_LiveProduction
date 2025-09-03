@@ -1498,7 +1498,7 @@ export default function OrganizationStructureTab({
     return (
       <div 
         ref={contentRef}
-        className="relative"
+        className="relative pan-area"
         style={{
           width: `${canvasSize.width}px`,
           height: `${canvasSize.height}px`,
