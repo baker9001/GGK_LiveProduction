@@ -9,12 +9,11 @@
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
  * UPDATED FEATURES:
- *   - Properly integrated with GradeLevelsTab.tsx database structure
- *   - Grade levels can now be at school-level OR branch-level
- *   - Fixed data fetching to match actual database schema
- *   - Updated tree building logic for proper hierarchy
- *   - Grades and branches appear side-by-side when both at school level
- *   - Branch-level grades appear under their respective branches
+ *   - Fullscreen now only applies to the organization chart section
+ *   - Added floating controls in fullscreen mode for better UX
+ *   - Improved fullscreen styling with dark overlay
+ *   - Exit fullscreen button always visible in fullscreen mode
+ *   - Better responsive behavior in fullscreen
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -369,9 +368,10 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
 OrgCard.displayName = 'OrgCard';
 
 // ===== COLOR-CODED LEVEL TABS =====
-const LevelTabs = ({ visibleLevels, onToggleLevel }: {
+const LevelTabs = ({ visibleLevels, onToggleLevel, isFullscreen = false }: {
   visibleLevels: Set<string>;
   onToggleLevel: (level: string) => void;
+  isFullscreen?: boolean;
 }) => {
   const levels = [
     { id: 'entity', label: 'Entity', icon: Building2, color: 'blue' },
@@ -382,7 +382,11 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   ];
 
   const getColorClasses = (color: string, isVisible: boolean) => {
-    if (!isVisible) return 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+    if (!isVisible) {
+      return isFullscreen 
+        ? 'bg-gray-700 text-gray-400'
+        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+    }
     
     const colorMap: Record<string, string> = {
       blue: 'bg-blue-500 text-white',
@@ -458,6 +462,7 @@ export default function OrganizationStructureTab({
   // Refs for SVG connections
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
   const autoResizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1062,22 +1067,30 @@ export default function OrganizationStructureTab({
     checkAndAutoResize();
   }, [checkAndAutoResize]);
 
-  // Toggle fullscreen
+  // Toggle fullscreen - UPDATED to target specific container
   const toggleFullscreen = () => {
+    const element = fullscreenContainerRef.current;
+    if (!element) return;
+
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-      setTimeout(() => {
-        checkAndAutoResize();
-      }, 300);
+      element.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+        setTimeout(() => {
+          checkAndAutoResize();
+        }, 300);
+      }).catch(err => {
+        console.error('Error entering fullscreen:', err);
+        toast.error('Could not enter fullscreen mode');
+      });
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
+      document.exitFullscreen().then(() => {
         setIsFullscreen(false);
         setTimeout(() => {
           checkAndAutoResize();
         }, 300);
-      }
+      }).catch(err => {
+        console.error('Error exiting fullscreen:', err);
+      });
     }
   };
 
@@ -1392,121 +1405,184 @@ export default function OrganizationStructureTab({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Organization Structure
-            </h2>
-            
-            {/* Show/Hide Controls */}
-            <div className="text-xs text-gray-500 dark:text-gray-400">Show/Hide:</div>
-            
-            <LevelTabs visibleLevels={visibleLevels} onToggleLevel={toggleLevel} />
-            
-            {/* Show Inactive Toggle */}
-            <button
-              onClick={() => setShowInactive(!showInactive)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
-                         bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300
-                         hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              {showInactive ? (
-                <ToggleRight className="w-4 h-4 text-orange-500" />
-              ) : (
-                <ToggleLeft className="w-4 h-4" />
-              )}
-              <span>Show Inactive</span>
-            </button>
-          </div>
-
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleZoomOut}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              disabled={zoomLevel <= 0.5}
-              title="Zoom out"
-            >
-              <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            </button>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              onClick={handleZoomIn}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              disabled={zoomLevel >= 2}
-              title="Zoom in"
-            >
-              <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            </button>
-            <button
-              onClick={handleFitToScreen}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Fit to screen"
-            >
-              <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            </button>
-            <button
-              onClick={handleResetZoom}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Reset and center"
-            >
-              <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            </button>
-            <button
-              onClick={toggleFullscreen}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              ) : (
-                <Maximize2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Chart Container with SVG Overlay */}
+    <>
+      {/* Main container with fullscreen ref */}
       <div 
-        ref={scrollAreaRef}
-        className={`overflow-auto bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 ${isFullscreen ? 'h-screen' : 'h-[calc(100vh-300px)]'} w-full relative`}
+        ref={fullscreenContainerRef}
+        className={`
+          ${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900' : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full'}
+        `}
       >
-        <div 
-          ref={chartContainerRef}
-          className="relative"
-          style={{
-            transform: `scale(${zoomLevel})`,
-            transformOrigin: 'center top',
-            transition: 'transform 0.2s ease-out',
-            width: `${Math.max(canvasSize.width, 1200)}px`,
-            height: `${Math.max(canvasSize.height, 800)}px`,
-            padding: '64px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start'
-          }}
-        >
-          {/* Organization Chart Content */}
-          <div className="relative">
-            {isHierarchyLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
-                <span className="ml-2 text-gray-600 dark:text-gray-400">Loading organization structure...</span>
+        {/* Header - styled differently for fullscreen */}
+        <div className={`
+          ${isFullscreen ? 'bg-gray-800 text-white' : 'bg-white dark:bg-gray-800'}
+          p-4 border-b ${isFullscreen ? 'border-gray-700' : 'border-gray-200 dark:border-gray-700'}
+        `}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              {isFullscreen && (
+                <h2 className="text-lg font-semibold text-white">
+                  Organization Structure
+                </h2>
+              )}
+              {!isFullscreen && (
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Organization Structure
+                </h2>
+              )}
+              
+              {/* Show/Hide Controls */}
+              <div className={`text-xs ${isFullscreen ? 'text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>
+                Show/Hide:
               </div>
-            ) : (
-              renderChart()
-            )}
+              
+              <LevelTabs 
+                visibleLevels={visibleLevels} 
+                onToggleLevel={toggleLevel} 
+                isFullscreen={isFullscreen}
+              />
+              
+              {/* Show Inactive Toggle */}
+              <button
+                onClick={() => setShowInactive(!showInactive)}
+                className={`
+                  flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                  ${isFullscreen 
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}
+                `}
+              >
+                {showInactive ? (
+                  <ToggleRight className="w-4 h-4 text-orange-500" />
+                ) : (
+                  <ToggleLeft className="w-4 h-4" />
+                )}
+                <span>Show Inactive</span>
+              </button>
+            </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleZoomOut}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isFullscreen 
+                    ? 'hover:bg-gray-700 text-gray-300' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                `}
+                disabled={zoomLevel <= 0.5}
+                title="Zoom out"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className={`
+                text-sm font-medium min-w-[3rem] text-center
+                ${isFullscreen ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300'}
+              `}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                onClick={handleZoomIn}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isFullscreen 
+                    ? 'hover:bg-gray-700 text-gray-300' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                `}
+                disabled={zoomLevel >= 2}
+                title="Zoom in"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleFitToScreen}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isFullscreen 
+                    ? 'hover:bg-gray-700 text-gray-300' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                `}
+                title="Fit to screen"
+              >
+                <Expand className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleResetZoom}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isFullscreen 
+                    ? 'hover:bg-gray-700 text-gray-300' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                `}
+                title="Reset and center"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isFullscreen 
+                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+                `}
+                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Chart Container with SVG Overlay */}
+        <div 
+          ref={scrollAreaRef}
+          className={`
+            overflow-auto 
+            ${isFullscreen 
+              ? 'h-[calc(100vh-73px)] bg-gray-900' 
+              : 'bg-gradient-to-b from-gray-50 to-white dark:from-gray-900/50 dark:to-gray-800 h-[calc(100vh-300px)]'} 
+            w-full relative
+          `}
+        >
+          <div 
+            ref={chartContainerRef}
+            className="relative"
+            style={{
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center top',
+              transition: 'transform 0.2s ease-out',
+              width: `${Math.max(canvasSize.width, 1200)}px`,
+              height: `${Math.max(canvasSize.height, 800)}px`,
+              padding: '64px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start'
+            }}
+          >
+            {/* Organization Chart Content */}
+            <div className="relative">
+              {isHierarchyLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
+                  <span className={`ml-2 ${isFullscreen ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400'}`}>
+                    Loading organization structure...
+                  </span>
+                </div>
+              ) : (
+                renderChart()
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Branch Edit Form */}
+      {/* Branch Edit Form - always outside of fullscreen container */}
       <SlideInForm
         title="Edit Branch"
         isOpen={showBranchForm}
@@ -1529,6 +1605,6 @@ export default function OrganizationStructureTab({
           isEditing={true}
         />
       </SlideInForm>
-    </div>
+    </>
   );
 }
