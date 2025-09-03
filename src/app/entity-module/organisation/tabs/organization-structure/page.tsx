@@ -1449,20 +1449,6 @@ export default function OrganizationStructureTab({
     };
   }, [fitToScreen]);
 
-  // Get cursor style
-  const getCursorStyle = () => {
-    switch (cursor) {
-      case 'grab':
-        return 'cursor-grab';
-      case 'grabbing':
-        return 'cursor-grabbing';
-      case 'move':
-        return 'cursor-move';
-      default:
-        return 'cursor-default';
-    }
-  };
-
   if (!companyData) {
     return (
       <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg">
