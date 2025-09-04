@@ -1,3 +1,8 @@
+/**
+ * File: /src/components/shared/FilterCard.tsx
+ * Updated to support green theme (#8CC63F) instead of blue
+ */
+
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
@@ -35,6 +40,10 @@ function FilterDropdown({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const unregisterPortalRef = React.useRef<(() => void) | null>(null);
+  
+  // Check if we're in a green-theme context
+  const isGreenTheme = typeof document !== 'undefined' && 
+    document.querySelector('.green-theme');
   
   const filteredOptions = options.filter(option => 
     option.label.toLowerCase().includes(searchTerm.toLowerCase())
@@ -157,7 +166,13 @@ function FilterDropdown({
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
-              className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className={cn(
+                "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                "focus:outline-none focus:ring-2",
+                isGreenTheme 
+                  ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  : "focus:ring-blue-500 focus:border-blue-500"
+              )}
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -174,7 +189,11 @@ function FilterDropdown({
                   type="button"
                   className={cn(
                     'w-full px-4 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors',
-                    option.value === value ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'
+                    option.value === value 
+                      ? isGreenTheme 
+                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 text-[#8CC63F]' 
+                        : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                      : 'text-gray-900 dark:text-white'
                   )}
                   onClick={() => {
                     onChange(option.value);
@@ -208,7 +227,10 @@ function FilterDropdown({
           id={id}
           className={cn(
             'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md py-2 pl-3 pr-10 text-left',
-            'focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500',
+            'focus:outline-none focus:ring-1',
+            isGreenTheme 
+              ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
+              : 'focus:ring-blue-500 focus:border-blue-500',
             'text-sm text-gray-900 dark:text-gray-100 transition-colors duration-200',
             disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed'
           )}
@@ -303,6 +325,7 @@ export function FilterCard({
               variant="outline"
               size="sm"
               onClick={handleClear}
+              className="border-gray-300 hover:border-[#8CC63F] hover:text-[#8CC63F] focus:ring-[#8CC63F]"
             >
               Clear Filters
             </Button>
