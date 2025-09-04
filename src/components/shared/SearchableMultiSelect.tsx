@@ -2,7 +2,7 @@
  * File: /src/components/shared/SearchableMultiSelect.tsx
  * 
  * Searchable Multi-Select Component with Portal Support
- * Provides dropdown selection with search, multi-select, and create new functionality
+ * Updated to use green theme (#8CC63F) instead of blue
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -27,6 +27,7 @@ interface SearchableMultiSelectProps {
   error?: string;
   usePortal?: boolean;
   onCreateNew?: (searchTerm: string) => Promise<string | null>;
+  className?: string; // Added to support custom theming
 }
 
 // Type declaration for the global window object
@@ -47,7 +48,8 @@ export function SearchableMultiSelect({
   disabled = false,
   error,
   usePortal = true,
-  onCreateNew
+  onCreateNew,
+  className
 }: SearchableMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +61,9 @@ export function SearchableMultiSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
+
+  // Determine if we're using green theme
+  const isGreenTheme = className?.includes('green-theme');
 
   // Ensure selectedValues is always an array
   const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
@@ -295,7 +300,12 @@ export function SearchableMultiSelect({
               <input
                 ref={searchInputRef}
                 type="text"
-                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={cn(
+                  "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                  isGreenTheme 
+                    ? "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                    : "focus:outline-none focus:ring-2 focus:ring-blue-500"
+                )}
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -317,13 +327,19 @@ export function SearchableMultiSelect({
                   aria-selected={safeSelectedValues.includes(option.value)}
                   className={cn(
                     'w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                    safeSelectedValues.includes(option.value) && 'bg-blue-50 dark:bg-blue-900/30'
+                    safeSelectedValues.includes(option.value) && (
+                      isGreenTheme 
+                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20'
+                        : 'bg-blue-50 dark:bg-blue-900/30'
+                    )
                   )}
                   onClick={() => handleSelect(option.value)}
                 >
                   <span className={cn(
                     safeSelectedValues.includes(option.value) 
-                      ? "text-blue-600 dark:text-blue-400 font-medium" 
+                      ? isGreenTheme
+                        ? "text-[#8CC63F] font-medium" 
+                        : "text-blue-600 dark:text-blue-400 font-medium"
                       : "text-gray-900 dark:text-white"
                   )}>
                     {option.label}
@@ -370,7 +386,7 @@ export function SearchableMultiSelect({
   };
 
   return (
-    <div className="space-y-1" ref={containerRef}>
+    <div className={cn("space-y-1", className)} ref={containerRef}>
       {label && (
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label}
@@ -382,11 +398,17 @@ export function SearchableMultiSelect({
           ref={triggerRef}
           className={cn(
             'min-h-[38px] w-full rounded-md border px-3 py-2 text-sm transition-colors duration-200',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+            isGreenTheme 
+              ? 'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]'
+              : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
             'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
             disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
             error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
-            isOpen && 'ring-2 ring-blue-500 border-blue-500',
+            isOpen && (
+              isGreenTheme 
+                ? 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
+                : 'ring-2 ring-blue-500 border-blue-500'
+            ),
             'cursor-pointer flex items-center justify-between'
           )}
           onClick={handleOpen}
@@ -407,13 +429,23 @@ export function SearchableMultiSelect({
               selectedOptions.map(option => (
                 <span
                   key={option.value}
-                  className="inline-flex items-center bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded px-2 py-0.5 text-sm"
+                  className={cn(
+                    "inline-flex items-center rounded px-2 py-0.5 text-sm",
+                    isGreenTheme
+                      ? "bg-[#8CC63F]/10 text-[#8CC63F] dark:bg-[#8CC63F]/20"
+                      : "bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
+                  )}
                 >
                   {option.label}
                   {isMulti && (
                     <button
                       type="button"
-                      className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                      className={cn(
+                        "ml-1",
+                        isGreenTheme
+                          ? "text-[#8CC63F] hover:text-[#7AB52F]"
+                          : "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                      )}
                       onClick={(e) => handleRemove(option.value, e)}
                       aria-label={`Remove ${option.label}`}
                     >
