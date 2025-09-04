@@ -22,6 +22,7 @@
  *   - ADDED: Academic year templates for quick creation
  *   - ADDED: Bulk operations support
  *   - ENHANCED: Better date validation and formatting
+ *   - FIXED: Replaced all blue theme colors with green (#8CC63F)
  * 
  * Database Tables:
  *   - academic_years (id, school_id, year_name, start_date, end_date, total_terms, current_term, is_current, status)
@@ -719,7 +720,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                 </div>
                 <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1">
                   <div 
-                    className="bg-blue-600 h-1.5 rounded-full"
+                    className="bg-[#8CC63F] h-1.5 rounded-full"
                     style={{ width: `${((row.current_term || 1) / row.total_terms) * 100}%` }}
                   />
                 </div>
@@ -807,7 +808,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-gray-500">Current:</span>
-              <span className="font-medium text-blue-600 dark:text-blue-400">{statistics.current}</span>
+              <span className="font-medium text-[#8CC63F]">{statistics.current}</span>
             </div>
           </div>
           <Button
@@ -843,6 +844,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               placeholder="Search by year name..."
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
             />
           </FormField>
 
@@ -855,6 +857,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             selectedValues={filters.school_ids}
             onChange={(values) => setFilters({ ...filters, school_ids: values })}
             placeholder="Select schools..."
+            className="green-theme"
           />
 
           <FormField id="year_range" label="Time Period">
@@ -961,7 +964,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                     onClick={() => applyTemplate(template)}
                     className={`p-2 text-xs text-left rounded-md border transition-colors ${
                       selectedTemplate === template
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                        ? 'border-[#8CC63F] bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 text-[#8CC63F] dark:text-[#8CC63F]'
                         : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
                   >
@@ -992,6 +995,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                 setFormState(prev => ({ ...prev, school_ids: values }));
               }}
               placeholder="Select one or more schools..."
+              className="green-theme"
             />
           </FormField>
 
@@ -1009,6 +1013,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
               onChange={(e) => setFormState(prev => ({ ...prev, year_name: e.target.value }))}
               leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
               maxLength={100}
+              className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
             />
           </FormField>
 
@@ -1025,6 +1030,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                 type="date"
                 value={formState.start_date}
                 onChange={(e) => setFormState(prev => ({ ...prev, start_date: e.target.value }))}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
@@ -1041,6 +1047,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                 value={formState.end_date}
                 onChange={(e) => setFormState(prev => ({ ...prev, end_date: e.target.value }))}
                 min={formState.start_date}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
           </div>
@@ -1078,6 +1085,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                   ...prev, 
                   total_terms: e.target.value ? parseInt(e.target.value) : null 
                 }))}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
