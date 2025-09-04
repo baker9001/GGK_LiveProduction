@@ -1,3 +1,6 @@
+///home/project/src/components/shared/SlideInForm.tsx
+
+
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
