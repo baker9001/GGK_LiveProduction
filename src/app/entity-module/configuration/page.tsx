@@ -2,13 +2,15 @@
  * File: /src/app/entity-module/configuration/page.tsx
  * 
  * Entity Configuration Management Page
- * Manages Years/Grade, Academic Year, Departments, and Class/Section data
+ * Manages Years/Grade, Academic Year, and Departments
  * 
  * Dependencies:
  *   - @/components/shared/Tabs
  *   - @/hooks/useAccessControl
  *   - @/contexts/UserContext
  *   - ./tabs/* (all tab components)
+ * 
+ * Modified: Removed Class Sections tab as requested
  */
 
 'use client';
@@ -19,7 +21,6 @@ import {
   GraduationCap, 
   Calendar, 
   Building2, 
-  Users, 
   AlertTriangle, 
   Loader2,
   Info,
@@ -32,7 +33,6 @@ import { toast } from '../../../components/shared/Toast';
 import { GradeLevelsTab } from './tabs/GradeLevelsTab';
 import { AcademicYearsTab } from './tabs/AcademicYearsTab';
 import { DepartmentsTab } from './tabs/DepartmentsTab';
-import { ClassSectionsTab } from './tabs/ClassSectionsTab';
 
 export default function ConfigurationPage() {
   const { user } = useUser();
@@ -141,20 +141,20 @@ export default function ConfigurationPage() {
         </div>
 
         {/* Access Information */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+        <div className="bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB635]/10 dark:from-[#8CC63F]/20 dark:to-[#7AB635]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <Info className="h-5 w-5 text-[#7AB635] dark:text-[#8CC63F]" />
             <div>
-              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
                 Configuration Access
               </h3>
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
                 {isEntityAdmin || isSubEntityAdmin 
                   ? "You have full access to configure all organizational settings and academic structures."
                   : isSchoolAdmin
                     ? "You can configure settings for your assigned schools and their academic structures."
                     : isBranchAdmin
-                      ? "You can configure settings for your assigned branches and their class sections."
+                      ? "You can configure settings for your assigned branches."
                       : "Your configuration access may be limited based on your role."
                 }
               </p>
@@ -178,10 +178,6 @@ export default function ConfigurationPage() {
             <Building2 className="w-4 h-4 mr-2" />
             Departments
           </TabsTrigger>
-          <TabsTrigger value="class-sections">
-            <Users className="w-4 h-4 mr-2" />
-            Class Sections
-          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="grade-levels">
@@ -195,41 +191,29 @@ export default function ConfigurationPage() {
         <TabsContent value="departments">
           <DepartmentsTab companyId={userCompanyId} />
         </TabsContent>
-
-        <TabsContent value="class-sections">
-          <ClassSectionsTab companyId={userCompanyId} />
-        </TabsContent>
       </Tabs>
 
       {/* Development Status */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-3">
+      <div className="bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg p-6">
+        <div className="flex items-center gap-2 text-[#5A8A2C] dark:text-[#8CC63F] mb-3">
           <Settings className="w-5 h-5" />
           <span className="font-semibold">Configuration Management</span>
         </div>
-        <p className="text-sm text-blue-600 dark:text-blue-400 mb-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
           Complete configuration management system for academic and organizational structure.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <GraduationCap className="w-4 h-4 text-[#8CC63F]" />
-              <span className="text-blue-600 dark:text-blue-400">Grade Levels Management</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4 text-[#8CC63F]" />
-              <span className="text-blue-600 dark:text-blue-400">Academic Years Planning</span>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-center gap-2 text-sm">
+            <GraduationCap className="w-4 h-4 text-[#8CC63F]" />
+            <span className="text-gray-700 dark:text-gray-300">Grade Levels Management</span>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Building2 className="w-4 h-4 text-[#8CC63F]" />
-              <span className="text-blue-600 dark:text-blue-400">Department Structure</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Users className="w-4 h-4 text-[#8CC63F]" />
-              <span className="text-blue-600 dark:text-blue-400">Class Sections Organization</span>
-            </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="w-4 h-4 text-[#8CC63F]" />
+            <span className="text-gray-700 dark:text-gray-300">Academic Years Planning</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Building2 className="w-4 h-4 text-[#8CC63F]" />
+            <span className="text-gray-700 dark:text-gray-300">Department Structure</span>
           </div>
         </div>
       </div>
