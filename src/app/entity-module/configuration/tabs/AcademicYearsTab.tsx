@@ -1099,6 +1099,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
                   current_term: e.target.value ? parseInt(e.target.value) : null 
                 }))}
                 disabled={!formState.total_terms}
+                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
               />
             </FormField>
           </div>
