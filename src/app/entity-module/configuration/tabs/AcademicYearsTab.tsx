@@ -576,6 +576,31 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Clear previous errors
+    setFormErrors({});
+    
+    // Validate required fields
+    if (!formState.school_ids || formState.school_ids.length === 0) {
+      setFormErrors({ school_ids: 'Please select at least one school' });
+      return;
+    }
+    
+    if (!formState.year_name) {
+      setFormErrors({ year_name: 'Year name is required' });
+      return;
+    }
+    
+    if (!formState.start_date) {
+      setFormErrors({ start_date: 'Start date is required' });
+      return;
+    }
+    
+    if (!formState.end_date) {
+      setFormErrors({ end_date: 'End date is required' });
+      return;
+    }
+    
     yearMutation.mutate(formState);
   };
 
@@ -872,6 +897,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
             selectedValues={filters.status}
             onChange={(values) => setFilters({ ...filters, status: values })}
             placeholder="Select status..."
+            className="green-theme"
           />
         </div>
       </FilterCard>
