@@ -775,7 +775,7 @@ export function AcademicYearsTab({ companyId }: AcademicYearsTabProps) {
         <div className="flex items-center gap-1">
           <button
             onClick={() => duplicateYear(row)}
-            className="p-1 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+            className="p-1 text-gray-500 hover:text-[#8CC63F] dark:text-gray-400 dark:hover:text-[#8CC63F] transition-colors"
             title="Duplicate for next year"
           >
             <Copy className="h-4 w-4" />
