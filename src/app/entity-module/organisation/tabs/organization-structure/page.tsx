@@ -8,28 +8,14 @@
  *   - @/components/shared/SlideInForm
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * FINAL ENHANCED VERSION - Complete Organization Structure
+ * FINAL CLEAN VERSION - Organization Structure Component
  * 
- * ✅ Enhanced Features:
- *   - Improved diagram centering in both regular and fullscreen modes
- *   - Dynamic spacing that adapts to hierarchy complexity
+ * Enhanced Features:
+ *   - Improved diagram centering and sizing
+ *   - Dynamic spacing based on hierarchy complexity
  *   - Coordinated auto-refit system for level toggles
  *   - Enhanced connection lines with dynamic styling
- *   - Better canvas sizing with complexity-aware scaling
- *   - Smart zoom levels for optimal viewing
  *   - All original features preserved
- * 
- * ✅ Original Features Maintained:
- *   - Theme preservation in fullscreen (respects light/dark mode)
- *   - Mouse wheel zoom with focal point
- *   - Auto click-and-drag panning on empty canvas
- *   - Trackpad pinch-to-zoom support
- *   - Comprehensive keyboard shortcuts
- *   - Visual cursor feedback (auto grab cursor)
- *   - Smooth animations and transitions
- *   - Zoom slider control
- *   - Fixed tab hierarchy logic
- *   - Branch editing functionality
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -61,7 +47,7 @@ import { BranchFormContent } from '@/components/forms/BranchFormContent';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { toast } from 'react-hot-toast';
 
-// ===== ENHANCED ZOOM/PAN HOOK WITH BETTER CENTERING =====
+// Enhanced zoom/pan hook with better centering
 const useZoomPan = (
   containerRef: React.RefObject<HTMLDivElement>,
   contentRef: React.RefObject<HTMLDivElement>,
@@ -87,14 +73,12 @@ const useZoomPan = (
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
     
-    // Calculate focal point (default to center if not provided)
     const focalX = clientX !== undefined ? clientX - rect.left : rect.width / 2;
     const focalY = clientY !== undefined ? clientY - rect.top : rect.height / 2;
     
     setZoom(prevZoom => {
       const newZoom = Math.max(minZoom, Math.min(maxZoom, prevZoom + delta));
       
-      // Adjust pan to keep focal point stable
       if (clientX !== undefined && clientY !== undefined) {
         setPan(prevPan => {
           const zoomRatio = newZoom / prevZoom;
@@ -109,22 +93,19 @@ const useZoomPan = (
     });
   }, [containerRef, contentRef, minZoom, maxZoom]);
 
-  // Mouse wheel handler with throttling
+  // Mouse wheel handler
   const handleWheel = useCallback((e: WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return;
     
     e.preventDefault();
     
-    // Clear previous timeout
     if (wheelTimeoutRef.current) {
       clearTimeout(wheelTimeoutRef.current);
     }
     
-    // Normalize wheel delta across browsers
     const delta = -e.deltaY * 0.001;
-    const zoomDelta = delta * (e.shiftKey ? 0.5 : 0.25); // Slower with shift
+    const zoomDelta = delta * (e.shiftKey ? 0.5 : 0.25);
     
-    // Use requestAnimationFrame for smooth updates
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -133,13 +114,12 @@ const useZoomPan = (
       handleZoom(zoomDelta, e.clientX, e.clientY);
     });
     
-    // Debounce end of zoom
     wheelTimeoutRef.current = setTimeout(() => {
       animationFrameRef.current = null;
     }, 150);
   }, [handleZoom]);
 
-  // Touch handlers for pinch-to-zoom
+  // Touch handlers
   const handleTouchStart = useCallback((e: TouchEvent) => {
     if (e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -157,8 +137,6 @@ const useZoomPan = (
       const distance = Math.sqrt(dx * dx + dy * dy);
       
       const delta = (distance - pinchDistanceRef.current) * 0.003;
-      
-      // Calculate center point between fingers
       const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       
@@ -171,15 +149,13 @@ const useZoomPan = (
     pinchDistanceRef.current = null;
   }, []);
 
-  // Mouse handlers for panning - AUTO PAN ON CANVAS
+  // Mouse handlers for panning
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left click
+    if (e.button !== 0) return;
     
-    // Check if clicking on a card element
     const target = e.target as HTMLElement;
     const clickedCard = target.closest('[data-card-id]');
     
-    // If clicking on a card, don't start panning (unless space is pressed)
     if (clickedCard && !isSpacePressed) return;
     
     setIsPanning(true);
@@ -190,7 +166,6 @@ const useZoomPan = (
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning) {
-      // Currently panning
       const dx = e.clientX - lastMousePosRef.current.x;
       const dy = e.clientY - lastMousePosRef.current.y;
       
@@ -200,18 +175,15 @@ const useZoomPan = (
       }));
       
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-      return; // Keep grabbing cursor while panning
+      return;
     }
     
-    // Not panning - update cursor based on hover target
     const target = e.target as HTMLElement;
     const hoveringCard = target.closest('[data-card-id]');
     
     if (hoveringCard && !isSpacePressed) {
-      // Hovering over a card (and not forcing pan mode)
       setCursor('default');
     } else {
-      // Hovering over empty space or space is pressed
       setCursor('grab');
     }
   }, [isPanning, isSpacePressed]);
@@ -219,13 +191,11 @@ const useZoomPan = (
   const handleMouseUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
-      // After releasing, update cursor based on current position
-      setCursor('grab'); // Default to grab since we're likely still over canvas
+      setCursor('grab');
     }
   }, [isPanning]);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
-    // When entering the chart area, set appropriate cursor
     const target = e.target as HTMLElement;
     const hoveringCard = target.closest('[data-card-id]');
     
@@ -241,14 +211,12 @@ const useZoomPan = (
 
   // Keyboard handlers
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Space for pan mode
     if (e.code === 'Space' && !e.repeat) {
       e.preventDefault();
       setIsSpacePressed(true);
       setCursor('grab');
     }
     
-    // Zoom shortcuts
     if (e.ctrlKey || e.metaKey) {
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
@@ -263,7 +231,6 @@ const useZoomPan = (
       }
     }
     
-    // Arrow keys for panning
     const panSpeed = e.shiftKey ? 50 : 20;
     switch (e.key) {
       case 'ArrowUp':
@@ -292,19 +259,17 @@ const useZoomPan = (
     }
   }, []);
 
-  // Reset view
   const resetView = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setCursor('default');
   }, []);
 
-  // Effect to attach/detach event listeners
+  // Effect to attach event listeners
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Add event listeners
     container.addEventListener('wheel', handleWheel, { passive: false });
     container.addEventListener('touchstart', handleTouchStart);
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -313,11 +278,9 @@ const useZoomPan = (
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Initialize cursor to grab when over canvas
     setCursor('grab');
 
     return () => {
-      // Cleanup
       container.removeEventListener('wheel', handleWheel);
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
@@ -352,7 +315,7 @@ const useZoomPan = (
   };
 };
 
-// ===== PROPS INTERFACE =====
+// Props interface
 export interface OrgStructureProps {
   companyData: any;
   companyId: string;
@@ -362,7 +325,7 @@ export interface OrgStructureProps {
   refreshData?: () => void;
 }
 
-// ===== SKELETON LOADER COMPONENT =====
+// Skeleton loader component
 const CardSkeleton = () => (
   <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 
                   w-[260px] p-4 animate-pulse">
@@ -383,7 +346,7 @@ const CardSkeleton = () => (
   </div>
 );
 
-// ===== ENHANCED ORG CARD WITH REF FORWARDING AND LOGO SUPPORT =====
+// Enhanced org card with ref forwarding and logo support
 const OrgCard = memo(React.forwardRef<HTMLDivElement, { 
   item: any; 
   type: 'company' | 'school' | 'branch' | 'year' | 'section';
@@ -403,7 +366,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   onToggleExpand,
   hierarchicalData = {}
 }, ref) => {
-  // Helper function to get logo URL based on type and item data
+  // Helper function to get logo URL
   const getLogoUrl = () => {
     let logoPath = null;
     let bucketName = '';
@@ -427,12 +390,10 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
     
     if (!logoPath) return null;
     
-    // If it's already a full URL, return as is
     if (logoPath.startsWith('http')) {
       return logoPath;
     }
     
-    // Construct Supabase storage URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       console.warn('VITE_SUPABASE_URL is not defined');
@@ -531,13 +492,11 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
   const managerName = item.additional?.[config.nameField] || item[config.nameField];
   const logoUrl = getLogoUrl();
 
-  // Handle click event 
   const handleCardClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent pan when clicking cards
+    e.stopPropagation();
     onItemClick(item, type);
   };
 
-  // Display name based on type
   const getDisplayName = () => {
     switch (type) {
       case 'year':
@@ -563,7 +522,6 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         {/* Header with Icon */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            {/* Logo or Icon */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white`}>
               {logoUrl ? (
                 <>
@@ -601,7 +559,6 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
               )}
             </div>
             
-            {/* Title and Code */}
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                 <Icon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -625,7 +582,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
           </p>
         </div>
 
-        {/* Hierarchical Stats */}
+        {/* Stats */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {config.stats.slice(0, 4).map((stat, idx) => {
             const StatIcon = stat.icon;
@@ -639,7 +596,6 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
           })}
         </div>
         
-        {/* Additional stat if present */}
         {config.stats.length > 4 && (
           <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
@@ -651,7 +607,6 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
         )}
       </div>
 
-      {/* Expand/Collapse Button */}
       {hasChildren && onToggleExpand && (
         <button
           onClick={(e) => {
@@ -675,7 +630,7 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
 
 OrgCard.displayName = 'OrgCard';
 
-// ===== COLOR-CODED LEVEL TABS =====
+// Color-coded level tabs
 const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   visibleLevels: Set<string>;
   onToggleLevel: (level: string) => void;
@@ -733,7 +688,7 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
   );
 };
 
-// ===== ZOOM SLIDER COMPONENT =====
+// Zoom slider component
 const ZoomSlider = ({ zoom, onZoomChange, min = 0.25, max = 2 }: {
   zoom: number;
   onZoomChange: (value: number) => void;
@@ -765,7 +720,7 @@ const ZoomSlider = ({ zoom, onZoomChange, min = 0.25, max = 2 }: {
   );
 };
 
-// ===== KEYBOARD SHORTCUTS HELPER =====
+// Keyboard shortcuts helper
 const KeyboardShortcuts = () => {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -812,7 +767,7 @@ const KeyboardShortcuts = () => {
   );
 };
 
-// ===== MAIN COMPONENT WITH ENHANCED CENTERING =====
+// Main component
 export default function OrganizationStructureTab({ 
   companyData,
   companyId,
@@ -823,7 +778,7 @@ export default function OrganizationStructureTab({
 }: OrgStructureProps) {
   // State management
   const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
-    new Set(['entity', 'schools'])  // Default: Entity and Schools visible
+    new Set(['entity', 'schools'])
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
   const [lazyLoadedData, setLazyLoadedData] = useState<Map<string, any[]>>(new Map());
@@ -843,7 +798,7 @@ export default function OrganizationStructureTab({
   const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
   const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   
-  // Refs for SVG connections and coordinated auto-refit
+  // Refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
@@ -851,7 +806,6 @@ export default function OrganizationStructureTab({
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRefitRef = useRef<NodeJS.Timeout | null>(null);
-  const lastRefitTriggerRef = useRef<string>('');
 
   // Check for dark mode on mount
   useEffect(() => {
@@ -861,7 +815,6 @@ export default function OrganizationStructureTab({
     
     checkDarkMode();
     
-    // Observer for theme changes
     const observer = new MutationObserver(checkDarkMode);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
@@ -910,7 +863,7 @@ export default function OrganizationStructureTab({
     { enabled: !!companyId }
   );
 
-  // Fetch complete hierarchical data including grade levels and sections
+  // Fetch complete hierarchical data
   const { data: completeHierarchyData, isLoading: isHierarchyLoading } = useQuery(
     ['complete-hierarchy', companyId, showInactive, expandedNodes],
     async () => {
@@ -918,7 +871,7 @@ export default function OrganizationStructureTab({
 
       const schoolIds = filteredSchools.map((s: any) => s.id);
       
-      // Fetch all branches
+      // Fetch branches
       let branchQuery = supabase
         .from('branches')
         .select(`
@@ -937,13 +890,12 @@ export default function OrganizationStructureTab({
       
       const branchIds = branches?.map(b => b.id) || [];
       
-      // Fetch grade levels (both school-level and branch-level)
+      // Fetch grade levels
       let gradeLevelsQuery = supabase
         .from('grade_levels')
         .select('*')
         .order('grade_order');
 
-      // Build OR condition for school_id and branch_id
       if (schoolIds.length > 0 || branchIds.length > 0) {
         const conditions = [];
         
@@ -967,7 +919,7 @@ export default function OrganizationStructureTab({
       const { data: gradeLevels, error: gradeError } = await gradeLevelsQuery;
       if (gradeError) throw gradeError;
       
-      // Fetch class sections for all grade levels
+      // Fetch class sections
       let classSections: any[] = [];
       if (gradeLevels && gradeLevels.length > 0) {
         const { data: sections, error: sectionError } = await supabase
@@ -980,7 +932,6 @@ export default function OrganizationStructureTab({
         classSections = sections || [];
       }
       
-      // Build complete hierarchy
       return {
         branches: branches?.map(b => ({
           ...b,
@@ -1010,15 +961,12 @@ export default function OrganizationStructureTab({
     if (!filteredSchools || !completeHierarchyData) return [];
     
     return filteredSchools.map((school: any) => {
-      // Get branches for this school
       const schoolBranches = completeHierarchyData.branches.filter(b => b.school_id === school.id);
       
-      // Get school-level grades (grades without branch_id but with school_id)
       const schoolGrades = completeHierarchyData.gradeLevels.filter(g => 
         g.school_id === school.id && !g.branch_id
       );
       
-      // Add sections to school-level grades
       const schoolGradesWithSections = schoolGrades.map(grade => ({
         ...grade,
         class_sections: completeHierarchyData.classSections.filter(s => 
@@ -1026,14 +974,11 @@ export default function OrganizationStructureTab({
         )
       }));
       
-      // Process branches with their grades
       const branchesWithGrades = schoolBranches.map(branch => {
-        // Get branch-level grades
         const branchGrades = completeHierarchyData.gradeLevels.filter(g => 
           g.branch_id === branch.id
         );
         
-        // Add sections to branch grades
         const branchGradesWithSections = branchGrades.map(grade => ({
           ...grade,
           class_sections: completeHierarchyData.classSections.filter(s => 
@@ -1051,7 +996,7 @@ export default function OrganizationStructureTab({
       return {
         ...school,
         branches: branchesWithGrades,
-        grade_levels: schoolGradesWithSections, // School-level grades
+        grade_levels: schoolGradesWithSections,
         total_grades: schoolGradesWithSections.length + 
                      branchesWithGrades.reduce((sum, b) => sum + b.grade_levels.length, 0)
       };
@@ -1065,55 +1010,6 @@ export default function OrganizationStructureTab({
     }
     return cardRefs.current.get(id)!;
   }, []);
-
-  // Enhanced dynamic layout configuration
-  const layoutConfig: LayoutConfig = useMemo(() => {
-    // Calculate tree complexity metrics
-    const visibleLevelCount = visibleLevels.size;
-    const totalNodes = treeNodes.size;
-    const hasDeepHierarchy = visibleLevels.has('sections') || visibleLevels.has('years');
-    
-    // Dynamic spacing based on complexity and screen size
-    const baseGapX = isFullscreen ? 60 : 48;
-    const baseGapY = isFullscreen ? 100 : 80;
-    
-    // Adjust spacing based on hierarchy depth and node count
-    let dynamicGapX = baseGapX;
-    let dynamicGapY = baseGapY;
-    
-    if (hasDeepHierarchy) {
-      // More generous spacing for complex hierarchies
-      dynamicGapX = baseGapX + 20;
-      dynamicGapY = baseGapY + 30;
-    }
-    
-    if (totalNodes > 20) {
-      // Additional spacing for large trees
-      dynamicGapX += 15;
-      dynamicGapY += 20;
-    }
-    
-    if (visibleLevels.has('sections')) {
-      // Extra spacing when sections are visible
-      dynamicGapX += 10;
-      dynamicGapY += 15;
-    }
-    
-    return {
-      gapX: dynamicGapX,
-      gapY: dynamicGapY,
-      centerParents: true,
-      minCardWidth: 260,
-      maxCardWidth: 300
-    };
-  }, [visibleLevels, treeNodes.size, isFullscreen]);
-
-  // Measure node dimensions
-  const nodeDimensions = useNodeMeasurements(
-    cardRefs,
-    1, // Use base zoom for measurements
-    [expandedNodes, visibleLevels, processedSchoolData.length, showInactive]
-  );
 
   // Build tree structure from processed data
   const treeNodes = useMemo(() => {
@@ -1133,6 +1029,49 @@ export default function OrganizationStructureTab({
     );
   }, [companyData, processedSchoolData, expandedNodes, visibleLevels]);
 
+  // Dynamic layout configuration - FIXED: Now defined after treeNodes
+  const layoutConfig: LayoutConfig = useMemo(() => {
+    const visibleLevelCount = visibleLevels.size;
+    const totalNodes = treeNodes.size;
+    const hasDeepHierarchy = visibleLevels.has('sections') || visibleLevels.has('years');
+    
+    const baseGapX = isFullscreen ? 60 : 48;
+    const baseGapY = isFullscreen ? 100 : 80;
+    
+    let dynamicGapX = baseGapX;
+    let dynamicGapY = baseGapY;
+    
+    if (hasDeepHierarchy) {
+      dynamicGapX = baseGapX + 20;
+      dynamicGapY = baseGapY + 30;
+    }
+    
+    if (totalNodes > 20) {
+      dynamicGapX += 15;
+      dynamicGapY += 20;
+    }
+    
+    if (visibleLevels.has('sections')) {
+      dynamicGapX += 10;
+      dynamicGapY += 15;
+    }
+    
+    return {
+      gapX: dynamicGapX,
+      gapY: dynamicGapY,
+      centerParents: true,
+      minCardWidth: 260,
+      maxCardWidth: 300
+    };
+  }, [visibleLevels, treeNodes.size, isFullscreen]);
+
+  // Measure node dimensions
+  const nodeDimensions = useNodeMeasurements(
+    cardRefs,
+    1,
+    [expandedNodes, visibleLevels, processedSchoolData.length, showInactive]
+  );
+
   // Enhanced fitToScreen with better centering
   const fitToScreen = useCallback(() => {
     if (!scrollAreaRef.current || !contentRef.current || layoutPositions.size === 0) return;
@@ -1140,7 +1079,6 @@ export default function OrganizationStructureTab({
     const container = scrollAreaRef.current;
     const containerRect = container.getBoundingClientRect();
     
-    // Calculate content bounds from layout positions
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     
@@ -1160,31 +1098,26 @@ export default function OrganizationStructureTab({
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
     
-    // Enhanced padding for better appearance
     const padding = isFullscreen ? 100 : 50;
     const availableWidth = containerRect.width - padding * 2;
     const availableHeight = containerRect.height - padding * 2;
     
-    // Calculate optimal zoom with better sizing for fullscreen
     const scaleX = availableWidth / contentWidth;
     const scaleY = availableHeight / contentHeight;
     const baseScale = Math.min(scaleX, scaleY);
     
-    // Enhanced scaling logic: allow larger content in fullscreen, moderate sizing in regular
     const maxZoom = isFullscreen ? 1.5 : 1.2;
     const minZoom = 0.3;
     const optimalZoom = Math.min(baseScale, maxZoom);
     
     const finalZoom = Math.max(minZoom, optimalZoom);
     
-    // Calculate centered position
     const scaledContentWidth = contentWidth * finalZoom;
     const scaledContentHeight = contentHeight * finalZoom;
     
     const centerX = (containerRect.width - scaledContentWidth) / 2;
     const centerY = (containerRect.height - scaledContentHeight) / 2;
     
-    // Account for content offset and center it
     const contentCenterX = (minX + maxX) / 2;
     const contentCenterY = (minY + maxY) / 2;
     
@@ -1195,19 +1128,14 @@ export default function OrganizationStructureTab({
     });
   }, [scrollAreaRef, layoutPositions, nodeDimensions, isFullscreen, setZoom, setPan]);
 
-  // Coordinated auto-refit function to prevent conflicts
+  // Coordinated auto-refit function
   const triggerAutoRefit = useCallback((reason: string, delay: number = 400) => {
     if (!hasInitialized) return;
     
-    // Clear any existing pending refit
     if (pendingRefitRef.current) {
       clearTimeout(pendingRefitRef.current);
     }
     
-    // Update trigger reason for debugging
-    lastRefitTriggerRef.current = reason;
-    
-    // Schedule new refit
     pendingRefitRef.current = setTimeout(() => {
       if (layoutPositions.size > 0) {
         fitToScreen();
@@ -1216,7 +1144,7 @@ export default function OrganizationStructureTab({
     }, delay);
   }, [hasInitialized, layoutPositions.size, fitToScreen]);
 
-  // Enhanced layout calculation with dynamic spacing and auto-refit
+  // Layout calculation with dynamic spacing and auto-refit
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
@@ -1234,16 +1162,13 @@ export default function OrganizationStructureTab({
       const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      // Dynamic canvas sizing based on content and complexity
       const baseWidth = result.totalSize.width;
       const baseHeight = result.totalSize.height;
       
-      // Adaptive minimum canvas size based on tree complexity
-      const complexityFactor = Math.min(treeNodes.size / 10, 2); // Cap at 2x
+      const complexityFactor = Math.min(treeNodes.size / 10, 2);
       const minCanvasWidth = 1400 + (complexityFactor * 300);
       const minCanvasHeight = 1000 + (complexityFactor * 200);
       
-      // Extra padding for complex hierarchies
       const extraPadding = visibleLevels.has('sections') ? 300 : 200;
       
       const paddedSize = {
@@ -1251,7 +1176,6 @@ export default function OrganizationStructureTab({
         height: Math.max(baseHeight + extraPadding, minCanvasHeight)
       };
       
-      // Center content in the larger canvas
       const centerOffsetX = (paddedSize.width - baseWidth) / 2;
       const centerOffsetY = (paddedSize.height - baseHeight) / 2;
       
@@ -1266,12 +1190,11 @@ export default function OrganizationStructureTab({
       setLayoutPositions(centeredPositions);
       setCanvasSize(paddedSize);
       
-      // Enhanced initial centering - delay fitToScreen for better user experience
       if (!hasInitialized) {
         setTimeout(() => {
           fitToScreen();
           setHasInitialized(true);
-        }, 150); // Slightly longer delay for smoother initialization
+        }, 150);
       }
     }, 200);
     
@@ -1280,7 +1203,7 @@ export default function OrganizationStructureTab({
         clearTimeout(layoutUpdateTimeoutRef.current);
       }
     };
-  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, fitToScreen]);
+  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, fitToScreen, visibleLevels]);
 
   // Auto-refit when visibility levels change
   useEffect(() => {
@@ -1296,7 +1219,7 @@ export default function OrganizationStructureTab({
     }
   }, [layoutPositions, hasInitialized, triggerAutoRefit]);
 
-  // Auto-refit when expanded nodes change (for cascade operations)
+  // Auto-refit when expanded nodes change
   useEffect(() => {
     if (hasInitialized) {
       triggerAutoRefit('expanded-nodes-changed', 300);
@@ -1470,27 +1393,22 @@ export default function OrganizationStructureTab({
     });
   }, []);
 
-  // Toggle level visibility with proper hierarchical rules (cleaned up)
+  // Toggle level visibility with proper hierarchical rules
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
       
-      // Entity tab can never be turned off
       if (level === 'entity' && newSet.has('entity')) {
         return prev;
       }
       
       if (newSet.has(level)) {
-        // Turning OFF a level - cascade down
         newSet.delete(level);
         
-        // Hierarchy: entity -> schools -> branches -> years -> sections
         if (level === 'schools') {
-          // Turn off all child levels
           newSet.delete('branches');
           newSet.delete('years');
           newSet.delete('sections');
-          // Collapse all schools
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1499,10 +1417,8 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'branches') {
-          // Turn off grades and sections when turning off branches
           newSet.delete('years');
           newSet.delete('sections');
-          // Collapse all branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1513,9 +1429,7 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'years') {
-          // Turn off sections when turning off years/grades
           newSet.delete('sections');
-          // Collapse all grade levels
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             Array.from(newExpanded).forEach(node => {
@@ -1528,17 +1442,13 @@ export default function OrganizationStructureTab({
         }
         
       } else {
-        // Turning ON a level - cascade up
         newSet.add(level);
         
-        // Ensure parent levels are also on
         if (level === 'sections') {
-          // Need years, branches, and schools
           if (!newSet.has('years')) newSet.add('years');
           if (!newSet.has('branches')) newSet.add('branches');
           if (!newSet.has('schools')) newSet.add('schools');
           
-          // Expand relevant nodes
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1547,13 +1457,11 @@ export default function OrganizationStructureTab({
               
               if (hasGradesWithSections) {
                 newExpanded.add(`school-${school.id}`);
-                // Expand grades with sections
                 school.grade_levels?.forEach((grade: any) => {
                   if (grade.class_sections && grade.class_sections.length > 0) {
                     newExpanded.add(`grade-${grade.id}`);
                   }
                 });
-                // Expand branches with grades that have sections
                 school.branches?.forEach((branch: any) => {
                   if (branch.grade_levels && branch.grade_levels.length > 0) {
                     newExpanded.add(`branch-${branch.id}`);
@@ -1569,18 +1477,15 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'years') {
-          // Need branches and schools (grades can be under branches)
           if (!newSet.has('branches')) newSet.add('branches');
           if (!newSet.has('schools')) newSet.add('schools');
           
-          // Expand schools and branches that have grades
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
               if ((school.grade_levels && school.grade_levels.length > 0) || 
                   (school.branches && school.branches.some((b: any) => b.grade_levels.length > 0))) {
                 newExpanded.add(`school-${school.id}`);
-                // Also expand branches that have grades
                 school.branches?.forEach((branch: any) => {
                   if (branch.grade_levels && branch.grade_levels.length > 0) {
                     newExpanded.add(`branch-${branch.id}`);
@@ -1591,10 +1496,8 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         } else if (level === 'branches') {
-          // Need schools
           if (!newSet.has('schools')) newSet.add('schools');
           
-          // Expand schools with branches
           setExpandedNodes(prevExpanded => {
             const newExpanded = new Set(prevExpanded);
             processedSchoolData.forEach((school: any) => {
@@ -1661,7 +1564,7 @@ export default function OrganizationStructureTab({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [fitToScreen, toggleFullscreen]);
+  }, [fitToScreen]);
 
   if (!companyData) {
     return (
@@ -1709,7 +1612,7 @@ export default function OrganizationStructureTab({
           willChange: 'transform'
         }}
       >
-        {/* Render all nodes with absolute positioning */}
+        {/* Render all nodes */}
         {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
           const position = layoutPositions.get(nodeId);
           const dimensions = nodeDimensions.get(nodeId) || { width: 260, height: 140 };
@@ -1728,7 +1631,6 @@ export default function OrganizationStructureTab({
           
           const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
           
-          // Special handling for different node types based on their parent relationships
           if (node.type === 'branch') {
             const parentSchoolId = node.parentId;
             const isSchoolExpanded = parentSchoolId && expandedNodes.has(parentSchoolId);
@@ -1737,7 +1639,6 @@ export default function OrganizationStructureTab({
               return null;
             }
           } else if (node.type === 'year') {
-            // Grade levels should show when years tab is on and parent is expanded
             const parentId = node.parentId;
             const isParentExpanded = parentId && expandedNodes.has(parentId);
             
@@ -1745,7 +1646,6 @@ export default function OrganizationStructureTab({
               return null;
             }
           } else if (node.type === 'section') {
-            // Class sections should show when sections tab is on and parent grade is expanded
             const parentGradeId = node.parentId;
             const isGradeExpanded = parentGradeId && expandedNodes.has(parentGradeId);
             
@@ -1786,7 +1686,6 @@ export default function OrganizationStructureTab({
             const school = processedSchoolData.find((s: any) => s.id === schoolId);
             item = school;
             
-            // A school has children if it has branches OR grade levels (depending on visible tabs)
             const hasBranches = school?.branches && school.branches.length > 0;
             const hasGradeLevels = school?.grade_levels && school.grade_levels.length > 0;
             
@@ -1795,26 +1694,22 @@ export default function OrganizationStructureTab({
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'branch') {
             const branchId = node.id.replace('branch-', '');
-            // Find branch in processed data
             for (const school of processedSchoolData) {
               const branch = school.branches?.find((b: any) => b.id === branchId);
               if (branch) {
                 item = branch;
-                // Branch has children if it has grade levels and years tab is visible
                 hasChildren = branch.grade_levels && branch.grade_levels.length > 0 && visibleLevels.has('years');
                 isExpanded = expandedNodes.has(node.id);
                 break;
               }
             }
           } else if (node.type === 'year') {
-            // Grade level node
             item = node.data;
             hasChildren = item?.class_sections && item.class_sections.length > 0 && visibleLevels.has('sections');
             isExpanded = expandedNodes.has(node.id);
           } else if (node.type === 'section') {
-            // Class section node
             item = node.data;
-            hasChildren = false; // Sections are leaf nodes
+            hasChildren = false;
           }
 
           if (!item) return null;
@@ -1864,7 +1759,7 @@ export default function OrganizationStructureTab({
           );
         })}
 
-        {/* Enhanced SVG Connections with better path handling */}
+        {/* Enhanced SVG Connections */}
         {shouldShowConnections && (
           <svg
             className="absolute pointer-events-none z-0"
@@ -1891,7 +1786,6 @@ export default function OrganizationStructureTab({
                   className="dark:fill-gray-500"
                 />
               </marker>
-              {/* Enhanced gradient for better line appearance */}
               <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#9CA3AF" stopOpacity="0.8"/>
                 <stop offset="100%" stopColor="#9CA3AF" stopOpacity="0.6"/>
@@ -1899,7 +1793,6 @@ export default function OrganizationStructureTab({
             </defs>
             {Array.from(treeNodes.entries())
               .filter(([nodeId, node]) => {
-                // Enhanced filtering for cleaner connections
                 if (!node.parentId) return false;
                 
                 const nodeTypeToLevel = {
@@ -1916,7 +1809,6 @@ export default function OrganizationStructureTab({
                 const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
                 const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
                 
-                // Enhanced visibility logic for complex hierarchies
                 if (node.type === 'branch') {
                   if (!visibleLevels.has('branches') || !expandedNodes.has(node.parentId)) {
                     return false;
@@ -1948,7 +1840,6 @@ export default function OrganizationStructureTab({
                 
                 if (!parentPos || !childPos) return null;
 
-                // Enhanced path generation with better spacing consideration
                 const enhancedGapY = layoutConfig.gapY;
                 const path = generateConnectionPath(
                   { x: parentPos.x, y: parentPos.y },
@@ -1958,7 +1849,6 @@ export default function OrganizationStructureTab({
                   enhancedGapY
                 );
 
-                // Dynamic stroke width based on hierarchy level
                 const getStrokeWidth = (nodeType: string) => {
                   switch (nodeType) {
                     case 'school': return '2.5';
@@ -1990,7 +1880,7 @@ export default function OrganizationStructureTab({
 
   return (
     <>
-      {/* Main container with fullscreen ref - Preserve theme */}
+      {/* Main container with fullscreen ref */}
       <div 
         ref={fullscreenContainerRef}
         className={`
@@ -1999,7 +1889,7 @@ export default function OrganizationStructureTab({
             : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full'}
         `}
       >
-        {/* Header - Adapt to current theme */}
+        {/* Header */}
         <div className={`
           ${isFullscreen 
             ? (isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900 border-b border-gray-200')
@@ -2012,12 +1902,10 @@ export default function OrganizationStructureTab({
                 Organization Structure
               </h2>
               
-              {/* Show/Hide Controls */}
               <div className="text-xs text-gray-500 dark:text-gray-400">Show/Hide:</div>
               
               <LevelTabs visibleLevels={visibleLevels} onToggleLevel={toggleLevel} />
               
-              {/* Show Inactive Toggle */}
               <button
                 onClick={() => setShowInactive(!showInactive)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
@@ -2033,9 +1921,8 @@ export default function OrganizationStructureTab({
               </button>
             </div>
 
-            {/* Enhanced Zoom Controls */}
+            {/* Zoom Controls */}
             <div className="flex items-center gap-3">
-              {/* Zoom Slider */}
               <ZoomSlider 
                 zoom={zoom} 
                 onZoomChange={setZoom}
@@ -2043,7 +1930,6 @@ export default function OrganizationStructureTab({
                 max={2}
               />
               
-              {/* Control Buttons */}
               <div className="flex items-center gap-1 border-l pl-3 border-gray-300 dark:border-gray-600">
                 <button
                   onClick={() => handleZoom(-0.1)}
@@ -2076,7 +1962,6 @@ export default function OrganizationStructureTab({
                   <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </button>
                 
-                {/* Keyboard Shortcuts Helper */}
                 <KeyboardShortcuts />
                 
                 <button
@@ -2115,7 +2000,7 @@ export default function OrganizationStructureTab({
           </div>
         </div>
 
-        {/* Chart Container with Enhanced Interactions */}
+        {/* Chart Container */}
         <div 
           ref={scrollAreaRef}
           className={`
@@ -2134,12 +2019,10 @@ export default function OrganizationStructureTab({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
         >
-          {/* Main Chart */}
           <div 
             ref={chartContainerRef}
             className="absolute inset-0"
           >
-            {/* Organization Chart Content */}
             {isHierarchyLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
@@ -2154,7 +2037,7 @@ export default function OrganizationStructureTab({
         </div>
       </div>
 
-      {/* Branch Edit Form - Always outside of fullscreen container */}
+      {/* Branch Edit Form */}
       <SlideInForm
         title="Edit Branch"
         isOpen={showBranchForm}
