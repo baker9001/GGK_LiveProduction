@@ -1,4 +1,7 @@
-///home/project/src/components/shared/Select.tsx
+/**
+ * File: /src/components/shared/Select.tsx
+ * Updated to support green theme (#8CC63F) instead of blue
+ */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -43,6 +46,10 @@ export function Select({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
+
+  // Check if we're in a green-theme context
+  const isGreenTheme = typeof document !== 'undefined' && 
+    (document.querySelector('.green-theme') || className?.includes('focus:ring-[#8CC63F]'));
 
   // Update selectedOption when value or defaultValue changes
   useEffect(() => {
@@ -243,7 +250,13 @@ export function Select({
               <input
                 ref={searchInputRef}
                 type="text"
-                className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className={cn(
+                  "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                  "focus:outline-none focus:ring-2",
+                  isGreenTheme 
+                    ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                    : "focus:ring-blue-500 focus:border-blue-500"
+                )}
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -265,7 +278,11 @@ export function Select({
                   aria-selected={value === option.value}
                   className={cn(
                     'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                    value === option.value && 'bg-blue-50 dark:bg-blue-900/20'
+                    value === option.value && (
+                      isGreenTheme 
+                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20' 
+                        : 'bg-blue-50 dark:bg-blue-900/20'
+                    )
                   )}
                   onClick={() => handleSelect(option)}
                 >
@@ -274,7 +291,9 @@ export function Select({
                   ) : (
                     <span className={cn(
                       value === option.value 
-                        ? "text-blue-600 dark:text-blue-400" 
+                        ? isGreenTheme 
+                          ? "text-[#8CC63F] font-medium" 
+                          : "text-blue-600 dark:text-blue-400"
                         : "text-gray-900 dark:text-white"
                     )}>
                       {option.label}
@@ -302,7 +321,10 @@ export function Select({
       <select
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm appearance-none transition-colors duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+          'focus:outline-none focus:ring-2',
+          isGreenTheme 
+            ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
+            : 'focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           className
@@ -330,10 +352,18 @@ export function Select({
         type="button"
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm text-left transition-colors duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+          'focus:outline-none focus:ring-2',
+          isGreenTheme 
+            ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
+            : 'focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed',
+          isOpen && (
+            isGreenTheme 
+              ? 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
+              : 'ring-2 ring-blue-500 border-blue-500'
+          ),
           className
         )}
         onClick={handleOpen}
@@ -347,22 +377,15 @@ export function Select({
         </span>
         <span className="absolute inset-y-0 right-0 flex items-center pr-2">
           {selectedOption ? (
-            <div
+            <button
               type="button"
-              role="button"
-              tabIndex={0}
               className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
               onClick={handleClear}
               aria-label="Clear selection"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleClear(e as any);
-                }
-              }}
+              tabIndex={-1}
             >
               <X className="h-4 w-4" />
-            </div>
+            </button>
           ) : (
             <ChevronDown className={cn(
               "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
