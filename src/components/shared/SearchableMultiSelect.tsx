@@ -2,7 +2,7 @@
  * File: /src/components/shared/SearchableMultiSelect.tsx
  * 
  * Searchable Multi-Select Component with Portal Support
- * Updated to use green theme (#8CC63F) instead of blue
+ * FIXED: Improved text contrast for selected items (darker green)
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -338,7 +338,7 @@ export function SearchableMultiSelect({
                   <span className={cn(
                     safeSelectedValues.includes(option.value) 
                       ? isGreenTheme
-                        ? "text-[#8CC63F] font-medium" 
+                        ? "text-[#7AB635] font-medium" // Darker green for better contrast
                         : "text-blue-600 dark:text-blue-400 font-medium"
                       : "text-gray-900 dark:text-white"
                   )}>
@@ -430,9 +430,9 @@ export function SearchableMultiSelect({
                 <span
                   key={option.value}
                   className={cn(
-                    "inline-flex items-center rounded px-2 py-0.5 text-sm",
+                    "inline-flex items-center rounded px-2 py-0.5 text-sm font-medium",
                     isGreenTheme
-                      ? "bg-[#8CC63F]/10 text-[#8CC63F] dark:bg-[#8CC63F]/20"
+                      ? "bg-[#8CC63F]/15 text-[#5A8A2C] dark:bg-[#8CC63F]/25 dark:text-[#8CC63F]" // Improved contrast
                       : "bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
                   )}
                 >
@@ -441,10 +441,10 @@ export function SearchableMultiSelect({
                     <button
                       type="button"
                       className={cn(
-                        "ml-1",
+                        "ml-1 hover:opacity-75",
                         isGreenTheme
-                          ? "text-[#8CC63F] hover:text-[#7AB52F]"
-                          : "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                          ? "text-[#5A8A2C] dark:text-[#8CC63F]" // Matching text color
+                          : "text-blue-600 dark:text-blue-400"
                       )}
                       onClick={(e) => handleRemove(option.value, e)}
                       aria-label={`Remove ${option.label}`}
