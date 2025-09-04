@@ -8,15 +8,16 @@
  *   - @/components/shared/SlideInForm
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * ENHANCED VERSION - Better Centering & Sizing
+ * FINAL ENHANCED VERSION - Complete Organization Structure
  * 
  * ✅ Enhanced Features:
  *   - Improved diagram centering in both regular and fullscreen modes
- *   - Better initial sizing and positioning
- *   - Enhanced fitToScreen logic with proper content bounds calculation
- *   - Dynamic canvas sizing with better space utilization
+ *   - Dynamic spacing that adapts to hierarchy complexity
+ *   - Coordinated auto-refit system for level toggles
+ *   - Enhanced connection lines with dynamic styling
+ *   - Better canvas sizing with complexity-aware scaling
  *   - Smart zoom levels for optimal viewing
- *   - All original features preserved (theme, zoom, pan, shortcuts, etc.)
+ *   - All original features preserved
  * 
  * ✅ Original Features Maintained:
  *   - Theme preservation in fullscreen (respects light/dark mode)
@@ -28,6 +29,7 @@
  *   - Smooth animations and transitions
  *   - Zoom slider control
  *   - Fixed tab hierarchy logic
+ *   - Branch editing functionality
  * 
  * Database Tables:
  *   - companies, schools, branches, grade_levels, class_sections
@@ -841,13 +843,15 @@ export default function OrganizationStructureTab({
   const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
   const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
   
-  // Refs for SVG connections
+  // Refs for SVG connections and coordinated auto-refit
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
   const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingRefitRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRefitTriggerRef = useRef<string>('');
 
   // Check for dark mode on mount
   useEffect(() => {
@@ -1062,14 +1066,47 @@ export default function OrganizationStructureTab({
     return cardRefs.current.get(id)!;
   }, []);
 
-  // Layout configuration
-  const layoutConfig: LayoutConfig = useMemo(() => ({
-    gapX: 48,
-    gapY: 80,
-    centerParents: true,
-    minCardWidth: 260,
-    maxCardWidth: 300
-  }), []);
+  // Enhanced dynamic layout configuration
+  const layoutConfig: LayoutConfig = useMemo(() => {
+    // Calculate tree complexity metrics
+    const visibleLevelCount = visibleLevels.size;
+    const totalNodes = treeNodes.size;
+    const hasDeepHierarchy = visibleLevels.has('sections') || visibleLevels.has('years');
+    
+    // Dynamic spacing based on complexity and screen size
+    const baseGapX = isFullscreen ? 60 : 48;
+    const baseGapY = isFullscreen ? 100 : 80;
+    
+    // Adjust spacing based on hierarchy depth and node count
+    let dynamicGapX = baseGapX;
+    let dynamicGapY = baseGapY;
+    
+    if (hasDeepHierarchy) {
+      // More generous spacing for complex hierarchies
+      dynamicGapX = baseGapX + 20;
+      dynamicGapY = baseGapY + 30;
+    }
+    
+    if (totalNodes > 20) {
+      // Additional spacing for large trees
+      dynamicGapX += 15;
+      dynamicGapY += 20;
+    }
+    
+    if (visibleLevels.has('sections')) {
+      // Extra spacing when sections are visible
+      dynamicGapX += 10;
+      dynamicGapY += 15;
+    }
+    
+    return {
+      gapX: dynamicGapX,
+      gapY: dynamicGapY,
+      centerParents: true,
+      minCardWidth: 260,
+      maxCardWidth: 300
+    };
+  }, [visibleLevels, treeNodes.size, isFullscreen]);
 
   // Measure node dimensions
   const nodeDimensions = useNodeMeasurements(
@@ -1096,7 +1133,7 @@ export default function OrganizationStructureTab({
     );
   }, [companyData, processedSchoolData, expandedNodes, visibleLevels]);
 
-  // ===== ENHANCED FIT TO SCREEN WITH BETTER CENTERING =====
+  // Enhanced fitToScreen with better centering
   const fitToScreen = useCallback(() => {
     if (!scrollAreaRef.current || !contentRef.current || layoutPositions.size === 0) return;
     
@@ -1158,7 +1195,28 @@ export default function OrganizationStructureTab({
     });
   }, [scrollAreaRef, layoutPositions, nodeDimensions, isFullscreen, setZoom, setPan]);
 
-  // Layout calculation with enhanced centering
+  // Coordinated auto-refit function to prevent conflicts
+  const triggerAutoRefit = useCallback((reason: string, delay: number = 400) => {
+    if (!hasInitialized) return;
+    
+    // Clear any existing pending refit
+    if (pendingRefitRef.current) {
+      clearTimeout(pendingRefitRef.current);
+    }
+    
+    // Update trigger reason for debugging
+    lastRefitTriggerRef.current = reason;
+    
+    // Schedule new refit
+    pendingRefitRef.current = setTimeout(() => {
+      if (layoutPositions.size > 0) {
+        fitToScreen();
+      }
+      pendingRefitRef.current = null;
+    }, delay);
+  }, [hasInitialized, layoutPositions.size, fitToScreen]);
+
+  // Enhanced layout calculation with dynamic spacing and auto-refit
   useEffect(() => {
     if (treeNodes.size === 0) return;
     
@@ -1176,17 +1234,21 @@ export default function OrganizationStructureTab({
       const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      // Enhanced canvas sizing - make it larger for better centering
+      // Dynamic canvas sizing based on content and complexity
       const baseWidth = result.totalSize.width;
       const baseHeight = result.totalSize.height;
       
-      // Ensure minimum canvas size for good centering
-      const minCanvasWidth = 1400;
-      const minCanvasHeight = 1000;
+      // Adaptive minimum canvas size based on tree complexity
+      const complexityFactor = Math.min(treeNodes.size / 10, 2); // Cap at 2x
+      const minCanvasWidth = 1400 + (complexityFactor * 300);
+      const minCanvasHeight = 1000 + (complexityFactor * 200);
+      
+      // Extra padding for complex hierarchies
+      const extraPadding = visibleLevels.has('sections') ? 300 : 200;
       
       const paddedSize = {
-        width: Math.max(baseWidth + 200, minCanvasWidth),
-        height: Math.max(baseHeight + 200, minCanvasHeight)
+        width: Math.max(baseWidth + extraPadding, minCanvasWidth),
+        height: Math.max(baseHeight + extraPadding, minCanvasHeight)
       };
       
       // Center content in the larger canvas
@@ -1219,6 +1281,36 @@ export default function OrganizationStructureTab({
       }
     };
   }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, fitToScreen]);
+
+  // Auto-refit when visibility levels change
+  useEffect(() => {
+    if (hasInitialized) {
+      triggerAutoRefit('visibility-levels-changed', 500);
+    }
+  }, [visibleLevels, hasInitialized, triggerAutoRefit]);
+
+  // Auto-refit when layout positions are updated
+  useEffect(() => {
+    if (hasInitialized && layoutPositions.size > 0) {
+      triggerAutoRefit('layout-positions-updated', 200);
+    }
+  }, [layoutPositions, hasInitialized, triggerAutoRefit]);
+
+  // Auto-refit when expanded nodes change (for cascade operations)
+  useEffect(() => {
+    if (hasInitialized) {
+      triggerAutoRefit('expanded-nodes-changed', 300);
+    }
+  }, [expandedNodes, hasInitialized, triggerAutoRefit]);
+
+  // Cleanup pending refit on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingRefitRef.current) {
+        clearTimeout(pendingRefitRef.current);
+      }
+    };
+  }, []);
 
   // Calculate hierarchical data
   const hierarchicalData = useMemo(() => {
@@ -1378,7 +1470,7 @@ export default function OrganizationStructureTab({
     });
   }, []);
 
-  // Toggle level visibility with proper hierarchical rules
+  // Toggle level visibility with proper hierarchical rules (cleaned up)
   const toggleLevel = useCallback((level: string) => {
     setVisibleLevels(prev => {
       const newSet = new Set(prev);
@@ -1434,6 +1526,7 @@ export default function OrganizationStructureTab({
             return newExpanded;
           });
         }
+        
       } else {
         // Turning ON a level - cascade up
         newSet.add(level);
