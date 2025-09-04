@@ -1176,13 +1176,13 @@ export default function OrganizationStructureTab({
       const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      // Enhanced canvas sizing - increased to accommodate better spacing
+      // Enhanced canvas sizing - make it larger for better centering
       const baseWidth = result.totalSize.width;
       const baseHeight = result.totalSize.height;
       
-      // Ensure minimum canvas size for good centering with enhanced spacing
-      const minCanvasWidth = 1600;  // Increased from 1400
-      const minCanvasHeight = 1200; // Increased from 1000
+      // Ensure minimum canvas size for good centering
+      const minCanvasWidth = 1400;
+      const minCanvasHeight = 1000;
       
       const paddedSize = {
         width: Math.max(baseWidth + 200, minCanvasWidth),
@@ -1771,7 +1771,7 @@ export default function OrganizationStructureTab({
           );
         })}
 
-        {/* SVG Connections */}
+        {/* Enhanced SVG Connections with better path handling */}
         {shouldShowConnections && (
           <svg
             className="absolute pointer-events-none z-0"
@@ -1798,74 +1798,97 @@ export default function OrganizationStructureTab({
                   className="dark:fill-gray-500"
                 />
               </marker>
+              {/* Enhanced gradient for better line appearance */}
+              <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#9CA3AF" stopOpacity="0.8"/>
+                <stop offset="100%" stopColor="#9CA3AF" stopOpacity="0.6"/>
+              </linearGradient>
             </defs>
             {Array.from(treeNodes.entries())
+              .filter(([nodeId, node]) => {
+                // Enhanced filtering for cleaner connections
+                if (!node.parentId) return false;
+                
+                const nodeTypeToLevel = {
+                  'company': 'entity',
+                  'school': 'schools', 
+                  'branch': 'branches',
+                  'year': 'years',
+                  'section': 'sections'
+                };
+                
+                const parentNode = treeNodes.get(node.parentId);
+                if (!parentNode) return false;
+                
+                const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
+                const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
+                
+                // Enhanced visibility logic for complex hierarchies
+                if (node.type === 'branch') {
+                  if (!visibleLevels.has('branches') || !expandedNodes.has(node.parentId)) {
+                    return false;
+                  }
+                } else if (node.type === 'year') {
+                  if (!visibleLevels.has('years') || !expandedNodes.has(node.parentId)) {
+                    return false;
+                  }
+                } else if (node.type === 'section') {
+                  if (!visibleLevels.has('sections') || !expandedNodes.has(node.parentId)) {
+                    return false;
+                  }
+                } else {
+                  if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
+                    return false;
+                  }
+                }
+                
+                return true;
+              })
               .map(([nodeId, node]) => {
-              if (!node.parentId) return null;
-              
-              const nodeTypeToLevel = {
-                'company': 'entity',
-                'school': 'schools', 
-                'branch': 'branches',
-                'year': 'years',
-                'section': 'sections'
-              };
-              
-              const parentNode = treeNodes.get(node.parentId);
-              if (!parentNode) return null;
-              
-              const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
-              const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
-              
-              // Check visibility conditions
-              if (node.type === 'branch') {
-                if (!visibleLevels.has('branches') || !expandedNodes.has(node.parentId)) {
-                  return null;
-                }
-              } else if (node.type === 'year') {
-                if (!visibleLevels.has('years') || !expandedNodes.has(node.parentId)) {
-                  return null;
-                }
-              } else if (node.type === 'section') {
-                if (!visibleLevels.has('sections') || !expandedNodes.has(node.parentId)) {
-                  return null;
-                }
-              } else {
-                if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
-                  return null;
-                }
-              }
+                const parentPos = layoutPositions.get(node.parentId!);
+                const childPos = layoutPositions.get(nodeId);
+                const parentDim = nodeDimensions.get(node.parentId!);
+                const childDim = nodeDimensions.get(nodeId);
 
-              const parentPos = layoutPositions.get(node.parentId);
-              const childPos = layoutPositions.get(nodeId);
-              const parentDim = nodeDimensions.get(node.parentId);
-              const childDim = nodeDimensions.get(nodeId);
+                const parentDimensions = parentDim || { width: 260, height: 140 };
+                const childDimensions = childDim || { width: 260, height: 140 };
+                
+                if (!parentPos || !childPos) return null;
 
-              const parentDimensions = parentDim || { width: 260, height: 140 };
-              const childDimensions = childDim || { width: 260, height: 140 };
-              
-              if (!parentPos || !childPos) return null;
+                // Enhanced path generation with better spacing consideration
+                const enhancedGapY = layoutConfig.gapY;
+                const path = generateConnectionPath(
+                  { x: parentPos.x, y: parentPos.y },
+                  { x: childPos.x, y: childPos.y },
+                  parentDimensions.height,
+                  childDimensions.height,
+                  enhancedGapY
+                );
 
-              const path = generateConnectionPath(
-                { x: parentPos.x, y: parentPos.y },
-                { x: childPos.x, y: childPos.y },
-                parentDimensions.height,
-                childDimensions.height,
-                layoutConfig.gapY
-              );
+                // Dynamic stroke width based on hierarchy level
+                const getStrokeWidth = (nodeType: string) => {
+                  switch (nodeType) {
+                    case 'school': return '2.5';
+                    case 'branch': return '2';
+                    case 'year': return '1.8';
+                    case 'section': return '1.5';
+                    default: return '2';
+                  }
+                };
 
-              return (
-                <path
-                  key={`${node.parentId}-${nodeId}`}
-                  d={path}
-                  stroke="#9CA3AF"
-                  strokeWidth="2"
-                  fill="none"
-                  markerEnd="url(#arrowhead)"
-                  className="dark:stroke-gray-500"
-                />
-              );
-            })}
+                return (
+                  <path
+                    key={`${node.parentId}-${nodeId}`}
+                    d={path}
+                    stroke="url(#connectionGradient)"
+                    strokeWidth={getStrokeWidth(node.type)}
+                    fill="none"
+                    markerEnd="url(#arrowhead)"
+                    className="dark:stroke-gray-500 transition-opacity duration-200"
+                    opacity="0.8"
+                  />
+                );
+              })}
           </svg>
         )}
       </div>
