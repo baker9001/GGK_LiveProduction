@@ -1176,13 +1176,13 @@ export default function OrganizationStructureTab({
       const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
       const result = layoutEngine.layout('company');
       
-      // Enhanced canvas sizing - make it larger for better centering
+      // Enhanced canvas sizing - increased to accommodate better spacing
       const baseWidth = result.totalSize.width;
       const baseHeight = result.totalSize.height;
       
-      // Ensure minimum canvas size for good centering
-      const minCanvasWidth = 1400;
-      const minCanvasHeight = 1000;
+      // Ensure minimum canvas size for good centering with enhanced spacing
+      const minCanvasWidth = 1600;  // Increased from 1400
+      const minCanvasHeight = 1200; // Increased from 1000
       
       const paddedSize = {
         width: Math.max(baseWidth + 200, minCanvasWidth),
