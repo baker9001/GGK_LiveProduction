@@ -258,7 +258,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             qualification,
             experience_years,
             bio,
-            phone,
             company_id,
             school_id,
             branch_id,
