@@ -1,12 +1,14 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/DepartmentsTab.tsx
  * 
- * ENHANCED VERSION - Hierarchical View + Green Theme
+ * FIXED VERSION - Complete Hierarchical View with Expand/Collapse
  * 
- * ✅ All Original Features Preserved
- * ✅ New: Hierarchical tree view with expand/collapse
- * ✅ New: Green theme (#8CC63F) in forms
- * ✅ Fixed: Replaced all blue elements with green theme
+ * ✅ Fixed: Nested hierarchy with proper parent > sub-department structure
+ * ✅ Fixed: DepartmentCard reference replaced with DepartmentNode
+ * ✅ Fixed: Added handleAddChild function
+ * ✅ Fixed: Proper expand/collapse state management
+ * ✅ Enhanced: Visual hierarchy indicators
+ * ✅ Enhanced: Smooth animations for expand/collapse
  * 
  * Database Tables:
  * - departments (main table with all columns)
@@ -156,7 +158,7 @@ const DEPARTMENT_TYPES = [
   { value: 'other', label: 'Other', icon: Layers, color: 'gray' }
 ] as const;
 
-// Hierarchical Department Node Component
+// Enhanced Hierarchical Department Node Component with proper expand/collapse
 const DepartmentNode = ({ 
   department, 
   level = 0,
@@ -164,7 +166,8 @@ const DepartmentNode = ({
   onEdit,
   onDelete,
   onDuplicate,
-  onViewDetails
+  onViewDetails,
+  onAddChild
 }: {
   department: Department;
   level?: number;
@@ -173,6 +176,7 @@ const DepartmentNode = ({
   onDelete: (dept: Department) => void;
   onDuplicate: (dept: Department) => void;
   onViewDetails: (dept: Department) => void;
+  onAddChild?: (parentDept: Department) => void;
 }) => {
   const hasChildren = department.children && department.children.length > 0;
   const typeConfig = DEPARTMENT_TYPES.find(t => t.value === department.department_type);
@@ -182,30 +186,30 @@ const DepartmentNode = ({
     <>
       <div 
         className={cn(
-          "group flex items-center justify-between py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg",
-          level > 0 && "border-l-2 border-gray-200 dark:border-gray-700"
+          "group flex items-center justify-between py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 rounded-lg",
+          level > 0 && "ml-8 border-l-2 border-gray-200 dark:border-gray-700"
         )}
-        style={{ paddingLeft: `${(level * 2) + 1}rem` }}
       >
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Expand/Collapse Button */}
-          {hasChildren && (
-            <button
-              onClick={() => onToggleExpand(department.id)}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            >
-              {department.isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-gray-500" />
-              )}
-            </button>
-          )}
-          {!hasChildren && <div className="w-6" />}
+          <button
+            onClick={() => onToggleExpand(department.id)}
+            className={cn(
+              "p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors shrink-0",
+              !hasChildren && "invisible"
+            )}
+            type="button"
+          >
+            {department.isExpanded ? (
+              <ChevronDown className="h-4 w-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-gray-500" />
+            )}
+          </button>
           
-          {/* Department Icon */}
+          {/* Department Icon with proper color coding */}
           <div className={cn(
-            "p-1.5 rounded-lg",
+            "p-1.5 rounded-lg shrink-0",
             department.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
             department.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
             department.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
@@ -223,13 +227,13 @@ const DepartmentNode = ({
           </div>
           
           {/* Department Info */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 dark:text-white">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-gray-900 dark:text-white truncate">
                 {department.name}
               </span>
               {department.code && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded shrink-0">
                   {department.code}
                 </span>
               )}
@@ -238,21 +242,21 @@ const DepartmentNode = ({
             
             <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
               {department.head_name && (
-                <span className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
+                <span className="flex items-center gap-1 truncate">
+                  <Users className="h-3 w-3 shrink-0" />
                   {department.head_name}
                 </span>
               )}
               {department.school_names && department.school_names.length > 0 && (
                 <span className="flex items-center gap-1">
-                  <School className="h-3 w-3" />
+                  <School className="h-3 w-3 shrink-0" />
                   {department.school_names.length} school{department.school_names.length > 1 ? 's' : ''}
                 </span>
               )}
               {hasChildren && (
                 <span className="flex items-center gap-1">
-                  <GitBranch className="h-3 w-3" />
-                  {department.children?.length} sub-department{department.children?.length !== 1 ? 's' : ''}
+                  <GitBranch className="h-3 w-3 shrink-0" />
+                  {department.children?.length} sub-dept{department.children?.length !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
@@ -260,12 +264,13 @@ const DepartmentNode = ({
         </div>
         
         {/* Actions */}
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onViewDetails(department)}
             className="h-8 w-8 p-0"
+            title="View Details"
           >
             <Eye className="h-4 w-4" />
           </Button>
@@ -274,14 +279,27 @@ const DepartmentNode = ({
             size="sm"
             onClick={() => onEdit(department)}
             className="h-8 w-8 p-0"
+            title="Edit"
           >
             <Edit2 className="h-4 w-4" />
           </Button>
+          {onAddChild && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onAddChild(department)}
+              className="h-8 w-8 p-0"
+              title="Add Sub-department"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onDuplicate(department)}
             className="h-8 w-8 p-0"
+            title="Duplicate"
           >
             <Copy className="h-4 w-4" />
           </Button>
@@ -289,16 +307,20 @@ const DepartmentNode = ({
             variant="ghost"
             size="sm"
             onClick={() => onDelete(department)}
-            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            title="Delete"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
       
-      {/* Render Children */}
+      {/* Render Children with animation */}
       {hasChildren && department.isExpanded && (
-        <div className="ml-4">
+        <div className={cn(
+          "transition-all duration-300 ease-in-out",
+          department.isExpanded ? "opacity-100" : "opacity-0"
+        )}>
           {department.children?.map(child => (
             <DepartmentNode
               key={child.id}
@@ -309,6 +331,7 @@ const DepartmentNode = ({
               onDelete={onDelete}
               onDuplicate={onDuplicate}
               onViewDetails={onViewDetails}
+              onAddChild={onAddChild}
             />
           ))}
         </div>
@@ -654,15 +677,19 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     enabled: !!companyId
   });
 
-  // Build hierarchical structure
+  // Build hierarchical structure with proper isExpanded
   const hierarchicalDepartments = useMemo(() => {
     const buildTree = (departments: Department[]): Department[] => {
       const departmentMap = new Map<string, Department>();
       const rootDepartments: Department[] = [];
       
-      // First pass: create map of all departments
+      // First pass: create map of all departments with isExpanded property
       departments.forEach(dept => {
-        departmentMap.set(dept.id, { ...dept, children: [] });
+        departmentMap.set(dept.id, { 
+          ...dept, 
+          children: [],
+          isExpanded: expandedDepartments.has(dept.id) // Add isExpanded here
+        });
       });
       
       // Second pass: build tree structure
@@ -695,7 +722,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     };
     
     return buildTree(departments);
-  }, [departments]);
+  }, [departments, expandedDepartments]); // Add expandedDepartments as dependency
 
   // Toggle department expansion
   const toggleDepartmentExpansion = useCallback((deptId: string) => {
@@ -708,6 +735,29 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       }
       return newSet;
     });
+  }, []);
+
+  // Add child department handler
+  const handleAddChild = useCallback((parentDept: Department) => {
+    setEditingDepartment(null);
+    setFormData(prev => ({
+      ...prev,
+      parent_department_id: parentDept.id,
+      department_type: parentDept.department_type, // Inherit parent's type by default
+      school_ids: parentDept.assigned_schools || [], // Inherit parent's schools
+      branch_ids: parentDept.assigned_branches || [], // Inherit parent's branches
+      name: '',
+      code: null,
+      description: null,
+      head_id: null,
+      head_name: null,
+      head_email: null,
+      contact_email: null,
+      contact_phone: null,
+      status: 'active'
+    }));
+    setIsFormOpen(true);
+    setActiveTab('details');
   }, []);
 
   // Calculate statistics
@@ -816,11 +866,12 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     if (isFormOpen) {
       if (editingDepartment) {
         loadDepartmentForEdit(editingDepartment);
-      } else {
+      } else if (!formData.parent_department_id) {
+        // Only reset if not adding a child department
         resetForm();
       }
     }
-  }, [isFormOpen, editingDepartment, loadDepartmentForEdit, resetForm]);
+  }, [isFormOpen, editingDepartment, loadDepartmentForEdit, resetForm, formData.parent_department_id]);
 
   // Validate form and update tab errors
   const validateForm = useCallback((): boolean => {
@@ -1773,7 +1824,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             );
           })}
         </div>
-      ) : (
+      ) : viewMode === 'hierarchy' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -1789,17 +1840,29 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setExpandedDepartments(new Set(departments.map(d => d.id)))}
+                  onClick={() => {
+                    const allIds = new Set<string>();
+                    const collectIds = (depts: Department[]) => {
+                      depts.forEach(dept => {
+                        allIds.add(dept.id);
+                        if (dept.children) collectIds(dept.children);
+                      });
+                    };
+                    collectIds(hierarchicalDepartments);
+                    setExpandedDepartments(allIds);
+                  }}
                   className="text-[#8CC63F] border-[#8CC63F] hover:bg-[#8CC63F]/10"
                 >
+                  <FolderOpen className="h-4 w-4 mr-1" />
                   Expand All
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setExpandedDepartments(new Set())}
-                  className="text-gray-600 hover:bg-gray-100"
+                  className="text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
                 >
+                  <FolderClosed className="h-4 w-4 mr-1" />
                   Collapse All
                 </Button>
               </div>
@@ -1808,11 +1871,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           
           <div className="p-6">
             {hierarchicalDepartments.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {hierarchicalDepartments.map(dept => (
-                  <DepartmentCard
+                  <DepartmentNode
                     key={dept.id}
-                    department={{ ...dept, isExpanded: expandedDepartments.has(dept.id) }}
+                    department={dept}
                     level={0}
                     onToggleExpand={toggleDepartmentExpansion}
                     onEdit={(d) => {
@@ -1821,6 +1884,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     }}
                     onDelete={(d) => handleDelete([d])}
                     onDuplicate={handleDuplicate}
+                    onViewDetails={setViewingDepartment}
                     onAddChild={handleAddChild}
                   />
                 ))}
