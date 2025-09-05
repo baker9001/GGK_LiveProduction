@@ -1,14 +1,15 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/DepartmentsTab.tsx
  * 
- * FIXED VERSION - Complete Hierarchical View with Expand/Collapse
+ * FINAL CORRECTED VERSION - Complete Hierarchical Departments with All Fixes
  * 
  * ✅ Fixed: Nested hierarchy with proper parent > sub-department structure
- * ✅ Fixed: DepartmentCard reference replaced with DepartmentNode
- * ✅ Fixed: Added handleAddChild function
- * ✅ Fixed: Proper expand/collapse state management
- * ✅ Enhanced: Visual hierarchy indicators
- * ✅ Enhanced: Smooth animations for expand/collapse
+ * ✅ Fixed: Green theme (#8CC63F) for all form fields (no blue)
+ * ✅ Fixed: Phone number saving to database
+ * ✅ Fixed: Delete error handling for departments with children
+ * ✅ Fixed: Hierarchical table view with expand/collapse
+ * ✅ Fixed: Auto-expansion of parent departments
+ * ✅ Fixed: Duplicate name validation
  * 
  * Database Tables:
  * - departments (main table with all columns)
@@ -104,7 +105,6 @@ const departmentSchema = z.object({
   head_email: z.string().email('Invalid email format').optional().nullable().or(z.literal('')),
   contact_email: z.string().email('Invalid email format').optional().nullable().or(z.literal('')),
   contact_phone: z.string()
-    .regex(/^(\+\d{1,4}\s?)?\d{4,}$/, 'Invalid phone number format')
     .optional()
     .nullable()
     .or(z.literal('')),
@@ -121,16 +121,6 @@ interface DepartmentStats {
   byType: Record<string, number>;
   withHeads: number;
   parentDepartments: number;
-}
-
-// Activity interface for timeline
-interface DepartmentActivity {
-  id: string;
-  action: 'created' | 'updated' | 'deleted' | 'status_changed';
-  department_name: string;
-  user_name: string;
-  timestamp: string;
-  details?: string;
 }
 
 interface DepartmentsTabProps {
@@ -663,16 +653,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
 
-  // Auto-expand parent departments when data loads
-  useEffect(() => {
-    if (departments && departments.length > 0) {
-      const parentsWithChildren = departments.filter(d => (d.children_count || 0) > 0);
-      const parentIds = new Set(parentsWithChildren.map(d => d.id));
-      console.log('Auto-expanding parent departments:', parentsWithChildren.map(d => d.name));
-      setExpandedDepartments(parentIds);
-    }
-  }, [departments]);
-
   // Tab error tracking
   const [tabErrors, setTabErrors] = useState({
     details: false,
@@ -932,12 +912,20 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       const departmentMap = new Map<string, Department>();
       const rootDepartments: Department[] = [];
       
+      // Debug: Log the departments and their parent relationships
+      console.log('Building hierarchy from departments:', departments.map(d => ({
+        id: d.id,
+        name: d.name,
+        parent_id: d.parent_department_id,
+        parent_name: d.parent_department?.name
+      })));
+      
       // First pass: create map of all departments with isExpanded property
       departments.forEach(dept => {
         departmentMap.set(dept.id, { 
           ...dept, 
           children: [],
-          isExpanded: expandedDepartments.has(dept.id) // Add isExpanded here
+          isExpanded: expandedDepartments.has(dept.id)
         });
       });
       
@@ -949,12 +937,18 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         if (dept.parent_department_id) {
           const parent = departmentMap.get(dept.parent_department_id);
           if (parent) {
+            // Found parent in map, add as child
             if (!parent.children) parent.children = [];
             parent.children.push(currentDept);
+            console.log(`Added ${currentDept.name} as child of ${parent.name}`);
           } else {
+            // Parent not found in current list, treat as root
+            console.log(`Parent not found for ${currentDept.name}, treating as root`);
             rootDepartments.push(currentDept);
           }
         } else {
+          // No parent, it's a root
+          console.log(`${currentDept.name} has no parent, treating as root`);
           rootDepartments.push(currentDept);
         }
       });
@@ -967,11 +961,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         }));
       };
       
-      return sortDepartments(rootDepartments);
+      const result = sortDepartments(rootDepartments);
+      console.log('Final hierarchy structure:', result);
+      
+      return result;
     };
     
     return buildTree(departments);
-  }, [departments, expandedDepartments]); // Add expandedDepartments as dependency
+  }, [departments, expandedDepartments]);
+
+  // Auto-expand parent departments when data loads
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      const parentsWithChildren = departments.filter(d => (d.children_count || 0) > 0);
+      const parentIds = new Set(parentsWithChildren.map(d => d.id));
+      console.log('Auto-expanding parent departments:', parentsWithChildren.map(d => d.name));
+      setExpandedDepartments(parentIds);
+    }
+  }, [departments]);
 
   // Toggle department expansion
   const toggleDepartmentExpansion = useCallback((deptId: string) => {
@@ -1187,7 +1194,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       // Validate data
       const validated = departmentSchema.parse(data);
 
-      // Create department
+      // Create department - ensure phone is properly formatted
       const departmentData = {
         company_id: validated.company_id,
         name: validated.name,
@@ -1199,7 +1206,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         head_name: validated.head_name,
         head_email: validated.head_email,
         contact_email: validated.contact_email,
-        contact_phone: validated.contact_phone,
+        contact_phone: validated.contact_phone ? String(validated.contact_phone).trim() : null,
         status: validated.status
       };
 
@@ -1345,17 +1352,24 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     }
   });
 
-  // Delete mutation
+  // Delete mutation with better error handling
   const deleteMutation = useMutation({
     mutationFn: async (departmentIds: string[]) => {
       // Check for child departments
       const { data: children } = await supabase
         .from('departments')
-        .select('id')
+        .select('id, name, parent_department_id')
         .in('parent_department_id', departmentIds);
 
       if (children && children.length > 0) {
-        throw new Error('Cannot delete departments with child departments');
+        // Get parent department names for better error message
+        const parentDepts = departments.filter(d => departmentIds.includes(d.id));
+        const parentNames = parentDepts.map(d => d.name).join(', ');
+        const childCount = children.length;
+        
+        throw new Error(
+          `Cannot delete "${parentNames}" because it has ${childCount} sub-department${childCount > 1 ? 's' : ''}. Please delete or reassign the sub-departments first.`
+        );
       }
 
       // Delete assignments first
@@ -1391,6 +1405,25 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       toast.error(error.message || 'Failed to delete department(s)');
     }
   });
+
+  // Enhanced delete handler with pre-check
+  const handleDelete = useCallback((departments: Department[]) => {
+    // Check if any department has children
+    const departmentsWithChildren = departments.filter(d => (d.children_count || 0) > 0);
+    
+    if (departmentsWithChildren.length > 0) {
+      const names = departmentsWithChildren.map(d => `"${d.name}"`).join(', ');
+      toast.warning(
+        `Cannot delete ${names} because ${departmentsWithChildren.length === 1 ? 'it has' : 'they have'} sub-departments. Delete or reassign sub-departments first.`
+      );
+      return;
+    }
+    
+    setDeleteConfirmation({
+      isOpen: true,
+      departments
+    });
+  }, []);
 
   // Handle form submission
   const handleSubmit = useCallback((e?: React.FormEvent) => {
@@ -1441,14 +1474,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         }
       }, 0);
     }
-  }, []);
-
-  // Handle delete
-  const handleDelete = useCallback((departments: Department[]) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      departments
-    });
   }, []);
 
   // Confirm delete
@@ -1518,213 +1543,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         return <Building2 className="h-4 w-4 text-gray-500" />;
     }
   };
-
-  // Table columns configuration
-  const columns = [
-    {
-      id: 'name',
-      header: 'Department',
-      accessorKey: 'name',
-      enableSorting: true,
-      cell: (row: Department) => {
-        const typeConfig = DEPARTMENT_TYPES.find(t => t.value === row.department_type);
-        const Icon = typeConfig?.icon || Building2;
-        
-        return (
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              "p-1.5 rounded-lg",
-              row.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
-              row.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
-              row.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
-              row.department_type === 'operations' ? 'bg-orange-100 dark:bg-orange-900/30' :
-              'bg-gray-100 dark:bg-gray-900/30'
-            )}>
-              <Icon className={cn(
-                "h-4 w-4",
-                row.department_type === 'academic' ? 'text-green-600 dark:text-green-400' :
-                row.department_type === 'administrative' ? 'text-purple-600 dark:text-purple-400' :
-                row.department_type === 'support' ? 'text-green-600 dark:text-green-400' :
-                row.department_type === 'operations' ? 'text-orange-600 dark:text-orange-400' :
-                'text-gray-600 dark:text-gray-400'
-              )} />
-            </div>
-            <div className="flex items-center gap-1">
-              <DepartmentLevelIcon level={row.department_level || 'company'} />
-            </div>
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">
-                {row.name}
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                {row.code && (
-                  <div className="flex items-center gap-1">
-                    <Hash className="h-3 w-3 text-gray-400" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {row.code}
-                    </span>
-                  </div>
-                )}
-                {row.parent_department && (
-                  <div className="flex items-center gap-1">
-                    <ChevronRight className="h-3 w-3 text-gray-400" />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      Under {row.parent_department.name}
-                    </span>
-                  </div>
-                )}
-                {row.children_count && row.children_count > 0 && (
-                  <span className="text-xs text-green-600 dark:text-green-400">
-                    {row.children_count} sub-dept{row.children_count > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      id: 'type',
-      header: 'Type',
-      accessorKey: 'department_type',
-      enableSorting: true,
-      cell: (row: Department) => {
-        const typeConfig = DEPARTMENT_TYPES.find(t => t.value === row.department_type);
-        return (
-          <span className={cn(
-            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
-            row.department_type === 'academic' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-            row.department_type === 'administrative' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
-            row.department_type === 'support' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-            row.department_type === 'operations' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' :
-            'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
-          )}>
-            {typeConfig?.label || row.department_type}
-          </span>
-        );
-      }
-    },
-    {
-      id: 'schools',
-      header: 'Schools',
-      cell: (row: Department) => (
-        <div className="flex flex-wrap gap-1">
-          {row.school_names?.slice(0, 2).map((name, idx) => (
-            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
-              <School className="h-3 w-3" />
-              {name}
-            </span>
-          ))}
-          {row.school_names && row.school_names.length > 2 && (
-            <span className="text-xs text-gray-500">
-              +{row.school_names.length - 2} more
-            </span>
-          )}
-          {(!row.school_names || row.school_names.length === 0) && (
-            <span className="text-xs text-gray-400">All schools</span>
-          )}
-        </div>
-      )
-    },
-    {
-      id: 'branches',
-      header: 'Branches',
-      cell: (row: Department) => (
-        <div className="flex flex-wrap gap-1">
-          {row.branch_names && row.branch_names.length > 0 ? (
-            <>
-              {row.branch_names.slice(0, 1).map((name, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
-                  <MapPin className="h-3 w-3" />
-                  {name}
-                </span>
-              ))}
-              {row.branch_names.length > 1 && (
-                <span className="text-xs text-gray-500">
-                  +{row.branch_names.length - 1} more
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-xs text-gray-400">All branches</span>
-          )}
-        </div>
-      )
-    },
-    {
-      id: 'head',
-      header: 'Department Head',
-      cell: (row: Department) => (
-        <div className="text-sm">
-          {row.head_name ? (
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">
-                {row.head_name}
-              </div>
-              {row.head_email && (
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {row.head_email}
-                </div>
-              )}
-            </div>
-          ) : (
-            <span className="text-gray-400">Not assigned</span>
-          )}
-        </div>
-      )
-    },
-    {
-      id: 'contact',
-      header: 'Contact',
-      cell: (row: Department) => (
-        <div className="space-y-1">
-          {row.contact_email && (
-            <div className="flex items-center gap-1 text-sm">
-              <Mail className="h-3 w-3 text-gray-400" />
-              <span className="text-gray-600 dark:text-gray-300">
-                {row.contact_email}
-              </span>
-            </div>
-          )}
-          {row.contact_phone && (
-            <div className="flex items-center gap-1 text-sm">
-              <Phone className="h-3 w-3 text-gray-400" />
-              <span className="text-gray-600 dark:text-gray-300">
-                {row.contact_phone}
-              </span>
-            </div>
-          )}
-          {!row.contact_email && !row.contact_phone && (
-            <span className="text-sm text-gray-400">-</span>
-          )}
-        </div>
-      )
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      accessorKey: 'status',
-      enableSorting: true,
-      cell: (row: Department) => <StatusBadge status={row.status} />
-    },
-    {
-      id: 'actions',
-      header: '',
-      cell: (row: Department) => (
-        <QuickActionsMenu
-          department={row}
-          onEdit={() => {
-            setEditingDepartment(row);
-            setIsFormOpen(true);
-          }}
-          onDelete={() => handleDelete([row])}
-          onDuplicate={() => handleDuplicate(row)}
-          onViewDetails={() => setViewingDepartment(row)}
-        />
-      )
-    }
-  ];
 
   return (
     <div className="space-y-6">
@@ -1955,21 +1773,66 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       {isLoading ? (
         <DepartmentSkeleton />
       ) : viewMode === 'table' ? (
-        <DataTable
-          data={departments}
-          columns={columns}
-          keyField="id"
-          caption="List of departments with details"
-          ariaLabel="Departments table"
-          loading={isLoading}
-          isFetching={isFetching}
-          onEdit={(dept) => {
-            setEditingDepartment(dept);
-            setIsFormOpen(true);
-          }}
-          onDelete={handleDelete}
-          emptyMessage="No departments found"
-        />
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Schools
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Branches
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Department Head
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Contact
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th scope="col" className="relative px-6 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {hierarchicalDepartments.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center">
+                      <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">No departments found</p>
+                    </td>
+                  </tr>
+                ) : (
+                  hierarchicalDepartments.map(dept => (
+                    <DepartmentTableRow
+                      key={dept.id}
+                      department={dept}
+                      level={0}
+                      onToggleExpand={toggleDepartmentExpansion}
+                      onEdit={(d) => {
+                        setEditingDepartment(d);
+                        setIsFormOpen(true);
+                      }}
+                      onDelete={(d) => handleDelete([d])}
+                      onDuplicate={handleDuplicate}
+                      onViewDetails={setViewingDepartment}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {departments.map(dept => {
@@ -2159,7 +2022,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         </div>
       )}
 
-      {/* Form Modal */}
+      {/* Form Modal with comprehensive green theming */}
       <SlideInForm
         title={editingDepartment ? 'Edit Department' : 'Create Department'}
         isOpen={isFormOpen}
@@ -2171,7 +2034,29 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         }}
         onSave={handleSaveClick}
         loading={createMutation.isPending || updateMutation.isPending}
-        className="[&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_textarea:focus]:ring-2 [&_textarea:focus]:ring-[#8CC63F] [&_textarea:focus]:border-[#8CC63F] [&_select:focus]:ring-2 [&_select:focus]:ring-[#8CC63F] [&_select:focus]:border-[#8CC63F] [&_.react-select__control--is-focused]:border-[#8CC63F] [&_.react-select__control--is-focused]:shadow-[0_0_0_1px_#8CC63F] [&_button:focus]:ring-2 [&_button:focus]:ring-[#8CC63F] [&_button:focus]:border-[#8CC63F]"
+        className="
+          [&_input]:focus:ring-2 [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] 
+          [&_textarea]:focus:ring-2 [&_textarea]:focus:ring-[#8CC63F] [&_textarea]:focus:border-[#8CC63F] 
+          [&_select]:focus:ring-2 [&_select]:focus:ring-[#8CC63F] [&_select]:focus:border-[#8CC63F]
+          [&_.react-select__control]:border-gray-300 [&_.react-select__control]:hover:border-[#8CC63F]
+          [&_.react-select__control--is-focused]:border-[#8CC63F] [&_.react-select__control--is-focused]:shadow-[0_0_0_1px_#8CC63F] 
+          [&_.react-select__option--is-focused]:bg-green-50 [&_.react-select__option--is-selected]:bg-[#8CC63F]
+          [&_.react-select__multi-value]:bg-green-100 [&_.react-select__multi-value__label]:text-green-800
+          [&_.react-select__multi-value__remove]:hover:bg-green-200 [&_.react-select__multi-value__remove]:hover:text-green-900
+          [&_button]:focus:ring-2 [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]
+          [&_.dropdown]:border-gray-300 [&_.dropdown:focus]:border-[#8CC63F] [&_.dropdown:focus]:ring-2 [&_.dropdown:focus]:ring-[#8CC63F]
+          [&_.searchable-select]:border-gray-300 [&_.searchable-select:focus-within]:border-[#8CC63F] [&_.searchable-select:focus-within]:ring-2 [&_.searchable-select:focus-within]:ring-[#8CC63F]
+          [&_.search-input]:focus:border-[#8CC63F] [&_.search-input]:focus:ring-[#8CC63F] [&_.search-input]:focus:outline-none
+          [&_*[role='combobox']]:focus:border-[#8CC63F] [&_*[role='combobox']]:focus:ring-2 [&_*[role='combobox']]:focus:ring-[#8CC63F]
+          [&_*[role='listbox']_*[role='option']:hover]:bg-green-50 
+          [&_*[role='listbox']_*[role='option']:focus]:bg-green-100
+          [&_*[aria-selected='true']]:bg-green-100 [&_*[aria-selected='true']]:text-green-900
+          [&_.selected-item]:bg-[#8CC63F] [&_.selected-item]:text-white
+          [&_div[class*='control']]:border-gray-300 [&_div[class*='control']:focus-within]:border-[#8CC63F] [&_div[class*='control']:focus-within]:shadow-[0_0_0_1px_#8CC63F]
+          [&_div[class*='menu']]:border-gray-200 [&_div[class*='option']:hover]:bg-green-50
+          [&_input[type='search']]:focus:border-[#8CC63F] [&_input[type='search']]:focus:ring-[#8CC63F]
+          [&_input[type='text']]:focus:border-[#8CC63F] [&_input[type='text']]:focus:ring-[#8CC63F]
+        "
       >
         <form 
           id="department-form"
@@ -2225,6 +2110,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Mathematics Department"
                   leftIcon={<Building2 className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
               </FormField>
 
@@ -2244,6 +2130,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     }))}
                     placeholder="e.g., MATH"
                     leftIcon={<Hash className="h-4 w-4 text-gray-400" />}
+                    className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                   />
                 </FormField>
 
@@ -2253,18 +2140,25 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   required
                   error={formErrors.department_type}
                 >
-                  <Select
-                    id="department_type"
-                    value={formData.department_type}
-                    onChange={(value) => setFormData(prev => ({ 
-                      ...prev, 
-                      department_type: value as Department['department_type']
-                    }))}
-                    options={DEPARTMENT_TYPES.map(t => ({ 
-                      value: t.value, 
-                      label: t.label 
-                    }))}
-                  />
+                  <div className="[&_select]:border-gray-300 [&_select:focus]:ring-2 [&_select:focus]:ring-[#8CC63F] [&_select:focus]:border-[#8CC63F] [&_select:focus-visible]:ring-2 [&_select:focus-visible]:ring-[#8CC63F] [&_select:focus-visible]:border-[#8CC63F] [&_.dropdown]:focus:border-[#8CC63F] [&_.dropdown]:focus-within:border-[#8CC63F]">
+                    <Select
+                      id="department_type"
+                      value={formData.department_type}
+                      onChange={(value) => setFormData(prev => ({ 
+                        ...prev, 
+                        department_type: value as Department['department_type']
+                      }))}
+                      options={DEPARTMENT_TYPES.map(t => ({ 
+                        value: t.value, 
+                        label: t.label 
+                      }))}
+                      className="focus:ring-[#8CC63F] focus:border-[#8CC63F] focus-visible:ring-[#8CC63F] focus-visible:border-[#8CC63F] [&:focus]:ring-[#8CC63F] [&:focus]:border-[#8CC63F]"
+                      style={{
+                        borderColor: 'rgb(209, 213, 219)',
+                        outlineColor: '#8CC63F',
+                      }}
+                    />
+                  </div>
                 </FormField>
               </div>
 
@@ -2283,6 +2177,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   }))}
                   placeholder="Describe the department..."
                   rows={3}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
               </FormField>
 
@@ -2292,21 +2187,28 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 error={formErrors.parent_department_id}
                 description="Select if this is a sub-department"
               >
-                <Select
-                  id="parent_department"
-                  value={formData.parent_department_id || ''}
-                  onChange={(value) => setFormData(prev => ({ 
-                    ...prev, 
-                    parent_department_id: value || null 
-                  }))}
-                  options={[
-                    { value: '', label: 'No Parent (Top Level)' },
-                    ...parentDepartments.map(d => ({
-                      value: d.id,
-                      label: d.hierarchy_path || d.name
-                    }))
-                  ]}
-                />
+                <div className="[&_select]:border-gray-300 [&_select:focus]:ring-2 [&_select:focus]:ring-[#8CC63F] [&_select:focus]:border-[#8CC63F] [&_select:focus-visible]:ring-2 [&_select:focus-visible]:ring-[#8CC63F] [&_select:focus-visible]:border-[#8CC63F] [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] [&_input]:focus:outline-none">
+                  <Select
+                    id="parent_department"
+                    value={formData.parent_department_id || ''}
+                    onChange={(value) => setFormData(prev => ({ 
+                      ...prev, 
+                      parent_department_id: value || null 
+                    }))}
+                    options={[
+                      { value: '', label: 'No Parent (Top Level)' },
+                      ...parentDepartments.map(d => ({
+                        value: d.id,
+                        label: d.hierarchy_path || d.name
+                      }))
+                    ]}
+                    className="focus:ring-[#8CC63F] focus:border-[#8CC63F] focus-visible:ring-[#8CC63F] focus-visible:border-[#8CC63F] [&:focus]:ring-[#8CC63F] [&:focus]:border-[#8CC63F]"
+                    style={{
+                      borderColor: 'rgb(209, 213, 219)',
+                      outlineColor: '#8CC63F',
+                    }}
+                  />
+                </div>
               </FormField>
             </TabsContent>
 
@@ -2327,17 +2229,35 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 error={formErrors.school_ids}
                 description="Select one or more schools where this department operates"
               >
-                <SearchableMultiSelect
-                  label=""
-                  options={schools.map(s => ({ value: s.id, label: s.name }))}
-                  selectedValues={formData.school_ids}
-                  onChange={(values) => setFormData(prev => ({ 
-                    ...prev, 
-                    school_ids: values,
-                    branch_ids: []
-                  }))}
-                  placeholder="Select schools..."
-                />
+                <div className="
+                  [&_input]:border-gray-300 [&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_input:focus]:outline-none
+                  [&_button]:focus:ring-2 [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]
+                  [&_div[class*='control']]:border-gray-300 [&_div[class*='control']:hover]:border-[#8CC63F] 
+                  [&_div[class*='control']:focus-within]:border-[#8CC63F] [&_div[class*='control']:focus-within]:shadow-[0_0_0_1px_#8CC63F]
+                  [&_div[class*='option']:hover]:bg-green-50 [&_div[class*='option--is-focused']]:bg-green-50
+                  [&_div[class*='option--is-selected']]:bg-[#8CC63F] [&_div[class*='option--is-selected']]:text-white
+                  [&_div[class*='multi-value']]:bg-green-100 [&_div[class*='multi-value__label']]:text-green-800
+                  [&_div[class*='multi-value__remove']:hover]:bg-green-200 [&_div[class*='multi-value__remove']:hover]:text-green-900
+                  [&_.searchable-select]:border-gray-300 [&_.searchable-select:focus-within]:border-[#8CC63F] [&_.searchable-select:focus-within]:ring-2 [&_.searchable-select:focus-within]:ring-[#8CC63F]
+                ">
+                  <SearchableMultiSelect
+                    label=""
+                    options={schools.map(s => ({ value: s.id, label: s.name }))}
+                    selectedValues={formData.school_ids}
+                    onChange={(values) => setFormData(prev => ({ 
+                      ...prev, 
+                      school_ids: values,
+                      branch_ids: []
+                    }))}
+                    placeholder="Select schools..."
+                    className="focus-within:ring-[#8CC63F] focus-within:border-[#8CC63F]"
+                    style={{
+                      '--primary-color': '#8CC63F',
+                      '--primary-hover': '#7AB635',
+                      '--primary-light': 'rgb(236, 253, 218)',
+                    } as React.CSSProperties}
+                  />
+                </div>
               </FormField>
 
               {formData.school_ids.length > 0 && branches.length > 0 && (
@@ -2347,16 +2267,34 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   error={formErrors.branch_ids}
                   description="Leave empty to include all branches in selected schools"
                 >
-                  <SearchableMultiSelect
-                    label=""
-                    options={branches.map(b => ({ value: b.id, label: b.name }))}
-                    selectedValues={formData.branch_ids || []}
-                    onChange={(values) => setFormData(prev => ({ 
-                      ...prev, 
-                      branch_ids: values 
-                    }))}
-                    placeholder="All branches in selected schools"
-                  />
+                  <div className="
+                    [&_input]:border-gray-300 [&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_input:focus]:outline-none
+                    [&_button]:focus:ring-2 [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]
+                    [&_div[class*='control']]:border-gray-300 [&_div[class*='control']:hover]:border-[#8CC63F] 
+                    [&_div[class*='control']:focus-within]:border-[#8CC63F] [&_div[class*='control']:focus-within]:shadow-[0_0_0_1px_#8CC63F]
+                    [&_div[class*='option']:hover]:bg-green-50 [&_div[class*='option--is-focused']]:bg-green-50
+                    [&_div[class*='option--is-selected']]:bg-[#8CC63F] [&_div[class*='option--is-selected']]:text-white
+                    [&_div[class*='multi-value']]:bg-green-100 [&_div[class*='multi-value__label']]:text-green-800
+                    [&_div[class*='multi-value__remove']:hover]:bg-green-200 [&_div[class*='multi-value__remove']:hover]:text-green-900
+                    [&_.searchable-select]:border-gray-300 [&_.searchable-select:focus-within]:border-[#8CC63F] [&_.searchable-select:focus-within]:ring-2 [&_.searchable-select:focus-within]:ring-[#8CC63F]
+                  ">
+                    <SearchableMultiSelect
+                      label=""
+                      options={branches.map(b => ({ value: b.id, label: b.name }))}
+                      selectedValues={formData.branch_ids || []}
+                      onChange={(values) => setFormData(prev => ({ 
+                        ...prev, 
+                        branch_ids: values 
+                      }))}
+                      placeholder="All branches in selected schools"
+                      className="focus-within:ring-[#8CC63F] focus-within:border-[#8CC63F]"
+                      style={{
+                        '--primary-color': '#8CC63F',
+                        '--primary-hover': '#7AB635',
+                        '--primary-light': 'rgb(236, 253, 218)',
+                      } as React.CSSProperties}
+                    />
+                  </div>
                 </FormField>
               )}
             </TabsContent>
@@ -2386,6 +2324,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   }))}
                   placeholder="Full name"
                   leftIcon={<Users className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
               </FormField>
 
@@ -2405,6 +2344,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   }))}
                   placeholder="head@example.com"
                   leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
               </FormField>
 
@@ -2424,6 +2364,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   }))}
                   placeholder="department@example.com"
                   leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
               </FormField>
 
@@ -2484,6 +2425,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                       ...prev, 
                       status: checked ? 'active' : 'inactive' 
                     }))}
+                    className="[&_span]:bg-[#8CC63F] [&_input:checked+span]:bg-[#8CC63F]"
                   />
                 </div>
               </FormField>
