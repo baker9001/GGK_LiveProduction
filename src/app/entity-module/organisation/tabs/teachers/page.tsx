@@ -34,7 +34,6 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useUser } from '../../../../../contexts/UserContext';
-import { useTeachersQuery } from '../../../../../utils/queryHelpers';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
 import { FormField, Input, Select, Textarea } from '../../../../../components/shared/FormField';
 import { Button } from '../../../../../components/shared/Button';
@@ -308,12 +307,105 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               name,
               status
             )
-    useTeachersQuery(companyId, userContext, {
-      search: searchTerm,
-      specialization: filterSpecialization !== 'all' ? filterSpecialization : undefined
-    }),
+          `)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false });
+
+        // Apply scope-based filtering
+        if (!canAccessAll) {
+          const orConditions: string[] = [];
+          
+          if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+            orConditions.push(`school_id.in.(${scopeFilters.school_ids.join(',')})`);
+          }
+          
+          if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+            orConditions.push(`branch_id.in.(${scopeFilters.branch_ids.join(',')})`);
+          }
+          
+          if (orConditions.length > 0) {
+            query = query.or(orConditions.join(','));
+          }
+        }
+
+        const { data: teachersData, error: teachersError } = await query;
+
+        if (teachersError) {
+          console.error('Teachers query error:', teachersError);
+          throw new Error(`Failed to fetch teachers: ${teachersError.message}`);
+        }
+
+        if (!teachersData) {
+          return [];
+        }
+
+        // Fetch teacher relationships
+        const enrichedTeachers = await Promise.all(
+          teachersData.map(async (teacher) => {
+            try {
+              const { data: deptData } = await supabase
+                .from('teacher_departments')
+                .select('department_id, departments(id, name)')
+                .eq('teacher_id', teacher.id);
+              
+              const { data: gradeData } = await supabase
+                .from('teacher_grade_levels')
+                .select('grade_level_id, grade_levels(id, grade_name, grade_code)')
+                .eq('teacher_id', teacher.id);
+              
+              const { data: sectionData } = await supabase
+                .from('teacher_sections')
+                .select('section_id, class_sections(id, section_name, section_code, grade_level_id)')
+                .eq('teacher_id', teacher.id);
+
+              return {
+                ...teacher,
+                name: teacher.users?.raw_user_meta_data?.name || 
+                      teacher.users?.email?.split('@')[0] || 
+                      'Unknown Teacher',
+                email: teacher.users?.email || '',
+                is_active: teacher.users?.is_active ?? false,
+                school_name: teacher.schools?.name || 'No School Assigned',
+                branch_name: teacher.branches?.name || 'No Branch Assigned',
+                departments: deptData?.map(d => d.departments).filter(Boolean) || [],
+                grade_levels: gradeData?.map(g => g.grade_levels).filter(Boolean) || [],
+                sections: sectionData?.map(s => s.class_sections).filter(Boolean) || [],
+                user_data: teacher.users
+              };
+            } catch (err) {
+              return {
+                ...teacher,
+                name: teacher.users?.raw_user_meta_data?.name || 
+                      teacher.users?.email?.split('@')[0] || 
+                      'Unknown Teacher',
+                email: teacher.users?.email || '',
+                phone: teacher.phone || teacher.users?.raw_user_meta_data?.phone || '',
+                is_active: teacher.users?.is_active ?? false,
+                school_name: teacher.schools?.name || 'No School Assigned',
+                branch_name: teacher.branches?.name || 'No Branch Assigned',
+                departments: [],
+                grade_levels: [],
+                sections: [],
+                user_data: teacher.users
+              };
+            }
+          })
+        );
+
+        return enrichedTeachers as TeacherData[];
+
+      } catch (error) {
+        console.error('Error fetching teachers:', error);
+        throw error;
+      }
+    },
     {
-      enabled: !!companyId && !isAccessControlLoading && activeTab === 'list'
+      enabled: !!companyId && !isAccessControlLoading,
+      staleTime: 2 * 60 * 1000,
+      retry: (failureCount, error) => {
+        if (error.message.includes('permission')) return false;
+        return failureCount < 2;
+      }
     }
   );
 
@@ -1706,9 +1798,4 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       />
     </div>
   );
-}
-          )
-      }
-    }
-  )
 }
