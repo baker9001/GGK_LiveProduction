@@ -2426,16 +2426,21 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 <div className="relative flex [&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_button:focus]:ring-2 [&_button:focus]:ring-[#8CC63F] [&_button:focus]:border-[#8CC63F]">
                   <PhoneInput
                     value={formData.contact_phone || ''}
-                    onChange={(value: string) => {
-                      console.log('Phone value changed:', value); // Debug log
+                    onChange={(value: string | undefined) => {
+                      // Store the complete phone number with country code
+                      const phoneValue = value ? String(value) : '';
+                      console.log('Phone value being saved:', phoneValue); // Debug log
                       setFormData(prev => ({ 
                         ...prev, 
-                        contact_phone: value || null 
+                        contact_phone: phoneValue || null 
                       }));
                     }}
                     placeholder="XXXX XXXX"
                     disabled={createMutation.isPending || updateMutation.isPending}
                     className="w-full [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]"
+                    defaultCountry="KW"
+                    international
+                    countryCallingCodeEditable={false}
                   />
                 </div>
               </FormField>
@@ -2513,9 +2518,41 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       <ConfirmationDialog
         isOpen={deleteConfirmation.isOpen}
         title="Delete Department(s)"
-        message={`Are you sure you want to delete ${deleteConfirmation.departments.length} department(s)? This action cannot be undone.`}
+        message={
+          <div className="space-y-2">
+            <p>Are you sure you want to delete {deleteConfirmation.departments.length} department(s)?</p>
+            {deleteConfirmation.departments.length > 0 && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mt-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                      Departments to be deleted:
+                    </p>
+                    <ul className="list-disc list-inside text-yellow-700 dark:text-yellow-300">
+                      {deleteConfirmation.departments.map(dept => (
+                        <li key={dept.id}>
+                          {dept.name}
+                          {dept.children_count && dept.children_count > 0 && (
+                            <span className="text-red-600 dark:text-red-400 ml-1">
+                              (has {dept.children_count} sub-department{dept.children_count > 1 ? 's' : ''})
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              This action cannot be undone.
+            </p>
+          </div>
+        }
         confirmText="Delete"
         cancelText="Cancel"
+        confirmVariant="destructive"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmation({ isOpen: false, departments: [] })}
       />
