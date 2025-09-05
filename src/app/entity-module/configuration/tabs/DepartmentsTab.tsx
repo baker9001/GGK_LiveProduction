@@ -2300,11 +2300,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   label=""
                   options={schools.map(s => ({ value: s.id, label: s.name }))}
                   selectedValues={formData.school_ids}
-                  onChange={(values) => setFormData(prev => ({ 
-                    ...prev, 
-                    school_ids: values,
-                    branch_ids: []
-                  }))}
+                  onChange={(values) => {
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      school_ids: values,
+                      branch_ids: []
+                    }));
+                    // Real-time validation
+                    validateField('school_ids', values);
+                  }}
                   placeholder="Select schools..."
                 />
               </FormField>
