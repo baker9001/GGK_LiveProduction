@@ -1,3 +1,5 @@
+///home/project/src/app/system-admin/tenants/tabs/CompaniesTab.tsx
+
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
