@@ -962,7 +962,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       // Validate data
       const validated = departmentSchema.parse(data);
 
-      // Update department
+      // Update department - ensure phone is properly formatted
       const departmentData = {
         name: validated.name,
         code: validated.code,
@@ -973,7 +973,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         head_name: validated.head_name,
         head_email: validated.head_email,
         contact_email: validated.contact_email,
-        contact_phone: validated.contact_phone,
+        contact_phone: validated.contact_phone ? String(validated.contact_phone).trim() : null,
         status: validated.status,
         updated_at: new Date().toISOString()
       };
@@ -2093,16 +2093,21 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                 error={formErrors.contact_phone}
                 description="Department phone number for inquiries"
               >
-                <PhoneInput
-                  value={formData.contact_phone || ''}
-                  onChange={(value: string) => setFormData(prev => ({ 
-                    ...prev, 
-                    contact_phone: value || null 
-                  }))}
-                  placeholder="XXXX XXXX"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="w-full"
-                />
+                <div className="relative flex [&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_button:focus]:ring-2 [&_button:focus]:ring-[#8CC63F] [&_button:focus]:border-[#8CC63F]">
+                  <PhoneInput
+                    value={formData.contact_phone || ''}
+                    onChange={(value: string) => {
+                      console.log('Phone value changed:', value); // Debug log
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        contact_phone: value || null 
+                      }));
+                    }}
+                    placeholder="XXXX XXXX"
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    className="w-full [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]"
+                  />
+                </div>
               </FormField>
             </TabsContent>
 
