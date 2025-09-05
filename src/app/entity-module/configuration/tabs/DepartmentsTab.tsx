@@ -1517,17 +1517,50 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     
     setIsSaving(false);
     
-    if (!validateForm()) {
-      toast.error('Please fix the errors before submitting');
-      return;
-    }
+    // Validate form before submission
+    try {
+      departmentSchema.parse(formData);
+      // If validation passes, proceed with save
+      if (editingDepartment) {
+        updateMutation.mutate(formData);
+      } else {
+        createMutation.mutate(formData);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        // Show validation errors
+        const errors: Record<string, string> = {};
+        const newTabErrors = {
+          details: false,
+          assignments: false,
+          contact: false,
+          settings: false
+        };
 
-    if (editingDepartment) {
-      updateMutation.mutate(formData);
-    } else {
-      createMutation.mutate(formData);
+        error.errors.forEach(err => {
+          const field = err.path[0]?.toString();
+          if (field) {
+            errors[field] = err.message;
+            
+            // Update tab errors
+            if (['name', 'code', 'department_type', 'description', 'parent_department_id'].includes(field)) {
+              newTabErrors.details = true;
+            } else if (['school_ids', 'branch_ids'].includes(field)) {
+              newTabErrors.assignments = true;
+            } else if (['head_name', 'head_email', 'contact_email', 'contact_phone'].includes(field)) {
+              newTabErrors.contact = true;
+            } else if (['status'].includes(field)) {
+              newTabErrors.settings = true;
+            }
+          }
+        });
+
+        setFormErrors(errors);
+        setTabErrors(newTabErrors);
+        toast.error('Please fix the errors before submitting');
+      }
     }
-  }, [formData, editingDepartment, validateForm, createMutation, updateMutation, isSaving]);
+  }, [formData, editingDepartment, createMutation, updateMutation, isSaving]);
 
   // Handle intentional save (button click)
   const handleSaveClick = useCallback(() => {
