@@ -786,12 +786,18 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const checkDuplicateName = useCallback(async (name: string, excludeId?: string) => {
     if (!name || !companyId) return false;
 
-    const { data } = await supabase
+    let query = supabase
       .from('departments')
       .select('id')
       .eq('company_id', companyId)
-      .ilike('name', name)
-      .neq('id', excludeId || '');
+      .ilike('name', name);
+    
+    // Only add the neq filter if excludeId is provided
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+
+    const { data } = await query;
 
     return (data?.length || 0) > 0;
   }, [companyId]);
