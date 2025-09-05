@@ -1,39 +1,12 @@
 /**
  * File: /src/app/entity-module/configuration/tabs/DepartmentsTab.tsx
  * 
- * ULTIMATE ENHANCED VERSION - All Features + Improvements
+ * ENHANCED VERSION - Hierarchical View + Green Theme
  * 
- * ✅ Preserved Original Features:
- * - Multi-school assignment via junction tables
- * - Department hierarchy with parent departments
- * - Branch-level assignments
- * - Tab-based form organization with error indicators
- * - Department type categorization
- * - Contact information management
- * - Status management with toggle
- * - Department level indicators (Company/School/Branch)
- * 
- * ✅ Fixed Issues:
- * - Removed JSON metadata storage from description field
- * - Proper database columns for all attributes
- * - Simplified form submission handling
- * - Better state management
- * - Improved validation flow
- * 
- * ✅ New Enhancements:
- * - Bulk operations (delete multiple)
- * - Export to CSV functionality
- * - Duplicate department name checking
- * - Better loading states with skeletons
- * - Enhanced search (includes all fields)
- * - Quick actions menu
- * - Stats dashboard
- * - Better mobile responsiveness
- * - Keyboard navigation support
- * - Activity timeline tracking
- * - Advanced filtering with date ranges
- * - Department hierarchy visualization
- * - Better error recovery
+ * ✅ All Original Features Preserved
+ * ✅ New: Hierarchical tree view with expand/collapse
+ * ✅ New: Green theme (#8CC63F) in forms
+ * ✅ Fixed: Replaced all blue elements with green theme
  * 
  * Database Tables:
  * - departments (main table with all columns)
@@ -52,7 +25,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Info, Loader2, Search,
   Calendar, Clock, Activity, TrendingUp, BarChart3, Eye, Edit2,
   Trash2, Archive, RefreshCw, Settings, ChevronDown, ChevronUp,
-  FileText, Shield, Star, GitBranch, Layers, BookOpen
+  FileText, Shield, Star, GitBranch, Layers, BookOpen, FolderOpen, FolderClosed
 } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
@@ -102,6 +75,9 @@ interface Department {
   // Computed fields
   department_level?: 'company' | 'school' | 'branch';
   hierarchy_path?: string;
+  // For hierarchical view
+  children?: Department[];
+  isExpanded?: boolean;
 }
 
 // Enhanced validation schema with better rules
@@ -173,12 +149,173 @@ const DepartmentSkeleton = () => (
 
 // Department type configuration
 const DEPARTMENT_TYPES = [
-  { value: 'academic', label: 'Academic', icon: BookOpen, color: 'blue' },
+  { value: 'academic', label: 'Academic', icon: BookOpen, color: 'green' },
   { value: 'administrative', label: 'Administrative', icon: Building2, color: 'purple' },
   { value: 'support', label: 'Support', icon: Users, color: 'green' },
   { value: 'operations', label: 'Operations', icon: Settings, color: 'orange' },
   { value: 'other', label: 'Other', icon: Layers, color: 'gray' }
 ] as const;
+
+// Hierarchical Department Node Component
+const DepartmentNode = ({ 
+  department, 
+  level = 0,
+  onToggleExpand,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onViewDetails
+}: {
+  department: Department;
+  level?: number;
+  onToggleExpand: (deptId: string) => void;
+  onEdit: (dept: Department) => void;
+  onDelete: (dept: Department) => void;
+  onDuplicate: (dept: Department) => void;
+  onViewDetails: (dept: Department) => void;
+}) => {
+  const hasChildren = department.children && department.children.length > 0;
+  const typeConfig = DEPARTMENT_TYPES.find(t => t.value === department.department_type);
+  const Icon = typeConfig?.icon || Building2;
+  
+  return (
+    <>
+      <div 
+        className={cn(
+          "group flex items-center justify-between py-3 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg",
+          level > 0 && "border-l-2 border-gray-200 dark:border-gray-700"
+        )}
+        style={{ paddingLeft: `${(level * 2) + 1}rem` }}
+      >
+        <div className="flex items-center gap-3 flex-1">
+          {/* Expand/Collapse Button */}
+          {hasChildren && (
+            <button
+              onClick={() => onToggleExpand(department.id)}
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            >
+              {department.isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-gray-500" />
+              )}
+            </button>
+          )}
+          {!hasChildren && <div className="w-6" />}
+          
+          {/* Department Icon */}
+          <div className={cn(
+            "p-1.5 rounded-lg",
+            department.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
+            department.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
+            department.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
+            department.department_type === 'operations' ? 'bg-orange-100 dark:bg-orange-900/30' :
+            'bg-gray-100 dark:bg-gray-900/30'
+          )}>
+            <Icon className={cn(
+              "h-4 w-4",
+              department.department_type === 'academic' ? 'text-green-600 dark:text-green-400' :
+              department.department_type === 'administrative' ? 'text-purple-600 dark:text-purple-400' :
+              department.department_type === 'support' ? 'text-green-600 dark:text-green-400' :
+              department.department_type === 'operations' ? 'text-orange-600 dark:text-orange-400' :
+              'text-gray-600 dark:text-gray-400'
+            )} />
+          </div>
+          
+          {/* Department Info */}
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-900 dark:text-white">
+                {department.name}
+              </span>
+              {department.code && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                  {department.code}
+                </span>
+              )}
+              <StatusBadge status={department.status} size="sm" />
+            </div>
+            
+            <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {department.head_name && (
+                <span className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {department.head_name}
+                </span>
+              )}
+              {department.school_names && department.school_names.length > 0 && (
+                <span className="flex items-center gap-1">
+                  <School className="h-3 w-3" />
+                  {department.school_names.length} school{department.school_names.length > 1 ? 's' : ''}
+                </span>
+              )}
+              {hasChildren && (
+                <span className="flex items-center gap-1">
+                  <GitBranch className="h-3 w-3" />
+                  {department.children?.length} sub-department{department.children?.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Actions */}
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onViewDetails(department)}
+            className="h-8 w-8 p-0"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(department)}
+            className="h-8 w-8 p-0"
+          >
+            <Edit2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDuplicate(department)}
+            className="h-8 w-8 p-0"
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(department)}
+            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      {/* Render Children */}
+      {hasChildren && department.isExpanded && (
+        <div className="ml-4">
+          {department.children?.map(child => (
+            <DepartmentNode
+              key={child.id}
+              department={child}
+              level={level + 1}
+              onToggleExpand={onToggleExpand}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+              onViewDetails={onViewDetails}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+};
 
 // Quick actions menu component
 const QuickActionsMenu = ({ 
@@ -261,7 +398,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [showStats, setShowStats] = useState(true);
   const [viewMode, setViewMode] = useState<'table' | 'cards' | 'hierarchy'>('table');
-  const [isSaving, setIsSaving] = useState(false); // Add flag to track intentional saves
+  const [isSaving, setIsSaving] = useState(false);
+  const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
 
   // Tab error tracking
   const [tabErrors, setTabErrors] = useState({
@@ -491,7 +629,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           branch_names: branchNames,
           children_count: childrenCount,
           department_level: departmentLevel,
-          hierarchy_path: hierarchyPath
+          hierarchy_path: hierarchyPath,
+          isExpanded: expandedDepartments.has(dept.id)
         };
       }) || [];
 
@@ -514,6 +653,62 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     },
     enabled: !!companyId
   });
+
+  // Build hierarchical structure
+  const hierarchicalDepartments = useMemo(() => {
+    const buildTree = (departments: Department[]): Department[] => {
+      const departmentMap = new Map<string, Department>();
+      const rootDepartments: Department[] = [];
+      
+      // First pass: create map of all departments
+      departments.forEach(dept => {
+        departmentMap.set(dept.id, { ...dept, children: [] });
+      });
+      
+      // Second pass: build tree structure
+      departments.forEach(dept => {
+        const currentDept = departmentMap.get(dept.id);
+        if (!currentDept) return;
+        
+        if (dept.parent_department_id) {
+          const parent = departmentMap.get(dept.parent_department_id);
+          if (parent) {
+            if (!parent.children) parent.children = [];
+            parent.children.push(currentDept);
+          } else {
+            rootDepartments.push(currentDept);
+          }
+        } else {
+          rootDepartments.push(currentDept);
+        }
+      });
+      
+      // Sort children at each level
+      const sortDepartments = (depts: Department[]): Department[] => {
+        return depts.sort((a, b) => a.name.localeCompare(b.name)).map(dept => ({
+          ...dept,
+          children: dept.children ? sortDepartments(dept.children) : []
+        }));
+      };
+      
+      return sortDepartments(rootDepartments);
+    };
+    
+    return buildTree(departments);
+  }, [departments]);
+
+  // Toggle department expansion
+  const toggleDepartmentExpansion = useCallback((deptId: string) => {
+    setExpandedDepartments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deptId)) {
+        newSet.delete(deptId);
+      } else {
+        newSet.add(deptId);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Calculate statistics
   const stats = useMemo<DepartmentStats>(() => {
@@ -577,7 +772,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       settings: false
     });
     setActiveTab('details');
-    setIsSaving(false); // Reset saving flag
+    setIsSaving(false);
   }, [companyId]);
 
   // Load department for editing
@@ -614,9 +809,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       contact_phone: dept.contact_phone,
       status: dept.status
     });
-    
-    // Keep the same tab that was active
-    // Don't reset to 'details' when editing
   }, [companyId]);
 
   // Handle form open/close
@@ -748,11 +940,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       setIsFormOpen(false);
       resetForm();
-      setIsSaving(false); // Reset flag
+      setIsSaving(false);
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to create department');
-      setIsSaving(false); // Reset flag on error
+      setIsSaving(false);
     }
   });
 
@@ -839,11 +1031,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       setIsFormOpen(false);
       setEditingDepartment(null);
       resetForm();
-      setIsSaving(false); // Reset flag
+      setIsSaving(false);
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to update department');
-      setIsSaving(false); // Reset flag on error
+      setIsSaving(false);
     }
   });
 
@@ -896,18 +1088,15 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   // Handle form submission
   const handleSubmit = useCallback((e?: React.FormEvent) => {
-    // Always prevent default form submission
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
     
-    // Only proceed if this is an intentional save (button click or Enter key)
     if (!isSaving) {
       return;
     }
     
-    // Reset the saving flag immediately
     setIsSaving(false);
     
     if (!validateForm()) {
@@ -925,7 +1114,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   // Handle intentional save (button click)
   const handleSaveClick = useCallback(() => {
     setIsSaving(true);
-    // Use setTimeout to ensure state update happens before form submission
     setTimeout(() => {
       const form = document.querySelector('#department-form') as HTMLFormElement;
       if (form) {
@@ -936,7 +1124,6 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
 
   // Handle Enter key press for save
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Only save on Enter if we're in an input field (not textarea)
     if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
       e.preventDefault();
       e.stopPropagation();
@@ -1018,7 +1205,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
       case 'company':
         return <Building className="h-4 w-4 text-purple-500" />;
       case 'school':
-        return <School className="h-4 w-4 text-blue-500" />;
+        return <School className="h-4 w-4 text-green-500" />;
       case 'branch':
         return <MapPin className="h-4 w-4 text-green-500" />;
       default:
@@ -1041,7 +1228,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           <div className="flex items-center gap-2">
             <div className={cn(
               "p-1.5 rounded-lg",
-              row.department_type === 'academic' ? 'bg-blue-100 dark:bg-blue-900/30' :
+              row.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
               row.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
               row.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
               row.department_type === 'operations' ? 'bg-orange-100 dark:bg-orange-900/30' :
@@ -1049,7 +1236,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             )}>
               <Icon className={cn(
                 "h-4 w-4",
-                row.department_type === 'academic' ? 'text-blue-600 dark:text-blue-400' :
+                row.department_type === 'academic' ? 'text-green-600 dark:text-green-400' :
                 row.department_type === 'administrative' ? 'text-purple-600 dark:text-purple-400' :
                 row.department_type === 'support' ? 'text-green-600 dark:text-green-400' :
                 row.department_type === 'operations' ? 'text-orange-600 dark:text-orange-400' :
@@ -1081,7 +1268,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   </div>
                 )}
                 {row.children_count && row.children_count > 0 && (
-                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                  <span className="text-xs text-green-600 dark:text-green-400">
                     {row.children_count} sub-dept{row.children_count > 1 ? 's' : ''}
                   </span>
                 )}
@@ -1101,7 +1288,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         return (
           <span className={cn(
             "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
-            row.department_type === 'academic' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+            row.department_type === 'academic' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
             row.department_type === 'administrative' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
             row.department_type === 'support' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
             row.department_type === 'operations' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' :
@@ -1349,9 +1536,8 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   </div>
                   <Icon className={cn(
                     "h-8 w-8",
-                    config.color === 'blue' ? 'text-blue-400' :
-                    config.color === 'purple' ? 'text-purple-400' :
                     config.color === 'green' ? 'text-green-400' :
+                    config.color === 'purple' ? 'text-purple-400' :
                     config.color === 'orange' ? 'text-orange-400' :
                     'text-gray-400'
                   )} />
@@ -1493,7 +1679,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   <div className="flex items-center gap-2">
                     <div className={cn(
                       "p-2 rounded-lg",
-                      dept.department_type === 'academic' ? 'bg-blue-100 dark:bg-blue-900/30' :
+                      dept.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
                       dept.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
                       dept.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
                       dept.department_type === 'operations' ? 'bg-orange-100 dark:bg-orange-900/30' :
@@ -1501,7 +1687,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     )}>
                       <Icon className={cn(
                         "h-5 w-5",
-                        dept.department_type === 'academic' ? 'text-blue-600 dark:text-blue-400' :
+                        dept.department_type === 'academic' ? 'text-green-600 dark:text-green-400' :
                         dept.department_type === 'administrative' ? 'text-purple-600 dark:text-purple-400' :
                         dept.department_type === 'support' ? 'text-green-600 dark:text-green-400' :
                         dept.department_type === 'operations' ? 'text-orange-600 dark:text-orange-400' :
@@ -1588,8 +1774,49 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           })}
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-          <p className="text-center text-gray-500">Hierarchy view coming soon...</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Department Hierarchy</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setExpandedDepartments(new Set(departments.map(d => d.id)))}
+                  className="text-sm text-[#8CC63F] hover:text-[#7AB635]"
+                >
+                  Expand All
+                </button>
+                <button
+                  onClick={() => setExpandedDepartments(new Set())}
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700"
+                >
+                  Collapse All
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="p-4">
+            {hierarchicalDepartments.length > 0 ? (
+              hierarchicalDepartments.map(dept => (
+                <DepartmentNode
+                  key={dept.id}
+                  department={{ ...dept, isExpanded: expandedDepartments.has(dept.id) }}
+                  level={0}
+                  onToggleExpand={toggleDepartmentExpansion}
+                  onEdit={(d) => {
+                    setEditingDepartment(d);
+                    setIsFormOpen(true);
+                  }}
+                  onDelete={(d) => handleDelete([d])}
+                  onDuplicate={handleDuplicate}
+                  onViewDetails={setViewingDepartment}
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No departments found
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1601,21 +1828,20 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
           setIsFormOpen(false);
           setEditingDepartment(null);
           resetForm();
-          setIsSaving(false); // Reset saving flag on close
+          setIsSaving(false);
         }}
-        onSave={handleSaveClick} // Use the click handler, not the submit handler
+        onSave={handleSaveClick}
         loading={createMutation.isPending || updateMutation.isPending}
       >
         <form 
           id="department-form"
           onSubmit={handleSubmit} 
           className="space-y-4"
-          onKeyDown={handleKeyDown} // Add keyboard handler
+          onKeyDown={handleKeyDown}
         >
           <Tabs 
             value={activeTab} 
             onValueChange={(v) => {
-              // Just change the tab, don't trigger any saves
               setActiveTab(v as any);
             }}
           >
@@ -1745,11 +1971,11 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
             </TabsContent>
 
             <TabsContent value="assignments" className="space-y-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
                   School & Branch Assignment
                 </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-sm text-green-700 dark:text-green-300">
                   Assign this department to specific schools and optionally to specific branches
                 </p>
               </div>
@@ -1768,7 +1994,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                   onChange={(values) => setFormData(prev => ({ 
                     ...prev, 
                     school_ids: values,
-                    branch_ids: [] // Reset branches when schools change
+                    branch_ids: []
                   }))}
                   placeholder="Select schools..."
                 />
