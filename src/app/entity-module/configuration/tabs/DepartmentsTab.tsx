@@ -2101,8 +2101,439 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         </div>
       )}
 
-      {/* Form Modal - rest of the component remains the same */}
-      {/* ... SlideInForm and ConfirmationDialog components ... */}
+      {/* Form Modal with comprehensive green theming */}
+      <SlideInForm
+        title={editingDepartment ? 'Edit Department' : 'Create Department'}
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingDepartment(null);
+          resetForm();
+          setIsSaving(false);
+        }}
+        onSave={handleSaveClick}
+        loading={createMutation.isPending || updateMutation.isPending}
+        className="
+          [&_input]:focus:ring-2 [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] 
+          [&_textarea]:focus:ring-2 [&_textarea]:focus:ring-[#8CC63F] [&_textarea]:focus:border-[#8CC63F] 
+          [&_select]:focus:ring-2 [&_select]:focus:ring-[#8CC63F] [&_select]:focus:border-[#8CC63F]
+          [&_.react-select__control]:border-gray-300 [&_.react-select__control]:hover:border-[#8CC63F]
+          [&_.react-select__control--is-focused]:border-[#8CC63F] [&_.react-select__control--is-focused]:shadow-[0_0_0_1px_#8CC63F] 
+          [&_.react-select__option--is-focused]:bg-green-50 [&_.react-select__option--is-selected]:bg-[#8CC63F]
+          [&_.react-select__multi-value]:bg-green-100 [&_.react-select__multi-value__label]:text-green-800
+          [&_.react-select__multi-value__remove]:hover:bg-green-200 [&_.react-select__multi-value__remove]:hover:text-green-900
+          [&_button]:focus:ring-2 [&_button]:focus:ring-[#8CC63F] [&_button]:focus:border-[#8CC63F]
+          [&_.dropdown]:border-gray-300 [&_.dropdown:focus]:border-[#8CC63F] [&_.dropdown:focus]:ring-2 [&_.dropdown:focus]:ring-[#8CC63F]
+          [&_.searchable-select]:border-gray-300 [&_.searchable-select:focus-within]:border-[#8CC63F] [&_.searchable-select:focus-within]:ring-2 [&_.searchable-select:focus-within]:ring-[#8CC63F]
+          [&_.search-input]:focus:border-[#8CC63F] [&_.search-input]:focus:ring-[#8CC63F] [&_.search-input]:focus:outline-none
+          [&_*[role='combobox']]:focus:border-[#8CC63F] [&_*[role='combobox']]:focus:ring-2 [&_*[role='combobox']]:focus:ring-[#8CC63F]
+          [&_*[role='listbox']_*[role='option']:hover]:bg-green-50 
+          [&_*[role='listbox']_*[role='option']:focus]:bg-green-100
+          [&_*[aria-selected='true']]:bg-green-100 [&_*[aria-selected='true']]:text-green-900
+          [&_.selected-item]:bg-[#8CC63F] [&_.selected-item]:text-white
+          [&_div[class*='control']]:border-gray-300 [&_div[class*='control']:focus-within]:border-[#8CC63F] [&_div[class*='control']:focus-within]:shadow-[0_0_0_1px_#8CC63F]
+          [&_div[class*='menu']]:border-gray-200 [&_div[class*='option']:hover]:bg-green-50
+          [&_input[type='search']]:focus:border-[#8CC63F] [&_input[type='search']]:focus:ring-[#8CC63F]
+          [&_input[type='text']]:focus:border-[#8CC63F] [&_input[type='text']]:focus:ring-[#8CC63F]
+        "
+      >
+        <form 
+          id="department-form"
+          onSubmit={handleSubmit} 
+          className="space-y-4"
+          onKeyDown={handleKeyDown}
+        >
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(v) => {
+              setActiveTab(v as any);
+            }}
+          >
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="details" className="relative">
+                Details
+                {tabErrors.details && !editingDepartment && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="assignments" className="relative">
+                Assignments
+                {tabErrors.assignments && !editingDepartment && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="contact" className="relative">
+                Contact
+                {tabErrors.contact && !editingDepartment && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="relative">
+                Settings
+                {tabErrors.settings && !editingDepartment && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4">
+              <FormField
+                id="name"
+                label="Department Name"
+                required
+                error={formErrors.name}
+              >
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Mathematics Department"
+                  leftIcon={<Building2 className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  id="code"
+                  label="Department Code"
+                  error={formErrors.code}
+                  description="Uppercase letters, numbers, and hyphens only"
+                >
+                  <Input
+                    id="code"
+                    value={formData.code || ''}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      code: e.target.value.toUpperCase() || null 
+                    }))}
+                    placeholder="e.g., MATH"
+                    leftIcon={<Hash className="h-4 w-4 text-gray-400" />}
+                    className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  />
+                </FormField>
+
+                <FormField
+                  id="department_type"
+                  label="Department Type"
+                  required
+                  error={formErrors.department_type}
+                >
+                  <Select
+                    id="department_type"
+                    value={formData.department_type}
+                    onChange={(value) => setFormData(prev => ({ 
+                      ...prev, 
+                      department_type: value as Department['department_type']
+                    }))}
+                    options={DEPARTMENT_TYPES.map(t => ({ 
+                      value: t.value, 
+                      label: t.label 
+                    }))}
+                    className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  />
+                </FormField>
+              </div>
+
+              <FormField
+                id="description"
+                label="Description"
+                error={formErrors.description}
+                description="Brief description of the department's purpose and responsibilities"
+              >
+                <Textarea
+                  id="description"
+                  value={formData.description || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    description: e.target.value || null 
+                  }))}
+                  placeholder="Describe the department..."
+                  rows={3}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+
+              <FormField
+                id="parent_department"
+                label="Parent Department"
+                error={formErrors.parent_department_id}
+                description="Select if this is a sub-department"
+              >
+                <Select
+                  id="parent_department"
+                  value={formData.parent_department_id || ''}
+                  onChange={(value) => setFormData(prev => ({ 
+                    ...prev, 
+                    parent_department_id: value || null 
+                  }))}
+                  options={[
+                    { value: '', label: 'No Parent (Top Level)' },
+                    ...parentDepartments.map(d => ({
+                      value: d.id,
+                      label: d.hierarchy_path || d.name
+                    }))
+                  ]}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+            </TabsContent>
+
+            <TabsContent value="assignments" className="space-y-4">
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
+                  School & Branch Assignment
+                </h4>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Assign this department to specific schools and optionally to specific branches
+                </p>
+              </div>
+
+              <FormField
+                id="school_ids"
+                label="Assigned Schools"
+                required
+                error={formErrors.school_ids}
+                description="Select one or more schools where this department operates"
+              >
+                <SearchableMultiSelect
+                  label=""
+                  options={schools.map(s => ({ value: s.id, label: s.name }))}
+                  selectedValues={formData.school_ids}
+                  onChange={(values) => setFormData(prev => ({ 
+                    ...prev, 
+                    school_ids: values,
+                    branch_ids: []
+                  }))}
+                  placeholder="Select schools..."
+                />
+              </FormField>
+
+              {formData.school_ids.length > 0 && branches.length > 0 && (
+                <FormField
+                  id="branch_ids"
+                  label="Assigned Branches (Optional)"
+                  error={formErrors.branch_ids}
+                  description="Leave empty to include all branches in selected schools"
+                >
+                  <SearchableMultiSelect
+                    label=""
+                    options={branches.map(b => ({ value: b.id, label: b.name }))}
+                    selectedValues={formData.branch_ids || []}
+                    onChange={(values) => setFormData(prev => ({ 
+                      ...prev, 
+                      branch_ids: values 
+                    }))}
+                    placeholder="All branches in selected schools"
+                  />
+                </FormField>
+              )}
+            </TabsContent>
+
+            <TabsContent value="contact" className="space-y-4">
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
+                  Contact Information
+                </h4>
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Department head and contact details for inquiries
+                </p>
+              </div>
+
+              <FormField
+                id="head_name"
+                label="Department Head"
+                error={formErrors.head_name}
+                description="Name of the person in charge of this department"
+              >
+                <Input
+                  id="head_name"
+                  value={formData.head_name || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    head_name: e.target.value || null 
+                  }))}
+                  placeholder="Full name"
+                  leftIcon={<Users className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+
+              <FormField
+                id="head_email"
+                label="Head's Email"
+                error={formErrors.head_email}
+                description="Email address of the department head"
+              >
+                <Input
+                  id="head_email"
+                  type="email"
+                  value={formData.head_email || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    head_email: e.target.value || null 
+                  }))}
+                  placeholder="head@example.com"
+                  leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+
+              <FormField
+                id="contact_email"
+                label="Department Email"
+                error={formErrors.contact_email}
+                description="General contact email for the department"
+              >
+                <Input
+                  id="contact_email"
+                  type="email"
+                  value={formData.contact_email || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    contact_email: e.target.value || null 
+                  }))}
+                  placeholder="department@example.com"
+                  leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+
+              <FormField
+                id="contact_phone"
+                label="Contact Phone"
+                error={formErrors.contact_phone}
+                description="Department phone number for inquiries"
+              >
+                <PhoneInput
+                  value={formData.contact_phone || ''}
+                  onChange={(value: string | undefined) => {
+                    const phoneValue = value ? String(value) : '';
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      contact_phone: phoneValue || null 
+                    }));
+                  }}
+                  placeholder="XXXX XXXX"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  className="w-full"
+                  defaultCountry="KW"
+                  international
+                  countryCallingCodeEditable={false}
+                />
+              </FormField>
+            </TabsContent>
+
+            <TabsContent value="settings" className="space-y-4">
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+                  Department Settings
+                </h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  Configure department status and visibility
+                </p>
+              </div>
+
+              <FormField id="status" label="Status">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Department Status
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formData.status === 'active' 
+                        ? 'Department is active and operational' 
+                        : 'Department is inactive and hidden'}
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={formData.status === 'active'}
+                    onChange={(checked) => setFormData(prev => ({ 
+                      ...prev, 
+                      status: checked ? 'active' : 'inactive' 
+                    }))}
+                  />
+                </div>
+              </FormField>
+
+              {editingDepartment && (
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Department Information
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Created</span>
+                      <span className="text-gray-900 dark:text-white">
+                        {new Date(editingDepartment.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {editingDepartment.updated_at && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Last Updated</span>
+                        <span className="text-gray-900 dark:text-white">
+                          {new Date(editingDepartment.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                    {editingDepartment.children_count && editingDepartment.children_count > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Sub-departments</span>
+                        <span className="text-gray-900 dark:text-white">
+                          {editingDepartment.children_count}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </form>
+      </SlideInForm>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={deleteConfirmation.isOpen}
+        title="Delete Department(s)"
+        message={
+          <div className="space-y-2">
+            <p>Are you sure you want to delete {deleteConfirmation.departments.length} department(s)?</p>
+            {deleteConfirmation.departments.length > 0 && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mt-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                      Departments to be deleted:
+                    </p>
+                    <ul className="list-disc list-inside text-yellow-700 dark:text-yellow-300">
+                      {deleteConfirmation.departments.map(dept => (
+                        <li key={dept.id}>
+                          {dept.name}
+                          {dept.children_count && dept.children_count > 0 && (
+                            <span className="text-red-600 dark:text-red-400 ml-1">
+                              (has {dept.children_count} sub-department{dept.children_count > 1 ? 's' : ''})
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              This action cannot be undone.
+            </p>
+          </div>
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmVariant="destructive"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmation({ isOpen: false, departments: [] })}
+      />
     </div>
   );
 }
