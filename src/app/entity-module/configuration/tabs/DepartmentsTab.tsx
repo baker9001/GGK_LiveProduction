@@ -663,6 +663,16 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
 
+  // Auto-expand parent departments when data loads
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      const parentsWithChildren = departments.filter(d => (d.children_count || 0) > 0);
+      const parentIds = new Set(parentsWithChildren.map(d => d.id));
+      console.log('Auto-expanding parent departments:', parentsWithChildren.map(d => d.name));
+      setExpandedDepartments(parentIds);
+    }
+  }, [departments]);
+
   // Tab error tracking
   const [tabErrors, setTabErrors] = useState({
     details: false,
