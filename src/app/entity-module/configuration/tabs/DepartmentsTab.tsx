@@ -1777,43 +1777,63 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Department Hierarchy</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Department Hierarchy
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  ({departments.length} department{departments.length !== 1 ? 's' : ''})
+                </span>
+              </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => setExpandedDepartments(new Set(departments.map(d => d.id)))}
-                  className="text-sm text-[#8CC63F] hover:text-[#7AB635]"
+                  className="text-[#8CC63F] border-[#8CC63F] hover:bg-[#8CC63F]/10"
                 >
                   Expand All
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => setExpandedDepartments(new Set())}
-                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-700"
+                  className="text-gray-600 hover:bg-gray-100"
                 >
                   Collapse All
-                </button>
+                </Button>
               </div>
             </div>
           </div>
-          <div className="p-4">
+          
+          <div className="p-6">
             {hierarchicalDepartments.length > 0 ? (
-              hierarchicalDepartments.map(dept => (
-                <DepartmentNode
-                  key={dept.id}
-                  department={{ ...dept, isExpanded: expandedDepartments.has(dept.id) }}
-                  level={0}
-                  onToggleExpand={toggleDepartmentExpansion}
-                  onEdit={(d) => {
-                    setEditingDepartment(d);
-                    setIsFormOpen(true);
-                  }}
-                  onDelete={(d) => handleDelete([d])}
-                  onDuplicate={handleDuplicate}
-                  onViewDetails={setViewingDepartment}
-                />
-              ))
+              <div className="space-y-2">
+                {hierarchicalDepartments.map(dept => (
+                  <DepartmentCard
+                    key={dept.id}
+                    department={{ ...dept, isExpanded: expandedDepartments.has(dept.id) }}
+                    level={0}
+                    onToggleExpand={toggleDepartmentExpansion}
+                    onEdit={(d) => {
+                      setEditingDepartment(d);
+                      setIsFormOpen(true);
+                    }}
+                    onDelete={(d) => handleDelete([d])}
+                    onDuplicate={handleDuplicate}
+                    onAddChild={handleAddChild}
+                  />
+                ))}
+              </div>
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                No departments found
+              <div className="text-center py-12">
+                <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">
+                  No departments found
+                </p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                  Click "Add Department" to create your first department
+                </p>
               </div>
             )}
           </div>
