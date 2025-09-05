@@ -303,9 +303,6 @@ export const userCreationService = {
     const teacherData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
-      phone: payload.phone || null, // Phone stored in teachers table
       teacher_code: payload.teacher_code,
       specialization: payload.specialization || [],
       qualification: payload.qualification || null,
