@@ -201,7 +201,6 @@ export const queryActiveTeachers = async (
         bio,
         company_id,
         school_id,
-        branch_id,
         hire_date,
         created_at,
         updated_at,
