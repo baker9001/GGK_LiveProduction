@@ -1,15 +1,16 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
- * COMPLETE ENHANCED VERSION: Teachers Tab with Full CRUD Operations
+ * ENHANCED VERSION: Teachers Tab with Tabbed Form & Green Theme
  * 
  * Features Implemented:
- * 1. Complete teacher creation with user account
- * 2. Multi-select departments, grades, and sections
- * 3. Teacher editing with data synchronization
- * 4. Bulk operations (activate/deactivate/delete)
- * 5. Advanced filtering and search
- * 6. Password generation and management
+ * ✅ Tabbed form interface (Basic Info, Professional, Assignment)
+ * ✅ Password generation with copy functionality
+ * ✅ Scope-based filtering for schools/branches
+ * ✅ Green theme (#8CC63F) throughout
+ * ✅ Proper use of shared components
+ * ✅ Tab error indicators
+ * ✅ Form validation per tab
  * 
  * Dependencies:
  *   - @/services/userCreationService
@@ -17,19 +18,18 @@
  *   - @/components/shared/*
  *   - @/contexts/UserContext
  *   - @/lib/supabase
- *   - External: react, @tanstack/react-query, lucide-react
  */
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   Users, Award, Calendar, BookOpen, Clock, Briefcase, 
   Plus, Search, Filter, AlertTriangle, Info, CheckCircle2,
   Loader2, UserCheck, GraduationCap, Edit, Eye, MoreVertical,
   Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw,
   Trash2, UserX, FileText, ChevronDown, X, User, Building2,
-  School, Grid3x3, Layers
+  School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
@@ -42,7 +42,11 @@ import { toast } from '../../../../../components/shared/Toast';
 import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
+import { PhoneInput } from '../../../../../components/shared/PhoneInput';
+import { ToggleSwitch } from '../../../../../components/shared/ToggleSwitch';
 import { userCreationService } from '../../../../../services/userCreationService';
+import { cn } from '../../../../../lib/utils';
 
 // ===== INTERFACES =====
 interface TeacherData {
@@ -66,7 +70,6 @@ interface TeacherData {
   updated_at: string;
   school_name?: string;
   branch_name?: string;
-  // New relationship data
   departments?: { id: string; name: string }[];
   grade_levels?: { id: string; grade_name: string; grade_code: string }[];
   sections?: { id: string; section_name: string; section_code: string; grade_level_id: string }[];
@@ -100,7 +103,7 @@ interface TeacherFormData {
   grade_level_ids?: string[];
   section_ids?: string[];
   
-  // Status
+  // Settings
   is_active?: boolean;
   send_credentials?: boolean;
 }
@@ -143,12 +146,24 @@ const generateTeacherCode = (companyId: string): string => {
 };
 
 const generateSecurePassword = (): string => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  const length = 12;
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const special = '!@#$%^&*';
+  
   let password = '';
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+  password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+  password += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  password += special.charAt(Math.floor(Math.random() * special.length));
+  
+  const allChars = uppercase + lowercase + numbers + special;
+  for (let i = password.length; i < length; i++) {
+    password += allChars.charAt(Math.floor(Math.random() * allChars.length));
   }
-  return password;
+  
+  return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
 const specializationOptions = [
@@ -197,6 +212,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [selectedTeacher, setSelectedTeacher] = useState<TeacherData | null>(null);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
   const [isGeneratingPassword, setIsGeneratingPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Tab management
+  const [activeTab, setActiveTab] = useState<'basic' | 'professional' | 'assignment'>('basic');
+  const [tabErrors, setTabErrors] = useState({
+    basic: false,
+    professional: false,
+    assignment: false
+  });
   
   const [formData, setFormData] = useState<TeacherFormData>({
     name: '',
@@ -258,6 +282,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             qualification,
             experience_years,
             bio,
+            phone,
             company_id,
             school_id,
             branch_id,
@@ -314,24 +339,20 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           return [];
         }
 
-        // Fetch teacher relationships (departments, grades, sections) if junction tables exist
+        // Fetch teacher relationships
         const enrichedTeachers = await Promise.all(
           teachersData.map(async (teacher) => {
-            // These queries will fail gracefully if tables don't exist yet
             try {
-              // Fetch departments
               const { data: deptData } = await supabase
                 .from('teacher_departments')
                 .select('department_id, departments(id, name)')
                 .eq('teacher_id', teacher.id);
               
-              // Fetch grade levels
               const { data: gradeData } = await supabase
                 .from('teacher_grade_levels')
                 .select('grade_level_id, grade_levels(id, grade_name, grade_code)')
                 .eq('teacher_id', teacher.id);
               
-              // Fetch sections
               const { data: sectionData } = await supabase
                 .from('teacher_sections')
                 .select('section_id, class_sections(id, section_name, section_code, grade_level_id)')
@@ -352,7 +373,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 user_data: teacher.users
               };
             } catch (err) {
-              // If junction tables don't exist, return teacher without relationships
               return {
                 ...teacher,
                 name: teacher.users?.raw_user_meta_data?.name || 
@@ -388,7 +408,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
-  // Fetch available schools
+  // Fetch available schools (filtered by scope)
   const { data: availableSchools = [] } = useQuery(
     ['schools-for-teachers', companyId, scopeFilters],
     async () => {
@@ -400,6 +420,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           .eq('status', 'active')
           .order('name');
 
+        // Apply scope filtering
         if (!canAccessAll && scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
           schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
         }
@@ -423,18 +444,25 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
-  // Fetch branches for selected school
+  // Fetch branches for selected school (filtered by scope)
   const { data: availableBranches = [] } = useQuery(
-    ['branches-for-school', formData.school_id],
+    ['branches-for-school', formData.school_id, scopeFilters],
     async () => {
       if (!formData.school_id) return [];
       
-      const { data, error } = await supabase
+      let branchesQuery = supabase
         .from('branches')
         .select('id, name, status')
         .eq('school_id', formData.school_id)
         .eq('status', 'active')
         .order('name');
+      
+      // Apply scope filtering
+      if (!canAccessAll && scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+        branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
+      }
+      
+      const { data, error } = await branchesQuery;
       
       if (error) {
         console.error('Branches query error:', error);
@@ -534,7 +562,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== MUTATIONS =====
   const createTeacherMutation = useMutation(
     async (data: TeacherFormData) => {
-      // Create user and teacher using userCreationService
       const result = await userCreationService.createUser({
         user_type: 'teacher',
         email: data.email,
@@ -553,10 +580,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         is_active: data.is_active
       });
       
-      // Create relationships if junction tables exist
       if (result.entityId) {
         try {
-          // Add department assignments
           if (data.department_ids && data.department_ids.length > 0) {
             await supabase.from('teacher_departments').insert(
               data.department_ids.map(dept_id => ({
@@ -566,7 +591,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             );
           }
 
-          // Add grade level assignments
           if (data.grade_level_ids && data.grade_level_ids.length > 0) {
             await supabase.from('teacher_grade_levels').insert(
               data.grade_level_ids.map(grade_id => ({
@@ -576,7 +600,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             );
           }
 
-          // Add section assignments
           if (data.section_ids && data.section_ids.length > 0) {
             await supabase.from('teacher_sections').insert(
               data.section_ids.map(section_id => ({
@@ -608,7 +631,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
   const updateTeacherMutation = useMutation(
     async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
-      // Update teacher profile
       const { error: teacherError } = await supabase
         .from('teachers')
         .update({
@@ -625,7 +647,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       if (teacherError) throw teacherError;
       
-      // Update user metadata if name changed
       if (data.name) {
         const teacher = teachers.find(t => t.id === teacherId);
         if (teacher) {
@@ -643,9 +664,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }
       }
       
-      // Update relationships if junction tables exist
       try {
-        // Update departments
         if (data.department_ids !== undefined) {
           await supabase.from('teacher_departments').delete().eq('teacher_id', teacherId);
           if (data.department_ids.length > 0) {
@@ -658,7 +677,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           }
         }
 
-        // Update grade levels
         if (data.grade_level_ids !== undefined) {
           await supabase.from('teacher_grade_levels').delete().eq('teacher_id', teacherId);
           if (data.grade_level_ids.length > 0) {
@@ -671,7 +689,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           }
         }
 
-        // Update sections
         if (data.section_ids !== undefined) {
           await supabase.from('teacher_sections').delete().eq('teacher_id', teacherId);
           if (data.section_ids.length > 0) {
@@ -705,11 +722,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
   const deleteTeacherMutation = useMutation(
     async (teacherIds: string[]) => {
-      // Get user IDs for the teachers
       const teachersToDelete = teachers.filter(t => teacherIds.includes(t.id));
       const userIds = teachersToDelete.map(t => t.user_id);
       
-      // Delete from teachers table (cascade will handle related data)
       const { error: teacherError } = await supabase
         .from('teachers')
         .delete()
@@ -717,7 +732,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       if (teacherError) throw teacherError;
       
-      // Delete from users table
       const { error: userError } = await supabase
         .from('users')
         .delete()
@@ -746,7 +760,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       const teachersToUpdate = teachers.filter(t => teacherIds.includes(t.id));
       const userIds = teachersToUpdate.map(t => t.user_id);
       
-      // Update user status
       const { error } = await supabase
         .from('users')
         .update({ is_active: activate })
@@ -791,33 +804,68 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       send_credentials: true
     });
     setFormErrors({});
+    setTabErrors({
+      basic: false,
+      professional: false,
+      assignment: false
+    });
+    setActiveTab('basic');
     setSelectedTeacher(null);
+    setShowPassword(false);
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): boolean => {
     const errors: Record<string, string> = {};
+    const newTabErrors = {
+      basic: false,
+      professional: false,
+      assignment: false
+    };
     
+    // Basic tab validation
     if (!formData.name.trim()) {
       errors.name = 'Name is required';
+      newTabErrors.basic = true;
     }
     
     if (!formData.email.trim()) {
       errors.email = 'Email is required';
+      newTabErrors.basic = true;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errors.email = 'Invalid email format';
+      newTabErrors.basic = true;
     }
     
     if (!formData.teacher_code.trim()) {
       errors.teacher_code = 'Teacher code is required';
+      newTabErrors.basic = true;
     }
     
     if (!showEditForm && !formData.password) {
       errors.password = 'Password is required';
+      newTabErrors.basic = true;
+    }
+    
+    // Assignment tab validation
+    if (!formData.school_id) {
+      errors.school_id = 'School is required';
+      newTabErrors.assignment = true;
     }
     
     setFormErrors(errors);
+    setTabErrors(newTabErrors);
+    
+    // Switch to first tab with errors
+    if (newTabErrors.basic) {
+      setActiveTab('basic');
+    } else if (newTabErrors.professional) {
+      setActiveTab('professional');
+    } else if (newTabErrors.assignment) {
+      setActiveTab('assignment');
+    }
+    
     return Object.keys(errors).length === 0;
-  };
+  }, [formData, showEditForm]);
 
   // ===== EVENT HANDLERS =====
   const handleCreateTeacher = () => {
@@ -850,6 +898,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       send_credentials: false
     });
     setShowEditForm(true);
+    setActiveTab('basic');
   };
 
   const handleViewTeacher = (teacher: TeacherData) => {
@@ -900,7 +949,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       setFormData({ ...formData, password: newPassword });
       setIsGeneratingPassword(false);
       toast.success('New password generated');
-    }, 500);
+    }, 300);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -949,7 +998,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   if (isAccessControlLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
         <span className="ml-2 text-gray-600 dark:text-gray-400">
           Checking permissions...
         </span>
@@ -999,13 +1048,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       {/* Header Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         
-        {/* Summary Statistics */}
+        {/* Summary Statistics with Green Theme */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+          <div className="text-center p-4 bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 rounded-lg">
+            <div className="text-2xl font-bold text-[#8CC63F]">
               {summaryStats.total}
             </div>
-            <div className="text-sm text-blue-700 dark:text-blue-300">Total</div>
+            <div className="text-sm text-green-700 dark:text-green-300">Total</div>
           </div>
           <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -1042,7 +1091,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search teachers by name, email, or code..."
-                className="pl-10"
+                className="pl-10 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </div>
           </div>
@@ -1056,7 +1105,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   { value: 'all', label: 'All Schools' },
                   ...availableSchools.map(s => ({ value: s.id, label: s.name }))
                 ]}
-                className="w-48"
+                className="w-48 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             )}
             
@@ -1068,11 +1117,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 { value: 'active', label: 'Active' },
                 { value: 'inactive', label: 'Inactive' }
               ]}
-              className="w-32"
+              className="w-32 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
             />
 
             {canCreateTeacher && (
-              <Button onClick={handleCreateTeacher}>
+              <Button 
+                onClick={handleCreateTeacher}
+                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Teacher
               </Button>
@@ -1094,6 +1146,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       size="sm" 
                       variant="outline"
                       onClick={() => handleBulkAction('activate')}
+                      className="border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F]/10"
                     >
                       <UserCheck className="w-4 h-4 mr-1" />
                       Activate
@@ -1126,7 +1179,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         {/* Teachers Table */}
         {isLoadingTeachers ? (
           <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
             <span className="ml-2 text-gray-600 dark:text-gray-400">Loading teachers...</span>
           </div>
         ) : filteredTeachers.length === 0 ? (
@@ -1139,7 +1192,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 : "No teachers match your filters."}
             </p>
             {canCreateTeacher && teachers.length === 0 && (
-              <Button onClick={handleCreateTeacher}>
+              <Button 
+                onClick={handleCreateTeacher}
+                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Teacher
               </Button>
@@ -1164,7 +1220,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           setSelectedTeachers([]);
                         }
                       }}
-                      className="rounded border-gray-300 dark:border-gray-600"
+                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
                     />
                   </th>
                   <th className="text-left p-3 font-medium">Teacher</th>
@@ -1193,13 +1249,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             setSelectedTeachers(selectedTeachers.filter(id => id !== teacher.id));
                           }
                         }}
-                        className="rounded border-gray-300 dark:border-gray-600"
+                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
                       />
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                          <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <div className="w-8 h-8 bg-[#8CC63F]/20 rounded-full flex items-center justify-center">
+                          <GraduationCap className="w-4 h-4 text-[#8CC63F]" />
                         </div>
                         <div>
                           <div className="font-medium text-gray-900 dark:text-white">
@@ -1284,6 +1340,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           variant="outline"
                           onClick={() => handleViewTeacher(teacher)}
                           title="View Details"
+                          className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -1293,6 +1350,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             variant="outline"
                             onClick={() => handleEditTeacher(teacher)}
                             title="Edit"
+                            className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -1307,7 +1365,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         )}
       </div>
 
-      {/* Create/Edit Teacher Form Modal */}
+      {/* Create/Edit Teacher Form Modal with Tabs and Green Theme */}
       <SlideInForm
         title={showEditForm ? 'Edit Teacher' : 'Create New Teacher'}
         isOpen={showCreateForm || showEditForm}
@@ -1318,21 +1376,64 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }}
         onSave={handleSubmitForm}
         loading={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
+        className="
+          [&_input]:focus:ring-2 [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] 
+          [&_textarea]:focus:ring-2 [&_textarea]:focus:ring-[#8CC63F] [&_textarea]:focus:border-[#8CC63F] 
+          [&_select]:focus:ring-2 [&_select]:focus:ring-[#8CC63F] [&_select]:focus:border-[#8CC63F]
+        "
       >
-        <div className="space-y-6">
-          {/* Basic Information Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <User className="w-5 h-5 mr-2" />
-              Basic Information
-            </h3>
-            
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger 
+              value="basic" 
+              className="relative data-[state=active]:bg-[#8CC63F]/10 data-[state=active]:text-[#8CC63F]"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Basic Info
+              {tabErrors.basic && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="professional" 
+              className="relative data-[state=active]:bg-[#8CC63F]/10 data-[state=active]:text-[#8CC63F]"
+            >
+              <Briefcase className="w-4 h-4 mr-2" />
+              Professional
+              {tabErrors.professional && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="assignment" 
+              className="relative data-[state=active]:bg-[#8CC63F]/10 data-[state=active]:text-[#8CC63F]"
+            >
+              <School className="w-4 h-4 mr-2" />
+              Assignment
+              {tabErrors.assignment && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="basic" className="space-y-4">
+            <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
+              <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
+                Basic Information
+              </h4>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Teacher's personal details and login credentials
+              </p>
+            </div>
+
             <FormField id="name" label="Full Name" required error={formErrors.name}>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter teacher's full name"
+                leftIcon={<User className="h-4 w-4 text-gray-400" />}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
@@ -1344,16 +1445,20 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="teacher@school.com"
                 disabled={showEditForm}
+                leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
             <FormField id="phone" label="Phone Number">
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+1234567890"
+              <PhoneInput
+                value={formData.phone || ''}
+                onChange={(value) => setFormData({ ...formData, phone: value || '' })}
+                placeholder="Enter phone number"
+                defaultCountry="KW"
+                international
+                countryCallingCodeEditable={false}
+                className="w-full"
               />
             </FormField>
 
@@ -1365,12 +1470,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   onChange={(e) => setFormData({ ...formData, teacher_code: e.target.value })}
                   placeholder="TCH-XXX-XXX"
                   disabled={showEditForm}
+                  leftIcon={<Hash className="h-4 w-4 text-gray-400" />}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
                 {!showEditForm && (
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setFormData({ ...formData, teacher_code: generateTeacherCode(companyId) })}
+                    className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </Button>
@@ -1381,19 +1489,34 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {!showEditForm && (
               <FormField id="password" label="Password" required error={formErrors.password}>
                 <div className="flex gap-2">
-                  <Input
-                    id="password"
-                    type="text"
-                    value={formData.password || ''}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Enter password"
-                    className="font-mono"
-                  />
+                  <div className="relative flex-1">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password || ''}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Enter password"
+                      className="font-mono pr-10 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <EyeIcon className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={generateNewPassword}
                     disabled={isGeneratingPassword}
+                    className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
+                    title="Generate Password"
                   >
                     {isGeneratingPassword ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1406,33 +1529,53 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     variant="outline"
                     onClick={() => copyToClipboard(formData.password || '', 'Password')}
                     disabled={!formData.password}
+                    className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
+                    title="Copy Password"
                   >
                     <Copy className="w-4 h-4" />
                   </Button>
                 </div>
+                {formData.password && (
+                  <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                      Password Strength: {formData.password.length >= 12 ? 'Strong' : formData.password.length >= 8 ? 'Medium' : 'Weak'}
+                    </p>
+                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className={cn(
+                          "h-full transition-all",
+                          formData.password.length >= 12 ? 'bg-green-500 w-full' :
+                          formData.password.length >= 8 ? 'bg-yellow-500 w-2/3' :
+                          'bg-red-500 w-1/3'
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
               </FormField>
             )}
-          </div>
+          </TabsContent>
 
-          {/* Professional Information Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <Briefcase className="w-5 h-5 mr-2" />
-              Professional Information
-            </h3>
+          <TabsContent value="professional" className="space-y-4">
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg mb-4">
+              <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-1">
+                Professional Information
+              </h4>
+              <p className="text-sm text-purple-700 dark:text-purple-300">
+                Teacher's qualifications and experience
+              </p>
+            </div>
 
             <FormField id="specialization" label="Specialization/Subjects">
               <SearchableMultiSelect
-                options={specializationOptions.map(s => ({ id: s, name: s }))}
-                value={formData.specialization || []}
+                options={specializationOptions.map(s => ({ value: s, label: s }))}
+                selectedValues={formData.specialization || []}
                 onChange={(values) => setFormData({ ...formData, specialization: values })}
                 placeholder="Select subjects"
-                labelKey="name"
-                valueKey="id"
               />
             </FormField>
 
-            <FormField id="qualification" label="Qualification">
+            <FormField id="qualification" label="Highest Qualification">
               <Select
                 id="qualification"
                 value={formData.qualification}
@@ -1441,6 +1584,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   { value: '', label: 'Select qualification' },
                   ...qualificationOptions.map(q => ({ value: q, label: q }))
                 ]}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
@@ -1451,6 +1595,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 min="0"
                 value={formData.experience_years}
                 onChange={(e) => setFormData({ ...formData, experience_years: parseInt(e.target.value) || 0 })}
+                leftIcon={<Clock className="h-4 w-4 text-gray-400" />}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
@@ -1460,6 +1606,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 type="date"
                 value={formData.hire_date}
                 onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                leftIcon={<Calendar className="h-4 w-4 text-gray-400" />}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
@@ -1468,20 +1616,24 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 id="bio"
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                placeholder="Brief description..."
+                placeholder="Brief description about the teacher..."
                 rows={3}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
-          </div>
+          </TabsContent>
 
-          {/* Assignment Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <School className="w-5 h-5 mr-2" />
-              School Assignment
-            </h3>
+          <TabsContent value="assignment" className="space-y-4">
+            <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
+              <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
+                School Assignment
+              </h4>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Assign teacher to schools, branches, and classes
+              </p>
+            </div>
 
-            <FormField id="school_id" label="School">
+            <FormField id="school_id" label="School" required error={formErrors.school_id}>
               <Select
                 id="school_id"
                 value={formData.school_id}
@@ -1496,85 +1648,106 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   { value: '', label: 'Select school' },
                   ...availableSchools.map(s => ({ value: s.id, label: s.name }))
                 ]}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
               />
             </FormField>
 
+            {formData.school_id && availableBranches.length > 0 && (
+              <FormField id="branch_id" label="Branch">
+                <Select
+                  id="branch_id"
+                  value={formData.branch_id}
+                  onChange={(value) => setFormData({ 
+                    ...formData, 
+                    branch_id: value,
+                    grade_level_ids: [],
+                    section_ids: []
+                  })}
+                  options={[
+                    { value: '', label: 'Select branch (optional)' },
+                    ...availableBranches.map(b => ({ value: b.id, label: b.name }))
+                  ]}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                />
+              </FormField>
+            )}
+
             {formData.school_id && (
               <>
-                <FormField id="branch_id" label="Branch">
-                  <Select
-                    id="branch_id"
-                    value={formData.branch_id}
-                    onChange={(value) => setFormData({ 
-                      ...formData, 
-                      branch_id: value,
-                      grade_level_ids: [],
-                      section_ids: []
-                    })}
-                    options={[
-                      { value: '', label: 'Select branch (optional)' },
-                      ...availableBranches.map(b => ({ value: b.id, label: b.name }))
-                    ]}
-                  />
-                </FormField>
-
                 <FormField id="department_ids" label="Departments">
                   <SearchableMultiSelect
-                    options={availableDepartments}
-                    value={formData.department_ids || []}
+                    options={availableDepartments.map(d => ({ value: d.id, label: d.name }))}
+                    selectedValues={formData.department_ids || []}
                     onChange={(values) => setFormData({ ...formData, department_ids: values })}
                     placeholder="Select departments"
-                    labelKey="name"
-                    valueKey="id"
                   />
                 </FormField>
 
                 <FormField id="grade_level_ids" label="Grade Levels">
                   <SearchableMultiSelect
-                    options={availableGradeLevels}
-                    value={formData.grade_level_ids || []}
+                    options={availableGradeLevels.map(g => ({ value: g.id, label: `${g.grade_name} (${g.grade_code})` }))}
+                    selectedValues={formData.grade_level_ids || []}
                     onChange={(values) => setFormData({ 
                       ...formData, 
                       grade_level_ids: values,
                       section_ids: []
                     })}
                     placeholder="Select grade levels"
-                    labelKey="grade_name"
-                    valueKey="id"
                   />
                 </FormField>
 
                 {formData.grade_level_ids && formData.grade_level_ids.length > 0 && (
                   <FormField id="section_ids" label="Sections">
                     <SearchableMultiSelect
-                      options={availableSections}
-                      value={formData.section_ids || []}
+                      options={availableSections.map(s => ({ value: s.id, label: `${s.section_name} (${s.section_code})` }))}
+                      selectedValues={formData.section_ids || []}
                       onChange={(values) => setFormData({ ...formData, section_ids: values })}
                       placeholder="Select sections"
-                      labelKey="section_name"
-                      valueKey="id"
                     />
                   </FormField>
                 )}
               </>
             )}
 
-            <FormField id="is_active" label="Status">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor="is_active" className="text-sm text-gray-700 dark:text-gray-300">
-                  Active (Teacher can login)
-                </label>
-              </div>
-            </FormField>
-          </div>
-        </div>
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <FormField id="is_active" label="Account Status">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Active Account
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formData.is_active 
+                        ? 'Teacher can log in to the system' 
+                        : 'Teacher cannot access the system'}
+                    </p>
+                  </div>
+                  <ToggleSwitch
+                    checked={formData.is_active ?? true}
+                    onChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                  />
+                </div>
+              </FormField>
+
+              {!showEditForm && (
+                <FormField id="send_credentials" label="Send Credentials">
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <input
+                      type="checkbox"
+                      id="send_credentials"
+                      checked={formData.send_credentials}
+                      onChange={(e) => setFormData({ ...formData, send_credentials: e.target.checked })}
+                      className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
+                    />
+                    <label htmlFor="send_credentials" className="text-sm text-gray-700 dark:text-gray-300">
+                      Send login credentials to teacher's email
+                    </label>
+                  </div>
+                </FormField>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </SlideInForm>
 
       {/* Delete Confirmation Dialog */}
