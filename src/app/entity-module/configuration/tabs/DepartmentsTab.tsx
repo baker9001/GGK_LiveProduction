@@ -340,6 +340,245 @@ const DepartmentNode = ({
   );
 };
 
+// Hierarchical Table Row Component for nested display in table view
+const DepartmentTableRow = ({
+  department,
+  level = 0,
+  onToggleExpand,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onViewDetails
+}: {
+  department: Department;
+  level?: number;
+  onToggleExpand: (deptId: string) => void;
+  onEdit: (dept: Department) => void;
+  onDelete: (dept: Department) => void;
+  onDuplicate: (dept: Department) => void;
+  onViewDetails: (dept: Department) => void;
+}) => {
+  const hasChildren = department.children && department.children.length > 0;
+  const typeConfig = DEPARTMENT_TYPES.find(t => t.value === department.department_type);
+  const Icon = typeConfig?.icon || Building2;
+  const DeptLevelIcon = department.department_level === 'company' ? Building :
+                         department.department_level === 'school' ? School : 
+                         department.department_level === 'branch' ? MapPin : Building2;
+  
+  return (
+    <>
+      <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+        {/* Department Name Cell with Expand/Collapse */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 2}rem` }}>
+            <button
+              onClick={() => onToggleExpand(department.id)}
+              className={cn(
+                "p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors",
+                !hasChildren && "invisible"
+              )}
+              type="button"
+            >
+              {department.isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-gray-500" />
+              )}
+            </button>
+            
+            <div className={cn(
+              "p-1.5 rounded-lg",
+              department.department_type === 'academic' ? 'bg-green-100 dark:bg-green-900/30' :
+              department.department_type === 'administrative' ? 'bg-purple-100 dark:bg-purple-900/30' :
+              department.department_type === 'support' ? 'bg-green-100 dark:bg-green-900/30' :
+              department.department_type === 'operations' ? 'bg-orange-100 dark:bg-orange-900/30' :
+              'bg-gray-100 dark:bg-gray-900/30'
+            )}>
+              <Icon className={cn(
+                "h-4 w-4",
+                department.department_type === 'academic' ? 'text-green-600 dark:text-green-400' :
+                department.department_type === 'administrative' ? 'text-purple-600 dark:text-purple-400' :
+                department.department_type === 'support' ? 'text-green-600 dark:text-green-400' :
+                department.department_type === 'operations' ? 'text-orange-600 dark:text-orange-400' :
+                'text-gray-600 dark:text-gray-400'
+              )} />
+            </div>
+            
+            <DeptLevelIcon className={cn(
+              "h-4 w-4",
+              department.department_level === 'company' ? 'text-purple-500' :
+              department.department_level === 'school' ? 'text-green-500' :
+              department.department_level === 'branch' ? 'text-green-500' :
+              'text-gray-500'
+            )} />
+            
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white">
+                {department.name}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {department.code && (
+                  <div className="flex items-center gap-1">
+                    <Hash className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {department.code}
+                    </span>
+                  </div>
+                )}
+                {level > 0 && department.parent_department && (
+                  <div className="flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      Under {department.parent_department.name}
+                    </span>
+                  </div>
+                )}
+                {hasChildren && (
+                  <span className="text-xs text-green-600 dark:text-green-400">
+                    {department.children?.length} sub-dept{department.children?.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </td>
+        
+        {/* Type Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <span className={cn(
+            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
+            department.department_type === 'academic' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+            department.department_type === 'administrative' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
+            department.department_type === 'support' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+            department.department_type === 'operations' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' :
+            'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+          )}>
+            {typeConfig?.label || department.department_type}
+          </span>
+        </td>
+        
+        {/* Schools Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="flex flex-wrap gap-1">
+            {department.school_names?.slice(0, 2).map((name, idx) => (
+              <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
+                <School className="h-3 w-3" />
+                {name}
+              </span>
+            ))}
+            {department.school_names && department.school_names.length > 2 && (
+              <span className="text-xs text-gray-500">
+                +{department.school_names.length - 2} more
+              </span>
+            )}
+            {(!department.school_names || department.school_names.length === 0) && (
+              <span className="text-xs text-gray-400">All schools</span>
+            )}
+          </div>
+        </td>
+        
+        {/* Branches Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="flex flex-wrap gap-1">
+            {department.branch_names && department.branch_names.length > 0 ? (
+              <>
+                {department.branch_names.slice(0, 1).map((name, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
+                    <MapPin className="h-3 w-3" />
+                    {name}
+                  </span>
+                ))}
+                {department.branch_names.length > 1 && (
+                  <span className="text-xs text-gray-500">
+                    +{department.branch_names.length - 1} more
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">All branches</span>
+            )}
+          </div>
+        </td>
+        
+        {/* Department Head Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="text-sm">
+            {department.head_name ? (
+              <div>
+                <div className="font-medium text-gray-900 dark:text-white">
+                  {department.head_name}
+                </div>
+                {department.head_email && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {department.head_email}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-400">Not assigned</span>
+            )}
+          </div>
+        </td>
+        
+        {/* Contact Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="space-y-1">
+            {department.contact_email && (
+              <div className="flex items-center gap-1 text-sm">
+                <Mail className="h-3 w-3 text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">
+                  {department.contact_email}
+                </span>
+              </div>
+            )}
+            {department.contact_phone && (
+              <div className="flex items-center gap-1 text-sm">
+                <Phone className="h-3 w-3 text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">
+                  {department.contact_phone}
+                </span>
+              </div>
+            )}
+            {!department.contact_email && !department.contact_phone && (
+              <span className="text-sm text-gray-400">-</span>
+            )}
+          </div>
+        </td>
+        
+        {/* Status Cell */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <StatusBadge status={department.status} />
+        </td>
+        
+        {/* Actions Cell */}
+        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+          <QuickActionsMenu
+            department={department}
+            onEdit={() => onEdit(department)}
+            onDelete={() => onDelete(department)}
+            onDuplicate={() => onDuplicate(department)}
+            onViewDetails={() => onViewDetails(department)}
+          />
+        </td>
+      </tr>
+      
+      {/* Render Children Rows */}
+      {hasChildren && department.isExpanded && department.children?.map(child => (
+        <DepartmentTableRow
+          key={child.id}
+          department={child}
+          level={level + 1}
+          onToggleExpand={onToggleExpand}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onViewDetails={onViewDetails}
+        />
+      ))}
+    </>
+  );
+};
+
 // Quick actions menu component
 const QuickActionsMenu = ({ 
   department, 
@@ -1922,6 +2161,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
         }}
         onSave={handleSaveClick}
         loading={createMutation.isPending || updateMutation.isPending}
+        className="[&_input:focus]:ring-2 [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_textarea:focus]:ring-2 [&_textarea:focus]:ring-[#8CC63F] [&_textarea:focus]:border-[#8CC63F] [&_select:focus]:ring-2 [&_select:focus]:ring-[#8CC63F] [&_select:focus]:border-[#8CC63F] [&_.react-select__control--is-focused]:border-[#8CC63F] [&_.react-select__control--is-focused]:shadow-[0_0_0_1px_#8CC63F] [&_button:focus]:ring-2 [&_button:focus]:ring-[#8CC63F] [&_button:focus]:border-[#8CC63F]"
       >
         <form 
           id="department-form"
