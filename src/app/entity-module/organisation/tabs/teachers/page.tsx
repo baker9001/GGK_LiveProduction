@@ -379,6 +379,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       teacher.users?.email?.split('@')[0] || 
                       'Unknown Teacher',
                 email: teacher.users?.email || '',
+                phone: teacher.phone || teacher.users?.raw_user_meta_data?.phone || '',
                 is_active: teacher.users?.is_active ?? false,
                 school_name: teacher.schools?.name || 'No School Assigned',
                 branch_name: teacher.branches?.name || 'No Branch Assigned',
