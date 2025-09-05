@@ -28,7 +28,7 @@ import {
   Users, Award, Calendar, BookOpen, Clock, Briefcase, 
   Plus, Search, Filter, AlertTriangle, Info, CheckCircle2,
   Loader2, UserCheck, GraduationCap, Edit, Eye, MoreVertical,
-  Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw,
+  MapPin, Phone, Mail, Home, Edit, Eye, MoreVertical, User
   Trash2, UserX, FileText, ChevronDown, X
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
