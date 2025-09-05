@@ -1707,3 +1707,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     </div>
   );
 }
+          )
+      }
+    }
+  )
+}
