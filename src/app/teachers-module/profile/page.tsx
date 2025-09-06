@@ -227,10 +227,10 @@ export default function TeacherProfilePage() {
             last_login_at,
             raw_user_meta_data
           ),
-          companies (
-            name
-          ),
-          schools (
+          companies!fk_teachers_company_id(name),
+          schools!teachers_school_id_fkey(name),
+          branches!teachers_branch_id_fkey(name),
+          departments!teachers_department_id_fkey(name)
             name
           ),
           branches (
