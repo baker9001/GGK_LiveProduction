@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Shield, Eye } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shared/Tabs';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { toast } from 'react-hot-toast';
 import { adminService } from './services/adminService';
@@ -66,7 +67,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
   }, [isAccessControlLoading, canViewTab]);
 
   // State management
-  const [viewMode, setViewMode] = useState<'list' | 'hierarchy' | 'audit'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'hierarchy' | 'audit'>('list');
   const [showCreateAdminModal, setShowCreateAdminModal] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<EntityUser | null>(null);
   const [selectedAdminForDetails, setSelectedAdminForDetails] = useState<EntityUser | null>(null);
@@ -119,7 +120,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       }
     },
     {
-      enabled: !!companyId && viewMode === 'hierarchy',
+      enabled: !!companyId && activeTab === 'hierarchy',
       staleTime: 2 * 60 * 1000,
     }
   );
@@ -249,16 +250,16 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
   }, []);
   
   // Handle view mode change
-  const handleViewModeChange = React.useCallback((newMode: 'list' | 'hierarchy' | 'audit') => {
+  const handleTabChange = React.useCallback((newTab: 'list' | 'hierarchy' | 'audit') => {
     try {
-      if (!['list', 'hierarchy', 'audit'].includes(newMode)) {
-        console.error('Invalid view mode:', newMode);
+      if (!['list', 'hierarchy', 'audit'].includes(newTab)) {
+        console.error('Invalid tab:', newTab);
         return;
       }
-      setViewMode(newMode);
+      setActiveTab(newTab);
     } catch (error) {
-      console.error('Error changing view mode:', error);
-      toast.error('Failed to change view mode');
+      console.error('Error changing tab:', error);
+      toast.error('Failed to change tab');
     }
   }, []);
   
@@ -314,9 +315,8 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         {canCreateAdmin && (
           <Button
             onClick={handleCreateAdmin}
-            className="flex items-center gap-2"
+            leftIcon={<Plus className="h-4 w-4" />}
           >
-            <Plus className="h-4 w-4" />
             Create Admin
           </Button>
         )}
@@ -333,59 +333,56 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         </div>
       )}
 
-      {/* View Mode Toggles */}
-      <div className="flex space-x-3 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <Button
-          variant={viewMode === 'list' ? 'default' : 'ghost'}
-          onClick={() => handleViewModeChange('list')}
-          className="flex-1 flex items-center justify-center gap-2"
-        >
-          <Users className="h-4 w-4" />
-          List View
-        </Button>
-        <Button
-          variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
-          onClick={() => handleViewModeChange('hierarchy')}
-          className="flex-1 flex items-center justify-center gap-2"
-        >
-          <Shield className="h-4 w-4" />
-          Hierarchy View
-        </Button>
+      {/* View Mode Tabs */}
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="list">
+            <Users className="h-4 w-4 mr-2" />
+            List View
+          </TabsTrigger>
+          <TabsTrigger value="hierarchy">
+            <Shield className="h-4 w-4 mr-2" />
+            Hierarchy View
+          </TabsTrigger>
+          {canViewAuditLogs && (
+            <TabsTrigger value="audit">
+              <Eye className="h-4 w-4 mr-2" />
+              Audit Logs
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="list">
+          {companyId && (
+            <AdminListTable
+              companyId={companyId}
+              onCreateAdmin={handleCreateAdmin}
+              onEditAdmin={handleEditAdmin}
+              onViewDetails={handleViewAdminDetails}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="hierarchy">
+          {companyId && (
+            <AdminHierarchyTree
+              admins={Array.isArray(admins) ? admins : []}
+              companyId={companyId}
+              onNodeClick={handleViewAdminDetails}
+            />
+          )}
+        </TabsContent>
+        
         {canViewAuditLogs && (
-          <Button
-            variant={viewMode === 'audit' ? 'default' : 'ghost'}
-            onClick={() => handleViewModeChange('audit')}
-            className="flex-1 flex items-center justify-center gap-2"
-          >
-            <Eye className="h-4 w-4" />
-            Audit Logs
-          </Button>
+          <TabsContent value="audit">
+            {companyId && (
+              <AdminAuditLogsPanel
+                companyId={companyId}
+              />
+            )}
+          </TabsContent>
         )}
-      </div>
-
-      {/* Conditional Rendering of Views */}
-      {viewMode === 'list' && companyId && (
-        <AdminListTable
-          companyId={companyId}
-          onCreateAdmin={handleCreateAdmin}
-          onEditAdmin={handleEditAdmin}
-          onViewDetails={handleViewAdminDetails}
-        />
-      )}
-
-      {viewMode === 'hierarchy' && companyId && (
-        <AdminHierarchyTree
-          admins={Array.isArray(admins) ? admins : []}
-          companyId={companyId}
-          onNodeClick={handleViewAdminDetails}
-        />
-      )}
-      
-      {viewMode === 'audit' && canViewAuditLogs && companyId && (
-        <AdminAuditLogsPanel
-          companyId={companyId}
-        />
-      )}
+      </Tabs>
 
       {/* Admin Creation/Edit Modal - Passing user_id */}
       {companyId && (
