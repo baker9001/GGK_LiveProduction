@@ -143,7 +143,7 @@ export default function EntityLicenseManagementPage() {
       });
     },
     {
-      enabled: !!companyId && !isAccessControlLoading && canViewLicenses,
+      enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
       staleTime: 2 * 60 * 1000,
       retry: (failureCount, error) => {
         if (error.message.includes('permission')) return false;
@@ -164,7 +164,7 @@ export default function EntityLicenseManagementPage() {
       });
     },
     {
-      enabled: !!companyId && !isAccessControlLoading && canViewLicenses,
+      enabled: !!companyId && !isAccessControlLoading && (canViewLicenses || can('view_licenses')),
       staleTime: 5 * 60 * 1000
     }
   );
@@ -304,7 +304,7 @@ export default function EntityLicenseManagementPage() {
   }
 
   // Access denied
-  if (!canViewLicenses) {
+  if (!canViewLicenses && !can('view_licenses')) {
     return (
       <div className="p-6">
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
@@ -315,7 +315,8 @@ export default function EntityLicenseManagementPage() {
                 Access Denied
               </h3>
               <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                You do not have permission to view license management. Please contact your administrator.
+                You do not have permission to view license management. Please contact your administrator. 
+                Current admin level: {userContext?.adminLevel || 'Unknown'}
               </p>
             </div>
           </div>
