@@ -98,7 +98,7 @@ export function useAccessControl(): UseAccessControlResult {
             can_create_admins
           `)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (entityError || !entityUser) {
           console.error('[useAccessControl] Entity user not found:', entityError);
