@@ -248,13 +248,13 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
             <SubjectCard
               title="Mathematics"
-              image="https://images.pexels.com/photos/3768126/pexels-photo-3768126.jpeg"
+              image="https://images.pexels.com/photos/207665/pexels-photo-207665.jpeg"
               description="Master key concepts in algebra, geometry, and calculus"
             />
             <SubjectCard
-              title="Biology"
-              image="https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg"
-              description="Explore life sciences with interactive experiments"
+              title="Chemistry"
+              image="https://images.pexels.com/photos/3862379/pexels-photo-3862379.jpeg"
+              description="Discover chemical reactions and molecular structures"
             />
             <SubjectCard
               title="Physics"
@@ -262,9 +262,19 @@ export default function LandingPage() {
               description="Understand fundamental laws of the universe"
             />
             <SubjectCard
-              title="Physics"
-              image="https://images.pexels.com/photos/356043/pexels-photo-356043.jpeg"
-              description="Understand fundamental laws of the universe"
+              title="Biology"
+              image="https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg"
+              description="Explore life sciences with interactive experiments"
+             />
+            <SubjectCard
+              title="English Literature"
+              image="https://images.pexels.com/photos/2041540/pexels-photo-2041540.jpeg"
+              description="Analyze literary works and develop critical thinking"
+             />
+            <SubjectCard
+              title="Computer Science"
+              image="https://images.pexels.com/photos/574071/pexels-photo-574071.jpeg"
+              description="Learn programming and computational thinking"
             />
           </div>
         </div>
