@@ -784,55 +784,85 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         if (userError) throw userError;
       }
       
-      // Update relationships
+      // Update relationships - Sequential execution to avoid conflicts
       try {
-        const junctionUpdates = [];
-        
+        // Update departments
         if (data.department_ids !== undefined) {
-          junctionUpdates.push(
-            supabase.from('teacher_departments').delete().eq('teacher_id', teacherId),
-            data.department_ids.length > 0 
-              ? supabase.from('teacher_departments').insert(
-                  data.department_ids.map(dept_id => ({
-                    teacher_id: teacherId,
-                    department_id: dept_id
-                  }))
-                )
-              : Promise.resolve()
-          );
+          // First delete all existing department relationships
+          await supabase
+            .from('teacher_departments')
+            .delete()
+            .eq('teacher_id', teacherId);
+          
+          // Then insert new ones if any
+          if (data.department_ids.length > 0) {
+            const { error: deptError } = await supabase
+              .from('teacher_departments')
+              .insert(
+                data.department_ids.map(dept_id => ({
+                  teacher_id: teacherId,
+                  department_id: dept_id
+                }))
+              );
+            
+            if (deptError && deptError.code !== '23505') {
+              console.error('Error inserting departments:', deptError);
+            }
+          }
         }
 
+        // Update grade levels
         if (data.grade_level_ids !== undefined) {
-          junctionUpdates.push(
-            supabase.from('teacher_grade_levels').delete().eq('teacher_id', teacherId),
-            data.grade_level_ids.length > 0 
-              ? supabase.from('teacher_grade_levels').insert(
-                  data.grade_level_ids.map(grade_id => ({
-                    teacher_id: teacherId,
-                    grade_level_id: grade_id
-                  }))
-                )
-              : Promise.resolve()
-          );
+          // First delete all existing grade level relationships
+          await supabase
+            .from('teacher_grade_levels')
+            .delete()
+            .eq('teacher_id', teacherId);
+          
+          // Then insert new ones if any
+          if (data.grade_level_ids.length > 0) {
+            const { error: gradeError } = await supabase
+              .from('teacher_grade_levels')
+              .insert(
+                data.grade_level_ids.map(grade_id => ({
+                  teacher_id: teacherId,
+                  grade_level_id: grade_id
+                }))
+              );
+            
+            if (gradeError && gradeError.code !== '23505') {
+              console.error('Error inserting grade levels:', gradeError);
+            }
+          }
         }
 
+        // Update sections
         if (data.section_ids !== undefined) {
-          junctionUpdates.push(
-            supabase.from('teacher_sections').delete().eq('teacher_id', teacherId),
-            data.section_ids.length > 0 
-              ? supabase.from('teacher_sections').insert(
-                  data.section_ids.map(section_id => ({
-                    teacher_id: teacherId,
-                    section_id: section_id
-                  }))
-                )
-              : Promise.resolve()
-          );
+          // First delete all existing section relationships
+          await supabase
+            .from('teacher_sections')
+            .delete()
+            .eq('teacher_id', teacherId);
+          
+          // Then insert new ones if any
+          if (data.section_ids.length > 0) {
+            const { error: sectionError } = await supabase
+              .from('teacher_sections')
+              .insert(
+                data.section_ids.map(section_id => ({
+                  teacher_id: teacherId,
+                  section_id: section_id
+                }))
+              );
+            
+            if (sectionError && sectionError.code !== '23505') {
+              console.error('Error inserting sections:', sectionError);
+            }
+          }
         }
-        
-        await Promise.all(junctionUpdates);
       } catch (err) {
-        console.warn('Junction tables may not exist yet:', err);
+        console.warn('Error updating teacher relationships:', err);
+        // Don't throw here - relationships might be partially updated but main record is fine
       }
       
       return { success: true, password: passwordGenerated };
