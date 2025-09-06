@@ -3,7 +3,8 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
-import { UserCheck, Users, BookOpen, Calendar, BarChart3 } from 'lucide-react';
+import { Building2, Network, Settings, BarChart3, Users, User, GraduationCap } from 'lucide-react';
+import ProfilePage from './profile/page';
 
 interface TeachersModulePageProps {
   moduleKey?: string;
@@ -15,23 +16,23 @@ function DashboardPage() {
     <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Teachers Module
+          Teachers Dashboard
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Comprehensive teacher management and instructional support system
+          Welcome to your teaching dashboard - manage your classes, students, and professional development
         </p>
       </div>
 
-      {/* Teacher Management System Banner */}
-      <div className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6 mb-8">
+      {/* Teacher Dashboard Card */}
+      <div className="bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB635]/10 dark:from-[#8CC63F]/20 dark:to-[#7AB635]/20 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40 rounded-lg p-6 mb-8">
         <div className="flex items-center">
-          <Users className="h-8 w-8 text-purple-600 dark:text-purple-400 mr-4" />
+          <GraduationCap className="h-8 w-8 text-[#8CC63F] mr-4" />
           <div>
-            <h2 className="text-xl font-semibold text-purple-900 dark:text-purple-100 mb-2">
-              Teacher Management System
+            <h2 className="text-xl font-semibold text-[#5A8A2C] dark:text-[#8CC63F] mb-2">
+              Teacher Portal
             </h2>
-            <p className="text-purple-700 dark:text-purple-300">
-              This module will provide comprehensive teacher management capabilities including staff administration, curriculum management, performance tracking, and professional development tools.
+            <p className="text-[#5A8A2C] dark:text-[#8CC63F]">
+              Access your teaching tools, manage your classes, track student progress, and update your professional profile.
             </p>
           </div>
         </div>
@@ -39,26 +40,26 @@ function DashboardPage() {
 
       {/* Feature Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        {/* My Classes */}
           <div className="flex items-center mb-4">
-            <Users className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
+            <Users className="h-6 w-6 text-[#8CC63F] mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Staff Management
+              My Classes
             </h3>
           </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            View and manage your assigned classes, students, and lesson plans.
             Manage teacher profiles, qualifications, assignments, and administrative records.
-          </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
+            Coming Soon
             Coming Soon
           </div>
         </div>
-
+        {/* Student Progress */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <BookOpen className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
+            <BarChart3 className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Curriculum Management
+              Student Progress
             </h3>
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
@@ -76,26 +77,26 @@ function DashboardPage() {
               Schedule Management
             </h3>
           </div>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Track student performance, assignments, and academic progress.
             Manage teacher schedules, class assignments, and availability tracking.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
             Coming Soon
           </div>
         </div>
-
+        {/* My Profile */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <BarChart3 className="h-6 w-6 text-orange-600 dark:text-orange-400 mr-3" />
+            <User className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Performance Analytics
+              My Profile
             </h3>
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Track teaching effectiveness, student outcomes, and professional development progress.
+            Manage your personal information, qualifications, and professional details.
           </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500">
-            Coming Soon
+          <div className="text-sm text-green-600 dark:text-green-400 font-medium">
+            Available
           </div>
         </div>
       </div>
@@ -186,6 +187,7 @@ export default function TeachersModulePage({ moduleKey }: TeachersModulePageProp
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="staff" element={<StaffManagementPage />} />
         <Route path="curriculum" element={<CurriculumPage />} />
         <Route path="schedule" element={<SchedulePage />} />
