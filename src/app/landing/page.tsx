@@ -87,7 +87,7 @@ const ALL_SUBJECTS = [
   // Sciences & Mathematics
   { 
     title: "Mathematics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU,
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Master algebra, geometry, statistics, and calculus",
     priority: true
