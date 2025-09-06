@@ -1,3 +1,6 @@
+///home/project/src/app/landing/components/TestimonialsSection.tsx
+
+
 import React from 'react';
 import { Star, Quote } from 'lucide-react';
 
