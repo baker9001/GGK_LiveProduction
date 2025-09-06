@@ -32,7 +32,8 @@ import {
   Download,
   RefreshCw,
   Info,
-  Shield
+  Shield,
+  Search
 } from 'lucide-react';
 import { DataTable } from '../../../components/shared/DataTable';
 import { FilterCard } from '../../../components/shared/FilterCard';
