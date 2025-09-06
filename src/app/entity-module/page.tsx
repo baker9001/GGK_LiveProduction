@@ -7,7 +7,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
-import { Building2, Network, Settings, BarChart3, Users, User } from 'lucide-react';
+import { Building2, Key, Settings, BarChart3, Users, User } from 'lucide-react';
 import OrganisationRouter from './organisation'; // Import the router instead of the page directly
 import ConfigurationPage from './configuration/page'; // Import the configuration page
 import ProfilePage from './profile/page'; // Import the profile page
@@ -81,13 +81,13 @@ function DashboardPage() {
         {/* Entity Relationships */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Network className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
+            <Key className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Entity Relationships
+              License Management
             </h3>
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Define and manage relationships between different organizational entities.
+            Manage licenses, allocations, and usage tracking for your organization.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
             Coming Soon
@@ -135,15 +135,15 @@ function RelationshipsPage() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-        Entity Relationships
+        License Management
       </h1>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-        <Network className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+        <Key className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Entity relationship management features are coming soon.
+          License management features are coming soon.
         </p>
         <p className="text-sm text-gray-500 dark:text-gray-500">
-          This feature will allow you to define and manage complex relationships between organizational entities.
+          This feature will allow you to manage licenses, track usage, and handle allocations for your organization.
         </p>
       </div>
     </div>
@@ -178,7 +178,7 @@ export default function EntityModulePage({ moduleKey }: EntityModulePageProps) {
         <Route path="organisation/*" element={<OrganisationRouter />} />
         <Route path="configuration" element={<ConfigurationPage />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="relationships" element={<RelationshipsPage />} />
+        <Route path="license-management" element={<RelationshipsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
       </Routes>
     </AdminLayout>
