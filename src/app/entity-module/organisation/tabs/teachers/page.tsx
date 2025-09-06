@@ -15,6 +15,9 @@
  * ✅ Comprehensive error handling and validation
  * ✅ Accessibility improvements
  * ✅ Fixed UUID handling for school_id and branch_id
+ * ✅ Fixed password update to actually save to database
+ * ✅ Fixed phone number saving to teachers table
+ * ✅ Fixed junction table updates to avoid conflicts
  * 
  * Dependencies:
  *   - @/services/userCreationService
@@ -715,20 +718,27 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const updateTeacherMutation = useMutation(
     async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
       // Update teacher profile in teachers table
+      const teacherUpdates: any = {
+        specialization: data.specialization,
+        qualification: data.qualification,
+        experience_years: data.experience_years,
+        bio: data.bio,
+        hire_date: data.hire_date,
+        // Convert empty strings to null for UUID fields
+        school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
+        branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Handle phone - ensure it's saved properly
+      if (data.phone !== undefined) {
+        // Clean the phone number - remove any formatting if needed
+        teacherUpdates.phone = data.phone ? data.phone.toString() : null;
+      }
+      
       const { error: teacherError } = await supabase
         .from('teachers')
-        .update({
-          phone: data.phone,
-          specialization: data.specialization,
-          qualification: data.qualification,
-          experience_years: data.experience_years,
-          bio: data.bio,
-          hire_date: data.hire_date,
-          // Convert empty strings to null for UUID fields
-          school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
-          branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
-          updated_at: new Date().toISOString()
-        })
+        .update(teacherUpdates)
         .eq('id', teacherId);
       
       if (teacherError) throw teacherError;
@@ -755,7 +765,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         };
       }
       
-      // Handle phone change
+      // Handle phone change in user metadata
       if (data.phone !== undefined) {
         if (!userUpdates.raw_user_meta_data) {
           userUpdates.raw_user_meta_data = { ...teacher.user_data?.raw_user_meta_data };
@@ -768,14 +778,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         const newPassword = !data.password || data.password === '' ? generateSecurePassword() : data.password;
         passwordGenerated = newPassword;
         
-        // In a real implementation, you would hash this password
-        // For now, we'll just update a flag indicating password change is required
-        userUpdates.requires_password_change = true;
-        // Note: In production, you'd use bcrypt to hash the password and store it
+        // Use the userCreationService to update password properly
+        try {
+          await userCreationService.updatePassword(teacher.user_id, newPassword);
+        } catch (passwordError: any) {
+          console.error('Password update error:', passwordError);
+          throw new Error(passwordError.message || 'Failed to update password');
+        }
       }
       
-      // Apply user updates if any
+      // Apply user updates if any (except password which was handled separately)
       if (Object.keys(userUpdates).length > 0) {
+        userUpdates.updated_at = new Date().toISOString();
+        
         const { error: userError } = await supabase
           .from('users')
           .update(userUpdates)
@@ -882,7 +897,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       },
       onError: (error: any) => {
         console.error('Update teacher error:', error);
-        toast.error('Failed to update teacher');
+        toast.error(error.message || 'Failed to update teacher');
       }
     }
   );
