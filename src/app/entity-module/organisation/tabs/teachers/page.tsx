@@ -978,8 +978,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
       section_ids: teacher.sections?.map(s => s.id) || [],
       is_active: teacher.is_active ?? true,
-      send_credentials: false
+      send_credentials: false,
+      password: '' // Clear password field for edit mode
     });
+    setGeneratePassword(false); // Don't generate password by default in edit mode
     setShowEditForm(true);
     setActiveTab('basic');
   };
