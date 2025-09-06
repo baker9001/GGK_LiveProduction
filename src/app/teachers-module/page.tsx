@@ -3,7 +3,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
-import { Building2, Network, Settings, BarChart3, Users, User, GraduationCap } from 'lucide-react';
+import { Building2, Network, Settings, BarChart3, Users, User, GraduationCap, BookOpen, Calendar } from 'lucide-react';
 import ProfilePage from './profile/page';
 
 interface TeachersModulePageProps {
@@ -41,16 +41,17 @@ function DashboardPage() {
       {/* Feature Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* My Classes */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
             <Users className="h-6 w-6 text-[#8CC63F] mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               My Classes
             </h3>
           </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             View and manage your assigned classes, students, and lesson plans.
-            Manage teacher profiles, qualifications, assignments, and administrative records.
+          </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
-            Coming Soon
             Coming Soon
           </div>
         </div>
@@ -63,7 +64,7 @@ function DashboardPage() {
             </h3>
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Create, manage, and assign curricula, lesson plans, and educational resources.
+            Track student performance, assignments, and academic progress.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
             Coming Soon
@@ -77,7 +78,7 @@ function DashboardPage() {
               Schedule Management
             </h3>
           </div>
-            Track student performance, assignments, and academic progress.
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             Manage teacher schedules, class assignments, and availability tracking.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
