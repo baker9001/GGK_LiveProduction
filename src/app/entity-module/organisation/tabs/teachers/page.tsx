@@ -1866,13 +1866,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             <FormField id="phone" label="Phone Number">
               <PhoneInput
                 value={formData.phone || ''}
-                onChange={(value) => setFormData({ ...formData, phone: value || '' })}
+                onChange={(value) => {
+                  // Log the value to debug
+                  console.log('Phone input changed to:', value);
+                  // Ensure we save the value as a string
+                  const phoneValue = value ? String(value) : '';
+                  setFormData({ ...formData, phone: phoneValue });
+                }}
                 placeholder="Enter phone number"
                 defaultCountry="KW"
                 international
                 countryCallingCodeEditable={false}
                 className="w-full"
               />
+              {/* Debug display - remove in production */}
+              <div className="text-xs text-gray-500 mt-1">
+                Current value: {formData.phone || 'empty'}
+              </div>
             </FormField>
 
             <FormField 
