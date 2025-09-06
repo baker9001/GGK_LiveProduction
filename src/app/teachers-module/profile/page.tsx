@@ -1158,3 +1158,5 @@ export default function TeacherProfilePage() {
     </div>
   );
 }
+
+export default TeacherProfilePage
