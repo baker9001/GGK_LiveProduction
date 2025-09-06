@@ -261,6 +261,11 @@ export default function LandingPage() {
               image="https://images.pexels.com/photos/60582/pexels-photo-60582.jpeg"
               description="Understand fundamental laws of the universe"
             />
+            <SubjectCard
+              title="Physics"
+              image="https://images.pexels.com/photos/356043/pexels-photo-356043.jpeg"
+              description="Understand fundamental laws of the universe"
+            />
           </div>
         </div>
       </div>
