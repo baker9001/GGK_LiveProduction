@@ -1,16 +1,18 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
- * ENHANCED VERSION: Teachers Tab with Tabbed Form & Green Theme
+ * ENHANCED VERSION: Teachers Tab with Improved UI/UX from Tenant Page
  * 
  * Features Implemented:
- * ✅ Tabbed form interface (Basic Info, Professional, Assignment)
- * ✅ Password generation with copy functionality
- * ✅ Scope-based filtering for schools/branches
+ * ✅ Enhanced password management with radio options
+ * ✅ Password requirements checker with visual feedback
+ * ✅ Generated password modal with copy/print functionality
+ * ✅ Improved tab content headers with icons
+ * ✅ Better visual password field with dynamic borders
+ * ✅ Print password functionality
+ * ✅ Improved status indicators
+ * ✅ Section separators with icons
  * ✅ Green theme (#8CC63F) throughout
- * ✅ Proper use of shared components
- * ✅ Tab error indicators
- * ✅ Form validation per tab
  * 
  * Dependencies:
  *   - @/services/userCreationService
@@ -29,7 +31,8 @@ import {
   Loader2, UserCheck, GraduationCap, Edit, Eye, MoreVertical,
   Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw,
   Trash2, UserX, FileText, ChevronDown, X, User, Building2,
-  School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff
+  School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff,
+  CheckCircle, XCircle, Printer, Check
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
@@ -132,10 +135,50 @@ interface ClassSection {
   max_capacity?: number;
 }
 
+interface PasswordRequirement {
+  label: string;
+  test: (password: string) => boolean;
+}
+
 export interface TeachersTabProps {
   companyId: string;
   refreshData?: () => void;
 }
+
+// ===== PASSWORD REQUIREMENTS =====
+const passwordRequirements: PasswordRequirement[] = [
+  { label: 'At least 8 characters', test: (p) => p.length >= 8 },
+  { label: 'Contains uppercase letter (A-Z)', test: (p) => /[A-Z]/.test(p) },
+  { label: 'Contains lowercase letter (a-z)', test: (p) => /[a-z]/.test(p) },
+  { label: 'Contains number (0-9)', test: (p) => /[0-9]/.test(p) },
+  { label: 'Contains special character (!@#$%^&*)', test: (p) => /[!@#$%^&*]/.test(p) }
+];
+
+// ===== PASSWORD REQUIREMENTS CHECKER COMPONENT =====
+const PasswordRequirementsChecker: React.FC<{ password: string }> = ({ password }) => {
+  return (
+    <div className="mt-2 space-y-1">
+      {passwordRequirements.map((req, index) => {
+        const isMet = password ? req.test(password) : false;
+        return (
+          <div 
+            key={index} 
+            className={`flex items-center gap-2 text-xs transition-all ${
+              isMet ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {isMet ? (
+              <CheckCircle className="h-3 w-3" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+            <span>{req.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // ===== HELPER FUNCTIONS =====
 const generateTeacherCode = (companyId: string): string => {
@@ -146,23 +189,24 @@ const generateTeacherCode = (companyId: string): string => {
 };
 
 const generateSecurePassword = (): string => {
-  const length = 12;
   const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lowercase = 'abcdefghjkmnpqrstuvwxyz';
   const numbers = '23456789';
-  const special = '!@#$%^&*';
+  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
   
   let password = '';
-  password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
-  password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
-  password += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  password += special.charAt(Math.floor(Math.random() * special.length));
+  // Ensure at least one of each required character type
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
   
   const allChars = uppercase + lowercase + numbers + special;
-  for (let i = password.length; i < length; i++) {
-    password += allChars.charAt(Math.floor(Math.random() * allChars.length));
+  for (let i = password.length; i < 12; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
   }
   
+  // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
@@ -211,8 +255,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   
   const [selectedTeacher, setSelectedTeacher] = useState<TeacherData | null>(null);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
-  const [isGeneratingPassword, setIsGeneratingPassword] = useState(false);
+  
+  // Enhanced password management state
+  const [generatePassword, setGeneratePassword] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copiedPassword, setCopiedPassword] = useState(false);
   
   // Tab management
   const [activeTab, setActiveTab] = useState<'basic' | 'professional' | 'assignment'>('basic');
@@ -238,7 +286,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     grade_level_ids: [],
     section_ids: [],
     is_active: true,
-    send_credentials: true
+    send_credentials: true,
+    password: ''
   });
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -563,11 +612,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== MUTATIONS =====
   const createTeacherMutation = useMutation(
     async (data: TeacherFormData) => {
+      const finalPassword = generatePassword ? generateSecurePassword() : data.password || generateSecurePassword();
+      
       const result = await userCreationService.createUser({
         user_type: 'teacher',
         email: data.email,
         name: data.name,
-        password: data.password || generateSecurePassword(),
+        password: finalPassword,
         phone: data.phone,
         company_id: companyId,
         teacher_code: data.teacher_code,
@@ -614,14 +665,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }
       }
       
-      return result;
+      return { ...result, password: finalPassword };
     },
     {
-      onSuccess: () => {
-        toast.success('Teacher created successfully');
-        setShowCreateForm(false);
-        refetchTeachers();
-        resetForm();
+      onSuccess: (result) => {
+        if (generatePassword && result.password) {
+          setGeneratedPassword(result.password);
+          toast.success('Teacher created successfully. Copy the temporary password!');
+        } else {
+          setShowCreateForm(false);
+          refetchTeachers();
+          resetForm();
+          toast.success('Teacher created successfully');
+        }
       },
       onError: (error: any) => {
         console.error('Create teacher error:', error);
@@ -817,7 +873,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       grade_level_ids: [],
       section_ids: [],
       is_active: true,
-      send_credentials: true
+      send_credentials: true,
+      password: ''
     });
     setFormErrors({});
     setTabErrors({
@@ -828,6 +885,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setActiveTab('basic');
     setSelectedTeacher(null);
     setShowPassword(false);
+    setGeneratePassword(true);
   };
 
   const validateForm = useCallback((): boolean => {
@@ -857,9 +915,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       newTabErrors.basic = true;
     }
     
-    if (!showEditForm && !formData.password) {
+    if (!showEditForm && !generatePassword && !formData.password) {
       errors.password = 'Password is required';
       newTabErrors.basic = true;
+    }
+    
+    if (!showEditForm && !generatePassword && formData.password) {
+      const allRequirementsMet = passwordRequirements.every(req => req.test(formData.password!));
+      if (!allRequirementsMet) {
+        errors.password = 'Password does not meet all requirements';
+        newTabErrors.basic = true;
+      }
     }
     
     // Assignment tab validation
@@ -881,15 +947,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
     
     return Object.keys(errors).length === 0;
-  }, [formData, showEditForm]);
+  }, [formData, showEditForm, generatePassword]);
 
   // ===== EVENT HANDLERS =====
   const handleCreateTeacher = () => {
     setFormData({
       ...formData,
       teacher_code: generateTeacherCode(companyId),
-      password: generateSecurePassword()
+      password: ''
     });
+    setGeneratePassword(true);
     setShowCreateForm(true);
   };
 
@@ -958,19 +1025,147 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   };
 
-  const generateNewPassword = () => {
-    setIsGeneratingPassword(true);
-    setTimeout(() => {
-      const newPassword = generateSecurePassword();
-      setFormData({ ...formData, password: newPassword });
-      setIsGeneratingPassword(false);
-      toast.success('New password generated');
-    }, 300);
-  };
-
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard`);
+  };
+
+  const copyPassword = () => {
+    if (generatedPassword) {
+      navigator.clipboard.writeText(generatedPassword);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+      toast.success('Password copied to clipboard');
+    }
+  };
+
+  const printPassword = () => {
+    if (generatedPassword) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Teacher Credentials - ${formData.name}</title>
+              <style>
+                body { 
+                  font-family: Arial, sans-serif; 
+                  padding: 40px;
+                  max-width: 600px;
+                  margin: 0 auto;
+                }
+                .header { 
+                  font-size: 24px; 
+                  font-weight: bold; 
+                  margin-bottom: 30px;
+                  color: #1f2937;
+                  border-bottom: 2px solid #8CC63F;
+                  padding-bottom: 10px;
+                }
+                .section {
+                  margin-bottom: 25px;
+                  background: #f9fafb;
+                  padding: 15px;
+                  border-radius: 8px;
+                }
+                .label {
+                  font-weight: bold;
+                  color: #4b5563;
+                  margin-bottom: 5px;
+                }
+                .value {
+                  color: #1f2937;
+                  font-size: 16px;
+                }
+                .password { 
+                  font-family: 'Courier New', monospace; 
+                  font-size: 18px; 
+                  background: #fef3c7; 
+                  padding: 15px;
+                  border: 2px dashed #f59e0b;
+                  border-radius: 8px;
+                  margin: 20px 0;
+                  text-align: center;
+                  letter-spacing: 2px;
+                }
+                .footer { 
+                  margin-top: 40px; 
+                  padding-top: 20px;
+                  border-top: 1px solid #e5e7eb;
+                  font-size: 14px; 
+                  color: #6b7280; 
+                }
+                .important {
+                  background: #fee2e2;
+                  border-left: 4px solid #ef4444;
+                  padding: 15px;
+                  margin: 20px 0;
+                }
+                @media print {
+                  body { padding: 20px; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">Teacher Login Credentials</div>
+              
+              <div class="section">
+                <div class="label">Teacher Name:</div>
+                <div class="value">${formData.name}</div>
+              </div>
+              
+              <div class="section">
+                <div class="label">Email Address:</div>
+                <div class="value">${formData.email}</div>
+              </div>
+              
+              <div class="section">
+                <div class="label">Teacher Code:</div>
+                <div class="value">${formData.teacher_code}</div>
+              </div>
+              
+              <div class="section">
+                <div class="label">School:</div>
+                <div class="value">${availableSchools.find(s => s.id === formData.school_id)?.name || 'Not Assigned'}</div>
+              </div>
+              
+              <div class="section">
+                <div class="label">Temporary Password:</div>
+                <div class="password">${generatedPassword}</div>
+              </div>
+              
+              <div class="important">
+                <strong>Important Instructions:</strong>
+                <ul>
+                  <li>This is a temporary password that must be changed on first login</li>
+                  <li>Share this password securely with the teacher</li>
+                  <li>The teacher will receive a verification email</li>
+                  <li>Email verification is required before first login</li>
+                </ul>
+              </div>
+              
+              <div class="footer">
+                <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+                <p><strong>Generated by:</strong> ${user?.name || user?.email || 'System Administrator'}</p>
+                <p style="margin-top: 20px; font-style: italic;">
+                  This document contains sensitive information. Please handle with care and dispose of securely after use.
+                </p>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const closePasswordModal = () => {
+    setGeneratedPassword(null);
+    setShowCreateForm(false);
+    setShowEditForm(false);
+    resetForm();
+    refetchTeachers();
   };
 
   // ===== FILTERING =====
@@ -1381,7 +1576,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         )}
       </div>
 
-      {/* Create/Edit Teacher Form Modal with Tabs and Green Theme */}
+      {/* Create/Edit Teacher Form Modal with Enhanced UI */}
       <SlideInForm
         title={showEditForm ? 'Edit Teacher' : 'Create New Teacher'}
         isOpen={showCreateForm || showEditForm}
@@ -1392,11 +1587,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }}
         onSave={handleSubmitForm}
         loading={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
-        className="
-          [&_input]:focus:ring-2 [&_input]:focus:ring-[#8CC63F] [&_input]:focus:border-[#8CC63F] 
-          [&_textarea]:focus:ring-2 [&_textarea]:focus:ring-[#8CC63F] [&_textarea]:focus:border-[#8CC63F] 
-          [&_select]:focus:ring-2 [&_select]:focus:ring-[#8CC63F] [&_select]:focus:border-[#8CC63F]
-        "
       >
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
           <TabsList className="grid w-full grid-cols-3 mb-6">
@@ -1433,13 +1623,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           </TabsList>
 
           <TabsContent value="basic" className="space-y-4">
+            {/* Enhanced Header Section */}
             <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
-              <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
-                Basic Information
-              </h4>
-              <p className="text-sm text-green-700 dark:text-green-300">
-                Teacher's personal details and login credentials
-              </p>
+              <div className="flex items-start gap-2">
+                <User className="h-5 w-5 text-[#8CC63F] mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Basic Information
+                  </h4>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                    Teacher's personal details and login credentials
+                  </p>
+                </div>
+              </div>
             </div>
 
             <FormField id="name" label="Full Name" required error={formErrors.name}>
@@ -1502,84 +1698,125 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
             </FormField>
 
+            {/* Enhanced Password Section */}
             {!showEditForm && (
-              <FormField id="password" label="Password" required error={formErrors.password}>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.password || ''}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Enter password"
-                      className="font-mono pr-10 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4 text-gray-500" />
-                      ) : (
-                        <EyeIcon className="w-4 h-4 text-gray-500" />
-                      )}
-                    </button>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={generateNewPassword}
-                    disabled={isGeneratingPassword}
-                    className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
-                    title="Generate Password"
-                  >
-                    {isGeneratingPassword ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Key className="w-4 h-4" />
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => copyToClipboard(formData.password || '', 'Password')}
-                    disabled={!formData.password}
-                    className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
-                    title="Copy Password"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <Shield className="h-4 w-4 text-[#8CC63F]" />
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security Settings</h3>
                 </div>
-                {formData.password && (
-                  <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                      Password Strength: {formData.password.length >= 12 ? 'Strong' : formData.password.length >= 8 ? 'Medium' : 'Weak'}
-                    </p>
-                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          "h-full transition-all",
-                          formData.password.length >= 12 ? 'bg-green-500 w-full' :
-                          formData.password.length >= 8 ? 'bg-yellow-500 w-2/3' :
-                          'bg-red-500 w-1/3'
-                        )}
+
+                {/* Password Options */}
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    Password Options
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="passwordOption"
+                        checked={generatePassword}
+                        onChange={() => {
+                          setGeneratePassword(true);
+                          setFormData({ ...formData, password: '' });
+                        }}
+                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
                       />
+                      <div>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                          Auto-generate secure password
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          System will create a strong 12-character password
+                        </p>
+                      </div>
+                    </label>
+                    
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="passwordOption"
+                        checked={!generatePassword}
+                        onChange={() => setGeneratePassword(false)}
+                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
+                      />
+                      <div>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                          Set password manually
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Enter your own password meeting complexity requirements
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Manual Password Input */}
+                {!generatePassword && (
+                  <FormField id="password" label="Password" required error={formErrors.password}>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={formData.password || ''}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          placeholder="Minimum 8 characters"
+                          className={cn(
+                            "pr-10 font-mono",
+                            formData.password && 
+                            passwordRequirements.every(req => req.test(formData.password!))
+                              ? "border-green-500 focus:border-green-500 focus:ring-green-500"
+                              : "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                          )}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <EyeIcon className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                      <PasswordRequirementsChecker password={formData.password || ''} />
                     </div>
+                  </FormField>
+                )}
+                
+                {/* Auto-generate Success Message */}
+                {generatePassword && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                    <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      A secure password will be automatically generated when you save
+                    </p>
                   </div>
                 )}
-              </FormField>
+              </div>
             )}
           </TabsContent>
 
           <TabsContent value="professional" className="space-y-4">
+            {/* Enhanced Header Section */}
             <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg mb-4">
-              <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-1">
-                Professional Information
-              </h4>
-              <p className="text-sm text-purple-700 dark:text-purple-300">
-                Teacher's qualifications and experience
-              </p>
+              <div className="flex items-start gap-2">
+                <Briefcase className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                    Professional Information
+                  </h4>
+                  <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                    Teacher's qualifications and experience
+                  </p>
+                </div>
+              </div>
             </div>
 
             <FormField id="specialization" label="Specialization/Subjects">
@@ -1640,13 +1877,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           </TabsContent>
 
           <TabsContent value="assignment" className="space-y-4">
+            {/* Enhanced Header Section */}
             <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
-              <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">
-                School Assignment
-              </h4>
-              <p className="text-sm text-green-700 dark:text-green-300">
-                Assign teacher to schools, branches, and classes
-              </p>
+              <div className="flex items-start gap-2">
+                <School className="h-5 w-5 text-[#8CC63F] mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
+                    School Assignment
+                  </h4>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                    Assign teacher to schools, branches, and classes
+                  </p>
+                </div>
+              </div>
             </div>
 
             <FormField id="school_id" label="School" required error={formErrors.school_id}>
@@ -1725,7 +1968,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </>
             )}
 
+            {/* Enhanced Account Status Section */}
             <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-4">
+                <Shield className="h-4 w-4 text-[#8CC63F]" />
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Account Settings</h3>
+              </div>
+
               <FormField id="is_active" label="Account Status">
                 <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div>
@@ -1734,8 +1983,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {formData.is_active 
-                        ? 'Teacher can log in to the system' 
-                        : 'Teacher cannot access the system'}
+                        ? '✓ Teacher can log in to the system' 
+                        : '✗ Teacher cannot access the system'}
                     </p>
                   </div>
                   <ToggleSwitch
@@ -1765,6 +2014,85 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           </TabsContent>
         </Tabs>
       </SlideInForm>
+
+      {/* Generated Password Modal */}
+      {generatedPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Teacher Account Created Successfully
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                A temporary password has been generated for {formData.name}.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                The teacher will receive a verification email and must verify their email before logging in.
+              </p>
+            </div>
+
+            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                Temporary Password
+              </p>
+              <div className="flex items-center justify-between">
+                <code className="text-base font-mono font-semibold break-all pr-2 text-gray-900 dark:text-white">
+                  {generatedPassword}
+                </code>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={copyPassword}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    title="Copy password"
+                  >
+                    {copiedPassword ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                    )}
+                  </button>
+                  <button
+                    onClick={printPassword}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    title="Print credentials"
+                  >
+                    <Printer className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Important:</strong> This password will not be shown again. Make sure to:
+              </p>
+              <ul className="mt-2 text-sm text-amber-700 dark:text-amber-400 list-disc list-inside">
+                <li>Copy or print the password now</li>
+                <li>Share it securely with the teacher</li>
+                <li>Advise them to change it after first login</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={printPassword}
+                className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+              <Button 
+                onClick={closePasswordModal}
+                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
