@@ -89,37 +89,37 @@ const SUBJECT_CATEGORIES = [
     subjects: [
       { 
         title: "Mathematics", 
-        image: "https://images.pexels.com/photos/6238050/pexels-photo-6238050.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZWciLCJpYXQiOjE3NTcxODIxNDQsImV4cCI6NDg3OTI0NjE0NH0.w7Q-3w4eGp9ZOrsdT1wrHnIKM49bam4S8j4IJJGwx5w",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Master algebra, geometry, statistics, and calculus" 
       },
       { 
         title: "Physics", 
-        image: "https://images.pexels.com/photos/714699/pexels-photo-714699.jpeg",
+        image: "https://images.pexels.com/photos/714699/pexels-photo-714699.jpeg", // MISSING - keeping original
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Explore mechanics, electricity, waves, and atomic physics" 
       },
       { 
         title: "Chemistry", 
-        image: "https://images.pexels.com/photos/8326738/pexels-photo-8326738.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Chemistry.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NoZW1pc3RyeS5qcGVnIiwiaWF0IjoxNzU3MTgxNzUwLCJleHAiOjQ4NzkyNDU3NTB9.e9o2dalCXd6Ya9YTNt54ofkEBU0dJahxvlG5Vd_pwdE",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Study chemical reactions, organic chemistry, and analysis" 
       },
       { 
         title: "Biology", 
-        image: "https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Biology.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Jpb2xvZ3kuanBlZyIsImlhdCI6MTc1NzE4MTY5OSwiZXhwIjo0ODc5MjQ1Njk5fQ.NHzAJ2D9yz9j2JnpyE1xnqyzaFTQoq-9fZ5quqUTgYg",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Understand living organisms, ecology, and genetics" 
       },
       { 
         title: "Environmental Management", 
-        image: "https://images.pexels.com/photos/2990650/pexels-photo-2990650.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Environmental%20Management.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Vudmlyb25tZW50YWwgTWFuYWdlbWVudC5qcGVnIiwiaWF0IjoxNzU3MTgxOTk2LCJleHAiOjQ4NzkyNDU5OTZ9.fJ0dfwGrKlsTjJSU0HMNH5DeCntgYAwrE7Ptagbwa7k",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Sustainability and environmental science" 
       },
       { 
         title: "Agriculture", 
-        image: "https://images.pexels.com/photos/2132250/pexels-photo-2132250.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Agriculture.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FncmljdWx0dXJlLmpwZWciLCJpYXQiOjE3NTcxODE1NDQsImV4cCI6NDg3OTI0NTU0NH0.y_OcVwtOIu9hjP1zN0vuGiire0E6dDFpp7CCxl6LxsU",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Agricultural science and farming practices" 
       }
@@ -130,37 +130,37 @@ const SUBJECT_CATEGORIES = [
     subjects: [
       { 
         title: "English Language", 
-        image: "https://images.pexels.com/photos/256417/pexels-photo-256417.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2gucG5nIiwiaWF0IjoxNzU3MTgxOTM3LCJleHAiOjQ4NzkyNDU5Mzd9.syR1ubxW9E9Xy597c3OD76eoC1vrX_Lsucqr5gda7iM",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Develop reading, writing, speaking, and listening skills" 
       },
       { 
         title: "English Literature", 
-        image: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg",
+        image: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg", // MISSING - keeping original
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Analyze poetry, prose, and drama from various periods" 
       },
       { 
         title: "French", 
-        image: "https://images.pexels.com/photos/1850619/pexels-photo-1850619.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/French.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0ZyZW5jaC5qcGVnIiwiaWF0IjoxNzU3MTgyMDUwLCJleHAiOjQ4NzkyNDYwNTB9.2R8Mz7mCBOS8nQXcXBYJEZw3OsgI6J5vsTicBQE2mCU",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Learn French language and francophone culture" 
       },
       { 
         title: "Spanish", 
-        image: "https://images.pexels.com/photos/4491461/pexels-photo-4491461.jpeg",
+        image: "https://images.pexels.com/photos/4491461/pexels-photo-4491461.jpeg", // MISSING - keeping original
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Master Spanish communication and Hispanic culture" 
       },
       { 
         title: "Arabic", 
-        image: "https://images.pexels.com/photos/2422290/pexels-photo-2422290.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Arabic.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FyYWJpYy5qcGVnIiwiaWF0IjoxNzU3MTgxNjQ5LCJleHAiOjQ4NzkyNDU2NDl9.ur8Qotm170I9eebfqcOxaiJN35gYQQfsWMVhsny-op4",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Master Arabic script and communication" 
       },
       { 
         title: "English as a Second Language", 
-        image: "https://images.pexels.com/photos/4145153/pexels-photo-4145153.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20as%20a%20Second%20Language.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggYXMgYSBTZWNvbmQgTGFuZ3VhZ2UuanBlZyIsImlhdCI6MTc1NzE4MTg2NiwiZXhwIjo0ODc5MjQ1ODY2fQ.TDB5KcfKpfSK9ksEaMeP6RBAznIJGQZJSMvCocPxgyM",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "English proficiency for non-native speakers" 
       }
@@ -171,37 +171,37 @@ const SUBJECT_CATEGORIES = [
     subjects: [
       { 
         title: "History", 
-        image: "https://images.pexels.com/photos/5063451/pexels-photo-5063451.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/History.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0hpc3RvcnkucG5nIiwiaWF0IjoxNzU3MTgzODc2LCJleHAiOjQ4NzkyNDc4NzZ9.ykwDKXS0eYP4MO2q5rI_as9Hb9df9o2JeQrRAZOOSK8",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Study world history from ancient to modern times" 
       },
       { 
         title: "Geography", 
-        image: "https://images.pexels.com/photos/7412095/pexels-photo-7412095.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Geography.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dlb2dyYXBoeS5qcGVnIiwiaWF0IjoxNzU3MTgyMDY3LCJleHAiOjQ4NzkyNDYwNjd9.A-Z1TYSbd3LSeAGCpcGvd0lRC--qGBs01JNDznyVChQ",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Explore physical and human geography" 
       },
       { 
         title: "Economics", 
-        image: "https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Economics.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Vjb25vbWljcy5qcGVnIiwiaWF0IjoxNzU3MTgxODQ5LCJleHAiOjQ4NzkyNDU4NDl9.sEkTCUXXKnb2cEyZO8Z0NVZpEMENeGsf9IOUrVfi4jg",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Understand micro and macroeconomic principles" 
       },
       { 
         title: "Business Studies", 
-        image: "https://images.pexels.com/photos/7413915/pexels-photo-7413915.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Business%20Studies.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0J1c2luZXNzIFN0dWRpZXMuanBlZyIsImlhdCI6MTc1NzE4MTczMiwiZXhwIjo0ODc5MjQ1NzMyfQ.nDexafDNQFi37-abTKtXY6UIGaaXL6RIzqXLb-0LEc4",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Learn business concepts and entrepreneurship" 
       },
       { 
         title: "Sociology", 
-        image: "https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg",
+        image: "https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg", // MISSING - keeping original
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Study society, culture, and human behavior" 
       },
       { 
         title: "Psychology", 
-        image: "https://images.pexels.com/photos/3825527/pexels-photo-3825527.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Psychology.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BzeWNob2xvZ3kuanBlZyIsImlhdCI6MTc1NzE4MjI3NywiZXhwIjo0ODc5MjQ2Mjc3fQ.DZRyExA9r5sXEqsMOIPFEO2Rqy8sVNf6hXBmAU2eoS4",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Explore human mind and behavior" 
       }
@@ -212,37 +212,37 @@ const SUBJECT_CATEGORIES = [
     subjects: [
       { 
         title: "Computer Science", 
-        image: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UuanBlZyIsImlhdCI6MTc1NzE4MTc3MSwiZXhwIjo0ODc5MjQ1NzcxfQ.FiJAFWfiJZSXbc6wmxgeQyNx4GmJjzN_RKp5WdixjT0",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Programming, algorithms, and computational thinking" 
       },
       { 
         title: "Information Technology", 
-        image: "https://images.pexels.com/photos/1181263/pexels-photo-1181263.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Information%20Technology.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0luZm9ybWF0aW9uIFRlY2hub2xvZ3kuanBlZyIsImlhdCI6MTc1NzE4MjA4NywiZXhwIjo0ODc5MjQ2MDg3fQ.cDC2Rf7KMJGAPqsE-N43G9UzpPnYPR73gNnsBr13s4I",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Digital literacy and practical IT skills" 
       },
       { 
         title: "Design & Technology", 
-        image: "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Design%20&%20Technology.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Rlc2lnbiAmIFRlY2hub2xvZ3kuanBlZyIsImlhdCI6MTc1NzE4MTc4NywiZXhwIjo0ODc5MjQ1Nzg3fQ.OmwKvX_QGhzKXF4J2cEnTarodc9vsMLU-uAtpSPsiSM",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Product design and manufacturing processes" 
       },
       { 
         title: "Digital Media", 
-        image: "https://images.pexels.com/photos/326503/pexels-photo-326503.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Digital%20Media.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0RpZ2l0YWwgTWVkaWEuanBlZyIsImlhdCI6MTc1NzE4MTgwNywiZXhwIjo0ODc5MjQ1ODA3fQ.2wovoPH8hIHfPauWMFKI2fnQezvBvg051IfXFzZPja4",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Create and edit digital content" 
       },
       { 
         title: "Accounting", 
-        image: "https://images.pexels.com/photos/6863332/pexels-photo-6863332.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Accounting.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FjY291bnRpbmcuanBlZyIsImlhdCI6MTc1NzE4MTQ2NiwiZXhwIjo0ODc5MjQ1NDY2fQ.HsbSmFiOvA0ohatzjxzeoDkuNTCgXEdWCwvH3GZRJ_Q",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Financial accounting and bookkeeping" 
       },
       { 
         title: "Enterprise", 
-        image: "https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Enterprise.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VudGVycHJpc2UuanBlZyIsImlhdCI6MTc1NzE4MTk2MCwiZXhwIjo0ODc5MjQ1OTYwfQ.jSf3V3vNF6UR2MUCNlFMsgu-c-ogNkLAjn49cP-pXjE",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Develop entrepreneurial skills and business innovation" 
       }
@@ -253,37 +253,37 @@ const SUBJECT_CATEGORIES = [
     subjects: [
       { 
         title: "Art & Design", 
-        image: "https://images.pexels.com/photos/1646953/pexels-photo-1646953.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Art%20&%20Design.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FydCAmIERlc2lnbi5qcGVnIiwiaWF0IjoxNzU3MTgxNjcwLCJleHAiOjQ4NzkyNDU2NzB9.Dp9tiJPJwb1zm2KHORL15J1MHhkVUhveyVU5P0eCscg",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Develop artistic skills and creative expression" 
       },
       { 
         title: "Music", 
-        image: "https://images.pexels.com/photos/164821/pexels-photo-164821.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Music.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL011c2ljLmpwZWciLCJpYXQiOjE3NTcxODIxNjQsImV4cCI6NDg3OTI0NjE2NH0.Rwk_fLYQrKD5QBV995wcMpZdfvVVVc1tN3hx47CXdU4",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Music theory, performance, and composition" 
       },
       { 
         title: "Drama", 
-        image: "https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Drama.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0RyYW1hLmpwZWciLCJpYXQiOjE3NTcxODE4MjcsImV4cCI6NDg3OTI0NTgyN30.-Was6tX7ZVvkXf533Gdy9U7v2GuqSsBC0Fn8jgYf9ow",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Theatre studies and performance arts" 
       },
       { 
         title: "Photography", 
-        image: "https://images.pexels.com/photos/1264210/pexels-photo-1264210.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Photography.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1Bob3RvZ3JhcGh5LmpwZWciLCJpYXQiOjE3NTcxODIyMzcsImV4cCI6NDg3OTI0NjIzN30.7qYaop17AaeJl0LXOkHd7Kb9YcDqNi-w2vOPi7mZR7k",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Digital photography and image composition" 
       },
       { 
         title: "Physical Education", 
-        image: "https://images.pexels.com/photos/3764011/pexels-photo-3764011.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physical%20Education.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BoeXNpY2FsIEVkdWNhdGlvbi5qcGVnIiwiaWF0IjoxNzU3MTgyMjU2LCJleHAiOjQ4NzkyNDYyNTZ9.pRe_tDs7z-vO2b1jT_ztrNvbY04R1_A4QZCwWEDhLRY",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Sports science and physical fitness" 
       },
       { 
         title: "Food & Nutrition", 
-        image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg",
+        image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Food%20&%20Nutrition.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Zvb2QgJiBOdXRyaXRpb24uanBlZyIsImlhdCI6MTc1NzE4MjAwOSwiZXhwIjo0ODc5MjQ2MDA5fQ.j3eaCfzMpM7m1FEABPx4poOlM0VvELS2HRUkS3ZpxmI",
         placeholder: PLACEHOLDER_SHIMMER,
         description: "Nutritional science and food preparation" 
       }
