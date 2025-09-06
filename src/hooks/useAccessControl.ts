@@ -351,7 +351,8 @@ export function useAccessControl(): UseAccessControlResult {
       'branches': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
       'admins': ['entity_admin', 'sub_entity_admin'],
       'teachers': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
-      'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin']
+      'students': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'],
+      'license-management': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin']
     };
     
     const hasAccess = tabPermissions[tabName]?.includes(level) || false;

@@ -88,10 +88,10 @@ function DashboardPage() {
             </h3>
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Manage licenses, allocations, and usage tracking for your organization.
+            Assign and manage licenses for students within your administrative scope.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
-            Coming Soon
+            Available
           </div>
         </div>
 
