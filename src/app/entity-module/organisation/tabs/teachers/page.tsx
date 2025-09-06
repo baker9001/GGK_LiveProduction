@@ -1333,7 +1333,36 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setGeneratedPassword(null);
     setShowCreateForm(false);
     setShowEditForm(false);
-    resetForm();
+    // Ensure complete form reset when closing
+    setFormData({
+      name: '',
+      email: '',
+      teacher_code: '',
+      phone: '', // Explicitly clear phone
+      specialization: [],
+      qualification: '',
+      experience_years: 0,
+      bio: '',
+      hire_date: new Date().toISOString().split('T')[0],
+      school_id: '',
+      branch_id: '',
+      department_ids: [],
+      grade_level_ids: [],
+      section_ids: [],
+      is_active: true,
+      send_credentials: true,
+      password: ''
+    });
+    setFormErrors({});
+    setTabErrors({
+      basic: false,
+      professional: false,
+      assignment: false
+    });
+    setActiveTab('basic');
+    setSelectedTeacher(null);
+    setShowPassword(false);
+    setGeneratePassword(true);
     refetchTeachers();
   };
 
