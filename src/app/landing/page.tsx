@@ -94,7 +94,7 @@ const ALL_SUBJECTS = [
   },
   { 
     title: "Physics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BoeXNpY3MuanBnIiwiaWF0IjoxNzU3MTg1NjkxLCJleHAiOjE3ODg3MjE2OTF9.FF_6DUggjvyTkz3pXuw2sIygmpnfrE6kqts5_g6CiZY",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physics.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BoeXNpY3MucG5nIiwiaWF0IjoxNzU3MTg4MzUyLCJleHAiOjE3ODg3MjQzNTJ9.U37lIVOO3XcNBRuz7Z47uaQ1TbCTUXFZrAVc_wXos1U",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Explore mechanics, electricity, waves, and atomic physics",
     priority: true
