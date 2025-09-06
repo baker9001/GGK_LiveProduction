@@ -986,6 +986,36 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setActiveTab('basic');
   };
 
+  const handleQuickPasswordReset = (teacher: TeacherData) => {
+    // Set up for password reset
+    setSelectedTeacher(teacher);
+    setFormData({
+      name: teacher.name || '',
+      email: teacher.email || '',
+      teacher_code: teacher.teacher_code,
+      phone: teacher.phone || '',
+      specialization: teacher.specialization || [],
+      qualification: teacher.qualification || '',
+      experience_years: teacher.experience_years || 0,
+      bio: teacher.bio || '',
+      hire_date: teacher.hire_date || '',
+      school_id: teacher.school_id || '',
+      branch_id: teacher.branch_id || '',
+      department_ids: teacher.departments?.map(d => d.id) || [],
+      grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
+      section_ids: teacher.sections?.map(s => s.id) || [],
+      is_active: teacher.is_active ?? true,
+      send_credentials: true,
+      password: '' // Will auto-generate
+    });
+    setGeneratePassword(true); // Enable password reset
+    setShowEditForm(true);
+    setActiveTab('basic'); // Jump to basic tab where password is
+    
+    // Show a toast to guide the user
+    toast.info('Password reset enabled. Save changes to generate a new password.');
+  };
+
   const handleViewTeacher = (teacher: TeacherData) => {
     setSelectedTeacher(teacher);
     setShowDetailsModal(true);
