@@ -137,10 +137,10 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'entity-module'
   },
   {
-    id: 'entity-relationships',
-    label: 'Entity Relationships',
-    path: '/app/entity-module/relationships',
-    icon: 'Network',
+    id: 'entity-license-management',
+    label: 'License Management',
+    path: '/app/entity-module/license-management',
+    icon: 'Key',
     moduleKey: 'entity-module'
   },
   {
