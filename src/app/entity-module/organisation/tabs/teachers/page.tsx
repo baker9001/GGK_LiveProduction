@@ -14,6 +14,7 @@
  * ✅ Green theme (#8CC63F) throughout
  * ✅ Comprehensive error handling and validation
  * ✅ Accessibility improvements
+ * ✅ Fixed UUID handling for school_id and branch_id
  * 
  * Dependencies:
  *   - @/services/userCreationService
@@ -641,8 +642,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         experience_years: data.experience_years,
         bio: data.bio,
         hire_date: data.hire_date,
-        school_id: data.school_id,
-        branch_id: data.branch_id,
+        // Convert empty strings to null for UUID fields
+        school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
+        branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
         is_active: data.is_active
       });
       
@@ -722,8 +724,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           experience_years: data.experience_years,
           bio: data.bio,
           hire_date: data.hire_date,
-          school_id: data.school_id,
-          branch_id: data.branch_id,
+          // Convert empty strings to null for UUID fields
+          school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
+          branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
           updated_at: new Date().toISOString()
         })
         .eq('id', teacherId);
