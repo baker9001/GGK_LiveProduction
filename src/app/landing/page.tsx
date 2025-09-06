@@ -1,5 +1,3 @@
-///home/project/src/app/landing/page.tsx
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
@@ -238,44 +236,197 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Popular Subjects */}
+      {/* Popular Subjects - ENHANCED VERSION WITH 3 CARDS PER ROW */}
       <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">Popular IGCSE Subjects</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">Comprehensive coverage of core subjects</p>
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">IGCSE Subjects We Offer</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Comprehensive coverage of all IGCSE subjects</p>
           </div>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <SubjectCard
-              title="Mathematics"
-              image="https://images.pexels.com/photos/207665/pexels-photo-207665.jpeg"
-              description="Master key concepts in algebra, geometry, and calculus"
-            />
-            <SubjectCard
-              title="Chemistry"
-              image="https://images.pexels.com/photos/3862379/pexels-photo-3862379.jpeg"
-              description="Discover chemical reactions and molecular structures"
-            />
-            <SubjectCard
-              title="Physics"
-              image="https://images.pexels.com/photos/60582/pexels-photo-60582.jpeg"
-              description="Understand fundamental laws of the universe"
-            />
-            <SubjectCard
-              title="Biology"
-              image="https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg"
-              description="Explore life sciences with interactive experiments"
-             />
-            <SubjectCard
-              title="English Literature"
-              image="https://images.pexels.com/photos/2041540/pexels-photo-2041540.jpeg"
-              description="Analyze literary works and develop critical thinking"
-             />
-            <SubjectCard
-              title="Computer Science"
-              image="https://images.pexels.com/photos/574071/pexels-photo-574071.jpeg"
-              description="Learn programming and computational thinking"
-            />
+          
+          {/* Core Sciences & Mathematics */}
+          <div className="mb-12">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Sciences & Mathematics</h3>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <SubjectCard
+                title="Mathematics"
+                image="https://images.pexels.com/photos/6238050/pexels-photo-6238050.jpeg"
+                description="Master algebra, geometry, statistics, and calculus"
+              />
+              <SubjectCard
+                title="Physics"
+                image="https://images.pexels.com/photos/714699/pexels-photo-714699.jpeg"
+                description="Explore mechanics, electricity, waves, and atomic physics"
+              />
+              <SubjectCard
+                title="Chemistry"
+                image="https://images.pexels.com/photos/8326738/pexels-photo-8326738.jpeg"
+                description="Study chemical reactions, organic chemistry, and analysis"
+              />
+              <SubjectCard
+                title="Biology"
+                image="https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg"
+                description="Understand living organisms, ecology, and genetics"
+              />
+              <SubjectCard
+                title="Environmental Management"
+                image="https://images.pexels.com/photos/2990650/pexels-photo-2990650.jpeg"
+                description="Sustainability and environmental science"
+              />
+              <SubjectCard
+                title="Agriculture"
+                image="https://images.pexels.com/photos/2132250/pexels-photo-2132250.jpeg"
+                description="Agricultural science and farming practices"
+              />
+            </div>
+          </div>
+
+          {/* Languages */}
+          <div className="mb-12">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Languages</h3>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <SubjectCard
+                title="English Language"
+                image="https://images.pexels.com/photos/256417/pexels-photo-256417.jpeg"
+                description="Develop reading, writing, speaking, and listening skills"
+              />
+              <SubjectCard
+                title="English Literature"
+                image="https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg"
+                description="Analyze poetry, prose, and drama from various periods"
+              />
+              <SubjectCard
+                title="French"
+                image="https://images.pexels.com/photos/1850619/pexels-photo-1850619.jpeg"
+                description="Learn French language and francophone culture"
+              />
+              <SubjectCard
+                title="Spanish"
+                image="https://images.pexels.com/photos/4491461/pexels-photo-4491461.jpeg"
+                description="Master Spanish communication and Hispanic culture"
+              />
+              <SubjectCard
+                title="Arabic"
+                image="https://images.pexels.com/photos/2422290/pexels-photo-2422290.jpeg"
+                description="Master Arabic script and communication"
+              />
+              <SubjectCard
+                title="English as a Second Language"
+                image="https://images.pexels.com/photos/4145153/pexels-photo-4145153.jpeg"
+                description="English proficiency for non-native speakers"
+              />
+            </div>
+          </div>
+
+          {/* Humanities & Social Sciences */}
+          <div className="mb-12">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Humanities & Social Sciences</h3>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <SubjectCard
+                title="History"
+                image="https://images.pexels.com/photos/5063451/pexels-photo-5063451.jpeg"
+                description="Study world history from ancient to modern times"
+              />
+              <SubjectCard
+                title="Geography"
+                image="https://images.pexels.com/photos/7412095/pexels-photo-7412095.jpeg"
+                description="Explore physical and human geography"
+              />
+              <SubjectCard
+                title="Economics"
+                image="https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg"
+                description="Understand micro and macroeconomic principles"
+              />
+              <SubjectCard
+                title="Business Studies"
+                image="https://images.pexels.com/photos/7413915/pexels-photo-7413915.jpeg"
+                description="Learn business concepts and entrepreneurship"
+              />
+              <SubjectCard
+                title="Sociology"
+                image="https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg"
+                description="Study society, culture, and human behavior"
+              />
+              <SubjectCard
+                title="Psychology"
+                image="https://images.pexels.com/photos/3825527/pexels-photo-3825527.jpeg"
+                description="Explore human mind and behavior"
+              />
+            </div>
+          </div>
+
+          {/* Technology & Business */}
+          <div className="mb-12">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Technology & Business</h3>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <SubjectCard
+                title="Computer Science"
+                image="https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg"
+                description="Programming, algorithms, and computational thinking"
+              />
+              <SubjectCard
+                title="Information Technology"
+                image="https://images.pexels.com/photos/1181263/pexels-photo-1181263.jpeg"
+                description="Digital literacy and practical IT skills"
+              />
+              <SubjectCard
+                title="Design & Technology"
+                image="https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg"
+                description="Product design and manufacturing processes"
+              />
+              <SubjectCard
+                title="Digital Media"
+                image="https://images.pexels.com/photos/326503/pexels-photo-326503.jpeg"
+                description="Create and edit digital content"
+              />
+              <SubjectCard
+                title="Accounting"
+                image="https://images.pexels.com/photos/6863332/pexels-photo-6863332.jpeg"
+                description="Financial accounting and bookkeeping"
+              />
+              <SubjectCard
+                title="Enterprise"
+                image="https://images.pexels.com/photos/3183197/pexels-photo-3183197.jpeg"
+                description="Develop entrepreneurial skills and business innovation"
+              />
+            </div>
+          </div>
+
+          {/* Creative Arts & Others */}
+          <div className="mb-12">
+            <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Creative Arts & Physical Education</h3>
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              <SubjectCard
+                title="Art & Design"
+                image="https://images.pexels.com/photos/1646953/pexels-photo-1646953.jpeg"
+                description="Develop artistic skills and creative expression"
+              />
+              <SubjectCard
+                title="Music"
+                image="https://images.pexels.com/photos/164821/pexels-photo-164821.jpeg"
+                description="Music theory, performance, and composition"
+              />
+              <SubjectCard
+                title="Drama"
+                image="https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg"
+                description="Theatre studies and performance arts"
+              />
+              <SubjectCard
+                title="Photography"
+                image="https://images.pexels.com/photos/1264210/pexels-photo-1264210.jpeg"
+                description="Digital photography and image composition"
+              />
+              <SubjectCard
+                title="Physical Education"
+                image="https://images.pexels.com/photos/3764011/pexels-photo-3764011.jpeg"
+                description="Sports science and physical fitness"
+              />
+              <SubjectCard
+                title="Food & Nutrition"
+                image="https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"
+                description="Nutritional science and food preparation"
+              />
+            </div>
           </div>
         </div>
       </div>
