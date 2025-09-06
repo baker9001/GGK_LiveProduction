@@ -1153,6 +1153,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const handleSubmitForm = async () => {
     if (!validateForm()) return;
     
+    // Debug log the phone value before submission
+    console.log('Form submission - Phone value:', formData.phone);
+    
     if (showEditForm && selectedTeacher) {
       // Include password in update data if reset was requested
       const updateData = { ...formData };
@@ -1160,11 +1163,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         delete updateData.password; // Don't send password if not resetting
       }
       
+      console.log('Updating teacher with data:', updateData);
+      
       updateTeacherMutation.mutate({
         teacherId: selectedTeacher.id,
         data: updateData
       });
     } else {
+      console.log('Creating teacher with data:', formData);
       createTeacherMutation.mutate(formData);
     }
   };
