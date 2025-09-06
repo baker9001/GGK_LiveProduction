@@ -295,7 +295,7 @@ const testimonials = [
   },
   {
     name: "Ahmed Al-Rashid",
-    role: "IGCSE Student",
+    role: "IGCSE Teacher",
     image: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg",
     content: "The chemistry section is amazing! The visual explanations and step-by-step solutions made complex topics easy to understand.",
     rating: 5,
