@@ -191,6 +191,12 @@ export const permissionService = {
         view_all_branches: true,
         manage_departments: true,
       },
+      licenses: {
+        assign_license: true,
+        revoke_license: true,
+        view_licenses: true,
+        manage_license_assignments: true,
+      },
       settings: {
         manage_company_settings: true,
         manage_school_settings: true,
@@ -232,6 +238,12 @@ export const permissionService = {
         view_all_schools: true,
         view_all_branches: true,
         manage_departments: true,
+      },
+      licenses: {
+        assign_license: true,
+        revoke_license: true,
+        view_licenses: true,
+        manage_license_assignments: true,
       },
       settings: {
         manage_company_settings: false, // Limited company settings access
@@ -275,6 +287,12 @@ export const permissionService = {
         view_all_branches: true, // Branches in their schools
         manage_departments: true,
       },
+      licenses: {
+        assign_license: true,
+        revoke_license: true,
+        view_licenses: true,
+        manage_license_assignments: true,
+      },
       settings: {
         manage_company_settings: false,
         manage_school_settings: true, // Can manage their school settings
@@ -317,6 +335,12 @@ export const permissionService = {
         view_all_branches: true, // Can view their assigned branches
         manage_departments: false,
       },
+      licenses: {
+        assign_license: false, // Branch admins cannot assign licenses
+        revoke_license: false, // Branch admins cannot revoke licenses
+        view_licenses: true, // Can view licenses for their branches
+        manage_license_assignments: false,
+      },
       settings: {
         manage_company_settings: false,
         manage_school_settings: false,
@@ -358,6 +382,12 @@ export const permissionService = {
         view_all_schools: false,
         view_all_branches: false,
         manage_departments: false,
+      },
+      licenses: {
+        assign_license: false,
+        revoke_license: false,
+        view_licenses: false,
+        manage_license_assignments: false,
       },
       settings: {
         manage_company_settings: false,
@@ -426,6 +456,13 @@ export const permissionService = {
         return permissions.users.create_student ||
                permissions.users.modify_student ||
                permissions.users.view_all_users;
+               
+      case 'license-management':
+        // License management tab requires license permissions
+        return permissions.licenses.view_licenses ||
+               permissions.licenses.assign_license ||
+               permissions.licenses.revoke_license ||
+               permissions.licenses.manage_license_assignments;
                
       default:
         return false;
