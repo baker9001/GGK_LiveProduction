@@ -1124,9 +1124,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {canCreateTeacher && (
               <Button 
                 onClick={handleCreateTeacher}
-                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
+                className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
+                leftIcon={<Plus className="w-4 h-4" />}
               >
-                <Plus className="w-4 h-4 mr-2" />
                 Add Teacher
               </Button>
             )}
