@@ -632,14 +632,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
   const updateTeacherMutation = useMutation(
     async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
+      // Update teacher profile in teachers table
       const { error: teacherError } = await supabase
         .from('teachers')
         .update({
+          phone: data.phone,
           specialization: data.specialization,
           qualification: data.qualification,
           experience_years: data.experience_years,
           bio: data.bio,
-          phone: data.phone,
+          hire_date: data.hire_date,
           school_id: data.school_id,
           branch_id: data.branch_id,
           updated_at: new Date().toISOString()
@@ -648,23 +650,36 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       if (teacherError) throw teacherError;
       
-      if (data.name) {
+      // Update user metadata if name or phone changed
+      if (data.name || data.phone) {
         const teacher = teachers.find(t => t.id === teacherId);
         if (teacher) {
+          const updateData: any = {};
+          
+          if (data.name) {
+            updateData.raw_user_meta_data = { 
+              ...teacher.user_data?.raw_user_meta_data,
+              name: data.name
+            };
+          }
+          
+          if (data.phone) {
+            if (!updateData.raw_user_meta_data) {
+              updateData.raw_user_meta_data = { ...teacher.user_data?.raw_user_meta_data };
+            }
+            updateData.raw_user_meta_data.phone = data.phone;
+          }
+          
           const { error: userError } = await supabase
             .from('users')
-            .update({
-              raw_user_meta_data: { 
-                ...teacher.user_data?.raw_user_meta_data,
-                name: data.name 
-              }
-            })
+            .update(updateData)
             .eq('id', teacher.user_id);
           
           if (userError) throw userError;
         }
       }
       
+      // Update relationships
       try {
         if (data.department_ids !== undefined) {
           await supabase.from('teacher_departments').delete().eq('teacher_id', teacherId);
@@ -1124,9 +1139,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {canCreateTeacher && (
               <Button 
                 onClick={handleCreateTeacher}
-                className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
-                leftIcon={<Plus className="w-4 h-4" />}
+                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
               >
+                <Plus className="w-4 h-4 mr-2" />
                 Add Teacher
               </Button>
             )}
