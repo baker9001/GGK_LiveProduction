@@ -1535,7 +1535,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {canCreateTeacher && (
               <Button 
                 onClick={handleCreateTeacher}
-                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
                 aria-label="Add new teacher"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1607,7 +1606,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {canCreateTeacher && teachers.length === 0 && (
               <Button 
                 onClick={handleCreateTeacher}
-                className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Teacher
