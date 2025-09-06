@@ -203,7 +203,7 @@ const ALL_SUBJECTS = [
   // Technology & Business
   { 
     title: "Computer Science", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UuanBnIiwiaWF0IjoxNzU3MTg1MzE4LCJleHAiOjE3ODg3MjEzMTh9.hZHep9bmkiynbOABHpjYXWqPZE2erppnj6NYg6vhi8Y",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UucG5nIiwiaWF0IjoxNzU3MTg3OTI2LCJleHAiOjE3ODg3MjM5MjZ9.aOKRnQoiyeDCBNrcFt0jijMem6t144i7ECb3BwjRwS0",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Programming, algorithms, and computational thinking",
     priority: true
