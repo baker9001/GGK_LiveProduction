@@ -1,27 +1,27 @@
-import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { 
+  Book, Users, BarChart3, MessageSquare, ChevronRight, PlayCircle, 
+  AlertCircle, Loader2, Star, Quote, GraduationCap, Mail, Phone, 
+  MapPin, Facebook, Twitter, Instagram, Youtube 
+} from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
 import { supabase } from '../../lib/supabase';
 import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
 
 // ========================================
-// IMAGE CACHE MANAGER - Keeps images in memory
+// IMAGE CACHE MANAGER
 // ========================================
 class ImageCacheManager {
   private cache: Map<string, string> = new Map();
-  private preloadQueue: Set<string> = new Set();
   private loading: Set<string> = new Set();
 
-  // Preload an image and store in cache
   async preloadImage(src: string): Promise<string> {
-    // If already cached, return immediately
     if (this.cache.has(src)) {
       return this.cache.get(src)!;
     }
 
-    // If already loading, wait for it
     if (this.loading.has(src)) {
       return new Promise((resolve) => {
         const checkInterval = setInterval(() => {
@@ -33,7 +33,6 @@ class ImageCacheManager {
       });
     }
 
-    // Start loading
     this.loading.add(src);
 
     return new Promise((resolve, reject) => {
@@ -51,27 +50,19 @@ class ImageCacheManager {
     });
   }
 
-  // Preload multiple images
   async preloadImages(srcs: string[]): Promise<void> {
     await Promise.allSettled(srcs.map(src => this.preloadImage(src)));
   }
 
-  // Check if image is cached
   isCached(src: string): boolean {
     return this.cache.has(src);
   }
-
-  // Get cached image or null
-  getCached(src: string): string | null {
-    return this.cache.get(src) || null;
-  }
 }
 
-// Create singleton instance
 const imageCache = new ImageCacheManager();
 
 // ========================================
-// BLURHASH PLACEHOLDERS - Better loading experience
+// PLACEHOLDER SHIMMER
 // ========================================
 const PLACEHOLDER_SHIMMER = `data:image/svg+xml;base64,${btoa(`
   <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
@@ -89,7 +80,9 @@ const PLACEHOLDER_SHIMMER = `data:image/svg+xml;base64,${btoa(`
   </svg>
 `)}`;
 
-// Complete subject data with blur placeholders
+// ========================================
+// SUBJECT DATA - ALL 30 SUBJECTS
+// ========================================
 const SUBJECT_CATEGORIES = [
   {
     title: "Sciences & Mathematics",
@@ -299,7 +292,37 @@ const SUBJECT_CATEGORIES = [
 ];
 
 // ========================================
-// OPTIMIZED SUBJECT CARD WITH CACHING
+// TESTIMONIALS DATA
+// ========================================
+const testimonials = [
+  {
+    name: "Sarah Johnson",
+    role: "IGCSE Student",
+    image: "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg",
+    content: "GGK Learning helped me achieve A* grades in Mathematics and Physics. The interactive lessons and practice exams were incredibly helpful!",
+    rating: 5,
+    subject: "Mathematics & Physics"
+  },
+  {
+    name: "Ahmed Al-Rashid",
+    role: "IGCSE Student",
+    image: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg",
+    content: "The chemistry section is amazing! The visual explanations and step-by-step solutions made complex topics easy to understand.",
+    rating: 5,
+    subject: "Chemistry"
+  },
+  {
+    name: "Emma Thompson",
+    role: "Parent",
+    image: "https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg",
+    content: "As a parent, I love being able to track my daughter's progress. The platform provides excellent insights into her learning journey.",
+    rating: 5,
+    subject: "Parent Portal"
+  }
+];
+
+// ========================================
+// OPTIMIZED SUBJECT CARD
 // ========================================
 const SubjectCard = memo(({ 
   title, 
@@ -316,20 +339,17 @@ const SubjectCard = memo(({
 }) => {
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [currentSrc, setCurrentSrc] = useState(placeholder || PLACEHOLDER_SHIMMER);
-  const imgRef = useRef<HTMLImageElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     const loadImage = async () => {
       try {
-        // Check if image is already cached
         if (imageCache.isCached(image)) {
           setCurrentSrc(image);
           setImageStatus('loaded');
           return;
         }
 
-        // For priority images, load immediately
         if (priority) {
           await imageCache.preloadImage(image);
           setCurrentSrc(image);
@@ -337,7 +357,6 @@ const SubjectCard = memo(({
           return;
         }
 
-        // For non-priority, use intersection observer
         observerRef.current = new IntersectionObserver(
           async ([entry]) => {
             if (entry.isIntersecting) {
@@ -352,7 +371,7 @@ const SubjectCard = memo(({
             }
           },
           { 
-            rootMargin: '100px', // Start loading 100px before visible
+            rootMargin: '100px',
             threshold: 0.01 
           }
         );
@@ -377,7 +396,7 @@ const SubjectCard = memo(({
   return (
     <div 
       id={`subject-${title.replace(/\s+/g, '-')}`}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 will-change-transform"
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
     >
       <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
         {imageStatus === 'error' ? (
@@ -386,7 +405,6 @@ const SubjectCard = memo(({
           </div>
         ) : (
           <img
-            ref={imgRef}
             src={currentSrc}
             alt={title}
             className={`w-full h-full object-cover transform hover:scale-105 transition-all duration-300 ${
@@ -395,9 +413,6 @@ const SubjectCard = memo(({
             loading="lazy"
             decoding="async"
           />
-        )}
-        {imageStatus === 'loading' && currentSrc === placeholder && (
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
         )}
       </div>
       <div className="p-6">
@@ -411,14 +426,13 @@ const SubjectCard = memo(({
 SubjectCard.displayName = 'SubjectCard';
 
 // ========================================
-// SUBJECT SECTION WITH PRELOADING
+// SUBJECT SECTION WITH LAZY LOADING
 // ========================================
 const SubjectSection = ({ category, index }: { category: any; index: number }) => {
   const [isVisible, setIsVisible] = useState(index === 0);
   const sectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // First section always visible and preload its images
     if (index === 0) {
       const images = category.subjects.map((s: any) => s.image);
       imageCache.preloadImages(images);
@@ -429,7 +443,6 @@ const SubjectSection = ({ category, index }: { category: any; index: number }) =
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
-          // Preload next section's images
           if (index < SUBJECT_CATEGORIES.length - 1) {
             const nextImages = SUBJECT_CATEGORIES[index + 1].subjects.map(s => s.image);
             setTimeout(() => imageCache.preloadImages(nextImages), 500);
@@ -479,7 +492,7 @@ const SubjectSection = ({ category, index }: { category: any; index: number }) =
 };
 
 // ========================================
-// OPTIMIZED FEATURE CARD
+// FEATURE CARD
 // ========================================
 const FeatureCard = memo(({ icon, title, description }: { 
   icon: React.ReactNode; 
@@ -498,17 +511,209 @@ const FeatureCard = memo(({ icon, title, description }: {
 FeatureCard.displayName = 'FeatureCard';
 
 // ========================================
-// TESTIMONIAL CARD
+// TESTIMONIALS SECTION
 // ========================================
-function TestimonialCard({ quote, author, role }: { quote: string; author: string; role: string }) {
+function TestimonialsSection() {
   return (
-    <div className="bg-gray-50 dark:bg-gray-800 p-8 rounded-xl border border-gray-100 dark:border-gray-700 transition-colors duration-200">
-      <p className="text-gray-600 dark:text-gray-400 italic mb-6">{quote}</p>
-      <div>
-        <p className="font-semibold text-gray-900 dark:text-white">{author}</p>
-        <p className="text-sm text-[#8CC63F]">{role}</p>
+    <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">What Our Students Say</h2>
+          <p className="text-xl text-gray-600 dark:text-gray-400">
+            Real success stories from IGCSE students and parents
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {testimonials.map((testimonial, index) => (
+            <div
+              key={index}
+              className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
+            >
+              <div className="flex items-center mb-4">
+                {[...Array(testimonial.rating)].map((_, i) => (
+                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                ))}
+              </div>
+              
+              <div className="relative mb-6">
+                <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
+                <p className="text-gray-700 dark:text-gray-300 italic pl-6">
+                  "{testimonial.content}"
+                </p>
+              </div>
+              
+              <div className="flex items-center">
+                <img
+                  src={testimonial.image}
+                  alt={testimonial.name}
+                  className="h-12 w-12 rounded-full object-cover mr-4"
+                  loading="lazy"
+                />
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">
+                    {testimonial.name}
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {testimonial.role}
+                  </p>
+                  <p className="text-xs text-[#8CC63F] font-medium">
+                    {testimonial.subject}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+  );
+}
+
+// ========================================
+// FOOTER COMPONENT
+// ========================================
+function Footer() {
+  return (
+    <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Company Info */}
+          <div className="space-y-4">
+            <div className="flex items-center">
+              <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
+              <span className="ml-2 text-2xl font-bold">GGK Learning</span>
+            </div>
+            <p className="text-gray-400">
+              Your comprehensive IGCSE learning platform. Master every subject with interactive lessons, 
+              practice exams, and personalized feedback.
+            </p>
+            <div className="flex space-x-4">
+              <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                <Facebook className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                <Twitter className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                <Instagram className="h-5 w-5" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                <Youtube className="h-5 w-5" />
+              </a>
+            </div>
+          </div>
+
+          {/* Quick Links */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <ul className="space-y-2">
+              <li>
+                <a href="/subjects" className="text-gray-400 hover:text-white transition-colors">
+                  All Subjects
+                </a>
+              </li>
+              <li>
+                <a href="/resources" className="text-gray-400 hover:text-white transition-colors">
+                  Learning Resources
+                </a>
+              </li>
+              <li>
+                <a href="/practice-exams" className="text-gray-400 hover:text-white transition-colors">
+                  Practice Exams
+                </a>
+              </li>
+              <li>
+                <a href="/progress-tracking" className="text-gray-400 hover:text-white transition-colors">
+                  Progress Tracking
+                </a>
+              </li>
+              <li>
+                <a href="/pricing" className="text-gray-400 hover:text-white transition-colors">
+                  Pricing
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Subjects */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Popular Subjects</h3>
+            <ul className="space-y-2">
+              <li>
+                <a href="/subjects/mathematics" className="text-gray-400 hover:text-white transition-colors">
+                  Mathematics
+                </a>
+              </li>
+              <li>
+                <a href="/subjects/physics" className="text-gray-400 hover:text-white transition-colors">
+                  Physics
+                </a>
+              </li>
+              <li>
+                <a href="/subjects/chemistry" className="text-gray-400 hover:text-white transition-colors">
+                  Chemistry
+                </a>
+              </li>
+              <li>
+                <a href="/subjects/biology" className="text-gray-400 hover:text-white transition-colors">
+                  Biology
+                </a>
+              </li>
+              <li>
+                <a href="/subjects/english-literature" className="text-gray-400 hover:text-white transition-colors">
+                  English Literature
+                </a>
+              </li>
+              <li>
+                <a href="/subjects/computer-science" className="text-gray-400 hover:text-white transition-colors">
+                  Computer Science
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Contact Info */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <Mail className="h-5 w-5 text-[#8CC63F] mr-3" />
+                <span className="text-gray-400">support@ggklearning.com</span>
+              </div>
+              <div className="flex items-center">
+                <Phone className="h-5 w-5 text-[#8CC63F] mr-3" />
+                <span className="text-gray-400">+965 2XXX XXXX</span>
+              </div>
+              <div className="flex items-center">
+                <MapPin className="h-5 w-5 text-[#8CC63F] mr-3" />
+                <span className="text-gray-400">Kuwait City, Kuwait</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="border-t border-gray-800 mt-12 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-400 text-sm">
+              © 2025 GGK Learning Platform. All rights reserved.
+            </p>
+            <div className="flex space-x-6 mt-4 md:mt-0">
+              <a href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
+                Privacy Policy
+              </a>
+              <a href="/terms" className="text-gray-400 hover:text-white text-sm transition-colors">
+                Terms of Service
+              </a>
+              <a href="/cookies" className="text-gray-400 hover:text-white text-sm transition-colors">
+                Cookie Policy
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -520,12 +725,12 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Preload hero image and first 3 subject images on mount
+  // Preload critical images on mount
   useEffect(() => {
     const preloadCriticalImages = async () => {
       const criticalImages = [
-        "https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg", // Hero image
-        ...SUBJECT_CATEGORIES[0].subjects.slice(0, 3).map(s => s.image) // First 3 subjects
+        "https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg",
+        ...SUBJECT_CATEGORIES[0].subjects.slice(0, 3).map(s => s.image)
       ];
       await imageCache.preloadImages(criticalImages);
     };
@@ -773,18 +978,11 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Testimonials - Using imported component */}
+      {/* Testimonials */}
       <TestimonialsSection />
 
-      {/* Footer - Using imported component */}
+      {/* Footer */}
       <Footer />
     </div>
   );
 }
-
-// Add shimmer animation to your global CSS
-// @keyframes shimmer {
-//   0% { transform: translateX(-100%); }
-//   100% { transform: translateX(100%); }
-// }
-// .animate-shimmer { animation: shimmer 1s ease-in-out infinite; }
