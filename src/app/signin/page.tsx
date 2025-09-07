@@ -133,7 +133,7 @@ export default function SignInPage() {
         } else if (authError.message.includes('Too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else {
-          setError('Authentication failed. Please check your credentials and try again.');
+          setError('Invalid email or password. Please check your credentials or use the development login below for testing.');
         }
         
         setLoading(false);
