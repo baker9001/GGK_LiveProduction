@@ -666,7 +666,7 @@ export default function LandingPage() {
     setShowAllSubjects(true);
     // Preload additional subject images when expanding
     setTimeout(() => {
-      const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 6).map(s => s.image);
+      const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 15).map(s => s.image);
       imageCache.preloadImages(additionalImages);
     }, 100);
   };
