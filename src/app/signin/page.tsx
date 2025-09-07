@@ -1,6 +1,6 @@
 /**
  * File: /src/app/signin/page.tsx
- * Production-Ready Sign In Page - Final Version
+ * Production-Ready Sign In Page - Final Corrected Version
  * 
  * Security Features:
  *   - No development backdoors
@@ -468,30 +468,18 @@ export default function SignInPage() {
   
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image with Optimized Loading */}
+      {/* Background Image - Simple and Stable */}
       <div className="absolute inset-0 z-0">
-        {/* Show gradient background immediately */}
+        {/* Gradient background - always visible */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
         
-        {/* Main background image loads on top */}
+        {/* Main background image */}
         <img
           src={BACKGROUND_IMAGE.src}
           alt={BACKGROUND_IMAGE.alt}
-          className={`w-full h-full object-cover select-none pointer-events-none transition-opacity duration-700 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
           loading="eager"
-          fetchPriority="high"
           draggable="false"
-          onLoad={() => {
-            setImageLoaded(true);
-          }}
-          onError={(e) => {
-            // Silently handle error - gradient background will show
-            const target = e.currentTarget as HTMLImageElement;
-            target.style.display = 'none';
-            setImageLoaded(true);
-          }}
           onContextMenu={(e) => e.preventDefault()}
           style={{ 
             userSelect: 'none',
