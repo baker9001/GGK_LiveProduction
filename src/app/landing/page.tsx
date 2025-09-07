@@ -84,7 +84,7 @@ const PLACEHOLDER_SHIMMER = `data:image/svg+xml;base64,${btoa(`
 // ALL SUBJECTS DATA
 // ========================================
 const ALL_SUBJECTS = [
-  // Sciences & Mathematics
+  // Sciences & Mathematics (Priority)
   { 
     title: "Mathematics", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU",
@@ -117,7 +117,8 @@ const ALL_SUBJECTS = [
     title: "Environmental Management", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Environmental%20Management.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Vudmlyb25tZW50YWwgTWFuYWdlbWVudC5qcGciLCJpYXQiOjE3NTcxODU0NzIsImV4cCI6MTc4ODcyMTQ3Mn0.O9Kcqs-qnZqGEWbg1l1c3uWmbMkPdoHLQXpPqExy9l4",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Sustainability and environmental science"
+    description: "Sustainability and environmental science",
+    priority: true
   },
   { 
     title: "Agriculture", 
@@ -125,7 +126,7 @@ const ALL_SUBJECTS = [
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Agricultural science and farming practices"
   },
-  // Languages
+  // Languages (Priority)
   { 
     title: "English Language", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20(2).jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggKDIpLmpwZyIsImlhdCI6MTc1NzE4NTM4MywiZXhwIjoxNzg4NzIxMzgzfQ.4_mdpJQeOjQpd4cNvb_3Hmth_mhgM2nZIUL22l3VRs8",
@@ -137,13 +138,15 @@ const ALL_SUBJECTS = [
     title: "English Literature", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20(2).jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggKDIpLmpwZyIsImlhdCI6MTc1NzE4NTM4MywiZXhwIjoxNzg4NzIxMzgzfQ.4_mdpJQeOjQpd4cNvb_3Hmth_mhgM2nZIUL22l3VRs8",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Analyze poetry, prose, and drama from various periods"
+    description: "Analyze poetry, prose, and drama from various periods",
+    priority: true
   },
   { 
     title: "French", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/French.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0ZyZW5jaC5qcGciLCJpYXQiOjE3NTcxODU1MjMsImV4cCI6MTc4ODcyMTUyM30.8qvxK-a4yjwIJ-rpleC62rFIKSKya1FeuYoJTwG4HXw",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Learn French language and francophone culture"
+    description: "Learn French language and francophone culture",
+    priority: true
   },
   { 
     title: "Spanish", 
@@ -155,7 +158,8 @@ const ALL_SUBJECTS = [
     title: "Arabic", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Arabic.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FyYWJpYy5qcGciLCJpYXQiOjE3NTcxODUyNTcsImV4cCI6MTc4ODcyMTI1N30.pkixwXYfE5rWZ_YHhogdnlqXJx7a7IDtqSrVjDts2tI",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Master Arabic script and communication"
+    description: "Master Arabic script and communication",
+    priority: true
   },
   { 
     title: "English as a Second Language", 
@@ -163,24 +167,27 @@ const ALL_SUBJECTS = [
     placeholder: PLACEHOLDER_SHIMMER,
     description: "English proficiency for non-native speakers"
   },
-  // Humanities & Social Sciences
+  // Humanities & Social Sciences (Priority)
   { 
     title: "History", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/History.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0hpc3RvcnkuanBnIiwiaWF0IjoxNzU3MTg1NTUwLCJleHAiOjE3ODg3MjE1NTB9.4rtaz4CoPJM2QPqKGz5Lg3kvBnDWsGHNDCfyz_nFVTc",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Study world history from ancient to modern times"
+    description: "Study world history from ancient to modern times",
+    priority: true
   },
   { 
     title: "Geography", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Geography.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0dlb2dyYXBoeS5qcGciLCJpYXQiOjE3NTcxODU1MzcsImV4cCI6MTc4ODcyMTUzN30.nvxNl104LZzhXX0pcgWjQfq-YFsIEVLdUYICy_hlsJE",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Explore physical and human geography"
+    description: "Explore physical and human geography",
+    priority: true
   },
   { 
     title: "Economics", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Economics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Vjb25vbWljcy5qcGciLCJpYXQiOjE3NTcxODUzNjAsImV4cCI6MTc4ODcyMTM2MH0.lBtveJ3q_0feZAwNaTvC-C1hPea5nhoKGDl30JSYfcQ",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Understand micro and macroeconomic principles"
+    description: "Understand micro and macroeconomic principles",
+    priority: true
   },
   { 
     title: "Business Studies", 
@@ -200,7 +207,7 @@ const ALL_SUBJECTS = [
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Explore human mind and behavior"
   },
-  // Technology & Business
+  // Technology & Business (Priority)
   { 
     title: "Computer Science", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UucG5nIiwiaWF0IjoxNzU3MTg3OTI2LCJleHAiOjE3ODg3MjM5MjZ9.aOKRnQoiyeDCBNrcFt0jijMem6t144i7ECb3BwjRwS0",
@@ -666,7 +673,7 @@ export default function LandingPage() {
     setShowAllSubjects(true);
     // Preload additional subject images when expanding
     setTimeout(() => {
-      const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 15).map(s => s.image);
+      const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 6).map(s => s.image);
       imageCache.preloadImages(additionalImages);
     }, 100);
   };
@@ -851,116 +858,3 @@ export default function LandingPage() {
                 </Button>
               )}
             </div>
-            {error && (
-              <div className="mt-4 flex items-center justify-center text-red-400 bg-red-900/50 backdrop-blur-sm rounded-lg p-2">
-                <AlertCircle className="h-5 w-5 mr-2" />
-                {error}
-              </div>
-            )}
-            {process.env.NODE_ENV === 'development' && (
-              <p className="mt-4 text-sm text-yellow-300 bg-yellow-900/50 backdrop-blur-sm rounded-lg p-2 inline-block">
-                ⚠️ Dev Login — for development use only. Will be removed before production.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Feature Highlights */}
-      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">Why Choose GGK?</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">Everything you need to excel in your IGCSE journey</p>
-          </div>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-            <FeatureCard
-              icon={<Book className="h-8 w-8" />}
-              title="Self-paced Learning"
-              description="Learn at your own pace with structured content and interactive materials"
-            />
-            <FeatureCard
-              icon={<BarChart3 className="h-8 w-8" />}
-              title="Personalized Exams"
-              description="Practice with custom exams tailored to your learning progress"
-            />
-            <FeatureCard
-              icon={<Users className="h-8 w-8" />}
-              title="Progress Tracking"
-              description="Monitor your improvement with detailed performance analytics"
-            />
-            <FeatureCard
-              icon={<MessageSquare className="h-8 w-8" />}
-              title="Teacher Feedback"
-              description="Get personalized feedback and guidance from experienced teachers"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Popular Subjects with View More */}
-      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">IGCSE Subjects We Offer</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400">Comprehensive coverage of all IGCSE subjects</p>
-          </div>
-          
-          {/* Priority Subjects - Always visible */}
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {PRIORITY_SUBJECTS.map((subject) => (
-              <SubjectCard 
-                key={subject.title} 
-                {...subject} 
-                priority={true}
-              />
-            ))}
-          </div>
-
-          {/* View More / Additional Subjects */}
-          {!showAllSubjects ? (
-            <div className="text-center mt-12">
-              <Button
-                size="lg"
-                onClick={handleViewMore}
-                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-white rounded-full px-8"
-                rightIcon={<ChevronDown className="ml-2 h-5 w-5" />}
-              >
-                View All 30 Subjects
-              </Button>
-            </div>
-          ) : (
-            <div className="mt-12">
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {ADDITIONAL_SUBJECTS.map((subject) => (
-                  <SubjectCard 
-                    key={subject.title} 
-                    {...subject} 
-                    priority={false}
-                  />
-                ))}
-              </div>
-              <div className="text-center mt-8">
-                <Button
-                  size="md"
-                  variant="ghost"
-                  onClick={() => setShowAllSubjects(false)}
-                  className="text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]"
-                  rightIcon={<ChevronUp className="ml-2 h-4 w-4" />}
-                >
-                  Show Less
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Testimonials */}
-      <TestimonialsSection />
-
-      {/* Footer */}
-      <Footer />
-    </div>
-  );
-}
