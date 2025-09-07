@@ -87,7 +87,6 @@ export default function SignInPage() {
   const [isVerificationNeeded, setIsVerificationNeeded] = useState(false);
   const [isAccountLocked, setIsAccountLocked] = useState(false);
   const [networkRetryCount, setNetworkRetryCount] = useState(0);
-  const [imageLoaded, setImageLoaded] = useState(false);
   
   // Rate limiting
   const [lastAttemptTime, setLastAttemptTime] = useState(0);
