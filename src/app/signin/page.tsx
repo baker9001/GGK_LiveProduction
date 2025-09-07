@@ -1,14 +1,14 @@
 /**
  * File: /src/app/signin/page.tsx
- * Production-Ready Sign In Page - Simplified Version
- * Works with existing project structure
+ * Production-Ready Sign In Page - Final Version
  * 
  * Security Features:
- *   - Removed all dev backdoors
+ *   - No development backdoors
  *   - Server-side authentication via Supabase
  *   - Input validation and sanitization
  *   - Secure session management
  *   - Rate limiting ready
+ *   - Optimized background image loading
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -60,12 +60,9 @@ const sanitizeInput = (input: string): string => {
     .slice(0, 255); // Limit length
 };
 
-// Optimized background image configuration
+// Background image configuration - Optimized public URL
 const BACKGROUND_IMAGE = {
-  // Use a local optimized image or CDN URL
-  src: '/images/signin-background.jpg',
-  // For Supabase storage, use a proper CDN URL if available
-  // src: 'https://your-cdn.com/images/signin-background.jpg',
+  src: 'https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Sining.jpg',
   alt: 'Educational background'
 };
 
@@ -90,6 +87,7 @@ export default function SignInPage() {
   const [isVerificationNeeded, setIsVerificationNeeded] = useState(false);
   const [isAccountLocked, setIsAccountLocked] = useState(false);
   const [networkRetryCount, setNetworkRetryCount] = useState(0);
+  const [imageLoaded, setImageLoaded] = useState(false);
   
   // Rate limiting
   const [lastAttemptTime, setLastAttemptTime] = useState(0);
@@ -102,17 +100,6 @@ export default function SignInPage() {
   
   // Initialize and cleanup on mount
   useEffect(() => {
-    // Preload background image
-    const img = new Image();
-    img.src = BACKGROUND_IMAGE.src;
-    img.onload = () => {
-      // Image preloaded successfully
-      console.log('Background image preloaded');
-    };
-    img.onerror = () => {
-      console.error('Failed to preload background image');
-    };
-    
     // Clear all authentication data on mount
     const clearAuthData = () => {
       // Clear auth-related storage
@@ -482,17 +469,39 @@ export default function SignInPage() {
   
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image */}
+      {/* Background Image with Optimized Loading */}
       <div className="absolute inset-0 z-0">
+        {/* Show gradient background immediately */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
+        
+        {/* Main background image loads on top */}
         <img
           src={BACKGROUND_IMAGE.src}
           alt={BACKGROUND_IMAGE.alt}
-          className="w-full h-full object-cover select-none pointer-events-none"
+          className={`w-full h-full object-cover select-none pointer-events-none transition-opacity duration-700 ${
+            imageLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
           loading="eager"
+          fetchPriority="high"
           draggable="false"
+          onLoad={() => {
+            setImageLoaded(true);
+          }}
+          onError={(e) => {
+            // Silently handle error - gradient background will show
+            const target = e.currentTarget as HTMLImageElement;
+            target.style.display = 'none';
+            setImageLoaded(true);
+          }}
           onContextMenu={(e) => e.preventDefault()}
-          style={{ userSelect: 'none' }}
+          style={{ 
+            userSelect: 'none',
+            objectFit: 'cover',
+            objectPosition: 'center'
+          }}
         />
+        
+        {/* Gradient overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
       
