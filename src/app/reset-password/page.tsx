@@ -1,4 +1,5 @@
 // /home/project/src/app/reset-password/page.tsx
+// Updated to use Supabase Auth for password reset
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -40,7 +41,16 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const token = searchParams.get('token');
+  
+  // Supabase sends these parameters after email link click
+  const access_token = searchParams.get('access_token');
+  const refresh_token = searchParams.get('refresh_token');
+  const type = searchParams.get('type'); // Should be 'recovery' for password reset
+  const error_code = searchParams.get('error_code');
+  const error_description = searchParams.get('error_description');
+  
+  // Legacy token support (for your existing system)
+  const legacyToken = searchParams.get('token');
   
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -51,19 +61,70 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [checkingToken, setCheckingToken] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
-  const [tokenData, setTokenData] = useState<any>(null);
+  const [sessionReady, setSessionReady] = useState(false);
   
-  // New state for first-login password change
+  // State for first-login password change
   const [isFirstLoginChange, setIsFirstLoginChange] = useState(false);
   const [userIdToProcess, setUserIdToProcess] = useState<string | null>(null);
   const [userTypeToProcess, setUserTypeToProcess] = useState<string | null>(null);
   
+  // Legacy token data
+  const [legacyTokenData, setLegacyTokenData] = useState<any>(null);
+  
   const passwordStrength = calculatePasswordStrength(password);
 
   useEffect(() => {
-    if (token) {
-      checkResetToken();
-    } else {
+    const initializeReset = async () => {
+      // Check for Supabase error parameters
+      if (error_code || error_description) {
+        setError(error_description || 'Invalid or expired reset link');
+        setTokenValid(false);
+        setCheckingToken(false);
+        return;
+      }
+
+      // Handle Supabase Auth reset flow
+      if (access_token && type === 'recovery') {
+        try {
+          // Set the session with the recovery token
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token: refresh_token || ''
+          });
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            setError('Failed to verify reset link. Please request a new one.');
+            setTokenValid(false);
+          } else {
+            // Get the current user from the session
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            
+            if (userError || !user) {
+              setError('Failed to verify user. Please request a new reset link.');
+              setTokenValid(false);
+            } else {
+              setTokenValid(true);
+              setSessionReady(true);
+              setUserIdToProcess(user.id);
+            }
+          }
+        } catch (err) {
+          console.error('Error setting session:', err);
+          setError('Failed to process reset link');
+          setTokenValid(false);
+        } finally {
+          setCheckingToken(false);
+        }
+        return;
+      }
+
+      // Handle legacy token-based reset
+      if (legacyToken) {
+        await checkLegacyResetToken();
+        return;
+      }
+
       // Check if this is a first-login password change
       const currentUser = getCurrentUser();
       if (currentUser && location.pathname === '/app/settings/change-password') {
@@ -72,26 +133,23 @@ export default function ResetPasswordPage() {
         setUserTypeToProcess(currentUser.userType || 'user');
         setTokenValid(true);
         setCheckingToken(false);
-      } else {
-        setError('No reset token provided');
-        setCheckingToken(false);
+        return;
       }
-    }
-  }, [token, location.pathname]);
 
-  useEffect(() => {
-    if (isFirstLoginChange) {
+      setError('No reset token provided');
       setCheckingToken(false);
-    }
-  }, [isFirstLoginChange]);
+    };
 
-  const checkResetToken = async () => {
+    initializeReset();
+  }, [access_token, refresh_token, type, legacyToken, location.pathname, error_code, error_description]);
+
+  const checkLegacyResetToken = async () => {
     try {
-      // Validate token
+      // Validate legacy token from your custom table
       const { data, error } = await supabase
         .from('password_reset_tokens')
         .select('*')
-        .eq('token', token)
+        .eq('token', legacyToken)
         .eq('used', false)
         .gte('expires_at', new Date().toISOString())
         .single();
@@ -100,7 +158,7 @@ export default function ResetPasswordPage() {
         setError('Invalid or expired reset link. Please request a new one.');
         setTokenValid(false);
       } else {
-        setTokenData(data);
+        setLegacyTokenData(data);
         setUserIdToProcess(data.user_id);
         setUserTypeToProcess(data.user_type);
         setTokenValid(true);
@@ -136,53 +194,88 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      // Hash the new password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      // Use Supabase Auth if we have a valid session
+      if (sessionReady) {
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: password
+        });
 
-      // Always update the users table first
-      const { error: userUpdateError } = await supabase
-        .from('users')
-        .update({
-          password_hash: hashedPassword,
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userIdToProcess);
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
 
-      if (userUpdateError) {
-        throw new Error(`Failed to update password: ${userUpdateError.message}`);
-      }
+        // Also update the password hash in your custom tables for consistency
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-      // Also update admin_users table if this is an admin user
-      if (userTypeToProcess === 'admin' || userTypeToProcess === 'system') {
-        const { error: updateError } = await supabase
-          .from('admin_users')
-          .update({ 
+        // Update users table
+        const { error: userTableError } = await supabase
+          .from('users')
+          .update({
             password_hash: hashedPassword,
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
             updated_at: new Date().toISOString()
           })
           .eq('id', userIdToProcess);
 
-        if (updateError) {
-          console.error('Failed to update admin_users table:', updateError);
-          // Don't throw - the main password update succeeded
+        if (userTableError) {
+          console.error('Failed to update users table:', userTableError);
+          // Don't throw - the main password update in Supabase Auth succeeded
         }
-      }
 
-      // Mark token as used (only if this was a token-based reset)
-      if (tokenData && tokenData.id) {
-        const { error: tokenError } = await supabase
-          .from('password_reset_tokens')
-          .update({ 
-            used: true, 
-            used_at: new Date().toISOString() 
+        // Sign out after password reset (Supabase best practice)
+        await supabase.auth.signOut();
+        
+      } else {
+        // Fallback: Update password directly in database (legacy approach)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Update users table
+        const { error: userUpdateError } = await supabase
+          .from('users')
+          .update({
+            password_hash: hashedPassword,
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
+            updated_at: new Date().toISOString()
           })
-          .eq('id', tokenData.id);
+          .eq('id', userIdToProcess);
 
-        if (tokenError) {
-          console.error('Failed to mark token as used:', tokenError);
+        if (userUpdateError) {
+          throw new Error(`Failed to update password: ${userUpdateError.message}`);
+        }
+
+        // Also update admin_users table if this is an admin user
+        if (userTypeToProcess === 'admin' || userTypeToProcess === 'system') {
+          const { error: updateError } = await supabase
+            .from('admin_users')
+            .update({ 
+              password_hash: hashedPassword,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userIdToProcess);
+
+          if (updateError) {
+            console.error('Failed to update admin_users table:', updateError);
+            // Don't throw - the main password update succeeded
+          }
+        }
+
+        // Mark legacy token as used
+        if (legacyTokenData && legacyTokenData.id) {
+          const { error: tokenError } = await supabase
+            .from('password_reset_tokens')
+            .update({ 
+              used: true, 
+              used_at: new Date().toISOString() 
+            })
+            .eq('id', legacyTokenData.id);
+
+          if (tokenError) {
+            console.error('Failed to mark token as used:', tokenError);
+          }
         }
       }
       
