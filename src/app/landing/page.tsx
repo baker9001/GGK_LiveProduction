@@ -2,13 +2,11 @@ import React, { useState, useEffect, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Book, Users, BarChart3, MessageSquare, ChevronRight, ChevronDown, ChevronUp, PlayCircle, 
-  AlertCircle, Loader2, Star, Quote, GraduationCap, Mail, Phone, 
+  Star, Quote, GraduationCap, Mail, Phone, 
   MapPin, Facebook, Twitter, Instagram, Youtube 
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
-import { supabase } from '../../lib/supabase';
-import { setAuthenticatedUser, type User, type UserRole } from '../../lib/auth';
 
 // ========================================
 // IMAGE CACHE MANAGER
@@ -653,8 +651,6 @@ function Footer() {
 // ========================================
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showAllSubjects, setShowAllSubjects] = useState(false);
 
   // Preload only priority subject images on mount
@@ -676,126 +672,6 @@ export default function LandingPage() {
       const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 6).map(s => s.image);
       imageCache.preloadImages(additionalImages);
     }, 100);
-  };
-
-  const handleDevLogin = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const bcryptModule = process.env.NODE_ENV === 'development' 
-        ? await import('bcryptjs/dist/bcrypt.min')
-        : null;
-
-      if (!bcryptModule) {
-        throw new Error('Dev login only available in development mode');
-      }
-
-      const bcrypt = bcryptModule.default || bcryptModule;
-
-      const { data: user, error: queryError } = await supabase
-        .from('users')
-        .select(`
-          id,
-          email,
-          password_hash,
-          user_type,
-          is_active,
-          raw_user_meta_data
-        `)
-        .eq('email', 'bakir.alramadi@gmail.com')
-        .eq('user_type', 'system')
-        .maybeSingle();
-
-      if (queryError) {
-        throw new Error('Failed to check dev user');
-      }
-
-      if (!user) {
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash('dev_password', salt);
-
-        const { data: ssaRole, error: roleError } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', 'Super Admin')
-          .single();
-
-        if (roleError || !ssaRole) {
-          throw new Error('Super Admin role not found');
-        }
-
-        const { data: newUser, error: userInsertError } = await supabase
-          .from('users')
-          .insert([{
-            email: 'bakir.alramadi@gmail.com',
-            password_hash: hashedPassword,
-            user_type: 'system',
-            is_active: true,
-            email_verified: true,
-            raw_user_meta_data: { name: 'Baker R.' }
-          }])
-          .select(`
-            id,
-            email,
-            user_type,
-            raw_user_meta_data
-          `)
-          .single();
-
-        if (userInsertError) throw userInsertError;
-
-        const { error: adminInsertError } = await supabase
-          .from('admin_users')
-          .insert([{
-            id: newUser.id,
-            name: 'Baker R.',
-            email: 'bakir.alramadi@gmail.com',
-            role_id: ssaRole.id,
-            status: 'active'
-          }]);
-
-        if (adminInsertError) throw adminInsertError;
-
-        const authenticatedUser: User = {
-          id: newUser.id,
-          name: newUser.raw_user_meta_data?.name || 'Baker R.',
-          email: newUser.email,
-          role: 'SSA'
-        };
-
-        setAuthenticatedUser(authenticatedUser);
-      } else {
-        const { data: adminUser } = await supabase
-          .from('admin_users')
-          .select('roles!inner(name)')
-          .eq('id', user.id)
-          .single();
-
-        const roleMapping: Record<string, UserRole> = {
-          'Super Admin': 'SSA',
-          'Support Admin': 'SUPPORT',
-          'Viewer': 'VIEWER'
-        };
-
-        const userRole = roleMapping[adminUser?.roles?.name] || 'SSA';
-
-        const authenticatedUser: User = {
-          id: user.id,
-          name: user.raw_user_meta_data?.name || 'Baker R.',
-          email: user.email,
-          role: userRole
-        };
-
-        setAuthenticatedUser(authenticatedUser);
-      }
-
-      navigate('/app/system-admin/dashboard', { replace: true });
-    } catch (err) {
-      console.error('Dev login error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to login');
-      setLoading(false);
-    }
   };
 
   return (
@@ -839,22 +715,106 @@ export default function LandingPage() {
               >
                 Watch Demo
               </Button>
-              {process.env.NODE_ENV === 'development' && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-white/20 w-full sm:w-auto"
-                  onClick={handleDevLogin}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Logging in...
-                    </>
-                  ) : (
-                    '🔧 Dev Login (Baker R.)'
-                  )}
-                </Button>
-              )}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Highlights */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">Why Choose GGK?</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Everything you need to excel in your IGCSE journey</p>
+          </div>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              icon={<Book className="h-8 w-8" />}
+              title="Self-paced Learning"
+              description="Learn at your own pace with structured content and interactive materials"
+            />
+            <FeatureCard
+              icon={<BarChart3 className="h-8 w-8" />}
+              title="Personalized Exams"
+              description="Practice with custom exams tailored to your learning progress"
+            />
+            <FeatureCard
+              icon={<Users className="h-8 w-8" />}
+              title="Progress Tracking"
+              description="Monitor your improvement with detailed performance analytics"
+            />
+            <FeatureCard
+              icon={<MessageSquare className="h-8 w-8" />}
+              title="Teacher Feedback"
+              description="Get personalized feedback and guidance from experienced teachers"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Popular Subjects with View More */}
+      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">IGCSE Subjects We Offer</h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">Comprehensive coverage of all IGCSE subjects</p>
+          </div>
+          
+          {/* Priority Subjects - Always visible */}
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {PRIORITY_SUBJECTS.map((subject) => (
+              <SubjectCard 
+                key={subject.title} 
+                {...subject} 
+                priority={true}
+              />
+            ))}
+          </div>
+
+          {/* View More / Additional Subjects */}
+          {!showAllSubjects ? (
+            <div className="text-center mt-12">
+              <Button
+                size="lg"
+                onClick={handleViewMore}
+                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-white rounded-full px-8"
+                rightIcon={<ChevronDown className="ml-2 h-5 w-5" />}
+              >
+                View All 30 Subjects
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-12">
+              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                {ADDITIONAL_SUBJECTS.map((subject) => (
+                  <SubjectCard 
+                    key={subject.title} 
+                    {...subject} 
+                    priority={false}
+                  />
+                ))}
+              </div>
+              <div className="text-center mt-8">
+                <Button
+                  size="md"
+                  variant="ghost"
+                  onClick={() => setShowAllSubjects(false)}
+                  className="text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]"
+                  rightIcon={<ChevronUp className="ml-2 h-4 w-4" />}
+                >
+                  Show Less
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Testimonials */}
+      <TestimonialsSection />
+
+      {/* Footer */}
+      <Footer />
+    </div>
+  );
+}
