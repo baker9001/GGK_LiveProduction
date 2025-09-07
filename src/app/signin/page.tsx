@@ -1,21 +1,20 @@
 /**
  * File: /src/app/signin/page.tsx
- * Production-Ready Sign In Page - Final Corrected Version
+ * Dependencies: 
+ *   - React
+ *   - react-router-dom
+ *   - lucide-react
+ *   - Custom components
  * 
- * Security Features:
- *   - No development backdoors
- *   - Server-side authentication via Supabase
- *   - Input validation and sanitization
- *   - Secure session management
- *   - Rate limiting ready
- *   - Optimized background image loading
+ * SECURITY FIX: Added complete session cleanup before new login
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   GraduationCap, 
   AlertCircle, 
+  CheckCircle, 
   Loader2, 
   Mail,
   Lock,
@@ -23,472 +22,413 @@ import {
   EyeOff,
   ShieldAlert,
   MailWarning,
-  Shield,
-  RefreshCw
+  Home
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { toast } from '../../components/shared/Toast';
 import { 
   setAuthenticatedUser, 
-  clearAuthenticatedUser,
+  clearAuthenticatedUser, 
   type User, 
   type UserRole 
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
+import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
-// Type definitions
-interface SignInFormData {
-  email: string;
-  password: string;
+interface LoginResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    user_type: string;
+    requires_password_change: boolean;
+    profile: any;
+  };
+  error?: string;
+  code?: string;
+  userId?: string;
+  attemptsLeft?: number;
+  message?: string;
 }
-
-interface SignInError {
-  message: string;
-  code?: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'VERIFICATION_REQUIRED' | 'RATE_LIMITED';
-  attemptsRemaining?: number;
-}
-
-// Email validation regex
-const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-// Simple input sanitization function
-const sanitizeInput = (input: string): string => {
-  return input
-    .trim()
-    .replace(/[<>]/g, '') // Remove potential HTML tags
-    .slice(0, 255); // Limit length
-};
-
-// Background image configuration - Optimized public URL
-const BACKGROUND_IMAGE = {
-  src: 'https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Sining.jpg',
-  alt: 'Educational background'
-};
 
 export default function SignInPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const formRef = useRef<HTMLFormElement>(null);
-  const emailInputRef = useRef<HTMLInputElement>(null);
   
   // Form state
-  const [formData, setFormData] = useState<SignInFormData>({
-    email: '',
-    password: ''
-  });
-  const [formErrors, setFormErrors] = useState<Partial<SignInFormData>>({});
-  
-  // UI state
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [generalError, setGeneralError] = useState<SignInError | null>(null);
-  const [isVerificationNeeded, setIsVerificationNeeded] = useState(false);
-  const [isAccountLocked, setIsAccountLocked] = useState(false);
-  const [networkRetryCount, setNetworkRetryCount] = useState(0);
   
-  // Rate limiting
-  const [lastAttemptTime, setLastAttemptTime] = useState(0);
-  const RATE_LIMIT_DELAY = 1000; // 1 second between attempts
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [verificationNeeded, setVerificationNeeded] = useState(false);
+  const [unverifiedUserId, setUnverifiedUserId] = useState<string | null>(null);
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   
-  // Secure redirect
+  // Redirect path
   const from = location.state?.from?.pathname || '/app/dashboard';
-  const isValidRedirect = from.startsWith('/app/');
-  const safeRedirect = isValidRedirect ? from : '/app/dashboard';
   
-  // Initialize and cleanup on mount
+  // SECURITY FIX: Complete session cleanup on mount
   useEffect(() => {
-    // Clear all authentication data on mount
-    const clearAuthData = () => {
-      // Clear auth-related storage
-      const authKeys = [
-        'ggk_authenticated_user',
-        'ggk_auth_token',
-        'ggk_session_id',
-        'user_scope_cache',
-        'last_user_id',
-        'test_mode_user' // Remove any dev mode data
-      ];
-      
-      authKeys.forEach(key => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
-      });
-      
-      // Clear auth state
-      clearAuthenticatedUser();
-    };
+    // Clear ALL authentication data before showing login form
+    console.log('[Security] Clearing all authentication data on signin page load');
     
-    clearAuthData();
+    // Clear all auth-related localStorage keys
+    const authKeys = [
+      'ggk_authenticated_user',
+      'test_mode_user', 
+      'ggk_auth_token',
+      'ggk_remember_session',
+      'user_scope_cache', // Clear cached user scope
+      'last_user_id' // Clear last user ID
+    ];
     
-    // Load remembered email if exists
+    authKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear sessionStorage
+    sessionStorage.clear();
+    
+    // Clear any React Query cache if available
+    if (window.__REACT_QUERY_STATE__) {
+      window.__REACT_QUERY_STATE__ = undefined;
+    }
+    
+    // Clear authentication using the auth library
+    clearAuthenticatedUser();
+    
+    // Load remembered email if exists (this is safe to keep)
     const savedEmail = localStorage.getItem('ggk_remembered_email');
-    if (savedEmail && EMAIL_REGEX.test(savedEmail)) {
-      setFormData(prev => ({ ...prev, email: savedEmail }));
+    if (savedEmail) {
+      setEmail(savedEmail);
       setRememberMe(true);
     }
     
-    // Focus email input
-    if (emailInputRef.current) {
-      emailInputRef.current.focus();
-    }
-    
-    // Security check for HTTPS in production
-    if (window.location.hostname !== 'localhost' && window.location.protocol !== 'https:') {
-      console.warn('Warning: Should use HTTPS in production');
-    }
-    
-    return () => {
-      // Clear sensitive data on unmount
-      setFormData({ email: '', password: '' });
-    };
+    console.log('[Security] Authentication cleanup complete');
   }, []);
   
-  // Validate form input
-  const validateInput = useCallback((name: keyof SignInFormData, value: string): string | null => {
-    switch (name) {
-      case 'email':
-        if (!value) return 'Email is required';
-        if (!EMAIL_REGEX.test(value)) return 'Please enter a valid email address';
-        if (value.length > 254) return 'Email address is too long';
-        return null;
-        
-      case 'password':
-        if (!value) return 'Password is required';
-        if (value.length < 8) return 'Password must be at least 8 characters';
-        if (value.length > 128) return 'Password is too long';
-        return null;
-        
-      default:
-        return null;
-    }
-  }, []);
-  
-  // Handle input changes
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    
-    // Sanitize input
-    const sanitizedValue = sanitizeInput(value);
-    
-    // Update form data
-    setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
-    
-    // Clear error for this field
-    if (formErrors[name as keyof SignInFormData]) {
-      setFormErrors(prev => ({ ...prev, [name]: undefined }));
-    }
-    
-    // Clear general error
-    if (generalError) {
-      setGeneralError(null);
-    }
-  }, [formErrors, generalError]);
-  
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setVerificationNeeded(false);
+    setAccountLocked(false);
+    setAttemptsLeft(null);
     
-    // Prevent double submission
-    if (isLoading) return;
-    
-    // Client-side rate limiting
-    const now = Date.now();
-    if (now - lastAttemptTime < RATE_LIMIT_DELAY) {
-      setGeneralError({
-        message: 'Please wait a moment before trying again',
-        code: 'RATE_LIMITED'
-      });
-      return;
-    }
-    setLastAttemptTime(now);
-    
-    // Clear previous errors
-    setGeneralError(null);
-    setFormErrors({});
-    setIsVerificationNeeded(false);
-    setIsAccountLocked(false);
-    
-    // Validate all inputs
-    const errors: Partial<SignInFormData> = {};
-    Object.entries(formData).forEach(([key, value]) => {
-      const error = validateInput(key as keyof SignInFormData, value);
-      if (error) {
-        errors[key as keyof SignInFormData] = error;
-      }
-    });
-    
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    // Basic validation
+    if (!email || !password) {
+      setError('Please enter both email and password');
       return;
     }
     
-    setIsLoading(true);
+    setLoading(true);
     
     try {
-      const normalizedEmail = formData.email.trim().toLowerCase();
+      const normalizedEmail = email.trim().toLowerCase();
       
-      // Use Supabase Auth for secure authentication
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: formData.password,
-      });
+      // SECURITY: Clear any existing session before attempting login
+      clearAuthenticatedUser();
+      localStorage.removeItem('user_scope_cache');
+      localStorage.removeItem('last_user_id');
       
-      if (authError) {
-        // Handle different error types
-        if (authError.message.includes('Invalid login credentials')) {
-          setGeneralError({
-            message: 'Invalid email or password',
-            code: 'INVALID_CREDENTIALS'
-          });
-        } else if (authError.message.includes('Email not confirmed')) {
-          setIsVerificationNeeded(true);
-          setGeneralError({
-            message: 'Please verify your email before signing in',
-            code: 'VERIFICATION_REQUIRED'
-          });
-        } else if (authError.message.includes('Too many requests')) {
-          setIsAccountLocked(true);
-          setGeneralError({
-            message: 'Too many attempts. Please try again later',
-            code: 'ACCOUNT_LOCKED'
-          });
-        } else {
-          setGeneralError({
-            message: 'Authentication failed. Please try again',
-            code: 'INVALID_CREDENTIALS'
-          });
-        }
-        setIsLoading(false);
-        return;
-      }
-      
-      if (!data.user) {
-        setGeneralError({
-          message: 'Authentication failed. Please try again',
-          code: 'INVALID_CREDENTIALS'
-        });
-        setIsLoading(false);
-        return;
-      }
-      
-      // Get additional user details from database
-      const { data: userData, error: userError } = await supabase
+      // Get user from database
+      const { data: user, error: userError } = await supabase
         .from('users')
         .select(`
           id,
           email,
+          password_hash,
           user_type,
           is_active,
           email_verified,
+          locked_until,
+          failed_login_attempts,
           requires_password_change,
           raw_user_meta_data
         `)
-        .eq('id', data.user.id)
-        .single();
+        .eq('email', normalizedEmail)
+        .maybeSingle();
       
-      if (userError || !userData) {
-        console.error('Failed to fetch user data:', userError);
-        setGeneralError({
-          message: 'Failed to load user profile. Please try again',
-          code: 'INVALID_CREDENTIALS'
-        });
-        setIsLoading(false);
+      if (userError) {
+        throw new Error('Database query failed');
+      }
+      
+      if (!user) {
+        setError('Invalid email or password');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if account is locked
+      if (user.locked_until && new Date(user.locked_until) > new Date()) {
+        const minutesLeft = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 60000);
+        setAccountLocked(true);
+        setError(`Account locked. Try again in ${minutesLeft} minutes.`);
+        setLoading(false);
         return;
       }
       
       // Check if account is active
-      if (!userData.is_active) {
-        await supabase.auth.signOut();
-        setGeneralError({
-          message: 'Your account is inactive. Please contact support',
-          code: 'ACCOUNT_LOCKED'
-        });
-        setIsLoading(false);
+      if (!user.is_active) {
+        setError('Account is inactive. Please contact support.');
+        setLoading(false);
         return;
       }
       
-      // Get user role
-      const userRole = await getUserRole(userData.user_type, userData.id, normalizedEmail);
-      const userName = userData.raw_user_meta_data?.name || normalizedEmail.split('@')[0];
-      
-      // Create authenticated user object
-      const authenticatedUser: User = {
-        id: userData.id,
-        email: userData.email,
-        name: userName,
-        role: userRole,
-        userType: userData.user_type
-      };
-      
-      // Handle remember me
-      if (rememberMe) {
-        localStorage.setItem('ggk_remembered_email', normalizedEmail);
-      } else {
-        localStorage.removeItem('ggk_remembered_email');
+      // Check if email is verified
+      if (user.email_verified === false) {
+        setVerificationNeeded(true);
+        setUnverifiedUserId(user.id);
+        setError('Please verify your email before signing in. Check your inbox for the verification link.');
+        setLoading(false);
+        return;
       }
       
-      // Update last login time
-      await supabase
-        .from('users')
-        .update({
-          last_login_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userData.id);
+      // Verify password
+      let isValidPassword = false;
+      
+      if (user.password_hash) {
+        isValidPassword = await bcrypt.compare(password, user.password_hash);
+      }
+      
+      if (!isValidPassword) {
+        const newAttempts = (user.failed_login_attempts || 0) + 1;
+        
+        if (newAttempts >= 5) {
+          setError('Too many failed attempts. Please try again later.');
+        } else {
+          setAttemptsLeft(5 - newAttempts);
+          setError(`Invalid email or password. ${5 - newAttempts} attempts remaining`);
+        }
+        setLoading(false);
+        return;
+      }
+      
+      // Update last login time in users table
+      try {
+        const { error: loginUpdateError } = await supabase
+          .from('users')
+          .update({
+            last_login_at: new Date().toISOString(),
+            last_sign_in_at: new Date().toISOString(),
+            failed_login_attempts: 0, // Reset failed attempts on successful login
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+        
+        if (loginUpdateError) {
+          console.error('Failed to update last login time:', loginUpdateError);
+          // Don't throw - allow login to continue even if this update fails
+        }
+      } catch (loginTimeError) {
+        console.error('Error updating login time:', loginTimeError);
+        // Don't throw - allow login to continue
+      }
+      
+      // Get user profile details based on user type
+      let userRole: UserRole = 'VIEWER';
+      let userName = user.raw_user_meta_data?.name || user.email.split('@')[0];
+      
+      // SECURITY FIX: Get the correct user profile based on user type
+      switch (user.user_type) {
+        case 'system':
+          try {
+            const { data: adminUser } = await supabase
+              .from('admin_users')
+              .select('role_id, roles!inner(name)')
+              .eq('email', normalizedEmail)
+              .maybeSingle();
+            
+            if (adminUser?.roles?.name) {
+              userRole = getUserSystemRole(adminUser.roles.name);
+            } else {
+              userRole = 'SSA';
+            }
+          } catch (err) {
+            console.warn('Could not fetch admin role, using default SSA');
+            userRole = 'SSA';
+          }
+          break;
+          
+        case 'entity':
+          // Get entity user details for name
+          try {
+            const { data: entityUser } = await supabase
+              .from('entity_users')
+              .select('name, admin_level')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            
+            if (entityUser) {
+              userName = entityUser.name || userName;
+              // Determine role based on admin_level
+              if (entityUser.admin_level === 'school_admin') {
+                userRole = 'ENTITY_ADMIN'; // This will be refined by permissions
+              } else {
+                userRole = 'ENTITY_ADMIN';
+              }
+            }
+          } catch (err) {
+            console.warn('Could not fetch entity user details');
+          }
+          userRole = 'ENTITY_ADMIN';
+          break;
+          
+        case 'teacher':
+          userRole = 'TEACHER';
+          break;
+          
+        case 'student':
+          userRole = 'STUDENT';
+          break;
+          
+        default:
+          userRole = 'VIEWER';
+      }
+      
+      // SECURITY: Create user object with verified data
+      const authenticatedUser: User = {
+        id: user.id,
+        email: user.email,
+        name: userName,
+        role: userRole,
+        userType: user.user_type
+      };
+      
+      // SECURITY: Log authentication for audit
+      console.log('[Security] User authenticated:', {
+        userId: user.id,
+        email: user.email,
+        userType: user.user_type,
+        role: userRole,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Handle Remember Me functionality
+      if (rememberMe) {
+        localStorage.setItem('ggk_remembered_email', normalizedEmail);
+        localStorage.setItem('ggk_remember_session', 'true');
+      } else {
+        localStorage.removeItem('ggk_remembered_email');
+        localStorage.removeItem('ggk_remember_session');
+      }
       
       // Set authenticated user
       setAuthenticatedUser(authenticatedUser);
       
       // Check if password change required
-      if (userData.requires_password_change) {
-        toast.warning('Please update your password for security');
-        navigate('/app/settings/change-password', { replace: true });
+      if (user.requires_password_change) {
+        toast.warning('Please change your password');
+        navigate('/app/settings/change-password');
         return;
       }
       
-      // Success
+      // Success message
       toast.success(`Welcome back, ${authenticatedUser.name}!`);
       
-      // Redirect to appropriate dashboard
-      const redirectPath = getRedirectPath(userData.user_type, userRole);
+      // Redirect based on user type
+      const redirectPath = getRedirectPath(user.user_type, userRole);
       navigate(redirectPath, { replace: true });
       
-    } catch (error) {
-      console.error('Sign in error:', error);
-      
-      // Handle network errors with retry
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        if (networkRetryCount < 2) {
-          setNetworkRetryCount(prev => prev + 1);
-          setGeneralError({
-            message: `Network error. Retrying... (${networkRetryCount + 1}/3)`,
-            code: 'RATE_LIMITED'
-          });
-          
-          // Retry after delay
-          setTimeout(() => {
-            handleSubmit(e);
-          }, 2000);
-        } else {
-          setGeneralError({
-            message: 'Network error. Please check your connection and try again',
-            code: 'RATE_LIMITED'
-          });
-        }
-      } else {
-        setGeneralError({
-          message: 'An unexpected error occurred. Please try again',
-          code: 'INVALID_CREDENTIALS'
-        });
-      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('An error occurred. Please try again.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
   
-  // Get user role from database
-  const getUserRole = async (userType: string, userId: string, email: string): Promise<UserRole> => {
-    switch (userType) {
-      case 'system':
-        try {
-          const { data } = await supabase
-            .from('admin_users')
-            .select('role_id, roles!inner(name)')
-            .eq('email', email)
-            .single();
-          
-          if (data?.roles?.name) {
-            const roleMap: Record<string, UserRole> = {
-              'Super Admin': 'SSA',
-              'Support Admin': 'SUPPORT',
-              'Viewer': 'VIEWER'
-            };
-            return roleMap[data.roles.name] || 'VIEWER';
-          }
-        } catch (err) {
-          console.warn('Could not fetch admin role');
-        }
-        return 'SSA';
-        
-      case 'entity':
-        return 'ENTITY_ADMIN';
-        
-      case 'teacher':
-        return 'TEACHER';
-        
-      case 'student':
-        return 'STUDENT';
-        
-      default:
-        return 'VIEWER';
-    }
-  };
-  
-  // Get redirect path based on user type
-  const getRedirectPath = (userType: string, role: UserRole): string => {
-    const paths: Record<string, string> = {
-      'system': '/app/system-admin/dashboard',
-      'entity': '/app/entity-module/dashboard',
-      'teacher': '/app/teachers-module/dashboard',
-      'student': '/app/student-module/dashboard'
-    };
-    return paths[userType] || '/app/dashboard';
-  };
-  
-  // Handle resend verification
   const handleResendVerification = async () => {
-    if (!formData.email || !EMAIL_REGEX.test(formData.email)) {
-      setFormErrors({ email: 'Please enter a valid email address' });
+    if (!email) {
+      setError('Please enter your email address');
       return;
     }
     
-    setIsLoading(true);
+    setLoading(true);
     
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: formData.email.trim().toLowerCase(),
-      });
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (!error) {
-        toast.success('Verification email sent. Please check your inbox.');
-        setIsVerificationNeeded(false);
-      } else {
-        toast.error('Failed to send verification email. Please try again.');
-      }
-    } catch (error) {
-      console.error('Resend verification error:', error);
-      toast.error('An error occurred. Please try again later.');
+      toast.info('If this email is registered, you will receive a verification link shortly.');
+      toast.info('Please check your spam folder if you don\'t see it.');
+      
+      setVerificationNeeded(false);
+      setError(null);
+    } catch (err) {
+      console.error('Resend verification error:', err);
+      toast.error('Failed to send verification email. Please try again later.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+  
+  const handleDevLogin = () => {
+    // SECURITY: Clear everything before dev login
+    clearAuthenticatedUser();
+    localStorage.removeItem('user_scope_cache');
+    localStorage.removeItem('last_user_id');
+    
+    const devUser: User = {
+      id: 'dev-001',
+      email: 'dev@ggk.com',
+      name: 'Developer',
+      role: 'SSA',
+      userType: 'system'
+    };
+    
+    localStorage.setItem('ggk_remember_session', 'true');
+    setAuthenticatedUser(devUser);
+    
+    toast.success('Dev login successful!');
+    navigate('/app/system-admin/dashboard', { replace: true });
+  };
+  
+  const getUserSystemRole = (roleName?: string): UserRole => {
+    if (!roleName) return 'VIEWER';
+    
+    const roleMapping: Record<string, UserRole> = {
+      'Super Admin': 'SSA',
+      'Support Admin': 'SUPPORT',
+      'Viewer': 'VIEWER'
+    };
+    return roleMapping[roleName] || 'VIEWER';
+  };
+  
+  const getRedirectPath = (userType?: string, role?: UserRole): string => {
+    if (!userType) return '/app/dashboard';
+    
+    switch (userType) {
+      case 'system':
+        return '/app/system-admin/dashboard';
+      case 'entity':
+        return '/app/entity-module/dashboard';
+      case 'teacher':
+        return '/app/teachers-module/dashboard';
+      case 'student':
+        return '/app/student-module/dashboard';
+      default:
+        return '/app/dashboard';
     }
   };
   
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image - Simple and Stable */}
+      {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        {/* Gradient background - always visible */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
-        
-        {/* Main background image */}
         <img
-          src={BACKGROUND_IMAGE.src}
-          alt={BACKGROUND_IMAGE.alt}
-          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
-          loading="eager"
+          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+          alt="Educational background"
+          className="w-full h-full object-cover select-none pointer-events-none"
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
-          style={{ 
-            userSelect: 'none',
-            objectFit: 'cover',
-            objectPosition: 'center'
-          }}
+          style={{ userSelect: 'none' }}
         />
-        
-        {/* Gradient overlay for better text readability */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
       
@@ -498,9 +438,9 @@ export default function SignInPage() {
         <div className="text-center">
           <div className="inline-flex items-center justify-center">
             <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
-            <h1 className="ml-3 text-4xl font-bold text-white">
+            <span className="ml-3 text-4xl font-bold text-white">
               GGK Learning
-            </h1>
+            </span>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
             Sign in to your account
@@ -512,51 +452,45 @@ export default function SignInPage() {
         
         {/* Sign-in Form */}
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
-          
           {/* Error Messages */}
-          {generalError && (
-            <div className="mb-4" role="alert" aria-live="assertive">
-              {isAccountLocked ? (
+          {error && (
+            <div className="mb-4">
+              {accountLocked ? (
                 <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
                   <ShieldAlert className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium">Account Temporarily Locked</p>
-                    <p className="text-sm mt-1">{generalError.message}</p>
+                    <p className="font-medium">Account Locked</p>
+                    <p className="text-sm mt-1">{error}</p>
                   </div>
                 </div>
-              ) : isVerificationNeeded ? (
+              ) : verificationNeeded ? (
                 <div className="bg-amber-500/10 backdrop-blur text-amber-400 p-4 rounded-lg border border-amber-500/20">
                   <div className="flex items-start">
                     <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-medium">Email Verification Required</p>
-                      <p className="text-sm mt-1">{generalError.message}</p>
+                      <p className="text-sm mt-1">Your email address is not verified. Please check your inbox for the verification link.</p>
+                      <p className="text-xs mt-2 text-amber-300">
+                        Can't find the email? Check your spam folder or click below to resend.
+                      </p>
                       <button
                         onClick={handleResendVerification}
-                        disabled={isLoading}
+                        disabled={loading}
                         className="text-sm mt-3 text-amber-100 hover:text-white font-medium underline disabled:opacity-50"
                       >
-                        {isLoading ? 'Sending...' : 'Resend verification email'}
+                        {loading ? 'Sending...' : 'Resend verification email'}
                       </button>
                     </div>
-                  </div>
-                </div>
-              ) : networkRetryCount > 0 ? (
-                <div className="bg-orange-500/10 backdrop-blur text-orange-400 p-4 rounded-lg flex items-start border border-orange-500/20">
-                  <RefreshCw className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 animate-spin" />
-                  <div>
-                    <p className="font-medium">Connection Error</p>
-                    <p className="text-sm">{generalError.message}</p>
                   </div>
                 </div>
               ) : (
                 <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
                   <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-sm">{generalError.message}</span>
-                    {generalError.attemptsRemaining && (
+                    <span className="text-sm">{error}</span>
+                    {attemptsLeft !== null && attemptsLeft > 0 && (
                       <p className="text-xs mt-1 text-red-300">
-                        {generalError.attemptsRemaining} attempts remaining
+                        Your account will be locked after {attemptsLeft} more failed attempts
                       </p>
                     )}
                   </div>
@@ -565,13 +499,12 @@ export default function SignInPage() {
             </div>
           )}
           
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-6" noValidate>
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <FormField
               id="email"
               label="Email address"
               required
-              error={formErrors.email}
               labelClassName="text-gray-200"
             >
               <div className="relative">
@@ -579,28 +512,18 @@ export default function SignInPage() {
                   <Mail className="h-5 w-5 text-gray-400" />
                 </div>
                 <Input
-                  ref={emailInputRef}
                   id="email"
                   name="email"
                   type="email"
                   autoComplete="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter your email"
-                  disabled={isLoading}
-                  required
-                  aria-required="true"
-                  aria-invalid={!!formErrors.email}
-                  aria-describedby={formErrors.email ? 'email-error' : undefined}
-                  maxLength={254}
+                  disabled={loading}
+                  autoFocus
                 />
               </div>
-              {formErrors.email && (
-                <p id="email-error" className="mt-1 text-sm text-red-400">
-                  {formErrors.email}
-                </p>
-              )}
             </FormField>
             
             {/* Password Field */}
@@ -608,7 +531,6 @@ export default function SignInPage() {
               id="password"
               label="Password"
               required
-              error={formErrors.password}
               labelClassName="text-gray-200"
             >
               <div className="relative">
@@ -620,23 +542,17 @@ export default function SignInPage() {
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
-                  value={formData.password}
-                  onChange={handleInputChange}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter your password"
-                  disabled={isLoading}
-                  required
-                  aria-required="true"
-                  aria-invalid={!!formErrors.password}
-                  aria-describedby={formErrors.password ? 'password-error' : undefined}
-                  maxLength={128}
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   tabIndex={-1}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
@@ -645,11 +561,6 @@ export default function SignInPage() {
                   )}
                 </button>
               </div>
-              {formErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-400">
-                  {formErrors.password}
-                </p>
-              )}
             </FormField>
             
             {/* Remember Me & Forgot Password */}
@@ -660,7 +571,13 @@ export default function SignInPage() {
                   name="remember-me"
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                  onChange={(e) => {
+                    setRememberMe(e.target.checked);
+                    if (!e.target.checked) {
+                      localStorage.removeItem('ggk_remembered_email');
+                      localStorage.removeItem('ggk_remember_session');
+                    }
+                  }}
                   className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
@@ -682,9 +599,9 @@ export default function SignInPage() {
             <Button
               type="submit"
               className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
-              disabled={isLoading || !formData.email || !formData.password}
+              disabled={loading || !email || !password}
             >
-              {isLoading ? (
+              {loading ? (
                 <>
                   <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                   Signing in...
@@ -724,7 +641,32 @@ export default function SignInPage() {
             </div>
           </div>
           
-          {/* Back to Home */}
+          {/* Dev Login */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900/50 text-gray-400">
+                  Development Access
+                </span>
+              </div>
+            </div>
+            
+            <Button
+              onClick={handleDevLogin}
+              variant="outline"
+              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            >
+              🔧 Quick Dev Login (SSA)
+            </Button>
+            <p className="mt-2 text-xs text-center text-gray-500">
+              Temporary access for development
+            </p>
+          </div>
+          
+          {/* Back to Home Button */}
           <div className="mt-6">
             <Button
               onClick={() => navigate('/')}
@@ -734,17 +676,11 @@ export default function SignInPage() {
               Back to Home
             </Button>
           </div>
-          
-          {/* Security Badge */}
-          <div className="mt-6 flex items-center justify-center text-xs text-gray-500">
-            <Shield className="h-4 w-4 mr-1" />
-            <span>Protected by enterprise-grade security</span>
-          </div>
         </div>
         
-        {/* Footer */}
+        {/* Bottom text */}
         <p className="mt-8 text-center text-sm text-gray-400">
-          © 2025 GGK Learning. All rights reserved.
+          Protected by industry-standard encryption
         </p>
       </div>
     </div>
