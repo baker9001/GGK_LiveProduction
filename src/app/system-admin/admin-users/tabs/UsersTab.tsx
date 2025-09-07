@@ -488,7 +488,114 @@ export default function UsersTab() {
         const isGeneratedPassword = !password;
         
         try {
-          // 1. Create user in Supabase Auth (auth.users table)
+          // Check if we have admin capabilities
+          if (!hasServiceRoleKey || !supabaseAdmin) {
+            console.warn('Service role key not configured. Using alternative approach.');
+            
+            // Alternative approach: Use regular Supabase signup
+            // This will send a confirmation email automatically
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+              email: validatedData.email,
+              password: finalPassword,
+              options: {
+                data: {
+                  name: validatedData.name,
+                  created_by: currentUser?.id,
+                  role: 'admin'
+                }
+              }
+            });
+            
+            if (authError) {
+              console.error('Supabase Signup Error:', authError);
+              if (authError.message?.includes('already registered')) {
+                throw new Error('Email already registered in authentication system');
+              }
+              throw authError;
+            }
+            
+            if (!authData.user) {
+              throw new Error('Failed to create user in authentication system');
+            }
+            
+            // Continue with the rest of the process using authData.user
+            const newUserId = authData.user.id;
+            
+            // Hash password for legacy system
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(finalPassword, salt);
+            
+            // Create/Update user in users table
+            const { error: userError } = await supabase
+              .from('users')
+              .upsert({
+                id: newUserId,
+                email: validatedData.email,
+                password_hash: passwordHash,
+                user_type: 'system',
+                is_active: validatedData.status === 'active',
+                email_verified: false,
+                verification_token: generateVerificationToken(),
+                verification_sent_at: new Date().toISOString(),
+                created_at: authData.user.created_at,
+                raw_user_meta_data: {
+                  name: validatedData.name,
+                  created_by: currentUser?.id
+                }
+              });
+            
+            if (userError) {
+              console.error('Database Error:', userError);
+              throw userError;
+            }
+            
+            // Create admin user profile
+            const { error: adminError } = await supabase
+              .from('admin_users')
+              .insert({
+                id: newUserId,
+                name: validatedData.name,
+                email: validatedData.email,
+                role_id: validatedData.role_id,
+                status: validatedData.status,
+                created_at: new Date().toISOString()
+              });
+            
+            if (adminError) {
+              console.error('Admin User Error:', adminError);
+              await supabase.from('users').delete().eq('id', newUserId);
+              throw adminError;
+            }
+            
+            // Log the creation
+            await supabase
+              .from('audit_logs')
+              .insert({
+                user_id: currentUser?.id,
+                action: 'create_admin_user',
+                entity_type: 'admin_user',
+                entity_id: newUserId,
+                details: {
+                  email: validatedData.email,
+                  role_id: validatedData.role_id,
+                  created_by: currentUser?.email,
+                  created_via: 'supabase_auth_signup'
+                },
+                created_at: new Date().toISOString()
+              });
+            
+            return {
+              success: true,
+              message: 'User created successfully. A confirmation email has been sent.',
+              user: {
+                id: newUserId,
+                email: validatedData.email,
+                temporary_password: isGeneratedPassword ? finalPassword : undefined
+              }
+            };
+          }
+          
+          // Original admin approach with service role key
           const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: validatedData.email,
             password: finalPassword,
@@ -501,10 +608,13 @@ export default function UsersTab() {
           });
           
           if (authError) {
-            console.error('Supabase Auth Error:', authError);
+            console.error('Supabase Auth Admin Error:', authError);
             // Check for specific error types
             if (authError.message?.includes('already registered')) {
               throw new Error('Email already registered in authentication system');
+            }
+            if (authError.message?.includes('not allowed')) {
+              throw new Error('Admin permissions required. Please configure service role key.');
             }
             throw authError;
           }
@@ -575,7 +685,7 @@ export default function UsersTab() {
                 email: validatedData.email,
                 role_id: validatedData.role_id,
                 created_by: currentUser?.email,
-                created_via: 'supabase_auth'
+                created_via: 'supabase_auth_admin'
               },
               created_at: new Date().toISOString()
             });
