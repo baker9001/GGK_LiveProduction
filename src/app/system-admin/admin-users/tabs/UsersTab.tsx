@@ -489,6 +489,8 @@ export default function UsersTab() {
         
         try {
           // Check if we have admin capabilities
+          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+          
           if (!hasServiceRoleKey || !supabaseAdmin) {
             console.warn('Service role key not configured. Using alternative approach.');
             
