@@ -62,10 +62,8 @@ const sanitizeInput = (input: string): string => {
 
 // Optimized background image configuration
 const BACKGROUND_IMAGE = {
-  // Use a local optimized image or CDN URL
-  src: '/images/signin-background.jpg',
-  // For Supabase storage, use a proper CDN URL if available
-  // src: 'https://your-cdn.com/images/signin-background.jpg',
+  // Use a gradient background instead of missing image file
+  src: null,
   alt: 'Educational background'
 };
 
@@ -102,16 +100,7 @@ export default function SignInPage() {
   
   // Initialize and cleanup on mount
   useEffect(() => {
-    // Preload background image
-    const img = new Image();
-    img.src = BACKGROUND_IMAGE.src;
-    img.onload = () => {
-      // Image preloaded successfully
-      console.log('Background image preloaded');
-    };
-    img.onerror = () => {
-      console.error('Failed to preload background image');
-    };
+    // Skip image preloading since we're using gradient background
     
     // Clear all authentication data on mount
     const clearAuthData = () => {
@@ -484,16 +473,8 @@ export default function SignInPage() {
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        <img
-          src={BACKGROUND_IMAGE.src}
-          alt={BACKGROUND_IMAGE.alt}
-          className="w-full h-full object-cover select-none pointer-events-none"
-          loading="eager"
-          draggable="false"
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ userSelect: 'none' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        {/* Use gradient background instead of image */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900" />
       </div>
       
       {/* Content */}
