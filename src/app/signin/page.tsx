@@ -587,7 +587,7 @@ export default function SignInPage() {
               
               <div className="text-sm">
                 <Link
-                  to="/forgot-password"
+                  to="/app/reset-password"
                   className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
                 >
                   Forgot password?
