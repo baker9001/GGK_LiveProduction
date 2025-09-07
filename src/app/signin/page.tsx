@@ -102,6 +102,17 @@ export default function SignInPage() {
   
   // Initialize and cleanup on mount
   useEffect(() => {
+    // Preload background image
+    const img = new Image();
+    img.src = BACKGROUND_IMAGE.src;
+    img.onload = () => {
+      // Image preloaded successfully
+      console.log('Background image preloaded');
+    };
+    img.onerror = () => {
+      console.error('Failed to preload background image');
+    };
+    
     // Clear all authentication data on mount
     const clearAuthData = () => {
       // Clear auth-related storage
