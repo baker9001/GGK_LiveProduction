@@ -1,5 +1,5 @@
 // /home/project/src/app/reset-password/page.tsx
-// Updated to use Supabase Auth for password reset
+// Updated to handle Supabase Auth hash fragments and query params
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -37,17 +37,27 @@ function calculatePasswordStrength(password: string): PasswordStrength {
   return { score, feedback };
 }
 
+// Helper function to parse hash fragments
+function parseHashParams(hash: string): URLSearchParams {
+  // Remove the leading # if present
+  const cleanHash = hash.startsWith('#') ? hash.substring(1) : hash;
+  return new URLSearchParams(cleanHash);
+}
+
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   
-  // Supabase sends these parameters after email link click
-  const access_token = searchParams.get('access_token');
-  const refresh_token = searchParams.get('refresh_token');
-  const type = searchParams.get('type'); // Should be 'recovery' for password reset
-  const error_code = searchParams.get('error_code');
-  const error_description = searchParams.get('error_description');
+  // Parse tokens from either hash fragments or query params
+  const hashParams = parseHashParams(window.location.hash);
+  
+  // Try to get params from hash first (Supabase default), then fall back to query params
+  const access_token = hashParams.get('access_token') || searchParams.get('access_token');
+  const refresh_token = hashParams.get('refresh_token') || searchParams.get('refresh_token');
+  const type = hashParams.get('type') || searchParams.get('type');
+  const error_code = hashParams.get('error_code') || searchParams.get('error_code');
+  const error_description = hashParams.get('error_description') || searchParams.get('error_description');
   
   // Legacy token support (for your existing system)
   const legacyToken = searchParams.get('token');
@@ -75,6 +85,12 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const initializeReset = async () => {
+      console.log('Initializing password reset...');
+      console.log('Hash params:', window.location.hash);
+      console.log('Query params:', window.location.search);
+      console.log('Parsed access_token:', access_token ? 'present' : 'missing');
+      console.log('Parsed type:', type);
+      
       // Check for Supabase error parameters
       if (error_code || error_description) {
         setError(error_description || 'Invalid or expired reset link');
@@ -86,6 +102,8 @@ export default function ResetPasswordPage() {
       // Handle Supabase Auth reset flow
       if (access_token && type === 'recovery') {
         try {
+          console.log('Setting Supabase session with recovery token...');
+          
           // Set the session with the recovery token
           const { error: sessionError } = await supabase.auth.setSession({
             access_token,
@@ -101,12 +119,17 @@ export default function ResetPasswordPage() {
             const { data: { user }, error: userError } = await supabase.auth.getUser();
             
             if (userError || !user) {
+              console.error('User error:', userError);
               setError('Failed to verify user. Please request a new reset link.');
               setTokenValid(false);
             } else {
+              console.log('Session established successfully for user:', user.id);
               setTokenValid(true);
               setSessionReady(true);
               setUserIdToProcess(user.id);
+              
+              // Clear the hash from the URL for cleaner appearance
+              window.history.replaceState(null, '', window.location.pathname);
             }
           }
         } catch (err) {
@@ -121,6 +144,7 @@ export default function ResetPasswordPage() {
 
       // Handle legacy token-based reset
       if (legacyToken) {
+        console.log('Processing legacy token...');
         await checkLegacyResetToken();
         return;
       }
@@ -128,6 +152,7 @@ export default function ResetPasswordPage() {
       // Check if this is a first-login password change
       const currentUser = getCurrentUser();
       if (currentUser && location.pathname === '/app/settings/change-password') {
+        console.log('First login password change detected');
         setIsFirstLoginChange(true);
         setUserIdToProcess(currentUser.id);
         setUserTypeToProcess(currentUser.userType || 'user');
@@ -136,6 +161,7 @@ export default function ResetPasswordPage() {
         return;
       }
 
+      console.log('No valid reset token found');
       setError('No reset token provided');
       setCheckingToken(false);
     };
@@ -196,6 +222,8 @@ export default function ResetPasswordPage() {
     try {
       // Use Supabase Auth if we have a valid session
       if (sessionReady) {
+        console.log('Updating password via Supabase Auth...');
+        
         const { error: updateError } = await supabase.auth.updateUser({
           password: password
         });
@@ -229,6 +257,8 @@ export default function ResetPasswordPage() {
         
       } else {
         // Fallback: Update password directly in database (legacy approach)
+        console.log('Updating password via legacy method...');
+        
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -279,8 +309,10 @@ export default function ResetPasswordPage() {
         }
       }
       
+      console.log('Password updated successfully');
       setSuccess(true);
     } catch (err) {
+      console.error('Password update error:', err);
       setError(err instanceof Error ? err.message : 'Failed to reset password');
     } finally {
       setLoading(false);
