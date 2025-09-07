@@ -6,7 +6,7 @@
  *   - lucide-react
  *   - Custom components
  * 
- * SECURITY FIX: Added complete session cleanup before new login
+ * UPDATED: Now uses Supabase Auth for primary authentication
  */
 
 import React, { useState, useEffect } from 'react';
@@ -79,6 +79,9 @@ export default function SignInPage() {
     // Clear ALL authentication data before showing login form
     console.log('[Security] Clearing all authentication data on signin page load');
     
+    // Sign out from Supabase Auth first
+    supabase.auth.signOut();
+    
     // Clear all auth-related localStorage keys
     const authKeys = [
       'ggk_authenticated_user',
@@ -133,208 +136,320 @@ export default function SignInPage() {
       const normalizedEmail = email.trim().toLowerCase();
       
       // SECURITY: Clear any existing session before attempting login
+      await supabase.auth.signOut();
       clearAuthenticatedUser();
       localStorage.removeItem('user_scope_cache');
       localStorage.removeItem('last_user_id');
       
-      // Get user from database
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select(`
-          id,
-          email,
-          password_hash,
-          user_type,
-          is_active,
-          email_verified,
-          locked_until,
-          failed_login_attempts,
-          requires_password_change,
-          raw_user_meta_data
-        `)
-        .eq('email', normalizedEmail)
-        .maybeSingle();
+      console.log('[Auth] Attempting Supabase Auth login...');
       
-      if (userError) {
-        throw new Error('Database query failed');
-      }
-      
-      if (!user) {
-        setError('Invalid email or password');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if account is locked
-      if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        const minutesLeft = Math.ceil((new Date(user.locked_until).getTime() - Date.now()) / 60000);
-        setAccountLocked(true);
-        setError(`Account locked. Try again in ${minutesLeft} minutes.`);
-        setLoading(false);
-        return;
-      }
-      
-      // Check if account is active
-      if (!user.is_active) {
-        setError('Account is inactive. Please contact support.');
-        setLoading(false);
-        return;
-      }
-      
-      // Check if email is verified
-      if (user.email_verified === false) {
-        setVerificationNeeded(true);
-        setUnverifiedUserId(user.id);
-        setError('Please verify your email before signing in. Check your inbox for the verification link.');
-        setLoading(false);
-        return;
-      }
-      
-      // Verify password
-      let isValidPassword = false;
-      
-      if (user.password_hash) {
-        isValidPassword = await bcrypt.compare(password, user.password_hash);
-      }
-      
-      if (!isValidPassword) {
-        const newAttempts = (user.failed_login_attempts || 0) + 1;
-        
-        if (newAttempts >= 5) {
-          setError('Too many failed attempts. Please try again later.');
-        } else {
-          setAttemptsLeft(5 - newAttempts);
-          setError(`Invalid email or password. ${5 - newAttempts} attempts remaining`);
-        }
-        setLoading(false);
-        return;
-      }
-      
-      // Update last login time in users table
-      try {
-        const { error: loginUpdateError } = await supabase
-          .from('users')
-          .update({
-            last_login_at: new Date().toISOString(),
-            last_sign_in_at: new Date().toISOString(),
-            failed_login_attempts: 0, // Reset failed attempts on successful login
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-        
-        if (loginUpdateError) {
-          console.error('Failed to update last login time:', loginUpdateError);
-          // Don't throw - allow login to continue even if this update fails
-        }
-      } catch (loginTimeError) {
-        console.error('Error updating login time:', loginTimeError);
-        // Don't throw - allow login to continue
-      }
-      
-      // Get user profile details based on user type
-      let userRole: UserRole = 'VIEWER';
-      let userName = user.raw_user_meta_data?.name || user.email.split('@')[0];
-      
-      // SECURITY FIX: Get the correct user profile based on user type
-      switch (user.user_type) {
-        case 'system':
-          try {
-            const { data: adminUser } = await supabase
-              .from('admin_users')
-              .select('role_id, roles!inner(name)')
-              .eq('email', normalizedEmail)
-              .maybeSingle();
-            
-            if (adminUser?.roles?.name) {
-              userRole = getUserSystemRole(adminUser.roles.name);
-            } else {
-              userRole = 'SSA';
-            }
-          } catch (err) {
-            console.warn('Could not fetch admin role, using default SSA');
-            userRole = 'SSA';
-          }
-          break;
-          
-        case 'entity':
-          // Get entity user details for name
-          try {
-            const { data: entityUser } = await supabase
-              .from('entity_users')
-              .select('name, admin_level')
-              .eq('user_id', user.id)
-              .maybeSingle();
-            
-            if (entityUser) {
-              userName = entityUser.name || userName;
-              // Determine role based on admin_level
-              if (entityUser.admin_level === 'school_admin') {
-                userRole = 'ENTITY_ADMIN'; // This will be refined by permissions
-              } else {
-                userRole = 'ENTITY_ADMIN';
-              }
-            }
-          } catch (err) {
-            console.warn('Could not fetch entity user details');
-          }
-          userRole = 'ENTITY_ADMIN';
-          break;
-          
-        case 'teacher':
-          userRole = 'TEACHER';
-          break;
-          
-        case 'student':
-          userRole = 'STUDENT';
-          break;
-          
-        default:
-          userRole = 'VIEWER';
-      }
-      
-      // SECURITY: Create user object with verified data
-      const authenticatedUser: User = {
-        id: user.id,
-        email: user.email,
-        name: userName,
-        role: userRole,
-        userType: user.user_type
-      };
-      
-      // SECURITY: Log authentication for audit
-      console.log('[Security] User authenticated:', {
-        userId: user.id,
-        email: user.email,
-        userType: user.user_type,
-        role: userRole,
-        timestamp: new Date().toISOString()
+      // PRIMARY METHOD: Try Supabase Auth first
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password
       });
       
-      // Handle Remember Me functionality
-      if (rememberMe) {
-        localStorage.setItem('ggk_remembered_email', normalizedEmail);
-        localStorage.setItem('ggk_remember_session', 'true');
-      } else {
-        localStorage.removeItem('ggk_remembered_email');
-        localStorage.removeItem('ggk_remember_session');
+      let userId: string | null = null;
+      let requiresPasswordChange = false;
+      let userType = 'user';
+      let userName = normalizedEmail.split('@')[0];
+      let userRole: UserRole = 'VIEWER';
+      
+      if (!authError && authData.user) {
+        // Successfully authenticated with Supabase Auth
+        console.log('[Auth] Supabase Auth login successful');
+        userId = authData.user.id;
+        
+        // Get additional user data from your custom users table
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select(`
+            id,
+            email,
+            user_type,
+            is_active,
+            email_verified,
+            locked_until,
+            requires_password_change,
+            raw_user_meta_data
+          `)
+          .eq('email', normalizedEmail)
+          .maybeSingle();
+        
+        if (userData) {
+          // Use the custom table's user ID (if different from auth.users)
+          userId = userData.id;
+          userType = userData.user_type || 'user';
+          requiresPasswordChange = userData.requires_password_change || false;
+          userName = userData.raw_user_meta_data?.name || userName;
+          
+          // Check if account is active
+          if (!userData.is_active) {
+            await supabase.auth.signOut();
+            setError('Account is inactive. Please contact support.');
+            setLoading(false);
+            return;
+          }
+          
+          // Check if account is locked
+          if (userData.locked_until && new Date(userData.locked_until) > new Date()) {
+            await supabase.auth.signOut();
+            const minutesLeft = Math.ceil((new Date(userData.locked_until).getTime() - Date.now()) / 60000);
+            setAccountLocked(true);
+            setError(`Account locked. Try again in ${minutesLeft} minutes.`);
+            setLoading(false);
+            return;
+          }
+          
+          // Check email verification
+          if (userData.email_verified === false) {
+            await supabase.auth.signOut();
+            setVerificationNeeded(true);
+            setUnverifiedUserId(userData.id);
+            setError('Please verify your email before signing in. Check your inbox for the verification link.');
+            setLoading(false);
+            return;
+          }
+        } else {
+          // User exists in auth.users but not in custom users table
+          // This might happen if user was created directly in Supabase Auth
+          console.log('[Auth] User not found in custom users table, creating entry...');
+          
+          // Create user in custom table
+          const { error: createError } = await supabase
+            .from('users')
+            .insert({
+              id: authData.user.id,
+              email: normalizedEmail,
+              user_type: 'user',
+              is_active: true,
+              email_verified: authData.user.email_confirmed_at ? true : false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          if (createError) {
+            console.error('Failed to create user in custom table:', createError);
+          }
+        }
+        
+      } else if (authError) {
+        // Supabase Auth failed, try fallback to custom table
+        console.log('[Auth] Supabase Auth failed:', authError.message);
+        
+        // Only use fallback for specific errors
+        if (authError.message.includes('Invalid login credentials') || 
+            authError.message.includes('Email not confirmed')) {
+          
+          // FALLBACK: Check custom users table with bcrypt
+          console.log('[Auth] Trying fallback to custom users table...');
+          
+          const { data: user, error: userError } = await supabase
+            .from('users')
+            .select(`
+              id,
+              email,
+              password_hash,
+              user_type,
+              is_active,
+              email_verified,
+              locked_until,
+              failed_login_attempts,
+              requires_password_change,
+              raw_user_meta_data
+            `)
+            .eq('email', normalizedEmail)
+            .maybeSingle();
+          
+          if (!user) {
+            setError('Invalid email or password');
+            setLoading(false);
+            return;
+          }
+          
+          // Check password hash
+          if (user.password_hash) {
+            const isValidPassword = await bcrypt.compare(password, user.password_hash);
+            
+            if (!isValidPassword) {
+              const newAttempts = (user.failed_login_attempts || 0) + 1;
+              
+              // Update failed attempts
+              await supabase
+                .from('users')
+                .update({
+                  failed_login_attempts: newAttempts,
+                  locked_until: newAttempts >= 5 
+                    ? new Date(Date.now() + 30 * 60 * 1000).toISOString() // Lock for 30 minutes
+                    : null
+                })
+                .eq('id', user.id);
+              
+              if (newAttempts >= 5) {
+                setError('Too many failed attempts. Account locked for 30 minutes.');
+              } else {
+                setAttemptsLeft(5 - newAttempts);
+                setError(`Invalid email or password. ${5 - newAttempts} attempts remaining`);
+              }
+              setLoading(false);
+              return;
+            }
+            
+            // Password is valid, proceed with custom auth
+            userId = user.id;
+            userType = user.user_type || 'user';
+            requiresPasswordChange = user.requires_password_change || false;
+            userName = user.raw_user_meta_data?.name || userName;
+            
+            // Migrate user to Supabase Auth for future logins
+            console.log('[Auth] Migrating user to Supabase Auth...');
+            try {
+              // Create user in Supabase Auth
+              const { error: signUpError } = await supabase.auth.signUp({
+                email: normalizedEmail,
+                password: password,
+                options: {
+                  emailRedirectTo: `${window.location.origin}/verify-email`
+                }
+              });
+              
+              if (signUpError) {
+                console.error('Failed to migrate to Supabase Auth:', signUpError);
+              } else {
+                console.log('[Auth] User migrated to Supabase Auth successfully');
+              }
+            } catch (migrationError) {
+              console.error('Migration error:', migrationError);
+            }
+          } else {
+            setError('Invalid email or password');
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Other auth errors (network, etc.)
+          setError('Authentication failed. Please try again.');
+          setLoading(false);
+          return;
+        }
       }
       
-      // Set authenticated user
-      setAuthenticatedUser(authenticatedUser);
-      
-      // Check if password change required
-      if (user.requires_password_change) {
-        toast.warning('Please change your password');
-        navigate('/app/settings/change-password');
-        return;
+      // Update last login time
+      if (userId) {
+        try {
+          const { error: loginUpdateError } = await supabase
+            .from('users')
+            .update({
+              last_login_at: new Date().toISOString(),
+              last_sign_in_at: new Date().toISOString(),
+              failed_login_attempts: 0, // Reset failed attempts on successful login
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+          
+          if (loginUpdateError) {
+            console.error('Failed to update last login time:', loginUpdateError);
+          }
+        } catch (loginTimeError) {
+          console.error('Error updating login time:', loginTimeError);
+        }
+        
+        // Get user role based on user type
+        switch (userType) {
+          case 'system':
+            try {
+              const { data: adminUser } = await supabase
+                .from('admin_users')
+                .select('role_id, roles!inner(name)')
+                .eq('email', normalizedEmail)
+                .maybeSingle();
+              
+              if (adminUser?.roles?.name) {
+                userRole = getUserSystemRole(adminUser.roles.name);
+              } else {
+                userRole = 'SSA';
+              }
+            } catch (err) {
+              console.warn('Could not fetch admin role, using default SSA');
+              userRole = 'SSA';
+            }
+            break;
+            
+          case 'entity':
+            try {
+              const { data: entityUser } = await supabase
+                .from('entity_users')
+                .select('name, admin_level')
+                .eq('user_id', userId)
+                .maybeSingle();
+              
+              if (entityUser) {
+                userName = entityUser.name || userName;
+                userRole = 'ENTITY_ADMIN';
+              }
+            } catch (err) {
+              console.warn('Could not fetch entity user details');
+            }
+            userRole = 'ENTITY_ADMIN';
+            break;
+            
+          case 'teacher':
+            userRole = 'TEACHER';
+            break;
+            
+          case 'student':
+            userRole = 'STUDENT';
+            break;
+            
+          default:
+            userRole = 'VIEWER';
+        }
+        
+        // Create authenticated user object
+        const authenticatedUser: User = {
+          id: userId,
+          email: normalizedEmail,
+          name: userName,
+          role: userRole,
+          userType: userType
+        };
+        
+        // Log authentication for audit
+        console.log('[Security] User authenticated:', {
+          userId: userId,
+          email: normalizedEmail,
+          userType: userType,
+          role: userRole,
+          authMethod: authData ? 'supabase_auth' : 'fallback',
+          timestamp: new Date().toISOString()
+        });
+        
+        // Handle Remember Me functionality
+        if (rememberMe) {
+          localStorage.setItem('ggk_remembered_email', normalizedEmail);
+          localStorage.setItem('ggk_remember_session', 'true');
+        } else {
+          localStorage.removeItem('ggk_remembered_email');
+          localStorage.removeItem('ggk_remember_session');
+        }
+        
+        // Set authenticated user
+        setAuthenticatedUser(authenticatedUser);
+        
+        // Check if password change required
+        if (requiresPasswordChange) {
+          toast.warning('Please change your password');
+          navigate('/app/settings/change-password');
+          return;
+        }
+        
+        // Success message
+        toast.success(`Welcome back, ${authenticatedUser.name}!`);
+        
+        // Redirect based on user type
+        const redirectPath = getRedirectPath(userType, userRole);
+        navigate(redirectPath, { replace: true });
       }
-      
-      // Success message
-      toast.success(`Welcome back, ${authenticatedUser.name}!`);
-      
-      // Redirect based on user type
-      const redirectPath = getRedirectPath(user.user_type, userRole);
-      navigate(redirectPath, { replace: true });
       
     } catch (err) {
       console.error('Login error:', err);
@@ -353,13 +468,22 @@ export default function SignInPage() {
     setLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Resend verification email via Supabase Auth
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase()
+      });
       
-      toast.info('If this email is registered, you will receive a verification link shortly.');
-      toast.info('Please check your spam folder if you don\'t see it.');
-      
-      setVerificationNeeded(false);
-      setError(null);
+      if (error) {
+        console.error('Resend verification error:', error);
+        toast.error('Failed to send verification email. Please try again later.');
+      } else {
+        toast.info('If this email is registered, you will receive a verification link shortly.');
+        toast.info('Please check your spam folder if you don\'t see it.');
+        
+        setVerificationNeeded(false);
+        setError(null);
+      }
     } catch (err) {
       console.error('Resend verification error:', err);
       toast.error('Failed to send verification email. Please try again later.');
