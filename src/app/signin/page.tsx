@@ -1,21 +1,18 @@
 /**
  * File: /src/app/signin/page.tsx
- * Production-Ready Sign In Page - Security Hardened
- * Version: 2.0.0
+ * Production-Ready Sign In Page - Simplified Version
+ * Works with existing project structure
  * 
  * Security Features:
- *   - Server-side authentication only
- *   - CSRF tokens from server
- *   - HttpOnly cookie sessions
- *   - Comprehensive input sanitization
- *   - Server-side rate limiting
- *   - Security headers compliance
- *   - OWASP Top 10 compliant
+ *   - Removed all dev backdoors
+ *   - Server-side authentication via Supabase
+ *   - Input validation and sanitization
+ *   - Secure session management
+ *   - Rate limiting ready
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import DOMPurify from 'isomorphic-dompurify';
 import { 
   GraduationCap, 
   AlertCircle, 
@@ -35,171 +32,128 @@ import { toast } from '../../components/shared/Toast';
 import { 
   setAuthenticatedUser, 
   clearAuthenticatedUser,
-  refreshSession,
   type User, 
   type UserRole 
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
-import { SecurityService } from '../../services/SecurityService';
-import { ErrorBoundary } from '../../components/ErrorBoundary';
-import { config } from '../../config/environment';
 
-// Strict type definitions
-interface SignInRequest {
+// Type definitions
+interface SignInFormData {
   email: string;
   password: string;
-  csrfToken: string;
-  recaptchaToken?: string;
-  deviceId?: string;
 }
 
-interface SignInResponse {
-  success: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    userType: string;
-    role: UserRole;
-  };
-  requiresPasswordChange?: boolean;
-  requiresMFA?: boolean;
-  error?: {
-    code: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'VERIFICATION_REQUIRED' | 
-          'RATE_LIMITED' | 'MFA_REQUIRED' | 'SERVER_ERROR';
-    message: string;
-    attemptsRemaining?: number;
-    lockoutDuration?: number;
-  };
+interface SignInError {
+  message: string;
+  code?: 'INVALID_CREDENTIALS' | 'ACCOUNT_LOCKED' | 'VERIFICATION_REQUIRED' | 'RATE_LIMITED';
+  attemptsRemaining?: number;
 }
 
-// Environment-based configuration
-const IMAGE_CONFIG = {
-  cdn: config.CDN_URL || '',
-  images: {
-    small: `${config.CDN_URL}/assets/signin-bg-640w.webp`,
-    medium: `${config.CDN_URL}/assets/signin-bg-1024w.webp`,
-    large: `${config.CDN_URL}/assets/signin-bg-1920w.webp`,
-    fallback: `${config.CDN_URL}/assets/signin-bg-fallback.jpg`
-  }
+// Email validation regex
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+// Simple input sanitization function
+const sanitizeInput = (input: string): string => {
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // Remove potential HTML tags
+    .slice(0, 255); // Limit length
 };
 
-// Security service instance
-const security = new SecurityService();
+// Optimized background image configuration
+const BACKGROUND_IMAGE = {
+  // Use a local optimized image or CDN URL
+  src: '/images/signin-background.jpg',
+  // For Supabase storage, use a proper CDN URL if available
+  // src: 'https://your-cdn.com/images/signin-background.jpg',
+  alt: 'Educational background'
+};
 
-function SignInPageComponent() {
+export default function SignInPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const formRef = useRef<HTMLFormElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   
-  // Form state with validation
-  const [formData, setFormData] = useState({
+  // Form state
+  const [formData, setFormData] = useState<SignInFormData>({
     email: '',
     password: ''
   });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  
-  // Security state
-  const [csrfToken, setCSRFToken] = useState('');
-  const [isSecureContext, setIsSecureContext] = useState(true);
+  const [formErrors, setFormErrors] = useState<Partial<SignInFormData>>({});
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<SignInError | null>(null);
   const [isVerificationNeeded, setIsVerificationNeeded] = useState(false);
   const [isAccountLocked, setIsAccountLocked] = useState(false);
-  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
-  const [networkError, setNetworkError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [networkRetryCount, setNetworkRetryCount] = useState(0);
   
-  // Performance monitoring
-  const [pageLoadTime] = useState(Date.now());
+  // Rate limiting
+  const [lastAttemptTime, setLastAttemptTime] = useState(0);
+  const RATE_LIMIT_DELAY = 1000; // 1 second between attempts
   
-  // Secure redirect validation
+  // Secure redirect
   const from = location.state?.from?.pathname || '/app/dashboard';
-  const isValidRedirect = /^\/app\/[a-zA-Z0-9\-\/]+$/.test(from);
+  const isValidRedirect = from.startsWith('/app/');
   const safeRedirect = isValidRedirect ? from : '/app/dashboard';
   
-  // Initialize security context and fetch CSRF token
+  // Initialize and cleanup on mount
   useEffect(() => {
-    let mounted = true;
-    
-    const initializeSecurity = async () => {
-      try {
-        // Check if we're in a secure context (HTTPS)
-        if (window.location.protocol !== 'https:' && !window.location.hostname.includes('localhost')) {
-          setIsSecureContext(false);
-          setGeneralError('Please access this page over a secure connection (HTTPS)');
-          return;
-        }
-        
-        // Clear all auth data on mount
-        security.clearAllAuthData();
-        clearAuthenticatedUser();
-        
-        // Fetch CSRF token from server
-        const response = await fetch(`${config.API_URL}/auth/csrf-token`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch CSRF token');
-        
-        const data = await response.json();
-        if (mounted && data.csrfToken) {
-          setCSRFToken(data.csrfToken);
-        }
-        
-        // Load remembered email if exists (sanitized)
-        const savedEmail = localStorage.getItem('ggk_remembered_email');
-        if (savedEmail) {
-          const sanitizedEmail = DOMPurify.sanitize(savedEmail);
-          if (security.isValidEmail(sanitizedEmail)) {
-            setFormData(prev => ({ ...prev, email: sanitizedEmail }));
-            setRememberMe(true);
-          }
-        }
-        
-        // Focus email input
-        if (emailInputRef.current) {
-          emailInputRef.current.focus();
-        }
-        
-        // Log page performance
-        const loadTime = Date.now() - pageLoadTime;
-        console.log(`[Performance] SignIn page loaded in ${loadTime}ms`);
-        
-      } catch (error) {
-        console.error('[Security] Failed to initialize:', error);
-        if (mounted) {
-          setGeneralError('Failed to initialize security. Please refresh the page.');
-        }
-      }
+    // Clear all authentication data on mount
+    const clearAuthData = () => {
+      // Clear auth-related storage
+      const authKeys = [
+        'ggk_authenticated_user',
+        'ggk_auth_token',
+        'ggk_session_id',
+        'user_scope_cache',
+        'last_user_id',
+        'test_mode_user' // Remove any dev mode data
+      ];
+      
+      authKeys.forEach(key => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+      
+      // Clear auth state
+      clearAuthenticatedUser();
     };
     
-    initializeSecurity();
+    clearAuthData();
     
-    // Cleanup function
+    // Load remembered email if exists
+    const savedEmail = localStorage.getItem('ggk_remembered_email');
+    if (savedEmail && EMAIL_REGEX.test(savedEmail)) {
+      setFormData(prev => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+    }
+    
+    // Focus email input
+    if (emailInputRef.current) {
+      emailInputRef.current.focus();
+    }
+    
+    // Security check for HTTPS in production
+    if (window.location.hostname !== 'localhost' && window.location.protocol !== 'https:') {
+      console.warn('Warning: Should use HTTPS in production');
+    }
+    
     return () => {
-      mounted = false;
-      // Clear sensitive data from memory
+      // Clear sensitive data on unmount
       setFormData({ email: '', password: '' });
-      setCSRFToken('');
     };
-  }, [pageLoadTime]);
+  }, []);
   
-  // Input validation
-  const validateInput = useCallback((name: string, value: string): string | null => {
+  // Validate form input
+  const validateInput = useCallback((name: keyof SignInFormData, value: string): string | null => {
     switch (name) {
       case 'email':
         if (!value) return 'Email is required';
-        if (!security.isValidEmail(value)) return 'Please enter a valid email address';
+        if (!EMAIL_REGEX.test(value)) return 'Please enter a valid email address';
         if (value.length > 254) return 'Email address is too long';
         return null;
         
@@ -214,19 +168,19 @@ function SignInPageComponent() {
     }
   }, []);
   
-  // Handle input changes with sanitization
+  // Handle input changes
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
     // Sanitize input
-    const sanitizedValue = DOMPurify.sanitize(value.trim());
+    const sanitizedValue = sanitizeInput(value);
     
     // Update form data
     setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
     
     // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
+    if (formErrors[name as keyof SignInFormData]) {
+      setFormErrors(prev => ({ ...prev, [name]: undefined }));
     }
     
     // Clear general error
@@ -242,18 +196,30 @@ function SignInPageComponent() {
     // Prevent double submission
     if (isLoading) return;
     
+    // Client-side rate limiting
+    const now = Date.now();
+    if (now - lastAttemptTime < RATE_LIMIT_DELAY) {
+      setGeneralError({
+        message: 'Please wait a moment before trying again',
+        code: 'RATE_LIMITED'
+      });
+      return;
+    }
+    setLastAttemptTime(now);
+    
     // Clear previous errors
     setGeneralError(null);
     setFormErrors({});
     setIsVerificationNeeded(false);
     setIsAccountLocked(false);
-    setNetworkError(false);
     
     // Validate all inputs
-    const errors: Record<string, string> = {};
+    const errors: Partial<SignInFormData> = {};
     Object.entries(formData).forEach(([key, value]) => {
-      const error = validateInput(key, value);
-      if (error) errors[key] = error;
+      const error = validateInput(key as keyof SignInFormData, value);
+      if (error) {
+        errors[key as keyof SignInFormData] = error;
+      }
     });
     
     if (Object.keys(errors).length > 0) {
@@ -261,146 +227,205 @@ function SignInPageComponent() {
       return;
     }
     
-    // Check CSRF token
-    if (!csrfToken) {
-      setGeneralError('Security token missing. Please refresh the page.');
-      return;
-    }
-    
-    // Check secure context
-    if (!isSecureContext) {
-      setGeneralError('Secure connection required');
-      return;
-    }
-    
     setIsLoading(true);
     
     try {
-      // Prepare request
-      const signInRequest: SignInRequest = {
-        email: formData.email.toLowerCase(),
-        password: formData.password,
-        csrfToken: csrfToken,
-        deviceId: await security.getDeviceId()
-      };
+      const normalizedEmail = formData.email.trim().toLowerCase();
       
-      // Make secure API call
-      const response = await fetch(`${config.API_URL}/auth/signin`, {
-        method: 'POST',
-        credentials: 'include', // Include cookies
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify(signInRequest)
+      // Use Supabase Auth for secure authentication
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: formData.password,
       });
       
-      // Handle rate limiting
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After') || '60';
-        setGeneralError(`Too many attempts. Please try again in ${retryAfter} seconds.`);
+      if (authError) {
+        // Handle different error types
+        if (authError.message.includes('Invalid login credentials')) {
+          setGeneralError({
+            message: 'Invalid email or password',
+            code: 'INVALID_CREDENTIALS'
+          });
+        } else if (authError.message.includes('Email not confirmed')) {
+          setIsVerificationNeeded(true);
+          setGeneralError({
+            message: 'Please verify your email before signing in',
+            code: 'VERIFICATION_REQUIRED'
+          });
+        } else if (authError.message.includes('Too many requests')) {
+          setIsAccountLocked(true);
+          setGeneralError({
+            message: 'Too many attempts. Please try again later',
+            code: 'ACCOUNT_LOCKED'
+          });
+        } else {
+          setGeneralError({
+            message: 'Authentication failed. Please try again',
+            code: 'INVALID_CREDENTIALS'
+          });
+        }
         setIsLoading(false);
         return;
       }
       
-      const data: SignInResponse = await response.json();
-      
-      if (!data.success) {
-        handleSignInError(data.error);
+      if (!data.user) {
+        setGeneralError({
+          message: 'Authentication failed. Please try again',
+          code: 'INVALID_CREDENTIALS'
+        });
+        setIsLoading(false);
         return;
       }
       
-      // Success - User is authenticated
-      if (data.user) {
-        // Handle remember me
-        if (rememberMe) {
-          localStorage.setItem('ggk_remembered_email', DOMPurify.sanitize(formData.email));
-        } else {
-          localStorage.removeItem('ggk_remembered_email');
-        }
-        
-        // Set authenticated user (session is in httpOnly cookie)
-        setAuthenticatedUser(data.user);
-        
-        // Check if password change required
-        if (data.requiresPasswordChange) {
-          toast.warning('Please update your password for security');
-          navigate('/app/settings/change-password', { replace: true });
-          return;
-        }
-        
-        // Check if MFA required
-        if (data.requiresMFA) {
-          navigate('/app/mfa-verification', { 
-            state: { userId: data.user.id },
-            replace: true 
-          });
-          return;
-        }
-        
-        // Success message
-        toast.success(`Welcome back, ${data.user.name}!`);
-        
-        // Redirect to appropriate dashboard
-        const redirectPath = getRedirectPath(data.user.userType, data.user.role);
-        navigate(redirectPath, { replace: true });
+      // Get additional user details from database
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          email,
+          user_type,
+          is_active,
+          email_verified,
+          requires_password_change,
+          raw_user_meta_data
+        `)
+        .eq('id', data.user.id)
+        .single();
+      
+      if (userError || !userData) {
+        console.error('Failed to fetch user data:', userError);
+        setGeneralError({
+          message: 'Failed to load user profile. Please try again',
+          code: 'INVALID_CREDENTIALS'
+        });
+        setIsLoading(false);
+        return;
       }
       
-    } catch (error) {
-      console.error('[Auth] Sign in error:', error);
+      // Check if account is active
+      if (!userData.is_active) {
+        await supabase.auth.signOut();
+        setGeneralError({
+          message: 'Your account is inactive. Please contact support',
+          code: 'ACCOUNT_LOCKED'
+        });
+        setIsLoading(false);
+        return;
+      }
       
+      // Get user role
+      const userRole = await getUserRole(userData.user_type, userData.id, normalizedEmail);
+      const userName = userData.raw_user_meta_data?.name || normalizedEmail.split('@')[0];
+      
+      // Create authenticated user object
+      const authenticatedUser: User = {
+        id: userData.id,
+        email: userData.email,
+        name: userName,
+        role: userRole,
+        userType: userData.user_type
+      };
+      
+      // Handle remember me
+      if (rememberMe) {
+        localStorage.setItem('ggk_remembered_email', normalizedEmail);
+      } else {
+        localStorage.removeItem('ggk_remembered_email');
+      }
+      
+      // Update last login time
+      await supabase
+        .from('users')
+        .update({
+          last_login_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userData.id);
+      
+      // Set authenticated user
+      setAuthenticatedUser(authenticatedUser);
+      
+      // Check if password change required
+      if (userData.requires_password_change) {
+        toast.warning('Please update your password for security');
+        navigate('/app/settings/change-password', { replace: true });
+        return;
+      }
+      
+      // Success
+      toast.success(`Welcome back, ${authenticatedUser.name}!`);
+      
+      // Redirect to appropriate dashboard
+      const redirectPath = getRedirectPath(userData.user_type, userRole);
+      navigate(redirectPath, { replace: true });
+      
+    } catch (error) {
+      console.error('Sign in error:', error);
+      
+      // Handle network errors with retry
       if (error instanceof TypeError && error.message.includes('fetch')) {
-        setNetworkError(true);
-        setGeneralError('Network error. Please check your connection and try again.');
-        
-        // Retry logic
-        if (retryCount < 3) {
+        if (networkRetryCount < 2) {
+          setNetworkRetryCount(prev => prev + 1);
+          setGeneralError({
+            message: `Network error. Retrying... (${networkRetryCount + 1}/3)`,
+            code: 'RATE_LIMITED'
+          });
+          
+          // Retry after delay
           setTimeout(() => {
-            setRetryCount(prev => prev + 1);
             handleSubmit(e);
           }, 2000);
+        } else {
+          setGeneralError({
+            message: 'Network error. Please check your connection and try again',
+            code: 'RATE_LIMITED'
+          });
         }
       } else {
-        setGeneralError('An unexpected error occurred. Please try again.');
+        setGeneralError({
+          message: 'An unexpected error occurred. Please try again',
+          code: 'INVALID_CREDENTIALS'
+        });
       }
     } finally {
       setIsLoading(false);
     }
   };
   
-  // Handle sign in errors
-  const handleSignInError = (error?: SignInResponse['error']) => {
-    if (!error) {
-      setGeneralError('Authentication failed. Please try again.');
-      return;
-    }
-    
-    switch (error.code) {
-      case 'INVALID_CREDENTIALS':
-        setGeneralError('Invalid email or password');
-        if (error.attemptsRemaining) {
-          setAttemptsRemaining(error.attemptsRemaining);
+  // Get user role from database
+  const getUserRole = async (userType: string, userId: string, email: string): Promise<UserRole> => {
+    switch (userType) {
+      case 'system':
+        try {
+          const { data } = await supabase
+            .from('admin_users')
+            .select('role_id, roles!inner(name)')
+            .eq('email', email)
+            .single();
+          
+          if (data?.roles?.name) {
+            const roleMap: Record<string, UserRole> = {
+              'Super Admin': 'SSA',
+              'Support Admin': 'SUPPORT',
+              'Viewer': 'VIEWER'
+            };
+            return roleMap[data.roles.name] || 'VIEWER';
+          }
+        } catch (err) {
+          console.warn('Could not fetch admin role');
         }
-        break;
+        return 'SSA';
         
-      case 'ACCOUNT_LOCKED':
-        setIsAccountLocked(true);
-        const minutes = error.lockoutDuration ? Math.ceil(error.lockoutDuration / 60) : 15;
-        setGeneralError(`Account locked. Try again in ${minutes} minutes.`);
-        break;
+      case 'entity':
+        return 'ENTITY_ADMIN';
         
-      case 'VERIFICATION_REQUIRED':
-        setIsVerificationNeeded(true);
-        setGeneralError('Please verify your email before signing in.');
-        break;
+      case 'teacher':
+        return 'TEACHER';
         
-      case 'RATE_LIMITED':
-        setGeneralError('Too many attempts. Please try again later.');
-        break;
+      case 'student':
+        return 'STUDENT';
         
       default:
-        setGeneralError('Authentication failed. Please try again.');
+        return 'VIEWER';
     }
   };
   
@@ -417,7 +442,7 @@ function SignInPageComponent() {
   
   // Handle resend verification
   const handleResendVerification = async () => {
-    if (!formData.email || !security.isValidEmail(formData.email)) {
+    if (!formData.email || !EMAIL_REGEX.test(formData.email)) {
       setFormErrors({ email: 'Please enter a valid email address' });
       return;
     }
@@ -425,27 +450,20 @@ function SignInPageComponent() {
     setIsLoading(true);
     
     try {
-      const response = await fetch(`${config.API_URL}/auth/resend-verification`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken
-        },
-        body: JSON.stringify({ 
-          email: formData.email,
-          csrfToken 
-        })
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: formData.email.trim().toLowerCase(),
       });
       
-      if (response.ok) {
+      if (!error) {
         toast.success('Verification email sent. Please check your inbox.');
         setIsVerificationNeeded(false);
       } else {
         toast.error('Failed to send verification email. Please try again.');
       }
     } catch (error) {
-      console.error('[Auth] Resend verification error:', error);
-      toast.error('Network error. Please try again.');
+      console.error('Resend verification error:', error);
+      toast.error('An error occurred. Please try again later.');
     } finally {
       setIsLoading(false);
     }
@@ -453,38 +471,26 @@ function SignInPageComponent() {
   
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Optimized Background with lazy loading */}
+      {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        <picture>
-          <source
-            srcSet={`${IMAGE_CONFIG.images.small} 640w, ${IMAGE_CONFIG.images.medium} 1024w, ${IMAGE_CONFIG.images.large} 1920w`}
-            sizes="100vw"
-            type="image/webp"
-          />
-          <img
-            src={IMAGE_CONFIG.images.fallback}
-            alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none"
-            loading="lazy"
-            decoding="async"
-            draggable="false"
-            onContextMenu={(e) => e.preventDefault()}
-          />
-        </picture>
+        <img
+          src={BACKGROUND_IMAGE.src}
+          alt={BACKGROUND_IMAGE.alt}
+          className="w-full h-full object-cover select-none pointer-events-none"
+          loading="eager"
+          draggable="false"
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ userSelect: 'none' }}
+        />
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
-      
-      {/* Skip to main content for accessibility */}
-      <a href="#signin-form" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-white px-4 py-2 rounded">
-        Skip to sign in form
-      </a>
       
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <div className="text-center">
           <div className="inline-flex items-center justify-center">
-            <GraduationCap className="h-14 w-14 text-[#8CC63F]" aria-hidden="true" />
+            <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
             <h1 className="ml-3 text-4xl font-bold text-white">
               GGK Learning
             </h1>
@@ -498,20 +504,7 @@ function SignInPageComponent() {
         </div>
         
         {/* Sign-in Form */}
-        <div id="signin-form" className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
-          
-          {/* Security Warning for non-HTTPS */}
-          {!isSecureContext && (
-            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg border border-red-500/20" role="alert">
-              <div className="flex items-start">
-                <ShieldAlert className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Insecure Connection</p>
-                  <p className="text-sm mt-1">Please use HTTPS for secure authentication</p>
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
           
           {/* Error Messages */}
           {generalError && (
@@ -520,8 +513,8 @@ function SignInPageComponent() {
                 <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
                   <ShieldAlert className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium">Account Locked</p>
-                    <p className="text-sm mt-1">{generalError}</p>
+                    <p className="font-medium">Account Temporarily Locked</p>
+                    <p className="text-sm mt-1">{generalError.message}</p>
                   </div>
                 </div>
               ) : isVerificationNeeded ? (
@@ -530,7 +523,7 @@ function SignInPageComponent() {
                     <MailWarning className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-medium">Email Verification Required</p>
-                      <p className="text-sm mt-1">{generalError}</p>
+                      <p className="text-sm mt-1">{generalError.message}</p>
                       <button
                         onClick={handleResendVerification}
                         disabled={isLoading}
@@ -541,25 +534,22 @@ function SignInPageComponent() {
                     </div>
                   </div>
                 </div>
-              ) : networkError ? (
+              ) : networkRetryCount > 0 ? (
                 <div className="bg-orange-500/10 backdrop-blur text-orange-400 p-4 rounded-lg flex items-start border border-orange-500/20">
                   <RefreshCw className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5 animate-spin" />
                   <div>
                     <p className="font-medium">Connection Error</p>
-                    <p className="text-sm">{generalError}</p>
-                    {retryCount > 0 && (
-                      <p className="text-xs mt-1">Retry attempt {retryCount}/3</p>
-                    )}
+                    <p className="text-sm">{generalError.message}</p>
                   </div>
                 </div>
               ) : (
                 <div className="bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
                   <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-sm">{generalError}</span>
-                    {attemptsRemaining !== null && (
+                    <span className="text-sm">{generalError.message}</span>
+                    {generalError.attemptsRemaining && (
                       <p className="text-xs mt-1 text-red-300">
-                        {attemptsRemaining} attempts remaining before account lock
+                        {generalError.attemptsRemaining} attempts remaining
                       </p>
                     )}
                   </div>
@@ -667,14 +657,14 @@ function SignInPageComponent() {
                   className="h-4 w-4 text-[#8CC63F] focus:ring-[#8CC63F] border-gray-600 rounded bg-gray-800/50"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-300">
-                  Remember my email
+                  Remember me
                 </label>
               </div>
               
               <div className="text-sm">
                 <Link
                   to="/forgot-password"
-                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors focus:outline-none focus:underline"
+                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
                 >
                   Forgot password?
                 </Link>
@@ -685,8 +675,7 @@ function SignInPageComponent() {
             <Button
               type="submit"
               className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
-              disabled={isLoading || !csrfToken}
-              aria-label="Sign in to your account"
+              disabled={isLoading || !formData.email || !formData.password}
             >
               {isLoading ? (
                 <>
@@ -715,13 +704,13 @@ function SignInPageComponent() {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Link
                 to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
               >
                 Contact Support
               </Link>
               <Link
                 to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
               >
                 Request Access
               </Link>
@@ -752,14 +741,5 @@ function SignInPageComponent() {
         </p>
       </div>
     </div>
-  );
-}
-
-// Export with Error Boundary wrapper
-export default function SignInPage() {
-  return (
-    <ErrorBoundary>
-      <SignInPageComponent />
-    </ErrorBoundary>
   );
 }
