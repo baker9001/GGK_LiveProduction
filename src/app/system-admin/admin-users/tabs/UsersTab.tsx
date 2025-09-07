@@ -30,6 +30,8 @@
  * Removed:
  *   - All API calls (makeAPICall removed)
  *   - Supabase auth dependencies
+ * 
+ * UPDATED: Added Supabase Auth integration for user creation
  */
 
 import React, { useState, useEffect } from 'react';
@@ -59,6 +61,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
@@ -75,6 +78,20 @@ import {
   mapUserTypeToRole,
   getAuthenticatedUser 
 } from '../../../../lib/auth';
+
+// ===== SUPABASE ADMIN CLIENT =====
+// NOTE: You'll need to add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file
+// This key should ONLY be used on the backend/server-side in production
+const supabaseAdmin = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY, // Fallback for testing
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // ===== VALIDATION SCHEMAS =====
 const adminUserSchema = z.object({
@@ -383,7 +400,7 @@ export default function UsersTab() {
 
   // ===== MUTATIONS =====
   
-  // Create/update user mutation (NO API)
+  // Create/update user mutation with Supabase Auth integration
   const userMutation = useMutation(
     async (formData: FormData) => {
       // Check for email duplication before submitting
@@ -453,16 +470,16 @@ export default function UsersTab() {
         return { success: true, message: 'User updated successfully' };
         
       } else {
-        // ===== CREATE NEW USER (Direct Database) =====
+        // ===== CREATE NEW USER WITH SUPABASE AUTH =====
         
-        // Check if email already exists
-        const { data: existingUser } = await supabase
-          .from('users')
+        // Check if email already exists in admin_users
+        const { data: existingAdminUser } = await supabase
+          .from('admin_users')
           .select('id')
           .eq('email', validatedData.email)
           .maybeSingle();
         
-        if (existingUser) {
+        if (existingAdminUser) {
           throw new Error('Email already exists');
         }
         
@@ -470,75 +487,118 @@ export default function UsersTab() {
         const finalPassword = password || generateComplexPassword();
         const isGeneratedPassword = !password;
         
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(finalPassword, salt);
-        
-        // 1. Create user in users table
-        const { data: newUser, error: userError } = await supabase
-          .from('users')
-          .insert({
+        try {
+          // 1. Create user in Supabase Auth (auth.users table)
+          const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: validatedData.email,
-            password_hash: passwordHash,
-            user_type: 'system',
-            is_active: validatedData.status === 'active',
-            email_verified: false,
-            verification_token: generateVerificationToken(),
-            verification_sent_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            raw_user_meta_data: {
+            password: finalPassword,
+            email_confirm: false, // Require email verification
+            user_metadata: {
               name: validatedData.name,
-              created_by: currentUser?.id
+              created_by: currentUser?.id,
+              role: 'admin'
             }
-          })
-          .select()
-          .single();
-        
-        if (userError) throw userError;
-        
-        // 2. Create admin user profile
-        const { error: adminError } = await supabase
-          .from('admin_users')
-          .insert({
-            id: newUser.id,
-            name: validatedData.name,
-            email: validatedData.email,
-            role_id: validatedData.role_id,
-            status: validatedData.status,
-            created_at: new Date().toISOString()
           });
-        
-        if (adminError) {
-          // Rollback: delete the user if admin_users insert fails
-          await supabase.from('users').delete().eq('id', newUser.id);
-          throw adminError;
-        }
-        
-        // 3. Log the creation
-        await supabase
-          .from('audit_logs')
-          .insert({
-            user_id: currentUser?.id,
-            action: 'create_admin_user',
-            entity_type: 'admin_user',
-            entity_id: newUser.id,
-            details: {
+          
+          if (authError) {
+            console.error('Supabase Auth Error:', authError);
+            // Check for specific error types
+            if (authError.message?.includes('already registered')) {
+              throw new Error('Email already registered in authentication system');
+            }
+            throw authError;
+          }
+          
+          if (!authData.user) {
+            throw new Error('Failed to create user in authentication system');
+          }
+          
+          // 2. Hash password for legacy system (if you still need it)
+          const salt = await bcrypt.genSalt(10);
+          const passwordHash = await bcrypt.hash(finalPassword, salt);
+          
+          // 3. Create/Update user in users table (to maintain consistency)
+          const { error: userError } = await supabase
+            .from('users')
+            .upsert({
+              id: authData.user.id,
+              email: validatedData.email,
+              password_hash: passwordHash,
+              user_type: 'system',
+              is_active: validatedData.status === 'active',
+              email_verified: false,
+              verification_token: generateVerificationToken(),
+              verification_sent_at: new Date().toISOString(),
+              created_at: authData.user.created_at,
+              raw_user_meta_data: {
+                name: validatedData.name,
+                created_by: currentUser?.id
+              }
+            });
+          
+          if (userError) {
+            // Try to clean up the auth user if database insert fails
+            console.error('Database Error:', userError);
+            await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+            throw userError;
+          }
+          
+          // 4. Create admin user profile
+          const { error: adminError } = await supabase
+            .from('admin_users')
+            .insert({
+              id: authData.user.id,
+              name: validatedData.name,
               email: validatedData.email,
               role_id: validatedData.role_id,
-              created_by: currentUser?.email
-            },
-            created_at: new Date().toISOString()
-          });
-        
-        return {
-          success: true,
-          message: 'User created successfully',
-          user: {
-            id: newUser.id,
-            email: newUser.email,
-            temporary_password: isGeneratedPassword ? finalPassword : undefined
+              status: validatedData.status,
+              created_at: new Date().toISOString()
+            });
+          
+          if (adminError) {
+            // Rollback: delete from users table and auth
+            console.error('Admin User Error:', adminError);
+            await supabase.from('users').delete().eq('id', authData.user.id);
+            await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+            throw adminError;
           }
-        };
+          
+          // 5. Log the creation
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'create_admin_user',
+              entity_type: 'admin_user',
+              entity_id: authData.user.id,
+              details: {
+                email: validatedData.email,
+                role_id: validatedData.role_id,
+                created_by: currentUser?.email,
+                created_via: 'supabase_auth'
+              },
+              created_at: new Date().toISOString()
+            });
+          
+          return {
+            success: true,
+            message: 'User created successfully in Supabase Auth',
+            user: {
+              id: authData.user.id,
+              email: authData.user.email,
+              temporary_password: isGeneratedPassword ? finalPassword : undefined
+            }
+          };
+        } catch (error) {
+          console.error('Error creating user:', error);
+          // Re-throw with a more user-friendly message if needed
+          if (error instanceof Error) {
+            if (error.message.includes('already registered') || error.message.includes('already exists')) {
+              throw new Error('This email is already registered. Please use a different email address.');
+            }
+          }
+          throw error;
+        }
       }
     },
     {
@@ -548,7 +608,7 @@ export default function UsersTab() {
         if (!editingUser && data?.user?.temporary_password) {
           // Show password modal for new users with generated password
           setGeneratedPassword(data.user.temporary_password);
-          toast.success('User created successfully. Copy the temporary password!');
+          toast.success('User created successfully in Supabase. Copy the temporary password!');
         } else {
           setIsFormOpen(false);
           setEditingUser(null);
@@ -565,7 +625,7 @@ export default function UsersTab() {
           
           // Show additional info about verification for new users
           if (!editingUser && data?.user) {
-            toast.info('Verification email has been sent to the user', {
+            toast.info('User created in Supabase Auth. They can now sign in after verifying their email.', {
               duration: 5000
             });
           }
@@ -587,7 +647,7 @@ export default function UsersTab() {
           console.error('Error:', error);
           const errorMessage = error.message || 'Operation failed';
           
-          if (errorMessage.includes('already exists')) {
+          if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
             setFormErrors({ email: 'This email is already registered' });
           } else {
             setFormErrors({ form: errorMessage });
@@ -1695,12 +1755,12 @@ export default function UsersTab() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {editingUser 
                   ? `A new password has been set for ${editingUser.name}.`
-                  : 'A temporary password has been generated.'
+                  : 'User has been created in Supabase Auth with a temporary password.'
                 }
               </p>
               {!editingUser && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  The user will receive a verification email and must verify their email before logging in.
+                  The user can now sign in with their email and this password after verifying their email.
                 </p>
               )}
             </div>
