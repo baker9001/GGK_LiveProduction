@@ -277,8 +277,8 @@ const ALL_SUBJECTS = [
   }
 ];
 
-// Get priority subjects (first 6)
-const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority).slice(0, 6);
+// Get priority subjects (first 15)
+const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority).slice(0, 15);
 const ADDITIONAL_SUBJECTS = ALL_SUBJECTS.filter(s => !s.priority);
 
 // ========================================
