@@ -82,7 +82,7 @@ const PLACEHOLDER_SHIMMER = `data:image/svg+xml;base64,${btoa(`
 // ALL SUBJECTS DATA
 // ========================================
 const ALL_SUBJECTS = [
-  // Sciences & Mathematics (Priority)
+  // Sciences & Mathematics (6 Priority)
   { 
     title: "Mathematics", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU",
@@ -119,12 +119,13 @@ const ALL_SUBJECTS = [
     priority: true
   },
   { 
-    title: "Agriculture", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Agriculture.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FncmljdWx0dXJlLmpwZyIsImlhdCI6MTc1NzE4NTI0OCwiZXhwIjoxNzg4NzIxMjQ4fQ.orw7nqPp0Mlx-uXoqRVI9fpGL9GrsutVK74Ow9mtpcg",
+    title: "Computer Science", 
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UucG5nIiwiaWF0IjoxNzU3MTg3OTI2LCJleHAiOjE3ODg3MjM5MjZ9.aOKRnQoiyeDCBNrcFt0jijMem6t144i7ECb3BwjRwS0",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Agricultural science and farming practices"
+    description: "Programming, algorithms, and computational thinking",
+    priority: true
   },
-  // Languages (Priority)
+  // Languages (5 Priority)
   { 
     title: "English Language", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20(2).jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggKDIpLmpwZyIsImlhdCI6MTc1NzE4NTM4MywiZXhwIjoxNzg4NzIxMzgzfQ.4_mdpJQeOjQpd4cNvb_3Hmth_mhgM2nZIUL22l3VRs8",
@@ -150,7 +151,8 @@ const ALL_SUBJECTS = [
     title: "Spanish", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Spanish%20language.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1NwYW5pc2ggbGFuZ3VhZ2UuanBnIiwiaWF0IjoxNzU3MTg1NjM0LCJleHAiOjE3ODg3MjE2MzR9.9ikJE82R8-EsPZUyqEHnhNdfbk4VR5LU0dPIAjCnaLE",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Master Spanish communication and Hispanic culture"
+    description: "Master Spanish communication and Hispanic culture",
+    priority: true
   },
   { 
     title: "Arabic", 
@@ -159,13 +161,7 @@ const ALL_SUBJECTS = [
     description: "Master Arabic script and communication",
     priority: true
   },
-  { 
-    title: "English as a Second Language", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20as%20a%20Second%20Language.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggYXMgYSBTZWNvbmQgTGFuZ3VhZ2UuanBnIiwiaWF0IjoxNzU3MTg1Mzk0LCJleHAiOjE3ODg3MjEzOTR9.fs_BUkf7yTqxNUGYTX6GPYso9KGVuCJ3MRBS10zoesc",
-    placeholder: PLACEHOLDER_SHIMMER,
-    description: "English proficiency for non-native speakers"
-  },
-  // Humanities & Social Sciences (Priority)
+  // Humanities & Social Sciences (4 Priority)
   { 
     title: "History", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/History.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0hpc3RvcnkuanBnIiwiaWF0IjoxNzU3MTg1NTUwLCJleHAiOjE3ODg3MjE1NTB9.4rtaz4CoPJM2QPqKGz5Lg3kvBnDWsGHNDCfyz_nFVTc",
@@ -191,7 +187,21 @@ const ALL_SUBJECTS = [
     title: "Business Studies", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Business%20Studies.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0J1c2luZXNzIFN0dWRpZXMuanBnIiwiaWF0IjoxNzU3MTg1MjkxLCJleHAiOjE3ODg3MjEyOTF9.Yq_LYb0s9NORcdQqIR1z_0K7O6FfAJbub8O4YKOIAzQ",
     placeholder: PLACEHOLDER_SHIMMER,
-    description: "Learn business concepts and entrepreneurship"
+    description: "Learn business concepts and entrepreneurship",
+    priority: true
+  },
+  // Additional subjects (Non-priority)
+  { 
+    title: "Agriculture", 
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Agriculture.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FncmljdWx0dXJlLmpwZyIsImlhdCI6MTc1NzE4NTI0OCwiZXhwIjoxNzg4NzIxMjQ4fQ.orw7nqPp0Mlx-uXoqRVI9fpGL9GrsutVK74Ow9mtpcg",
+    placeholder: PLACEHOLDER_SHIMMER,
+    description: "Agricultural science and farming practices"
+  },
+  { 
+    title: "English as a Second Language", 
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20as%20a%20Second%20Language.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggYXMgYSBTZWNvbmQgTGFuZ3VhZ2UuanBnIiwiaWF0IjoxNzU3MTg1Mzk0LCJleHAiOjE3ODg3MjEzOTR9.fs_BUkf7yTqxNUGYTX6GPYso9KGVuCJ3MRBS10zoesc",
+    placeholder: PLACEHOLDER_SHIMMER,
+    description: "English proficiency for non-native speakers"
   },
   { 
     title: "Sociology", 
@@ -204,14 +214,6 @@ const ALL_SUBJECTS = [
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Psychology.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BzeWNob2xvZ3kuanBnIiwiaWF0IjoxNzU3MTg1NzA3LCJleHAiOjE3ODg3MjE3MDd9.kqcK-V3USnOuuC7K8yBrWHRrR3pmexYDEzw4wCAyjbE",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Explore human mind and behavior"
-  },
-  // Technology & Business (Priority)
-  { 
-    title: "Computer Science", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UucG5nIiwiaWF0IjoxNzU3MTg3OTI2LCJleHAiOjE3ODg3MjM5MjZ9.aOKRnQoiyeDCBNrcFt0jijMem6t144i7ECb3BwjRwS0",
-    placeholder: PLACEHOLDER_SHIMMER,
-    description: "Programming, algorithms, and computational thinking",
-    priority: true
   },
   { 
     title: "Information Technology", 
@@ -243,7 +245,6 @@ const ALL_SUBJECTS = [
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Develop entrepreneurial skills and business innovation"
   },
-  // Creative Arts & Physical Education
   { 
     title: "Art & Design", 
     image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Art%20&%20Design.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0FydCAmIERlc2lnbi5qcGciLCJpYXQiOjE3NTcxODUyNjcsImV4cCI6MTc4ODcyMTI2N30.ci4ImwMdfsXLU3gSqI-bFZAXTQRiZbFaIJmkbKACQ5k",
@@ -270,20 +271,20 @@ const ALL_SUBJECTS = [
   },
   { 
     title: "Physical Education", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physical%20Education.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BoeXNpY2FsIEVkdWNhdGlvbi5qcGciLCJpYXQiOjE3NTcxODU3NDIsImV4cCI6MTc4ODcyMTc0Mn0.ZkAsxZz5DkjWIS2hH-7O5zUjN9I2pAqds0NVmwEn1Sw",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physical%20Education.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL1BoeXNpY2FsIEVkdWNhdGlvbi5qcGciLCJpYXQiOjE3NTcxODU3NDIsImV4cCI6MTc4ODcyMTc0Mn0.ZkAsxZz5DkjWIS2hH-7O5zUjN9I2pAqds0NVmwEn1Sw",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Sports science and physical fitness"
   },
   { 
     title: "Food & Nutrition", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Food%20&%20Nutrition.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Zvb2QgJiBOdXRyaXRpb24uanBnIiwiaWF0IjoxNzU3MTg1NDk2LCJleHAiOjE3ODg3MjE0OTZ9.anNvQe5bGpW94U_iz0dnZBoeJnJsBXpQ81T-A8TJwmM",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Food%20&%20Nutrition.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0Zvb2QgJiBOdXRyaXRpb24uanBnIiwiaWF0IjoxNzU3MTg1NDk2LCJleHAiOjE3ODg3MjE0OTZ9.anNvQe5bGpW94U_iz0dnZBoeJnJsBXpQ81T-A8TJwmM",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Nutritional science and food preparation"
   }
 ];
 
-// Get priority subjects (first 15)
-const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority).slice(0, 15);
+// Get priority subjects (exactly 15)
+const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority);
 const ADDITIONAL_SUBJECTS = ALL_SUBJECTS.filter(s => !s.priority);
 
 // ========================================
