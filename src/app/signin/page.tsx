@@ -623,6 +623,19 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
+            
+            {/* Sign up link */}
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-400">
+                Don't have an account?{' '}
+                <Link
+                  to="/signup"
+                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
+                >
+                  Sign up here
+                </Link>
+              </p>
+            </div>
           </div>
           
           {/* Back to Home Button */}
