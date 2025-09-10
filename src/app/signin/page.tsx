@@ -129,11 +129,11 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password');
+          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
         } else if (authError.message.includes('Too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else {
-          setError('Invalid email or password. Please check your credentials or use the development login below for testing.');
+          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
         }
         
         setLoading(false);
