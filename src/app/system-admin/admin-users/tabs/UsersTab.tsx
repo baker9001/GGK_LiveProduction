@@ -1,27 +1,29 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * Dependencies: 
- *   - React, react-router-dom
- *   - @tanstack/react-query
- *   - lucide-react
- *   - zod
- *   - bcryptjs
- *   - crypto
- *   - Custom components and lib
  * 
- * CORRECTED VERSION:
- *   - Password changes now update BOTH Supabase Auth AND users table
- *   - Password reset uses Supabase Auth's built-in functionality
- *   - User creation correctly syncs with both systems (already working)
+ * FINAL CORRECTED VERSION - v2.0
+ * ================================
  * 
- * Database Tables:
- *   - users (metadata and legacy support)
- *   - admin_users (profile only)
- *   - roles
- *   - audit_logs
+ * Critical Changes:
+ * 1. Password changes update BOTH Supabase Auth AND users table
+ * 2. Password reset uses Supabase Auth's built-in functionality  
+ * 3. Email verification uses Supabase Auth's built-in system
+ * 4. User deactivation syncs with Supabase Auth (bans user)
+ * 5. Email updates sync to Supabase Auth
+ * 6. Better error handling for missing service role key
+ * 7. Non-breaking audit logs
+ * 8. Proper state cleanup
+ * 
+ * IMPORTANT CONFIGURATION:
+ * ========================
+ * For full admin functionality, add to your .env file:
+ * VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+ * 
+ * Without this key, password changes and user management will have limited functionality.
+ * In production, these admin operations should be moved to a secure backend API.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -45,7 +47,8 @@ import {
   Shield,
   Printer,
   User,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { createClient } from '@supabase/supabase-js';
@@ -67,18 +70,29 @@ import {
 } from '../../../../lib/auth';
 
 // ===== SUPABASE ADMIN CLIENT =====
-// NOTE: You'll need to add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file
-// This key should ONLY be used on the backend/server-side in production
-const supabaseAdmin = createClient(
+// Check if service role key is available
+const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+const supabaseAdmin = hasServiceRoleKey ? createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY, // Fallback for testing
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
       autoRefreshToken: false,
       persistSession: false
     }
   }
-);
+) : null;
+
+// Log warning if service role key is missing
+if (!hasServiceRoleKey) {
+  console.warn(
+    '⚠️ SUPABASE SERVICE ROLE KEY NOT CONFIGURED\n' +
+    'Admin functions will have limited functionality.\n' +
+    'Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file for full admin capabilities.\n' +
+    'In production, move these operations to a secure backend API.'
+  );
+}
 
 // ===== VALIDATION SCHEMAS =====
 const adminUserSchema = z.object({
@@ -200,6 +214,28 @@ const PasswordRequirementsChecker: React.FC<{ password: string }> = ({ password 
   );
 };
 
+// ===== SERVICE ROLE WARNING COMPONENT =====
+const ServiceRoleWarning: React.FC = () => {
+  if (hasServiceRoleKey) return null;
+  
+  return (
+    <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            Limited Admin Functionality
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+            Service role key not configured. Password changes and some admin functions will not work.
+            Add VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ===== MAIN COMPONENT ======
 export default function UsersTab() {
   const queryClient = useQueryClient();
@@ -253,6 +289,16 @@ export default function UsersTab() {
     newPassword: '',
     sendEmail: false
   });
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear sensitive data on unmount
+      setGeneratedPassword(null);
+      setFormState(prev => ({ ...prev, password: '' }));
+      setPasswordFormState(prev => ({ ...prev, newPassword: '' }));
+    };
+  }, []);
 
   // Email validation function
   const validateEmailAvailability = async (email: string) => {
@@ -414,27 +460,24 @@ export default function UsersTab() {
 
       if (editingUser) {
         // ===== UPDATE EXISTING USER =====
+        let emailUpdateSuccess = false;
         
-        // 1. Update email in Supabase Auth if changed
-        if (validatedData.email !== editingUser.email) {
-          // Check if we have admin capabilities
-          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-          
-          if (hasServiceRoleKey && supabaseAdmin) {
-            try {
-              const { error: authEmailError } = await supabaseAdmin.auth.admin.updateUserById(
-                editingUser.id,
-                { email: validatedData.email }
-              );
-              
-              if (authEmailError) {
-                console.error('Failed to update email in Supabase Auth:', authEmailError);
-                throw new Error('Failed to update email in authentication system');
-              }
-            } catch (error) {
-              console.error('Error updating email in Supabase Auth:', error);
-              // Continue with database update even if Auth update fails
+        // 1. Try to update email in Supabase Auth if changed
+        if (validatedData.email !== editingUser.email && hasServiceRoleKey && supabaseAdmin) {
+          try {
+            const { error: authEmailError } = await supabaseAdmin.auth.admin.updateUserById(
+              editingUser.id,
+              { email: validatedData.email }
+            );
+            
+            if (authEmailError) {
+              console.error('Failed to update email in Supabase Auth:', authEmailError);
+              throw new Error('Failed to update email in authentication system. Email remains unchanged.');
             }
+            emailUpdateSuccess = true;
+          } catch (error) {
+            console.error('Error updating email in Supabase Auth:', error);
+            throw error; // Don't continue if email update fails
           }
         }
         
@@ -449,11 +492,9 @@ export default function UsersTab() {
           }
         };
         
-        // Check if email is changing
+        // Mark email as unverified if changed
         if (validatedData.email !== editingUser.email) {
           userUpdates.email_verified = false;
-          userUpdates.verification_token = generateVerificationToken();
-          userUpdates.verification_sent_at = new Date().toISOString();
         }
         
         const { error: userUpdateError } = await supabase
@@ -461,7 +502,20 @@ export default function UsersTab() {
           .update(userUpdates)
           .eq('id', editingUser.id);
         
-        if (userUpdateError) throw userUpdateError;
+        if (userUpdateError) {
+          // Rollback Auth email change if database update fails
+          if (emailUpdateSuccess && hasServiceRoleKey && supabaseAdmin) {
+            try {
+              await supabaseAdmin.auth.admin.updateUserById(
+                editingUser.id,
+                { email: editingUser.email } // Restore original email
+              );
+            } catch (rollbackError) {
+              console.error('Failed to rollback email change:', rollbackError);
+            }
+          }
+          throw userUpdateError;
+        }
         
         // 3. Update admin_users table
         const { error: adminUpdateError } = await supabase
@@ -498,14 +552,10 @@ export default function UsersTab() {
         const isGeneratedPassword = !password;
         
         try {
-          // Check if we have admin capabilities
-          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-          
           if (!hasServiceRoleKey || !supabaseAdmin) {
             console.warn('Service role key not configured. Using alternative approach.');
             
             // Alternative approach: Use regular Supabase signup
-            // This will send a confirmation email automatically
             const { data: authData, error: authError } = await supabase.auth.signUp({
               email: validatedData.email,
               password: finalPassword,
@@ -530,25 +580,17 @@ export default function UsersTab() {
               throw new Error('Failed to create user in authentication system');
             }
             
-            // Continue with the rest of the process using authData.user
             const newUserId = authData.user.id;
             
-            // Hash password for legacy system (optional - for audit purposes only)
-            const salt = await bcrypt.genSalt(10);
-            const passwordHash = await bcrypt.hash(finalPassword, salt);
-            
-            // Create/Update user in users table
+            // Create user in users table
             const { error: userError } = await supabase
               .from('users')
               .upsert({
                 id: newUserId,
                 email: validatedData.email,
-                password_hash: passwordHash, // Optional - for audit only
                 user_type: 'system',
                 is_active: validatedData.status === 'active',
                 email_verified: false,
-                verification_token: generateVerificationToken(),
-                verification_sent_at: new Date().toISOString(),
                 created_at: authData.user.created_at,
                 raw_user_meta_data: {
                   name: validatedData.name,
@@ -579,22 +621,26 @@ export default function UsersTab() {
               throw adminError;
             }
             
-            // Log the creation
-            await supabase
-              .from('audit_logs')
-              .insert({
-                user_id: currentUser?.id,
-                action: 'create_admin_user',
-                entity_type: 'admin_user',
-                entity_id: newUserId,
-                details: {
-                  email: validatedData.email,
-                  role_id: validatedData.role_id,
-                  created_by: currentUser?.email,
-                  created_via: 'supabase_auth_signup'
-                },
-                created_at: new Date().toISOString()
-              });
+            // Log the creation (non-breaking)
+            try {
+              await supabase
+                .from('audit_logs')
+                .insert({
+                  user_id: currentUser?.id,
+                  action: 'create_admin_user',
+                  entity_type: 'admin_user',
+                  entity_id: newUserId,
+                  details: {
+                    email: validatedData.email,
+                    role_id: validatedData.role_id,
+                    created_by: currentUser?.email,
+                    created_via: 'supabase_auth_signup'
+                  },
+                  created_at: new Date().toISOString()
+                });
+            } catch (logError) {
+              console.error('Failed to log user creation:', logError);
+            }
             
             return {
               success: true,
@@ -607,11 +653,11 @@ export default function UsersTab() {
             };
           }
           
-          // Original admin approach with service role key
+          // Admin approach with service role key
           const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: validatedData.email,
             password: finalPassword,
-            email_confirm: false, // Require email verification
+            email_confirm: false,
             user_metadata: {
               name: validatedData.name,
               created_by: currentUser?.id,
@@ -621,12 +667,8 @@ export default function UsersTab() {
           
           if (authError) {
             console.error('Supabase Auth Admin Error:', authError);
-            // Check for specific error types
             if (authError.message?.includes('already registered')) {
               throw new Error('Email already registered in authentication system');
-            }
-            if (authError.message?.includes('not allowed')) {
-              throw new Error('Admin permissions required. Please configure service role key.');
             }
             throw authError;
           }
@@ -635,22 +677,15 @@ export default function UsersTab() {
             throw new Error('Failed to create user in authentication system');
           }
           
-          // 2. Hash password for legacy system (optional - for audit purposes only)
-          const salt = await bcrypt.genSalt(10);
-          const passwordHash = await bcrypt.hash(finalPassword, salt);
-          
-          // 3. Create/Update user in users table (to maintain consistency)
+          // Create user in users table
           const { error: userError } = await supabase
             .from('users')
             .upsert({
               id: authData.user.id,
               email: validatedData.email,
-              password_hash: passwordHash, // Optional - for audit only
               user_type: 'system',
               is_active: validatedData.status === 'active',
               email_verified: false,
-              verification_token: generateVerificationToken(),
-              verification_sent_at: new Date().toISOString(),
               created_at: authData.user.created_at,
               raw_user_meta_data: {
                 name: validatedData.name,
@@ -659,13 +694,12 @@ export default function UsersTab() {
             });
           
           if (userError) {
-            // Try to clean up the auth user if database insert fails
             console.error('Database Error:', userError);
             await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
             throw userError;
           }
           
-          // 4. Create admin user profile
+          // Create admin user profile
           const { error: adminError } = await supabase
             .from('admin_users')
             .insert({
@@ -678,29 +712,32 @@ export default function UsersTab() {
             });
           
           if (adminError) {
-            // Rollback: delete from users table and auth
             console.error('Admin User Error:', adminError);
             await supabase.from('users').delete().eq('id', authData.user.id);
             await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
             throw adminError;
           }
           
-          // 5. Log the creation
-          await supabase
-            .from('audit_logs')
-            .insert({
-              user_id: currentUser?.id,
-              action: 'create_admin_user',
-              entity_type: 'admin_user',
-              entity_id: authData.user.id,
-              details: {
-                email: validatedData.email,
-                role_id: validatedData.role_id,
-                created_by: currentUser?.email,
-                created_via: 'supabase_auth_admin'
-              },
-              created_at: new Date().toISOString()
-            });
+          // Log the creation (non-breaking)
+          try {
+            await supabase
+              .from('audit_logs')
+              .insert({
+                user_id: currentUser?.id,
+                action: 'create_admin_user',
+                entity_type: 'admin_user',
+                entity_id: authData.user.id,
+                details: {
+                  email: validatedData.email,
+                  role_id: validatedData.role_id,
+                  created_by: currentUser?.email,
+                  created_via: 'supabase_auth_admin'
+                },
+                created_at: new Date().toISOString()
+              });
+          } catch (logError) {
+            console.error('Failed to log user creation:', logError);
+          }
           
           return {
             success: true,
@@ -713,7 +750,6 @@ export default function UsersTab() {
           };
         } catch (error) {
           console.error('Error creating user:', error);
-          // Re-throw with a more user-friendly message if needed
           if (error instanceof Error) {
             if (error.message.includes('already registered') || error.message.includes('already exists')) {
               throw new Error('This email is already registered. Please use a different email address.');
@@ -728,9 +764,8 @@ export default function UsersTab() {
         queryClient.invalidateQueries(['admin-users']);
         
         if (!editingUser && data?.user?.temporary_password) {
-          // Show password modal for new users with generated password
           setGeneratedPassword(data.user.temporary_password);
-          toast.success('User created successfully in Supabase. Copy the temporary password!');
+          toast.success('User created successfully. Copy the temporary password!');
         } else {
           setIsFormOpen(false);
           setEditingUser(null);
@@ -745,7 +780,6 @@ export default function UsersTab() {
           const message = data?.message || `User ${editingUser ? 'updated' : 'created'} successfully`;
           toast.success(message);
           
-          // Show additional info about verification for new users
           if (!editingUser && data?.user) {
             toast.info('User created in Supabase Auth. They can now sign in after verifying their email.', {
               duration: 5000
@@ -788,13 +822,9 @@ export default function UsersTab() {
       
       for (const user of users) {
         try {
-          // Check if we have admin capabilities
-          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-          
-          // 1. Deactivate in Supabase Auth if possible
+          // 1. Try to ban in Supabase Auth if we have admin capabilities
           if (hasServiceRoleKey && supabaseAdmin) {
             try {
-              // Ban the user in Supabase Auth (prevents login)
               const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(
                 user.id,
                 { ban_duration: 'none' } // Permanent ban until manually lifted
@@ -802,13 +832,14 @@ export default function UsersTab() {
               
               if (banError) {
                 console.error('Failed to ban user in Supabase Auth:', banError);
+                // Continue with database deactivation even if Auth ban fails
               }
             } catch (authError) {
               console.error('Error deactivating in Supabase Auth:', authError);
             }
           }
           
-          // 2. Soft delete - deactivate the user in custom tables
+          // 2. Deactivate in users table
           const { error: deactivateError } = await supabase
             .from('users')
             .update({
@@ -819,7 +850,7 @@ export default function UsersTab() {
           
           if (deactivateError) throw deactivateError;
           
-          // 3. Also update admin_users status
+          // 3. Update admin_users status
           await supabase
             .from('admin_users')
             .update({
@@ -828,20 +859,25 @@ export default function UsersTab() {
             })
             .eq('id', user.id);
           
-          // 4. Log the deactivation
-          await supabase
-            .from('audit_logs')
-            .insert({
-              user_id: currentUser?.id,
-              action: 'deactivate_admin_user',
-              entity_type: 'admin_user',
-              entity_id: user.id,
-              details: {
-                email: user.email,
-                deactivated_by: currentUser?.email
-              },
-              created_at: new Date().toISOString()
-            });
+          // 4. Log the deactivation (non-breaking)
+          try {
+            await supabase
+              .from('audit_logs')
+              .insert({
+                user_id: currentUser?.id,
+                action: 'deactivate_admin_user',
+                entity_type: 'admin_user',
+                entity_id: user.id,
+                details: {
+                  email: user.email,
+                  deactivated_by: currentUser?.email,
+                  banned_in_auth: hasServiceRoleKey
+                },
+                created_at: new Date().toISOString()
+              });
+          } catch (logError) {
+            console.error('Failed to log deactivation:', logError);
+          }
           
           results.push({ success: true });
         } catch (error) {
@@ -920,79 +956,86 @@ export default function UsersTab() {
     }
   );
 
-  // CORRECTED: Change password mutation - Updates BOTH Supabase Auth AND users table
+  // Change password mutation - Updates BOTH Supabase Auth AND users table
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
       // Check if we have admin capabilities
-      const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      if (!hasServiceRoleKey || !supabaseAdmin) {
+        throw new Error(
+          'Cannot change password without admin permissions. ' +
+          'Please configure VITE_SUPABASE_SERVICE_ROLE_KEY in your .env file.'
+        );
+      }
       
       // 1. CRITICAL: Update password in Supabase Auth FIRST
-      if (hasServiceRoleKey && supabaseAdmin) {
-        try {
-          const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-            data.userId,
-            { password: data.password }
-          );
-          
-          if (authError) {
-            console.error('Failed to update password in Supabase Auth:', authError);
-            throw new Error('Failed to update password in authentication system. User will not be able to login with the new password.');
-          }
-          
-          console.log('Password successfully updated in Supabase Auth for user:', data.userId);
-        } catch (error) {
-          console.error('Critical: Failed to update Supabase Auth password:', error);
-          throw error;
+      try {
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+          data.userId,
+          { password: data.password }
+        );
+        
+        if (authError) {
+          console.error('Failed to update password in Supabase Auth:', authError);
+          throw new Error('Failed to update password in authentication system.');
         }
-      } else {
-        // If no admin key, we can't update Supabase Auth password
-        console.error('WARNING: Service role key not configured. Cannot update password in Supabase Auth.');
-        throw new Error('Cannot update password without admin permissions. Please configure service role key.');
+        
+        console.log('Password successfully updated in Supabase Auth for user:', data.userId);
+      } catch (error) {
+        console.error('Critical: Failed to update Supabase Auth password:', error);
+        throw error;
       }
       
-      // 2. Update password hash in users table (optional - for audit/legacy purposes)
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(data.password, salt);
-      
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          password_hash: passwordHash, // Optional - mainly for audit trail
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          failed_login_attempts: 0,
-          locked_until: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', data.userId);
-      
-      if (updateError) {
-        console.error('Failed to update password in users table:', updateError);
-        // Don't throw here - Supabase Auth is already updated which is the critical part
+      // 2. Update password hash in users table (optional - for audit trail)
+      try {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(data.password, salt);
+        
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            password_hash: passwordHash, // Optional - for audit trail only
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
+            failed_login_attempts: 0,
+            locked_until: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', data.userId);
+        
+        if (updateError) {
+          console.error('Failed to update password in users table:', updateError);
+          // Don't throw - Auth update succeeded which is critical
+        }
+      } catch (dbError) {
+        console.error('Error updating users table:', dbError);
+        // Continue - Auth update was successful
       }
       
-      // 3. Log the password change
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: currentUser?.id,
-          action: 'admin_password_change',
-          entity_type: 'user',
-          entity_id: data.userId,
-          details: {
-            changed_by: currentUser?.email,
-            target_user: editingUser?.email,
-            notification_sent: data.sendEmail,
-            updated_in_auth: true
-          },
-          created_at: new Date().toISOString()
-        });
+      // 3. Log the password change (non-breaking)
+      try {
+        await supabase
+          .from('audit_logs')
+          .insert({
+            user_id: currentUser?.id,
+            action: 'admin_password_change',
+            entity_type: 'user',
+            entity_id: data.userId,
+            details: {
+              changed_by: currentUser?.email,
+              target_user: editingUser?.email,
+              notification_sent: data.sendEmail,
+              updated_in_auth: true
+            },
+            created_at: new Date().toISOString()
+          });
+      } catch (logError) {
+        console.error('Failed to log password change:', logError);
+      }
       
       // 4. Send email notification if requested
       if (data.sendEmail && editingUser?.email) {
-        // You would integrate with your email service here
+        // TODO: Integrate with your email service
         console.log('Password change notification would be sent to:', editingUser.email);
-        // Example: await sendPasswordChangeEmail(editingUser.email, data.password);
       }
       
       return { success: true, password: data.password };
@@ -1015,11 +1058,15 @@ export default function UsersTab() {
       onError: (error: any) => {
         console.error('Error changing password:', error);
         toast.error(error.message || 'Failed to change password');
+        
+        if (error.message?.includes('configure')) {
+          toast.error('Service role key required for password changes', { duration: 7000 });
+        }
       }
     }
   );
 
-  // CORRECTED: Reset password mutation - Uses Supabase Auth's built-in password reset
+  // Reset password mutation - Uses Supabase Auth's built-in password reset
   const resetPasswordMutation = useMutation(
     async (email: string) => {
       try {
@@ -1033,7 +1080,7 @@ export default function UsersTab() {
         
         if (error) throw error;
         
-        // Log the password reset request (don't let logging failures break the flow)
+        // Log the password reset request (non-breaking)
         try {
           await supabase
             .from('audit_logs')
@@ -1155,6 +1202,14 @@ export default function UsersTab() {
         setFormErrors(errors);
         return;
       }
+    }
+    
+    // Check for service role key
+    if (!hasServiceRoleKey) {
+      setFormErrors({ 
+        form: 'Password changes require admin permissions. Configure service role key.' 
+      });
+      return;
     }
     
     // Use generated password if checkbox is checked
@@ -1392,7 +1447,7 @@ export default function UsersTab() {
       )}
       
       {/* Change Password (for SSA only) */}
-      {isSSA && row.status === 'active' && (
+      {isSSA && row.status === 'active' && hasServiceRoleKey && (
         <button
           onClick={() => {
             setEditingUser(row);
@@ -1461,10 +1516,13 @@ export default function UsersTab() {
     </div>
   );
 
-  // ===== RENDER (All UI preserved exactly as original) =====
+  // ===== RENDER =====
   
   return (
     <div className="space-y-6">
+      {/* Service Role Warning */}
+      <ServiceRoleWarning />
+      
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">System Users</h2>
@@ -1561,7 +1619,7 @@ export default function UsersTab() {
         emptyMessage="No system users found"
       />
 
-      {/* Create/Edit User Form (Preserved exactly as original) */}
+      {/* Create/Edit User Form */}
       <SlideInForm
         key={editingUser?.id || 'new'}
         title={editingUser ? 'Edit System User' : 'Create System User'}
@@ -1750,15 +1808,14 @@ export default function UsersTab() {
             />
           </FormField>
 
-          {editingUser && (
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> To change the user's password, use the password reset option from the table actions.
+          {editingUser && !hasServiceRoleKey && (
+            <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                <strong>Note:</strong> Email changes require admin permissions. Configure service role key for full functionality.
               </p>
             </div>
           )}
           
-          {/* Email duplication warning */}
           {emailExistsError && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3">
               <div className="flex items-center">
@@ -1772,7 +1829,7 @@ export default function UsersTab() {
         </form>
       </SlideInForm>
 
-      {/* Change Password Form (Preserved exactly as original) */}
+      {/* Change Password Form */}
       <SlideInForm
         key={`${editingUser?.id || 'new'}-password`}
         title={`Change Password for ${editingUser?.name}`}
@@ -1798,6 +1855,15 @@ export default function UsersTab() {
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
+            </div>
+          )}
+
+          {!hasServiceRoleKey && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-700 dark:text-red-400">
+                <AlertTriangle className="h-4 w-4 inline mr-1" />
+                Password changes require admin permissions. Configure VITE_SUPABASE_SERVICE_ROLE_KEY.
+              </p>
             </div>
           )}
 
@@ -1932,7 +1998,7 @@ export default function UsersTab() {
         </form>
       </SlideInForm>
 
-      {/* Generated Password Modal (Preserved exactly as original) */}
+      {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
