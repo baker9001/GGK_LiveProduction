@@ -396,24 +396,9 @@ export const userCreationService = {
    * Update user password
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
-    if (!newPassword || newPassword.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        password_hash: hashedPassword,
-        password_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw new Error(`Failed to update password: ${error.message}`);
-    }
+    // Password updates require service role permissions
+    // This should be handled by a backend service or Edge Function
+    throw new Error('Password updates require backend service. Use Supabase Auth methods instead.');
   },
 
   /**
