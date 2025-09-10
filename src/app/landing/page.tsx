@@ -271,7 +271,7 @@ const ALL_SUBJECTS = [
   },
   { 
     title: "Physical Education", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physical%20Education.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL1BoeXNpY2FsIEVkdWNhdGlvbi5qcGciLCJpYXQiOjE3NTcxODU3NDIsImV4cCI6MTc4ODcyMTc0Mn0.ZkAsxZz5DkjWIS2hH-7O5zUjN9I2pAqds0NVmwEn1Sw",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Physical%20Education.jpg",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Sports science and physical fitness"
   },
