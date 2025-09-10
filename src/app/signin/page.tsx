@@ -129,11 +129,11 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
+          setError('Invalid email or password');
         } else if (authError.message.includes('Too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else {
-          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
+          setError('Invalid email or password. Please check your credentials or use the development login below for testing.');
         }
         
         setLoading(false);
@@ -326,12 +326,7 @@ export default function SignInPage() {
       
     } catch (err) {
       console.error('Login error:', err);
-      // Handle authentication errors gracefully
-      if (err.message === 'Invalid login credentials') {
-        setError('Invalid email or password. Please check your credentials and try again.');
-      } else {
-        setError(err.message);
-      }
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -628,19 +623,31 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
-            
-            {/* Sign up link */}
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-400">
-                Don't have an account?{' '}
-                <Link
-                  to="/signup"
-                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
-                >
-                  Sign up here
-                </Link>
-              </p>
+          </div>
+          
+          {/* Dev Login */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900/50 text-gray-400">
+                  Development Access
+                </span>
+              </div>
             </div>
+            
+            <Button
+              onClick={handleDevLogin}
+              variant="outline"
+              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            >
+              🔧 Quick Dev Login (SSA)
+            </Button>
+            <p className="mt-2 text-xs text-center text-gray-500">
+              Temporary access for development - bypasses regular authentication
+            </p>
           </div>
           
           {/* Back to Home Button */}
