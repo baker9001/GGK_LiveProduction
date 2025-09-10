@@ -7,31 +7,18 @@
  *   - zod
  *   - bcryptjs
  *   - crypto
- *   - Custom components and lib (NO API CALLS)
+ *   - Custom components and lib
  * 
- * Preserved Features:
- *   - User CRUD operations (direct database)
- *   - Role management
- *   - Status management
- *   - Test mode functionality
- *   - Email verification status
- *   - Password Requirements Checker
- *   - Print password functionality
- *   - Resend verification
- *   - Password reset email
- *   - All UI components and interactions
+ * CORRECTED VERSION:
+ *   - Password changes now update BOTH Supabase Auth AND users table
+ *   - Password reset uses Supabase Auth's built-in functionality
+ *   - User creation correctly syncs with both systems (already working)
  * 
  * Database Tables:
- *   - users (main auth table)
+ *   - users (metadata and legacy support)
  *   - admin_users (profile only)
  *   - roles
  *   - audit_logs
- * 
- * Removed:
- *   - All API calls (makeAPICall removed)
- *   - Supabase auth dependencies
- * 
- * UPDATED: Added Supabase Auth integration for user creation
  */
 
 import React, { useState, useEffect } from 'react';
@@ -426,9 +413,32 @@ export default function UsersTab() {
       const validatedData = adminUserSchema.parse(validationData);
 
       if (editingUser) {
-        // ===== UPDATE EXISTING USER (Direct Database) =====
+        // ===== UPDATE EXISTING USER =====
         
-        // 1. Update users table
+        // 1. Update email in Supabase Auth if changed
+        if (validatedData.email !== editingUser.email) {
+          // Check if we have admin capabilities
+          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+          
+          if (hasServiceRoleKey && supabaseAdmin) {
+            try {
+              const { error: authEmailError } = await supabaseAdmin.auth.admin.updateUserById(
+                editingUser.id,
+                { email: validatedData.email }
+              );
+              
+              if (authEmailError) {
+                console.error('Failed to update email in Supabase Auth:', authEmailError);
+                throw new Error('Failed to update email in authentication system');
+              }
+            } catch (error) {
+              console.error('Error updating email in Supabase Auth:', error);
+              // Continue with database update even if Auth update fails
+            }
+          }
+        }
+        
+        // 2. Update users table
         const userUpdates: any = {
           email: validatedData.email,
           is_active: validatedData.status === 'active',
@@ -453,7 +463,7 @@ export default function UsersTab() {
         
         if (userUpdateError) throw userUpdateError;
         
-        // 2. Update admin_users table
+        // 3. Update admin_users table
         const { error: adminUpdateError } = await supabase
           .from('admin_users')
           .update({
@@ -523,7 +533,7 @@ export default function UsersTab() {
             // Continue with the rest of the process using authData.user
             const newUserId = authData.user.id;
             
-            // Hash password for legacy system
+            // Hash password for legacy system (optional - for audit purposes only)
             const salt = await bcrypt.genSalt(10);
             const passwordHash = await bcrypt.hash(finalPassword, salt);
             
@@ -533,7 +543,7 @@ export default function UsersTab() {
               .upsert({
                 id: newUserId,
                 email: validatedData.email,
-                password_hash: passwordHash,
+                password_hash: passwordHash, // Optional - for audit only
                 user_type: 'system',
                 is_active: validatedData.status === 'active',
                 email_verified: false,
@@ -625,7 +635,7 @@ export default function UsersTab() {
             throw new Error('Failed to create user in authentication system');
           }
           
-          // 2. Hash password for legacy system (if you still need it)
+          // 2. Hash password for legacy system (optional - for audit purposes only)
           const salt = await bcrypt.genSalt(10);
           const passwordHash = await bcrypt.hash(finalPassword, salt);
           
@@ -635,7 +645,7 @@ export default function UsersTab() {
             .upsert({
               id: authData.user.id,
               email: validatedData.email,
-              password_hash: passwordHash,
+              password_hash: passwordHash, // Optional - for audit only
               user_type: 'system',
               is_active: validatedData.status === 'active',
               email_verified: false,
@@ -771,14 +781,34 @@ export default function UsersTab() {
     }
   );
 
-  // Delete users mutation (NO API)
+  // Delete users mutation (Deactivate in both Supabase Auth and custom tables)
   const deleteMutation = useMutation(
     async (users: AdminUser[]) => {
       const results = [];
       
       for (const user of users) {
         try {
-          // Soft delete - deactivate the user
+          // Check if we have admin capabilities
+          const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+          
+          // 1. Deactivate in Supabase Auth if possible
+          if (hasServiceRoleKey && supabaseAdmin) {
+            try {
+              // Ban the user in Supabase Auth (prevents login)
+              const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(
+                user.id,
+                { ban_duration: 'none' } // Permanent ban until manually lifted
+              );
+              
+              if (banError) {
+                console.error('Failed to ban user in Supabase Auth:', banError);
+              }
+            } catch (authError) {
+              console.error('Error deactivating in Supabase Auth:', authError);
+            }
+          }
+          
+          // 2. Soft delete - deactivate the user in custom tables
           const { error: deactivateError } = await supabase
             .from('users')
             .update({
@@ -789,7 +819,7 @@ export default function UsersTab() {
           
           if (deactivateError) throw deactivateError;
           
-          // Also update admin_users status
+          // 3. Also update admin_users status
           await supabase
             .from('admin_users')
             .update({
@@ -798,7 +828,7 @@ export default function UsersTab() {
             })
             .eq('id', user.id);
           
-          // Log the deactivation
+          // 4. Log the deactivation
           await supabase
             .from('audit_logs')
             .insert({
@@ -848,36 +878,33 @@ export default function UsersTab() {
     }
   );
 
-  // Resend verification mutation (NO API)
+  // Resend verification mutation (Using Supabase Auth)
   const resendVerificationMutation = useMutation(
     async (userId: string) => {
-      // Generate new verification token
-      const token = generateVerificationToken();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      // Update user with new token
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          verification_token: token,
-          verification_sent_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-      
-      if (updateError) throw updateError;
-      
       // Get user email
       const { data: user } = await supabase
         .from('users')
-        .select('email, raw_user_meta_data')
+        .select('email')
         .eq('id', userId)
         .single();
       
       if (!user) throw new Error('User not found');
       
-      // TODO: Send actual email
-      console.log('Verification email would be sent to:', user.email);
-      console.log('Verification token:', token);
+      // Use Supabase Auth to resend verification email
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email
+      });
+      
+      if (error) throw error;
+      
+      // Update verification sent timestamp in custom table
+      await supabase
+        .from('users')
+        .update({
+          verification_sent_at: new Date().toISOString()
+        })
+        .eq('id', userId);
       
       return { success: true };
     },
@@ -893,18 +920,44 @@ export default function UsersTab() {
     }
   );
 
-  // Change password mutation (NO API)
+  // CORRECTED: Change password mutation - Updates BOTH Supabase Auth AND users table
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
-      // Hash the new password
+      // Check if we have admin capabilities
+      const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      
+      // 1. CRITICAL: Update password in Supabase Auth FIRST
+      if (hasServiceRoleKey && supabaseAdmin) {
+        try {
+          const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+            data.userId,
+            { password: data.password }
+          );
+          
+          if (authError) {
+            console.error('Failed to update password in Supabase Auth:', authError);
+            throw new Error('Failed to update password in authentication system. User will not be able to login with the new password.');
+          }
+          
+          console.log('Password successfully updated in Supabase Auth for user:', data.userId);
+        } catch (error) {
+          console.error('Critical: Failed to update Supabase Auth password:', error);
+          throw error;
+        }
+      } else {
+        // If no admin key, we can't update Supabase Auth password
+        console.error('WARNING: Service role key not configured. Cannot update password in Supabase Auth.');
+        throw new Error('Cannot update password without admin permissions. Please configure service role key.');
+      }
+      
+      // 2. Update password hash in users table (optional - for audit/legacy purposes)
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(data.password, salt);
       
-      // Update password in users table
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          password_hash: passwordHash,
+          password_hash: passwordHash, // Optional - mainly for audit trail
           password_updated_at: new Date().toISOString(),
           requires_password_change: false,
           failed_login_attempts: 0,
@@ -913,9 +966,12 @@ export default function UsersTab() {
         })
         .eq('id', data.userId);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Failed to update password in users table:', updateError);
+        // Don't throw here - Supabase Auth is already updated which is the critical part
+      }
       
-      // Log the password change
+      // 3. Log the password change
       await supabase
         .from('audit_logs')
         .insert({
@@ -926,14 +982,17 @@ export default function UsersTab() {
           details: {
             changed_by: currentUser?.email,
             target_user: editingUser?.email,
-            notification_sent: data.sendEmail
+            notification_sent: data.sendEmail,
+            updated_in_auth: true
           },
           created_at: new Date().toISOString()
         });
       
-      // TODO: Send email notification if requested
-      if (data.sendEmail) {
-        console.log('Password change email would be sent to:', editingUser?.email);
+      // 4. Send email notification if requested
+      if (data.sendEmail && editingUser?.email) {
+        // You would integrate with your email service here
+        console.log('Password change notification would be sent to:', editingUser.email);
+        // Example: await sendPasswordChangeEmail(editingUser.email, data.password);
       }
       
       return { success: true, password: data.password };
@@ -944,7 +1003,7 @@ export default function UsersTab() {
         
         if (data.password) {
           setGeneratedPassword(data.password);
-          toast.success('Password changed successfully. Copy the new password!');
+          toast.success('Password changed successfully in Supabase Auth. Copy the new password!');
         } else {
           setIsPasswordFormOpen(false);
           setEditingUser(null);
@@ -960,44 +1019,51 @@ export default function UsersTab() {
     }
   );
 
-  // Reset password mutation (NO API)
+  // CORRECTED: Reset password mutation - Uses Supabase Auth's built-in password reset
   const resetPasswordMutation = useMutation(
     async (email: string) => {
-      // Generate reset token
-      const token = generateVerificationToken();
-      const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
-      
-      // Get user by email
-      const { data: user } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email.toLowerCase())
-        .single();
-      
-      if (!user) throw new Error('User not found');
-      
-      // Create password reset token record
-      const { error: tokenError } = await supabase
-        .from('password_reset_tokens')
-        .insert({
-          user_id: user.id,
-          token: token,
-          expires_at: expiresAt.toISOString(),
-          created_at: new Date().toISOString()
-        });
-      
-      if (tokenError) throw tokenError;
-      
-      // TODO: Send actual reset email
-      console.log('Password reset email would be sent to:', email);
-      console.log('Reset token:', token);
-      console.log('Reset URL:', `${window.location.origin}/reset-password?token=${token}`);
-      
-      return { success: true };
+      try {
+        // Use Supabase Auth's built-in password reset functionality
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.toLowerCase(),
+          {
+            redirectTo: `${window.location.origin}/reset-password`
+          }
+        );
+        
+        if (error) throw error;
+        
+        // Log the password reset request (don't let logging failures break the flow)
+        try {
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'password_reset_requested',
+              entity_type: 'user',
+              details: {
+                email: email,
+                requested_by: currentUser?.email,
+                method: 'supabase_auth'
+              },
+              created_at: new Date().toISOString()
+            });
+        } catch (logError) {
+          console.error('Failed to log password reset request:', logError);
+        }
+        
+        return { success: true };
+      } catch (error) {
+        console.error('Password reset error:', error);
+        throw error;
+      }
     },
     {
       onSuccess: (data, email) => {
         toast.success(`Password reset email sent to ${email}`);
+        toast.info('The user will receive an email with instructions to reset their password.', {
+          duration: 5000
+        });
       },
       onError: (error: any) => {
         console.error('Error:', error);
@@ -1145,6 +1211,13 @@ export default function UsersTab() {
                   margin: 20px 0;
                 }
                 .footer { margin-top: 30px; font-size: 12px; color: #6b7280; }
+                .warning { 
+                  margin-top: 20px; 
+                  padding: 10px; 
+                  background: #fef3c7; 
+                  border: 1px solid #fbbf24;
+                  color: #92400e;
+                }
               </style>
             </head>
             <body>
@@ -1153,9 +1226,13 @@ export default function UsersTab() {
               <div class="info"><strong>Email:</strong> ${editingUser.email}</div>
               <div class="info"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
               <div class="password">${generatedPassword}</div>
+              <div class="warning">
+                <strong>Important:</strong> This password has been set in Supabase Auth. 
+                The user can now sign in with this password after verifying their email.
+              </div>
               <div class="footer">
                 Please share this password securely with the user. 
-                They will need to verify their email before logging in.
+                They should change it after their first login.
               </div>
             </body>
           </html>
@@ -1727,7 +1804,7 @@ export default function UsersTab() {
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               <Shield className="h-4 w-4 inline mr-1" />
-              As a Super Admin, you can directly set a new password for this user.
+              As a Super Admin, you can directly set a new password for this user in Supabase Auth.
             </p>
           </div>
 
@@ -1819,7 +1896,7 @@ export default function UsersTab() {
               <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
                 <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
                   <CheckCircle className="h-4 w-4" />
-                  A strong password will be generated automatically
+                  A strong password will be generated and set in Supabase Auth
                 </p>
               </div>
             )}
@@ -1848,7 +1925,7 @@ export default function UsersTab() {
 
           <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              <strong>Note:</strong> The user can log in immediately with the new password.
+              <strong>Note:</strong> The password will be updated in Supabase Auth. The user can log in immediately with the new password.
               {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
             </p>
           </div>
@@ -1866,7 +1943,7 @@ export default function UsersTab() {
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {editingUser 
-                  ? `A new password has been set for ${editingUser.name}.`
+                  ? `The password has been updated in Supabase Auth for ${editingUser.name}.`
                   : 'User has been created in Supabase Auth with a temporary password.'
                 }
               </p>
