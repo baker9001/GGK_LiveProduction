@@ -270,7 +270,13 @@ export default function SignInPage() {
             last_login_at: new Date().toISOString(),
             last_sign_in_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          })
+          // Handle authentication errors gracefully
+          if (error.message === 'Invalid login credentials') {
+            setError('Invalid email or password. Please check your credentials and try again.');
+          } else {
+            setError(error.message);
+          }
+          return;
           .eq('id', userId);
         
         if (loginUpdateError) {
