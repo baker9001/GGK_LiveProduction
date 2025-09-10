@@ -277,7 +277,7 @@ const ALL_SUBJECTS = [
   },
   { 
     title: "Food & Nutrition", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Food%20&%20Nutrition.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0Zvb2QgJiBOdXRyaXRpb24uanBnIiwiaWF0IjoxNzU3MTg1NDk2LCJleHAiOjE3ODg3MjE0OTZ9.anNvQe5bGpW94U_iz0dnZBoeJnJsBXpQ81T-A8TJwmM",
+    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/public/signing/Food%20&%20Nutrition.jpg",
     placeholder: PLACEHOLDER_SHIMMER,
     description: "Nutritional science and food preparation"
   }
