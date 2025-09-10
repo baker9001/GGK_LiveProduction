@@ -129,11 +129,11 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
+          setError('Invalid email or password');
         } else if (authError.message.includes('Too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else {
-          setError('Invalid email or password. Please check your credentials or create an account if you don\'t have one yet.');
+          setError('Invalid email or password. Please check your credentials or use the development login below for testing.');
         }
         
         setLoading(false);
@@ -326,12 +326,7 @@ export default function SignInPage() {
       
     } catch (err) {
       console.error('Login error:', err);
-      // Handle authentication errors gracefully
-      if (err.message === 'Invalid login credentials') {
-        setError('Invalid email or password. Please check your credentials and try again.');
-      } else {
-        setError(err.message);
-      }
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -627,19 +622,6 @@ export default function SignInPage() {
               >
                 Request Access
               </Link>
-            </div>
-            
-            {/* Sign up link */}
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-400">
-                Don't have an account?{' '}
-                <Link
-                  to="/signup"
-                  className="font-medium text-[#8CC63F] hover:text-[#7AB635] transition-colors"
-                >
-                  Sign up here
-                </Link>
-              </p>
             </div>
           </div>
           

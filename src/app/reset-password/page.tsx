@@ -232,10 +232,16 @@ export default function ResetPasswordPage() {
           throw new Error(updateError.message);
         }
 
-        // Update only the password change requirement flag
+        // Also update the password hash in your custom tables for consistency
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Update users table
         const { error: userTableError } = await supabase
           .from('users')
           .update({
+            password_hash: hashedPassword,
+            password_updated_at: new Date().toISOString(),
             requires_password_change: false,
             updated_at: new Date().toISOString()
           })
@@ -253,8 +259,39 @@ export default function ResetPasswordPage() {
         // Fallback: Update password directly in database (legacy approach)
         console.log('Updating password via legacy method...');
         
-        // Legacy password updates require backend service - show error
-        throw new Error('Password reset requires authentication. Please use the email reset link.');
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Update users table
+        const { error: userUpdateError } = await supabase
+          .from('users')
+          .update({
+            password_hash: hashedPassword,
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userIdToProcess);
+
+        if (userUpdateError) {
+          throw new Error(`Failed to update password: ${userUpdateError.message}`);
+        }
+
+        // Also update admin_users table if this is an admin user
+        if (userTypeToProcess === 'admin' || userTypeToProcess === 'system') {
+          const { error: updateError } = await supabase
+            .from('admin_users')
+            .update({ 
+              password_hash: hashedPassword,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userIdToProcess);
+
+          if (updateError) {
+            console.error('Failed to update admin_users table:', updateError);
+            // Don't throw - the main password update succeeded
+          }
+        }
 
         // Mark legacy token as used
         if (legacyTokenData && legacyTokenData.id) {

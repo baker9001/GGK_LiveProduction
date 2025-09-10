@@ -458,10 +458,9 @@ export const adminService = {
       // Update password if provided
       if (validatedPayload.password && existingAdmin.user_id) {
         try {
-          // Password updates require service role permissions and should be handled by backend
-          console.warn('Password update skipped - requires backend service with service role permissions');
+          await userCreationService.updatePassword(existingAdmin.user_id, validatedPayload.password);
         } catch (passwordError) {
-          console.warn('Password update not available from client-side:', passwordError);
+          console.error('Failed to update password:', passwordError);
           // Don't throw - allow other updates to succeed
         }
       }
