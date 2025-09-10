@@ -625,31 +625,6 @@ export default function SignInPage() {
             </div>
           </div>
           
-          {/* Dev Login */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Development Access
-                </span>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleDevLogin}
-              variant="outline"
-              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              🔧 Quick Dev Login (SSA)
-            </Button>
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Temporary access for development - bypasses regular authentication
-            </p>
-          </div>
-          
           {/* Back to Home Button */}
           <div className="mt-6">
             <Button
