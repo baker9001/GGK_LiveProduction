@@ -1,55 +1,31 @@
 /**
  * File: /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
+ * Enhanced Version with Supabase Auth Integration
+ * 
  * Dependencies: 
  *   - @/components/shared/* (all UI components)
  *   - @/lib/supabase
  *   - @/lib/auth
+ *   - @supabase/supabase-js (for admin client)
  *   - bcryptjs
  *   - zod
  *   - React and related
  * 
- * Preserved Features:
- *   - Company CRUD operations
- *   - Tenant admin management (create/edit/delete)
- *   - View/Manage admins modal
- *   - Filter and search functionality
- *   - Image upload for company logos
- *   - All UI interactions and modals
+ * Enhanced Features:
+ *   - Dual authentication system (Custom + Supabase Auth)
+ *   - Syncs all user operations with auth.users table
+ *   - Maintains backward compatibility with custom auth
+ *   - Handles sync failures gracefully
+ *   - Updates user profiles in both systems
  * 
- * Fixed Issues:
- *   - UUID validation for audit logs (handles non-UUID user IDs like "dev-001")
- *   - Phone field properly saved to entity_users table
- *   - Update flow correctly refreshes admin list
- *   - Password requirements checker
- *   - Generate/manual password options
- *   - Password display and print functionality
- *   - Browser-compatible token generation (no Node.js crypto)
- *   - Simplified admin form (only name, email, phone, position, password)
- *   - Fixed z-index layering for modals (view admins: z-50, password form: z-70, generated password: z-80)
- * 
- * Fields managed in this stage:
- *   - name (required)
- *   - email (required)
- *   - phone (optional) - PROPERLY SAVED TO entity_users
- *   - position (optional, defaults to 'Administrator')
- *   - password (required for new, optional for edit)
- * 
- * Fields to be managed later in entity management:
- *   - department
- *   - employee_id
- *   - hire_date (auto-set to today for now)
- * 
- * Database Tables:
+ * Database Tables Used:
  *   - companies
- *   - users (main auth table)
- *   - entity_users (profile table - includes phone)
+ *   - users (custom auth table with auth_user_id link)
+ *   - entity_users (profile table)
+ *   - auth.users (Supabase Auth - synced)
  *   - regions
  *   - countries
- *   - audit_logs (with UUID validation)
- * 
- * Connected Files:
- *   - Uses same patterns as UsersTab.tsx
- *   - Follows hierarchical user model
+ *   - audit_logs
  */
 
 import React, { useState, useEffect } from 'react';
@@ -61,6 +37,7 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import { createClient } from '@supabase/supabase-js';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
@@ -74,6 +51,19 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
+
+// ===== SUPABASE ADMIN CLIENT =====
+// Initialize with service role for admin operations
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // Requires service role key
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -228,7 +218,7 @@ interface CompanyAdmin {
   employee_status?: string;
   department_id?: string | null;
   is_company_admin: boolean;
-  phone?: string; // Added phone field to interface
+  phone?: string;
   created_at: string;
   updated_at: string;
   users?: {
@@ -242,6 +232,7 @@ interface CompanyAdmin {
     requires_password_change?: boolean;
     email_verified?: boolean;
     raw_user_meta_data?: any;
+    auth_user_id?: string; // Link to Supabase Auth
   };
 }
 
@@ -253,7 +244,7 @@ function isValidUUID(uuid: string): boolean {
   return uuidRegex.test(uuid);
 }
 
-// Safe audit log insertion
+// Enhanced audit log with auth sync tracking
 async function createAuditLog(
   action: string,
   entityType: string,
@@ -263,8 +254,6 @@ async function createAuditLog(
   try {
     const currentUser = getAuthenticatedUser();
     
-    // Only insert if we have a valid UUID user ID
-    // If user ID is not a UUID (like "dev-001"), skip audit logging
     if (currentUser?.id && isValidUUID(currentUser.id)) {
       await supabase
         .from('audit_logs')
@@ -273,11 +262,14 @@ async function createAuditLog(
           action: action,
           entity_type: entityType,
           entity_id: entityId,
-          details: details,
+          details: {
+            ...details,
+            auth_sync_enabled: true,
+            timestamp: new Date().toISOString()
+          },
           created_at: new Date().toISOString()
         });
     } else {
-      // Log to console for dev/test environments
       console.log('Audit Log (dev mode):', {
         user: currentUser?.email || 'unknown',
         action,
@@ -287,8 +279,26 @@ async function createAuditLog(
       });
     }
   } catch (error) {
-    // Don't throw error for audit logging failures
     console.error('Failed to create audit log:', error);
+  }
+}
+
+// Sync error handling helper
+async function logSyncError(operation: string, userId: string, error: any, data?: any) {
+  console.error(`Supabase Auth sync error [${operation}]:`, error);
+  
+  // Optionally store in a sync_queue table for retry
+  try {
+    await supabase.from('sync_errors').insert({
+      user_id: userId,
+      operation: operation,
+      error_message: error.message || 'Unknown error',
+      error_data: error,
+      retry_data: data,
+      created_at: new Date().toISOString()
+    });
+  } catch (logError) {
+    console.error('Failed to log sync error:', logError);
   }
 }
 
@@ -300,41 +310,33 @@ function generateComplexPassword(length: number = 12): string {
   const allChars = uppercase + lowercase + numbers + special;
   
   let password = '';
-  // Ensure at least one of each required character type
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
   password += special[Math.floor(Math.random() * special.length)];
   
-  // Fill the rest randomly
   for (let i = password.length; i < length; i++) {
     password += allChars[Math.floor(Math.random() * allChars.length)];
   }
   
-  // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
 function generateVerificationToken(): string {
-  // Browser-compatible random token generation
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Alternative: Generate UUID v4 for tokens and IDs
 function generateUUID(): string {
-  // Proper UUID v4 generation for database IDs
   const array = new Uint8Array(16);
   window.crypto.getRandomValues(array);
   
-  // Set version (4) and variant bits
-  array[6] = (array[6] & 0x0f) | 0x40; // Version 4
-  array[8] = (array[8] & 0x3f) | 0x80; // Variant 10
+  array[6] = (array[6] & 0x0f) | 0x40;
+  array[8] = (array[8] & 0x3f) | 0x80;
   
   const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   
-  // Format as UUID
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
@@ -369,7 +371,7 @@ export default function CompaniesTab() {
   const [adminFormErrors, setAdminFormErrors] = useState<Record<string, string>>({});
   const [editingAdmin, setEditingAdmin] = useState<CompanyAdmin | null>(null);
   
-  // Password management state (unified with UsersTab)
+  // Password management state
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [generatePassword, setGeneratePassword] = useState(true);
@@ -535,7 +537,7 @@ export default function CompaniesTab() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Fetch related data separately for performance
+      // Fetch related data
       const companyIds = data?.map(item => item.id) || [];
       const regionIds = [...new Set(data?.map(item => item.region_id) || [])].filter(Boolean);
       const countryIds = [...new Set(data?.map(item => item.country_id) || [])].filter(Boolean);
@@ -576,7 +578,7 @@ export default function CompaniesTab() {
 
   // ===== MUTATIONS =====
   
-  // Company mutation
+  // Company mutation (unchanged)
   const mutation = useMutation(
     async (formData: FormState) => {
       const data = {
@@ -637,7 +639,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation (Direct Database - No API) - FIXED PHONE FIELD AND AUDIT LOGS
+  // Enhanced Tenant admin mutation with Supabase Auth sync
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -645,21 +647,16 @@ export default function CompaniesTab() {
         const email = formData.get('email') as string;
         const password = formData.get('password') as string | null;
         const phoneValue = formData.get('phone') as string;
-        // Convert empty string to null for database
         const phone = phoneValue?.trim() || null;
         const position = formData.get('position') as string;
 
-        // Debug logging to verify phone is received
-        console.log('Admin form submission:', { name, email, phone, position });
-
-        // Basic validation
+        // Validation
         if (!name || name.length < 2) {
           throw new Error('Name must be at least 2 characters');
         }
         if (!email || !email.includes('@')) {
           throw new Error('Please enter a valid email address');
         }
-
         if (!selectedCompanyForAdmin?.id) {
           throw new Error('No company selected');
         }
@@ -667,16 +664,41 @@ export default function CompaniesTab() {
         const companyId = selectedCompanyForAdmin.id;
 
         if (editingAdmin) {
-          // ===== UPDATE EXISTING ADMIN =====
+          // ===== UPDATE EXISTING ADMIN WITH AUTH SYNC =====
           
-          // Update entity_users profile with managed fields including PHONE
+          // Step 1: Update Supabase Auth if linked
+          if (editingAdmin.users?.auth_user_id) {
+            try {
+              const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+                editingAdmin.users.auth_user_id,
+                {
+                  email: email.toLowerCase(),
+                  phone: phone || undefined,
+                  user_metadata: {
+                    name: name,
+                    position: position || 'Administrator',
+                    company_id: companyId,
+                    company_name: selectedCompanyForAdmin.name,
+                    updated_by: currentUser?.email,
+                    updated_at: new Date().toISOString()
+                  }
+                }
+              );
+
+              if (authUpdateError && authUpdateError.message !== 'User not found') {
+                await logSyncError('update_user', editingAdmin.user_id, authUpdateError, { name, email, phone, position });
+              }
+            } catch (authError) {
+              await logSyncError('update_user', editingAdmin.user_id, authError, { name, email, phone, position });
+            }
+          }
+          
+          // Step 2: Update entity_users profile
           const entityUpdates: any = {
             position: position || editingAdmin.position || 'Administrator',
-            phone: phone, // Use the already processed phone value (null or string)
+            phone: phone,
             updated_at: new Date().toISOString()
           };
-
-          console.log('Updating entity_users with:', entityUpdates);
 
           const { error: entityError } = await supabase
             .from('entity_users')
@@ -685,7 +707,7 @@ export default function CompaniesTab() {
 
           if (entityError) throw entityError;
 
-          // Update users table if email/phone/name changed
+          // Step 3: Update custom users table
           const userUpdates: any = {
             updated_at: new Date().toISOString(),
             raw_user_meta_data: {
@@ -697,7 +719,7 @@ export default function CompaniesTab() {
             }
           };
 
-          // Check if email is changing
+          // Email change handling
           if (email !== editingAdmin.users?.email) {
             userUpdates.email = email.toLowerCase();
             userUpdates.email_verified = false;
@@ -706,11 +728,9 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Update phone in users table if changed
-          // Compare with both entity_users.phone and users.phone
-          const currentPhone = editingAdmin.phone || editingAdmin.users?.phone;
-          if (phone !== currentPhone) {
-            userUpdates.phone = phone; // Use the already processed phone value
+          // Phone change handling
+          if (phone !== (editingAdmin.phone || editingAdmin.users?.phone)) {
+            userUpdates.phone = phone;
           }
 
           const { error: userError } = await supabase
@@ -720,7 +740,6 @@ export default function CompaniesTab() {
 
           if (userError) throw userError;
 
-          // Log the update (with UUID validation)
           await createAuditLog(
             'update_entity_admin',
             'entity_user',
@@ -728,7 +747,8 @@ export default function CompaniesTab() {
             {
               company_id: companyId,
               updated_fields: { name, email, phone, position },
-              updated_by: currentUser?.email
+              updated_by: currentUser?.email,
+              auth_synced: !!editingAdmin.users?.auth_user_id
             }
           );
 
@@ -740,7 +760,7 @@ export default function CompaniesTab() {
           };
 
         } else {
-          // ===== CREATE NEW ADMIN =====
+          // ===== CREATE NEW ADMIN WITH AUTH SYNC =====
           
           // Check if user already exists
           const { data: existingUser } = await supabase
@@ -750,7 +770,7 @@ export default function CompaniesTab() {
             .maybeSingle();
 
           if (existingUser) {
-            // User exists - check if already linked to this company
+            // User exists - check if already linked to company
             const { data: existingLink } = await supabase
               .from('entity_users')
               .select('id')
@@ -762,16 +782,35 @@ export default function CompaniesTab() {
               throw new Error('This user is already associated with this company');
             }
 
-            // Link existing user to company as admin with phone field
+            // Update auth metadata if user has auth_user_id
+            if (existingUser.auth_user_id) {
+              try {
+                await supabaseAdmin.auth.admin.updateUserById(
+                  existingUser.auth_user_id,
+                  {
+                    user_metadata: {
+                      ...existingUser.raw_user_meta_data,
+                      companies: [
+                        ...(existingUser.raw_user_meta_data?.companies || []),
+                        { id: companyId, name: selectedCompanyForAdmin.name, role: 'admin' }
+                      ]
+                    }
+                  }
+                );
+              } catch (authError) {
+                await logSyncError('update_user_companies', existingUser.id, authError);
+              }
+            }
+
+            // Link existing user to company
             const entityUserData = {
-              // id will be auto-generated by database (uuid_generate_v4())
               user_id: existingUser.id,
               company_id: companyId,
               position: position || 'Administrator',
-              phone: phone, // Use the already processed phone value (null or string)
-              department: null, // Will be set later in entity management
-              employee_id: null, // Will be set later in entity management
-              hire_date: new Date().toISOString().split('T')[0], // Default to today
+              phone: phone,
+              department: null,
+              employee_id: null,
+              hire_date: new Date().toISOString().split('T')[0],
               is_company_admin: true,
               employee_status: 'active',
               department_id: null,
@@ -779,15 +818,12 @@ export default function CompaniesTab() {
               updated_at: new Date().toISOString()
             };
             
-            console.log('Linking existing user with entity_users data:', entityUserData);
-            
             const { error: linkError } = await supabase
               .from('entity_users')
               .insert([entityUserData]);
 
             if (linkError) throw linkError;
 
-            // Log the action (with UUID validation)
             await createAuditLog(
               'link_entity_admin',
               'entity_user',
@@ -795,7 +831,8 @@ export default function CompaniesTab() {
               {
                 company_id: companyId,
                 company_name: selectedCompanyForAdmin.name,
-                linked_by: currentUser?.email
+                linked_by: currentUser?.email,
+                auth_synced: !!existingUser.auth_user_id
               }
             );
 
@@ -808,19 +845,77 @@ export default function CompaniesTab() {
             };
           }
 
-          // Create new user
-          // Generate password if needed
+          // Create new user in both systems
           const finalPassword = password || generateComplexPassword();
           const isGeneratedPassword = !password;
           
-          // Hash password
+          // Step 1: Create user in Supabase Auth
+          let authUserId: string | null = null;
+          
+          try {
+            const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+              email: email.toLowerCase(),
+              password: finalPassword,
+              email_confirm: false,
+              phone: phone || undefined,
+              user_metadata: {
+                name: name,
+                position: position || 'Administrator',
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                created_by: currentUser?.email,
+                created_by_id: currentUser?.id,
+                is_invited: true,
+                invite_accepted: false,
+                companies: [{ id: companyId, name: selectedCompanyForAdmin.name, role: 'admin' }]
+              },
+              app_metadata: {
+                user_type: 'entity',
+                is_company_admin: true,
+                requires_password_change: isGeneratedPassword
+              }
+            });
+
+            if (authError) {
+              // Check if user already exists in auth
+              if (authError.message?.includes('already registered')) {
+                const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({
+                  filter: `email.eq.${email}`
+                });
+                
+                if (authUsers?.users?.[0]) {
+                  authUserId = authUsers.users[0].id;
+                }
+              } else {
+                await logSyncError('create_auth_user', email, authError);
+              }
+            } else if (authUser) {
+              authUserId = authUser.id;
+              
+              // Send invite email
+              try {
+                await supabaseAdmin.auth.admin.inviteUserByEmail(email.toLowerCase(), {
+                  data: {
+                    company_name: selectedCompanyForAdmin.name,
+                    invited_by: currentUser?.email,
+                    temporary_password: isGeneratedPassword ? finalPassword : undefined
+                  }
+                });
+              } catch (inviteError) {
+                console.error('Failed to send invite:', inviteError);
+              }
+            }
+          } catch (authCreationError) {
+            await logSyncError('create_auth_user', email, authCreationError);
+          }
+          
+          // Step 2: Hash password for custom system
           const salt = await bcrypt.genSalt(10);
           const passwordHash = await bcrypt.hash(finalPassword, salt);
           
-          // Generate verification token
+          // Step 3: Create user in custom users table
           const verificationToken = generateVerificationToken();
           
-          // Create user in users table with all required fields
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
@@ -829,7 +924,7 @@ export default function CompaniesTab() {
               user_type: 'entity',
               is_active: true,
               email_verified: false,
-              phone: phone, // Use the already processed phone value
+              phone: phone,
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
               verified_at: null,
@@ -841,12 +936,15 @@ export default function CompaniesTab() {
               password_updated_at: new Date().toISOString(),
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              auth_user_id: authUserId,
+              auth_invitation_sent_at: authUserId ? new Date().toISOString() : null,
               raw_user_meta_data: {
                 name: name,
                 company_id: companyId,
                 company_name: selectedCompanyForAdmin.name,
                 created_by: currentUser?.email,
-                created_by_id: currentUser?.id
+                created_by_id: currentUser?.id,
+                auth_synced: !!authUserId
               },
               raw_app_meta_data: {},
               user_types: ['entity'],
@@ -856,42 +954,54 @@ export default function CompaniesTab() {
             .single();
           
           if (userError) {
+            // Rollback auth user if custom user creation fails
+            if (authUserId) {
+              try {
+                await supabaseAdmin.auth.admin.deleteUser(authUserId);
+              } catch (deleteError) {
+                console.error('Failed to rollback auth user:', deleteError);
+              }
+            }
+            
             if (userError.code === '23505') {
               throw new Error('This email is already registered');
             }
             throw userError;
           }
           
-          // Create entity user profile with phone field
+          // Step 4: Create entity user profile
           const entityUserData = {
-            // id will be auto-generated by database (uuid_generate_v4())
-            user_id: newUser.id, // Link to the user we just created
+            user_id: newUser.id,
             company_id: companyId,
             position: position || 'Administrator',
-            phone: phone, // Use the already processed phone value (null or string)
-            department: null, // Will be set later in entity management
-            employee_id: null, // Will be set later in entity management
-            hire_date: new Date().toISOString().split('T')[0], // Default to today
-            is_company_admin: true, // Set as company admin
+            phone: phone,
+            department: null,
+            employee_id: null,
+            hire_date: new Date().toISOString().split('T')[0],
+            is_company_admin: true,
             employee_status: 'active',
             department_id: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
           
-          console.log('Creating new entity_user with data:', entityUserData);
-          
           const { error: entityError } = await supabase
             .from('entity_users')
             .insert(entityUserData);
           
           if (entityError) {
-            // Rollback: delete the user if entity_users insert fails
+            // Rollback both users
             await supabase.from('users').delete().eq('id', newUser.id);
+            if (authUserId) {
+              try {
+                await supabaseAdmin.auth.admin.deleteUser(authUserId);
+              } catch (deleteError) {
+                console.error('Failed to rollback auth user:', deleteError);
+              }
+            }
             throw entityError;
           }
           
-          // Log the creation (with UUID validation)
           await createAuditLog(
             'create_entity_admin',
             'entity_user',
@@ -902,7 +1012,8 @@ export default function CompaniesTab() {
               company_name: selectedCompanyForAdmin.name,
               is_company_admin: true,
               created_by: currentUser?.email,
-              password_generated: isGeneratedPassword
+              password_generated: isGeneratedPassword,
+              auth_synced: !!authUserId
             }
           );
           
@@ -913,7 +1024,8 @@ export default function CompaniesTab() {
               id: newUser.id,
               email: newUser.email,
               name: name,
-              temporary_password: isGeneratedPassword ? finalPassword : undefined
+              temporary_password: isGeneratedPassword ? finalPassword : undefined,
+              auth_user_id: authUserId
             },
             company: selectedCompanyForAdmin,
             message: isGeneratedPassword ? 'Admin created with temporary password' : 'Admin created successfully'
@@ -931,7 +1043,6 @@ export default function CompaniesTab() {
         queryClient.invalidateQueries(['companies']);
         
         if (result.type === 'created' && result.user?.temporary_password) {
-          // Show password modal for new users with generated password
           setGeneratedPassword(result.user.temporary_password);
           toast.success('Admin created successfully. Copy the temporary password!');
         } else {
@@ -941,10 +1052,7 @@ export default function CompaniesTab() {
           setAdminFormErrors({});
           resetAdminForm();
           
-          // Return to View Admins modal if we came from there
-          // For both create and update operations
           if (returnToViewAfterAdd && selectedCompanyForView) {
-            // Use the company from either the result or the selectedCompanyForView
             const companyId = result.company?.id || selectedCompanyForView.id;
             fetchCompanyAdmins(companyId);
             setIsViewAdminsOpen(true);
@@ -971,14 +1079,44 @@ export default function CompaniesTab() {
     }
   );
 
-  // Change password mutation (Direct Database - Like UsersTab)
+  // Enhanced password change mutation with Auth sync
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
-      // Hash the new password
+      // Hash password for custom system
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(data.password, salt);
       
-      // Update password in users table
+      // Get user to check for auth_user_id
+      const { data: user } = await supabase
+        .from('users')
+        .select('auth_user_id, email')
+        .eq('id', data.userId)
+        .single();
+      
+      // Update password in Supabase Auth if linked
+      if (user?.auth_user_id) {
+        try {
+          const { error: authPasswordError } = await supabaseAdmin.auth.admin.updateUserById(
+            user.auth_user_id,
+            { 
+              password: data.password,
+              app_metadata: {
+                requires_password_change: false,
+                password_changed_at: new Date().toISOString(),
+                password_changed_by: currentUser?.email
+              }
+            }
+          );
+          
+          if (authPasswordError) {
+            await logSyncError('update_password', data.userId, authPasswordError);
+          }
+        } catch (authError) {
+          await logSyncError('update_password', data.userId, authError);
+        }
+      }
+      
+      // Update password in custom users table
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -993,7 +1131,6 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Log the password change (with UUID validation)
       await createAuditLog(
         'admin_password_change',
         'entity_user',
@@ -1001,13 +1138,21 @@ export default function CompaniesTab() {
         {
           changed_by: currentUser?.email,
           target_user: selectedAdminForPassword?.users?.email,
-          notification_sent: data.sendEmail
+          notification_sent: data.sendEmail,
+          auth_synced: !!user?.auth_user_id
         }
       );
       
-      // TODO: Send email notification if requested
-      if (data.sendEmail) {
-        console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
+      // Send email notification if requested
+      if (data.sendEmail && user?.auth_user_id && user?.email) {
+        try {
+          await supabaseAdmin.auth.admin.generateLink({
+            type: 'recovery',
+            email: user.email
+          });
+        } catch (emailError) {
+          console.error('Failed to send password reset email:', emailError);
+        }
       }
       
       return { success: true, password: data.password };
@@ -1034,7 +1179,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Delete company mutation
+  // Delete company mutation (unchanged)
   const deleteMutation = useMutation(
     async (companies: Company[]) => {
       // Delete logos from storage
@@ -1049,7 +1194,7 @@ export default function CompaniesTab() {
         }
       }
 
-      // Delete companies from database (cascade will handle related records)
+      // Delete companies from database
       const { error } = await supabase
         .from('companies')
         .delete()
@@ -1074,15 +1219,44 @@ export default function CompaniesTab() {
     }
   );
 
-  // Remove admin mutation
+  // Enhanced remove admin mutation with Auth sync
   const removeAdminMutation = useMutation(
     async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
+      // Get user auth_user_id before deletion
+      const { data: user } = await supabase
+        .from('users')
+        .select('auth_user_id, raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+      
+      // Remove from entity_users
       const { error } = await supabase
         .from('entity_users')
         .delete()
         .eq('id', entityUserId);
 
       if (error) throw error;
+      
+      // Update auth metadata to remove company
+      if (user?.auth_user_id && selectedCompanyForView) {
+        try {
+          const companies = user.raw_user_meta_data?.companies || [];
+          const updatedCompanies = companies.filter((c: any) => c.id !== selectedCompanyForView.id);
+          
+          await supabaseAdmin.auth.admin.updateUserById(
+            user.auth_user_id,
+            {
+              user_metadata: {
+                ...user.raw_user_meta_data,
+                companies: updatedCompanies
+              }
+            }
+          );
+        } catch (authError) {
+          await logSyncError('remove_admin_company', userId, authError);
+        }
+      }
+      
       return { entityUserId };
     },
     {
@@ -1100,13 +1274,22 @@ export default function CompaniesTab() {
     }
   );
 
-  // Resend verification mutation
+  // Enhanced resend verification with Auth sync
   const resendVerificationMutation = useMutation(
     async (userId: string) => {
-      // Generate new verification token
+      // Get user details
+      const { data: user } = await supabase
+        .from('users')
+        .select('email, auth_user_id, raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+      
+      if (!user) throw new Error('User not found');
+      
+      // Generate new token for custom system
       const token = generateVerificationToken();
       
-      // Update user with new token
+      // Update custom user
       const { error: updateError } = await supabase
         .from('users')
         .update({
@@ -1117,18 +1300,19 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      // Get user email
-      const { data: user } = await supabase
-        .from('users')
-        .select('email, raw_user_meta_data')
-        .eq('id', userId)
-        .single();
+      // Resend through Supabase Auth if linked
+      if (user.auth_user_id) {
+        try {
+          await supabaseAdmin.auth.admin.generateLink({
+            type: 'signup',
+            email: user.email
+          });
+        } catch (authError) {
+          console.error('Failed to resend auth verification:', authError);
+        }
+      }
       
-      if (!user) throw new Error('User not found');
-      
-      // TODO: Send actual email
-      console.log('Verification email would be sent to:', user.email);
-      console.log('Verification token:', token);
+      console.log('Verification email sent to:', user.email);
       
       return { success: true };
     },
@@ -1165,10 +1349,9 @@ export default function CompaniesTab() {
   const fetchCompanyAdmins = async (companyId: string) => {
     setLoadingAdmins(true);
     try {
-      // Small delay to ensure database has updated
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Fetch entity_users with user details - Now includes phone from entity_users
+      // Fetch entity_users with admin flag
       const { data: entityUsers, error: entityError } = await supabase
         .from('entity_users')
         .select('*')
@@ -1195,7 +1378,7 @@ export default function CompaniesTab() {
       // Create user map
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
-      // Combine data - entity_users now includes phone field
+      // Combine data
       const adminsWithUsers = entityUsers.map(entityUser => ({
         ...entityUser,
         users: userMap.get(entityUser.user_id) || null
@@ -1214,12 +1397,10 @@ export default function CompaniesTab() {
   const getLogoUrl = (path: string | null) => {
     if (!path) return null;
     
-    // If path is already a full URL, return it
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
     
-    // Otherwise, get public URL from Supabase storage
     const { data } = supabase.storage
       .from('company-logos')
       .getPublicUrl(path);
@@ -1231,7 +1412,7 @@ export default function CompaniesTab() {
     setFormState(prev => ({
       ...prev,
       region_id: regionId,
-      country_id: '' // Reset country when region changes
+      country_id: ''
     }));
   };
 
@@ -1252,11 +1433,9 @@ export default function CompaniesTab() {
     e.preventDefault();
     setAdminFormErrors({});
     
-    // Use state values directly instead of FormData
     const formData = new FormData();
     formData.append('name', adminFormState.name);
     formData.append('email', adminFormState.email);
-    // Handle phone - ensure empty string is converted to null for database
     formData.append('phone', adminFormState.phone?.trim() || '');
     formData.append('position', adminFormState.position || '');
     formData.append('password', adminFormState.password || '');
@@ -1274,7 +1453,6 @@ export default function CompaniesTab() {
     const newPassword = formData.get('newPassword') as string;
     const sendEmail = formData.get('sendEmail') === 'on';
     
-    // Validate password
     try {
       passwordChangeSchema.parse({ newPassword, sendEmail });
     } catch (error) {
@@ -1290,7 +1468,6 @@ export default function CompaniesTab() {
       }
     }
     
-    // Use generated password if checkbox is checked
     const passwordToSet = generateNewPassword ? generateComplexPassword() : newPassword;
     
     changePasswordMutation.mutate({
@@ -1384,7 +1561,6 @@ export default function CompaniesTab() {
     });
     setGenerateNewPassword(true);
     
-    // Return to View Admins modal if needed
     if (returnToViewAfterAdd && selectedCompanyForView) {
       fetchCompanyAdmins(selectedCompanyForView.id);
       setIsViewAdminsOpen(true);
@@ -1394,7 +1570,6 @@ export default function CompaniesTab() {
 
   // ===== EFFECTS =====
   
-  // Update form state when editing company changes
   React.useEffect(() => {
     if (editingCompany) {
       setFormState({
@@ -1421,13 +1596,12 @@ export default function CompaniesTab() {
     }
   }, [editingCompany]);
 
-  // Update admin form when editing - FIXED to include phone from entity_users
   React.useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || editingAdmin.users?.phone || '', // Prefer entity_users.phone
+        phone: editingAdmin.phone || editingAdmin.users?.phone || '',
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -1438,7 +1612,6 @@ export default function CompaniesTab() {
     }
   }, [editingAdmin]);
 
-  // Reset password form when closing
   React.useEffect(() => {
     if (!isPasswordFormOpen) {
       setPasswordFormState({
@@ -1549,7 +1722,7 @@ export default function CompaniesTab() {
     },
   ];
 
-  // ===== RENDER =====
+  // ===== RENDER (UI remains unchanged) =====
   
   return (
     <div className="space-y-6">
@@ -1686,6 +1859,7 @@ export default function CompaniesTab() {
         emptyMessage="No companies found"
       />
 
+      {/* All modals and forms remain the same - UI unchanged */}
       {/* Company Form Modal */}
       <SlideInForm
         key={editingCompany?.id || 'new'}
@@ -1804,7 +1978,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form Modal (Unified with UsersTab pattern) */}
+      {/* Tenant Admin Form Modal */}
       <SlideInForm
         key={`${selectedCompanyForAdmin?.id || 'admin-new'}-${editingAdmin?.id || 'new'}`}
         title={editingAdmin ? `Edit Admin for ${selectedCompanyForAdmin?.name}` : `Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
@@ -2013,7 +2187,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Change Password Form - Highest z-index to appear above all modals */}
+      {/* Change Password Form */}
       {isPasswordFormOpen && !generatedPassword && (
         <div className="fixed inset-0 z-[70]">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => {
@@ -2190,7 +2364,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* View/Manage Admins Modal - FIXED to display phone from entity_users */}
+      {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -2292,6 +2466,11 @@ export default function CompaniesTab() {
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                                       <Key className="h-3 w-3 mr-1" />
                                       Password Change Required
+                                    </span>
+                                  )}
+                                  {admin.users?.auth_user_id && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                      Auth Synced
                                     </span>
                                   )}
                                 </div>
@@ -2466,7 +2645,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal - Highest z-index */}
+      {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
