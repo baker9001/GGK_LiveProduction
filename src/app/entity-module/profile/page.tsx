@@ -1,983 +1,704 @@
 /**
  * File: /src/app/entity-module/profile/page.tsx
- * Dependencies:
- *   - @/lib/supabase
- *   - @/contexts/UserContext
- *   - @/components/shared/* (Button, FormField, StatusBadge, ImageUpload, Tabs)
- *   - @/lib/utils (cn function)
- *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
  * 
- * Preserved Features:
- *   - All original data fetching logic
- *   - Entity user and users table integration
- *   - Avatar upload functionality
- *   - Inline editing capabilities
- *   - All field mappings as specified
- * 
- * Added/Modified:
- *   - QR code display placeholder
- *   - Remove profile picture option
- *   - Field headers with background
- *   - Horizontal layout for better space usage
- *   - Coming soon labels for non-functional features
- *   - FIXED: Tab icon and text spacing with proper left alignment
- *   - FIXED: Removed stray "0" at bottom of page
- * 
- * Database Tables:
- *   - entity_users (primary profile data)
- *   - users (authentication and system data)
- *   - companies (for company name)
- *   - schools (for assigned schools)
- *   - branches (for assigned branches)
+ * Entity Module Profile Management Page
+ * Handles profile information, avatar upload, and account settings for entity users
  */
 
-'use client';
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  User, Mail, Phone, Building2, Calendar, Shield, 
-  Edit2, Save, X, Camera, MapPin, School, Clock,
-  CheckCircle, XCircle, Key, Briefcase, Hash,
-  AlertCircle, Loader2, ChevronRight,
-  Activity, Download, Settings, FileText,
-  UserCircle, Upload, QrCode, Trash2, Info
+  User, 
+  Mail, 
+  Phone, 
+  Calendar, 
+  Shield, 
+  Camera, 
+  Save, 
+  Lock,
+  Bell,
+  Globe,
+  Palette,
+  Settings,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Building2,
+  MapPin,
+  Edit,
+  X
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
+import { useAccessControl } from '../../../hooks/useAccessControl';
 import { Button } from '../../../components/shared/Button';
-import { FormField, Input } from '../../../components/shared/FormField';
-import { PhoneInput } from '../../../components/shared/PhoneInput';
-import { StatusBadge } from '../../../components/shared/StatusBadge';
+import { FormField, Input, Select, Textarea } from '../../../components/shared/FormField';
 import { ImageUpload } from '../../../components/shared/ImageUpload';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/shared/Tabs';
+import { ToggleSwitch } from '../../../components/shared/ToggleSwitch';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { toast } from '../../../components/shared/Toast';
-import { cn } from '../../../lib/utils';
+import { getPublicUrl } from '../../../lib/storageHelpers';
 
-interface ProfileData {
+interface EntityUserProfile {
   id: string;
   user_id: string;
   name: string;
   email: string;
+  phone?: string;
   position?: string;
   department?: string;
-  phone?: string;
   employee_id?: string;
-  hire_date?: string;
-  company_id: string;
   admin_level: string;
-  assigned_schools?: string[];
-  assigned_branches?: string[];
+  company_id: string;
+  company_name?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
   metadata?: {
     avatar_url?: string;
     bio?: string;
-    [key: string]: any;
+    timezone?: string;
+    language?: string;
+    theme?: string;
+    notifications?: {
+      email: boolean;
+      system: boolean;
+      security: boolean;
+    };
   };
-  user_email: string;
-  is_active: boolean;
-  email_verified: boolean;
-  created_at: string;
-  last_login_at?: string;
-  password_updated_at?: string;
-  company_name?: string;
-  school_names?: string[];
-  branch_names?: string[];
+  assigned_schools?: string[];
+  assigned_branches?: string[];
 }
 
-export default function ModernProfilePage() {
-  const { user } = useUser();
+export default function EntityProfilePage() {
+  const { user, refreshUser } = useUser();
+  const { getUserContext } = useAccessControl();
   const queryClient = useQueryClient();
+  
+  const [activeTab, setActiveTab] = useState<'overview' | 'security' | 'activity' | 'preferences'>('overview');
   const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState<Partial<ProfileData>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
+  const [formData, setFormData] = useState<Partial<EntityUserProfile>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Fetch profile data
-  const { data: profileData, isLoading, error } = useQuery(
-    ['profile', user?.id],
+  // Get user context
+  const userContext = getUserContext();
+
+  // Fetch entity user profile data
+  const { 
+    data: profile, 
+    isLoading, 
+    error 
+  } = useQuery(
+    ['entity-profile', user?.id],
     async () => {
       if (!user?.id) throw new Error('User not authenticated');
 
-      const { data: entityUser, error: entityError } = await supabase
+      const { data, error } = await supabase
         .from('entity_users')
         .select(`
           id,
           user_id,
           name,
           email,
+          phone,
           position,
           department,
-          phone,
           employee_id,
-          hire_date,
-          company_id,
           admin_level,
-          assigned_schools,
-          assigned_branches,
+          company_id,
+          is_active,
+          created_at,
+          updated_at,
           metadata,
-          companies!entity_users_company_id_fkey (
-            id,
-            name
-          )
+          companies (name)
         `)
         .eq('user_id', user.id)
         .single();
 
-      if (entityError) throw entityError;
-
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          email,
-          is_active,
-          email_verified,
-          created_at,
-          last_login_at,
-          password_updated_at
-        `)
-        .eq('id', user.id)
-        .single();
-
-      if (userError) throw userError;
-
-      let schoolNames: string[] = [];
-      if (entityUser.assigned_schools?.length > 0) {
-        const { data: schools } = await supabase
-          .from('schools')
-          .select('name')
-          .in('id', entityUser.assigned_schools);
-        schoolNames = schools?.map(s => s.name) || [];
-      }
-
-      let branchNames: string[] = [];
-      if (entityUser.assigned_branches?.length > 0) {
-        const { data: branches } = await supabase
-          .from('branches')
-          .select('name')
-          .in('id', entityUser.assigned_branches);
-        branchNames = branches?.map(b => b.name) || [];
-      }
+      if (error) throw error;
 
       return {
-        ...entityUser,
-        user_email: userData.email,
-        is_active: userData.is_active,
-        email_verified: userData.email_verified,
-        created_at: userData.created_at,
-        last_login_at: userData.last_login_at,
-        password_updated_at: userData.password_updated_at,
-        company_name: entityUser.companies?.name,
-        school_names: schoolNames,
-        branch_names: branchNames
-      } as ProfileData;
+        ...data,
+        company_name: data.companies?.name || 'Unknown Company',
+        metadata: data.metadata || {}
+      } as EntityUserProfile;
     },
     {
       enabled: !!user?.id,
-      staleTime: 5 * 60 * 1000,
+      staleTime: 2 * 60 * 1000,
     }
   );
 
+  // Initialize form data when profile loads
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+        position: profile.position,
+        department: profile.department,
+        employee_id: profile.employee_id,
+        metadata: {
+          avatar_url: profile.metadata?.avatar_url || '',
+          bio: profile.metadata?.bio || '',
+          timezone: profile.metadata?.timezone || 'UTC',
+          language: profile.metadata?.language || 'en',
+          theme: profile.metadata?.theme || 'system',
+          notifications: {
+            email: profile.metadata?.notifications?.email ?? true,
+            system: profile.metadata?.notifications?.system ?? true,
+            security: profile.metadata?.notifications?.security ?? true,
+          }
+        }
+      });
+    }
+  }, [profile]);
+
+  // Update profile mutation
   const updateProfileMutation = useMutation(
-    async (updates: Partial<ProfileData>) => {
-      if (!user?.id || !profileData) throw new Error('User not authenticated');
+    async (updates: Partial<EntityUserProfile>) => {
+      if (!user?.id || !profile?.id) throw new Error('User not authenticated');
 
-      const entityUpdates: any = {};
-      if (updates.name !== undefined) entityUpdates.name = updates.name;
-      if (updates.position !== undefined) entityUpdates.position = updates.position;
-      if (updates.department !== undefined) entityUpdates.department = updates.department;
-      if (updates.phone !== undefined) entityUpdates.phone = updates.phone;
-      if (updates.metadata !== undefined) entityUpdates.metadata = updates.metadata;
+      const { error } = await supabase
+        .from('entity_users')
+        .update({
+          name: updates.name,
+          email: updates.email,
+          phone: updates.phone,
+          position: updates.position,
+          department: updates.department,
+          employee_id: updates.employee_id,
+          metadata: updates.metadata,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profile.id);
 
-      if (Object.keys(entityUpdates).length > 0) {
-        entityUpdates.updated_at = new Date().toISOString();
-        
-        const { error: entityError } = await supabase
-          .from('entity_users')
-          .update(entityUpdates)
-          .eq('user_id', user.id);
-
-        if (entityError) throw entityError;
-      }
-
-      return { ...profileData, ...updates };
+      if (error) throw error;
+      return updates;
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['profile', user?.id]);
+        queryClient.invalidateQueries(['entity-profile']);
+        refreshUser();
         setIsEditing(false);
-        setEditData({});
         toast.success('Profile updated successfully');
       },
-      onError: (error: any) => {
-        toast.error(error.message || 'Failed to update profile');
+      onError: (error) => {
+        console.error('Error updating profile:', error);
+        toast.error('Failed to update profile');
       }
     }
   );
 
-  useEffect(() => {
-    if (isEditing && profileData) {
-      setEditData({
-        name: profileData.name,
-        position: profileData.position,
-        department: profileData.department,
-        phone: profileData.phone
+  // Handle form submission
+  const handleSubmit = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.name?.trim()) {
+      errors.name = 'Name is required';
+    }
+
+    if (!formData.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    updateProfileMutation.mutate(formData);
+  };
+
+  // Handle avatar upload
+  const handleAvatarChange = (path: string | null) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      metadata: {
+        ...prev.metadata,
+        avatar_url: path
+      }
+    }));
+    
+    // Auto-save avatar changes
+    if (profile) {
+      updateProfileMutation.mutate({ 
+        ...formData, 
+        metadata: {
+          ...formData.metadata,
+          avatar_url: path
+        }
       });
     }
-  }, [isEditing, profileData]);
+  };
 
-  // Add keyboard shortcuts for save and cancel
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isEditing) return;
-      
-      // Check if the active element is an input or textarea
-      const activeElement = document.activeElement;
-      const isInputField = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
-      
-      if (e.key === 'Enter' && !isInputField) {
-        // Enter to save (only when not in an input field)
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'Escape') {
-        // Escape to cancel
-        e.preventDefault();
-        setIsEditing(false);
-        setEditData({});
+  // Handle field changes
+  const updateFormData = (field: string, value: any) => {
+    setFormData(prev => {
+      if (field.includes('.')) {
+        const [parent, child] = field.split('.');
+        return {
+          ...prev,
+          [parent]: {
+            ...(prev[parent as keyof EntityUserProfile] as any),
+            [child]: value
+          }
+        };
       }
-    };
+      return { ...prev, [field]: value };
+    });
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, editData]);
-
-  const handleAvatarUpdate = async (file: File) => {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
-      
-      const { error: uploadError, data } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const updatedMetadata = {
-        ...(profileData?.metadata || {}),
-        avatar_url: data.path
-      };
-      
-      updateProfileMutation.mutate({ metadata: updatedMetadata });
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      toast.error('Failed to upload avatar');
+    // Clear error for this field
+    if (formErrors[field]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
-  };
-
-  const handleRemovePhoto = async () => {
-    try {
-      // Remove from storage if exists
-      if (profileData?.metadata?.avatar_url) {
-        await supabase.storage
-          .from('avatars')
-          .remove([profileData.metadata.avatar_url]);
-      }
-
-      // Update metadata to remove avatar_url
-      const updatedMetadata = {
-        ...(profileData?.metadata || {}),
-        avatar_url: null
-      };
-      
-      updateProfileMutation.mutate({ metadata: updatedMetadata });
-      setShowRemovePhotoConfirm(false);
-      toast.success('Profile photo removed');
-    } catch (error) {
-      console.error('Error removing avatar:', error);
-      toast.error('Failed to remove profile photo');
-    }
-  };
-
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleAvatarUpdate(file);
-    }
-  };
-
-  const handleSave = () => {
-    updateProfileMutation.mutate(editData);
-  };
-
-  const getAdminLevelLabel = (level: string) => {
-    const labels: Record<string, string> = {
-      entity_admin: 'Entity Administrator',
-      sub_entity_admin: 'Sub-Entity Administrator',
-      school_admin: 'School Administrator',
-      branch_admin: 'Branch Administrator'
-    };
-    return labels[level] || level;
-  };
-
-  const getAvatarUrl = () => {
-    if (profileData?.metadata?.avatar_url) {
-      return supabase.storage
-        .from('avatars')
-        .getPublicUrl(profileData.metadata.avatar_url).data.publicUrl;
-    }
-    return null;
-  };
-
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F] mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Loading profile...</p>
-        </div>
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Loading profile...</span>
       </div>
     );
   }
 
-  if (error || !profileData) {
+  if (error || !profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Failed to load profile</p>
+      <div className="p-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-re-700 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+            <div>
+              <h3 className="font-semibold text-red-800 dark:text-red-200">
+                Error Loading Profile
+              </h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                {error?.message || 'Failed to load profile data. Please try again.'}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Profile Header Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-          <div className="flex items-center justify-between gap-6">
-            {/* Left Section - Avatar and Basic Info */}
-            <div className="flex items-center gap-4 flex-1">
-              {/* Avatar */}
-              <div className="relative group flex-shrink-0">
-                <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 relative cursor-pointer" onClick={handleAvatarClick}>
-                  {getAvatarUrl() ? (
-                    <img
-                      src={getAvatarUrl()}
-                      alt="Profile"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-[#8CC63F] to-[#7AB635]">
-                      <span className="text-lg font-bold text-white">
-                        {getInitials(profileData.name)}
-                      </span>
-                    </div>
-                  )}
-                  
-                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Camera className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                
-                {getAvatarUrl() && isEditing && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowRemovePhotoConfirm(true);
-                    }}
-                    className="absolute -bottom-1 -right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
-                  >
-                    <Trash2 className="h-2.5 w-2.5" />
-                  </button>
-                )}
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </div>
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F]/20 to-[#7AB635]/20 rounded-full flex items-center justify-center">
+              <Building2 className="w-8 h-8 text-[#8CC63F]" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Profile Management
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                Manage your account settings and preferences
+              </p>
+            </div>
+          </div>
 
-              {/* Name and Email */}
-              <div className="min-w-0">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate">
-                  {profileData.name}
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                  {profileData.user_email}
-                </p>
-              </div>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={profile.is_active ? 'active' : 'inactive'} />
+            <div className="flex items-center gap-1 px-3 py-1 bg-[#8CC63F]/10 rounded-lg">
+              <Shield className="w-4 h-4 text-[#8CC63F]" />
+              <span className="text-sm font-medium text-[#8CC63F]">
+                {profile.admin_level}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+          {[
+            { id: 'overview', label: 'Overview', icon: User },
+            { id: 'security', label: 'Security', icon: Lock },
+            { id: 'activity', label: 'Activity', icon: Calendar },
+            { id: 'preferences', label: 'Preferences', icon: Settings }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4 inline mr-2" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Profile Information */}
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Profile Information
+              </h2>
+              <Button
+                variant={isEditing ? "outline" : "default"}
+                onClick={() => {
+                  if (isEditing) {
+                    setIsEditing(false);
+                    setFormData({
+                      name: profile.name,
+                      email: profile.email,
+                      phone: profile.phone,
+                      position: profile.position,
+                      department: profile.department,
+                      employee_id: profile.employee_id,
+                      metadata: profile.metadata
+                    });
+                    setFormErrors({});
+                  } else {
+                    setIsEditing(true);
+                  }
+                }}
+                leftIcon={isEditing ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+              >
+                {isEditing ? 'Cancel' : 'Edit Profile'}
+              </Button>
             </div>
 
-            {/* Center Section - Key Information */}
-            <div className="flex items-center gap-6 flex-1">
-              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                <Briefcase className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{profileData.position || 'Position'}</span>
-              </div>
-              
-              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                <Building2 className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{profileData.company_name || 'BSK'}</span>
-              </div>
-              
-              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                <Shield className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{getAdminLevelLabel(profileData.admin_level)}</span>
-              </div>
-            </div>
-
-            {/* Right Section - Status and Actions */}
-            <div className="flex items-center gap-4 flex-shrink-0">
-              {/* Status Badges */}
-              <div className="flex items-center gap-2">
-                {profileData.is_active && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-xs font-medium">
-                    Active
-                  </span>
-                )}
-                {profileData.email_verified && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded text-xs font-medium">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Verified
-                  </span>
-                )}
-              </div>
-
-              {/* Edit/Save Buttons */}
-              {!isEditing ? (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
-                  size="sm"
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  id="name"
+                  label="Full Name"
+                  required
+                  error={formErrors.name}
                 >
-                  Edit Profile
-                </Button>
-              ) : (
-                <div className="flex gap-2">
+                  <Input
+                    id="name"
+                    value={formData.name || ''}
+                    onChange={(e) => updateFormData('name', e.target.value)}
+                    placeholder="Enter your full name"
+                    disabled={!isEditing}
+                    leftIcon={<User className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="email"
+                  label="Email Address"
+                  required
+                  error={formErrors.email}
+                >
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={(e) => updateFormData('email', e.target.value)}
+                    placeholder="Enter your email address"
+                    disabled={!isEditing}
+                    leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="phone"
+                  label="Phone Number"
+                  error={formErrors.phone}
+                >
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={formData.phone || ''}
+                    onChange={(e) => updateFormData('phone', e.target.value)}
+                    placeholder="Enter your phone number"
+                    disabled={!isEditing}
+                    leftIcon={<Phone className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="position"
+                  label="Position"
+                  error={formErrors.position}
+                >
+                  <Input
+                    id="position"
+                    value={formData.position || ''}
+                    onChange={(e) => updateFormData('position', e.target.value)}
+                    placeholder="Enter your position"
+                    disabled={!isEditing}
+                    leftIcon={<Building2 className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="department"
+                  label="Department"
+                  error={formErrors.department}
+                >
+                  <Input
+                    id="department"
+                    value={formData.department || ''}
+                    onChange={(e) => updateFormData('department', e.target.value)}
+                    placeholder="Enter your department"
+                    disabled={!isEditing}
+                    leftIcon={<Building2 className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+
+                <FormField
+                  id="employee_id"
+                  label="Employee ID"
+                  error={formErrors.employee_id}
+                >
+                  <Input
+                    id="employee_id"
+                    value={formData.employee_id || ''}
+                    onChange={(e) => updateFormData('employee_id', e.target.value)}
+                    placeholder="Enter your employee ID"
+                    disabled={!isEditing}
+                    leftIcon={<Shield className="h-5 w-5 text-gray-400" />}
+                  />
+                </FormField>
+              </div>
+
+              <FormField
+                id="bio"
+                label="Bio"
+                error={formErrors.bio}
+              >
+                <Textarea
+                  id="bio"
+                  value={formData.metadata?.bio || ''}
+                  onChange={(e) => updateFormData('metadata.bio', e.target.value)}
+                  placeholder="Tell us about yourself..."
+                  disabled={!isEditing}
+                  rows={3}
+                />
+              </FormField>
+
+              {isEditing && (
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <Button
+                    variant="outline"
                     onClick={() => {
                       setIsEditing(false);
-                      setEditData({});
+                      setFormData({
+                        name: profile.name,
+                        email: profile.email,
+                        phone: profile.phone,
+                        position: profile.position,
+                        department: profile.department,
+                        employee_id: profile.employee_id,
+                        metadata: profile.metadata
+                      });
+                      setFormErrors({});
                     }}
-                    variant="outline"
-                    size="sm"
-                    title="Cancel (Esc)"
                   >
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleSave}
+                    onClick={handleSubmit}
                     loading={updateProfileMutation.isPending}
-                    className="bg-[#8CC63F] hover:bg-[#7AB635] text-white"
-                    size="sm"
-                    title="Save (Enter)"
+                    leftIcon={<Save className="h-4 w-4" />}
                   >
-                    Save
+                    Save Changes
                   </Button>
                 </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Remove Photo Confirmation Dialog */}
-        {showRemovePhotoConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Remove Profile Photo?
+          {/* Profile Picture & Quick Info */}
+          <div className="space-y-6">
+            {/* Avatar Upload */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <Camera className="h-5 w-5 mr-2 text-[#8CC63F]" />
+                Profile Picture
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                This will remove your current profile photo and show your initials instead.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowRemovePhotoConfirm(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleRemovePhoto}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-                >
-                  Remove
-                </Button>
+              
+              <div className="text-center">
+                <div className="mb-4">
+                  <ImageUpload
+                    id="avatar"
+                    bucket="user-avatars"
+                    value={formData.metadata?.avatar_url}
+                    publicUrl={formData.metadata?.avatar_url ? getPublicUrl('user-avatars', formData.metadata.avatar_url) : null}
+                    onChange={handleAvatarChange}
+                    className="mx-auto"
+                  />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Upload a profile picture to personalize your account
+                </p>
+              </div>
+            </div>
+
+            {/* Account Summary */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Account Summary
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Company:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {profile.company_name}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Admin Level:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {profile.admin_level}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Status:</span>
+                  <StatusBadge status={profile.is_active ? 'active' : 'inactive'} size="sm" />
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Member Since:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {new Date(profile.created_at).toLocaleDateString()}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Tabs Navigation - PROPERLY FIXED SPACING AND ALIGNMENT */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-white dark:bg-gray-800 inline-flex items-center h-auto p-1">
-            <TabsTrigger value="overview" className="min-w-[120px] px-3">
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="security" className="min-w-[120px] px-3">
-              Security
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="min-w-[120px] px-3">
-              Activity
-            </TabsTrigger>
-          </TabsList>
+      {/* Other tabs content similar to system admin but adapted for entity users */}
+      {activeTab === 'preferences' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              System Preferences
+            </h2>
+            <Button
+              onClick={handleSubmit}
+              loading={updateProfileMutation.isPending}
+              leftIcon={<Save className="h-4 w-4" />}
+            >
+              Save Preferences
+            </Button>
+          </div>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Personal Information */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-                    Personal Information
-                  </h3>
-                  
-                  <div className="space-y-5">
-                    {/* Full Name */}
-                    <div>
-                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                          Full Name
-                        </label>
-                      </div>
-                      <div className="px-3 py-2">
-                        {isEditing ? (
-                          <Input
-                            value={editData.name || ''}
-                            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                            placeholder="Enter your full name"
-                            className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                          />
-                        ) : (
-                          <p className="text-gray-900 dark:text-white">
-                            {profileData.name}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Email */}
-                    <div>
-                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                          Email
-                        </label>
-                      </div>
-                      <div className="px-3 py-2">
-                        <p className="text-gray-900 dark:text-white">
-                          {profileData.user_email}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Position and Department - Side by side */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                            Position
-                          </label>
-                        </div>
-                        <div className="px-3 py-2">
-                          {isEditing ? (
-                            <Input
-                              value={editData.position || ''}
-                              onChange={(e) => setEditData({ ...editData, position: e.target.value })}
-                              placeholder="Your position"
-                              className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                            />
-                          ) : (
-                            <p className="text-gray-900 dark:text-white">
-                              {profileData.position || 'Not specified'}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                            Department
-                          </label>
-                        </div>
-                        <div className="px-3 py-2">
-                          {isEditing ? (
-                            <Input
-                              value={editData.department || ''}
-                              onChange={(e) => setEditData({ ...editData, department: e.target.value })}
-                              placeholder="Your department"
-                              className="border-0 p-0 h-auto text-base focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                            />
-                          ) : (
-                            <p className="text-gray-900 dark:text-white">
-                              {profileData.department || 'Not assigned'}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Phone */}
-                    <div>
-                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                          Phone
-                        </label>
-                      </div>
-                      <div className="px-3 py-2">
-                        {isEditing ? (
-                          <PhoneInput
-                            value={editData.phone || ''}
-                            onChange={(value) => setEditData({ ...editData, phone: value })}
-                            placeholder="Enter phone number"
-                            className="w-full [&_input:focus]:ring-[#8CC63F] [&_input:focus]:border-[#8CC63F] [&_button:focus]:ring-[#8CC63F] [&_button:focus]:border-[#8CC63F]"
-                          />
-                        ) : (
-                          <p className="text-gray-900 dark:text-white">
-                            {profileData.phone || 'Not assigned'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Side - Account Details & Quick Actions */}
-              <div className="space-y-6">
-                {/* Account Details */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-                      Account Details
-                    </h3>
-                    
-                    <div className="space-y-5">
-                      {/* Role and Company - Side by side */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                              Role
-                            </label>
-                          </div>
-                          <div className="px-3 py-2">
-                            <span className="inline-flex items-center px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md text-xs font-medium">
-                              {getAdminLevelLabel(profileData.admin_level)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                              Company
-                            </label>
-                          </div>
-                          <div className="px-3 py-2">
-                            <p className="text-gray-900 dark:text-white">
-                              {profileData.company_name || 'BSK'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Hire Date and Member Since - Side by side */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                              Hire Date
-                            </label>
-                          </div>
-                          <div className="px-3 py-2">
-                            <p className="text-gray-900 dark:text-white">
-                              {profileData.hire_date 
-                                ? new Date(profileData.hire_date).toLocaleDateString()
-                                : '8/25/2025'
-                              }
-                            </p>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                              Member Since
-                            </label>
-                          </div>
-                          <div className="px-3 py-2">
-                            <p className="text-gray-900 dark:text-white">
-                              {new Date(profileData.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Last Login */}
-                      <div>
-                        <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600">
-                          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                            Last Login
-                          </label>
-                        </div>
-                        <div className="px-3 py-2">
-                          <p className="text-gray-900 dark:text-white">
-                            {profileData.last_login_at 
-                              ? new Date(profileData.last_login_at).toLocaleString()
-                              : 'Never'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-                      Quick Actions
-                    </h3>
-                    
-                    <div className="space-y-1">
-                      <button 
-                        onClick={() => window.location.href = '/app/settings/change-password'}
-                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-700 dark:text-gray-300">Change Password</span>
-                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </button>
-                      
-                      <button 
-                        onClick={() => toast.info('Download feature coming soon!')}
-                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700 dark:text-gray-300">Download Data</span>
-                            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
-                              Coming Soon
-                            </span>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </button>
-
-                      <button 
-                        onClick={() => toast.info('Privacy settings coming soon!')}
-                        className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-700 dark:text-gray-300">Privacy Settings</span>
-                            <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded">
-                              Coming Soon
-                            </span>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Assignments Section - FIXED to prevent rendering "0" */}
-            {((profileData.school_names && profileData.school_names.length > 0) || 
-              (profileData.branch_names && profileData.branch_names.length > 0)) ? (
-              <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Assignments
+          <div className="space-y-6">
+            {/* Interface Settings */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <Palette className="h-5 w-5 text-[#8CC63F]" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Interface
                 </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {profileData.school_names && profileData.school_names.length > 0 && (
-                    <div>
-                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
-                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                          Schools ({profileData.school_names.length})
-                        </label>
-                      </div>
-                      <div className="flex flex-wrap gap-2 px-3">
-                        {profileData.school_names.map((school, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-sm font-medium"
-                          >
-                            <School className="h-3.5 w-3.5 mr-1.5" />
-                            {school}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {profileData.branch_names && profileData.branch_names.length > 0 && (
-                    <div>
-                      <div className="bg-gray-50 dark:bg-gray-700/30 px-3 py-1.5 rounded-t-md border-b-2 border-gray-200 dark:border-gray-600 mb-3">
-                        <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                          Branches ({profileData.branch_names.length})
-                        </label>
-                      </div>
-                      <div className="flex flex-wrap gap-2 px-3">
-                        {profileData.branch_names.map((branch, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium"
-                          >
-                            <MapPin className="h-3.5 w-3.5 mr-1.5" />
-                            {branch}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
-            ) : null}
-          </TabsContent>
 
-          {/* Security Tab */}
-          <TabsContent value="security">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {/* Email Verification */}
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
-                        Email Verification
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {profileData.email_verified 
-                          ? 'Your email address has been verified'
-                          : 'Verify your email address for added security'
-                        }
-                      </p>
-                    </div>
-                    {profileData.email_verified ? (
-                      <span className="inline-flex items-center px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md text-sm font-medium">
-                        <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                        Verified
-                      </span>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => toast.info('Email verification coming soon!')}
-                      >
-                        Verify Email
-                      </Button>
-                    )}
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField id="theme" label="Theme">
+                  <Select
+                    id="theme"
+                    value={formData.metadata?.theme || 'system'}
+                    onChange={(value) => updateFormData('metadata.theme', value)}
+                    options={[
+                      { value: 'system', label: 'System' },
+                      { value: 'light', label: 'Light' },
+                      { value: 'dark', label: 'Dark' }
+                    ]}
+                  />
+                </FormField>
 
-                {/* Password */}
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
-                        Password
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {profileData.password_updated_at
-                          ? `Last changed ${new Date(profileData.password_updated_at).toLocaleDateString()}`
-                          : 'Set a strong password to secure your account'
-                        }
-                      </p>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => window.location.href = '/app/settings/change-password'}
-                    >
-                      Change Password
-                    </Button>
-                  </div>
-                </div>
+                <FormField id="language" label="Language">
+                  <Select
+                    id="language"
+                    value={formData.metadata?.language || 'en'}
+                    onChange={(value) => updateFormData('metadata.language', value)}
+                    options={[
+                      { value: 'en', label: 'English' },
+                      { value: 'ar', label: 'العربية' },
+                      { value: 'es', label: 'Español' },
+                      { value: 'fr', label: 'Français' }
+                    ]}
+                  />
+                </FormField>
 
-                {/* Two-Factor Authentication */}
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
-                        Two-Factor Authentication
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Add an extra layer of security to your account
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md text-sm">
-                      Coming Soon
-                    </span>
-                  </div>
-                </div>
-
-                {/* Active Sessions */}
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-medium text-gray-900 dark:text-white">
-                        Active Sessions
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Manage and review your active login sessions
-                      </p>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => toast.info('Session management coming soon!')}
-                    >
-                      View Sessions
-                    </Button>
-                  </div>
-                </div>
+                <FormField id="timezone" label="Timezone">
+                  <Select
+                    id="timezone"
+                    value={formData.metadata?.timezone || 'UTC'}
+                    onChange={(value) => updateFormData('metadata.timezone', value)}
+                    options={[
+                      { value: 'UTC', label: 'UTC' },
+                      { value: 'America/New_York', label: 'Eastern Time' },
+                      { value: 'America/Chicago', label: 'Central Time' },
+                      { value: 'America/Denver', label: 'Mountain Time' },
+                      { value: 'America/Los_Angeles', label: 'Pacific Time' },
+                      { value: 'Europe/London', label: 'London' },
+                      { value: 'Europe/Paris', label: 'Paris' },
+                      { value: 'Asia/Dubai', label: 'Dubai' },
+                      { value: 'Asia/Kuwait', label: 'Kuwait' }
+                    ]}
+                  />
+                </FormField>
               </div>
             </div>
-          </TabsContent>
 
-          {/* Activity Tab */}
-          <TabsContent value="activity">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="p-12 text-center">
-                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Activity Log
+            {/* Notification Settings */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <Bell className="h-5 w-5 text-[#8CC63F]" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Notifications
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Your recent account activity will appear here
-                </p>
-                <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md text-sm">
-                  <Info className="h-3.5 w-3.5 mr-1.5" />
-                  Coming Soon
-                </span>
+              </div>
+
+              <div className="space-y-4">
+                <ToggleSwitch
+                  checked={formData.metadata?.notifications?.system ?? true}
+                  onChange={(checked) => updateFormData('metadata.notifications.system', checked)}
+                  label="System Notifications"
+                  description="Receive notifications about system events and updates"
+                />
+
+                <ToggleSwitch
+                  checked={formData.metadata?.notifications?.email ?? true}
+                  onChange={(checked) => updateFormData('metadata.notifications.email', checked)}
+                  label="Email Notifications"
+                  description="Receive important notifications via email"
+                />
+
+                <ToggleSwitch
+                  checked={formData.metadata?.notifications?.security ?? true}
+                  onChange={(checked) => updateFormData('metadata.notifications.security', checked)}
+                  label="Security Alerts"
+                  description="Get notified about security-related events"
+                />
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
