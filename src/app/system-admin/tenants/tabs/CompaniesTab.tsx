@@ -2727,4 +2727,3 @@ export default function CompaniesTab() {
       />
     </div>
   );
-}
