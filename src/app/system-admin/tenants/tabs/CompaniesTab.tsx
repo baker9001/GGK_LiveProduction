@@ -1318,15 +1318,34 @@ export default function CompaniesTab() {
       // Small delay to ensure database has updated
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Fetch entity_users with user details
+      // Fetch entity_users with user details - explicitly including phone
       const { data: entityUsers, error: entityError } = await supabase
         .from('entity_users')
-        .select('*')
+        .select(`
+          id,
+          user_id,
+          company_id,
+          position,
+          department,
+          employee_id,
+          hire_date,
+          is_company_admin,
+          employee_status,
+          department_id,
+          phone,
+          created_at,
+          updated_at
+        `)
         .eq('company_id', companyId)
         .eq('is_company_admin', true)
         .order('created_at', { ascending: false });
 
-      if (entityError) throw entityError;
+      if (entityError) {
+        console.error('Error fetching entity_users:', entityError);
+        throw entityError;
+      }
+
+      console.log('Raw entity_users from database:', entityUsers);
 
       if (!entityUsers || entityUsers.length === 0) {
         setCompanyAdmins([]);
@@ -1346,10 +1365,16 @@ export default function CompaniesTab() {
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
       // Combine data
-      const adminsWithUsers = entityUsers.map(entityUser => ({
-        ...entityUser,
-        users: userMap.get(entityUser.user_id) || null
-      }));
+      const adminsWithUsers = entityUsers.map(entityUser => {
+        const combined = {
+          ...entityUser,
+          users: userMap.get(entityUser.user_id) || null
+        };
+        console.log(`Admin ${entityUser.user_id} - Phone: ${entityUser.phone}, Position: ${entityUser.position}`);
+        return combined;
+      });
+
+      console.log('Final combined admins data:', adminsWithUsers);
 
       setCompanyAdmins(adminsWithUsers);
     } catch (error) {
@@ -1573,6 +1598,9 @@ export default function CompaniesTab() {
   // Update admin form when editing
   React.useEffect(() => {
     if (editingAdmin) {
+      console.log('Setting admin form for editing:', editingAdmin);
+      console.log('Phone value from entity_users:', editingAdmin.phone);
+      
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
@@ -2502,6 +2530,9 @@ export default function CompaniesTab() {
                               {/* Edit */}
                               <button
                                 onClick={() => {
+                                  console.log('Editing admin:', admin);
+                                  console.log('Admin phone from entity_users:', admin.phone);
+                                  console.log('Admin position:', admin.position);
                                   setSelectedCompanyForAdmin(selectedCompanyForView);
                                   setEditingAdmin(admin);
                                   setIsViewAdminsOpen(false);
