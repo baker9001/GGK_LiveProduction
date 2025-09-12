@@ -538,9 +538,9 @@ export default function EntityProfilePage() {
                 <div className="mb-4">
                   <ImageUpload
                     id="avatar"
-                    bucket="user-avatars"
+                    bucket="avatars"
                     value={formData.metadata?.avatar_url}
-                    publicUrl={formData.metadata?.avatar_url ? getPublicUrl('user-avatars', formData.metadata.avatar_url) : null}
+                    publicUrl={formData.metadata?.avatar_url ? getPublicUrl('avatars', formData.metadata.avatar_url) : null}
                     onChange={handleAvatarChange}
                     className="mx-auto"
                   />

@@ -375,7 +375,7 @@ export default function SystemAdminProfilePage() {
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('user-avatars')
+        .from('avatars')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
@@ -412,7 +412,7 @@ export default function SystemAdminProfilePage() {
     try {
       // Delete from storage
       const { error: deleteError } = await supabase.storage
-        .from('user-avatars')
+        .from('avatars')
         .remove([userProfile.avatar_url]);
 
       if (deleteError) {
@@ -536,7 +536,7 @@ export default function SystemAdminProfilePage() {
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-[#8CC63F] shadow-lg bg-gradient-to-br from-[#8CC63F] to-[#7AB635]">
                     {userProfile.avatar_url ? (
                       <img
-                        src={getPublicUrl('user-avatars', userProfile.avatar_url) || ''}
+                        src={getPublicUrl('avatars', userProfile.avatar_url) || ''}
                         alt={`${userProfile.name}'s avatar`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -658,7 +658,7 @@ export default function SystemAdminProfilePage() {
                   <div className="w-full h-full rounded-2xl overflow-hidden border-4 border-[#8CC63F] shadow-lg">
                     {userProfile.avatar_url ? (
                       <img
-                        src={getPublicUrl('user-avatars', userProfile.avatar_url) || ''}
+                        src={getPublicUrl('avatars', userProfile.avatar_url) || ''}
                         alt={`${userProfile.name}'s avatar`}
                         className="w-full h-full object-cover"
                         onError={(e) => {

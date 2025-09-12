@@ -30,7 +30,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   const { user } = useUser();
 
   // Define public buckets that don't require authentication
-  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos'].includes(bucket);
+  const isPublicBucket = ['company-logos', 'logos', 'school-logos', 'subject-logos', 'branch-logos', 'avatars'].includes(bucket);
 
   // Check authentication status on mount
   useEffect(() => {
