@@ -684,11 +684,13 @@ export default function CompaniesTab() {
         const email = formData.get('email') as string;
         const password = formData.get('password') as string | null;
         const phoneValue = formData.get('phone') as string;
-        const phone = phoneValue?.trim() || null;
+        // Important: PhoneInput might return empty string, convert to null for DB
+        const phone = (phoneValue && phoneValue.trim() !== '') ? phoneValue.trim() : null;
         const position = formData.get('position') as string;
 
         // Debug logging
         console.log('Admin form submission:', { name, email, phone, position });
+        console.log('Raw phone value from form:', phoneValue);
 
         // Basic validation
         if (!name || name.length < 2) {
@@ -730,9 +732,12 @@ export default function CompaniesTab() {
           // Update entity_users profile
           const entityUpdates: any = {
             position: position || editingAdmin.position || 'Administrator',
-            phone: phone,
+            phone: phone || null, // Ensure phone is saved (null if empty)
             updated_at: new Date().toISOString()
           };
+
+          console.log('Updating entity_users with phone:', phone);
+          console.log('Entity updates object:', entityUpdates);
 
           console.log('Updating entity_users with:', entityUpdates);
 
@@ -820,7 +825,7 @@ export default function CompaniesTab() {
               user_id: existingUser.id,
               company_id: companyId,
               position: position || 'Administrator',
-              phone: phone,
+              phone: phone || null, // Ensure null if empty string
               department: null,
               employee_id: null,
               hire_date: new Date().toISOString().split('T')[0],
@@ -831,7 +836,8 @@ export default function CompaniesTab() {
               updated_at: new Date().toISOString()
             };
             
-            console.log('Linking existing user with entity_users data:', entityUserData);
+            console.log('Linking existing user with entity_users data (phone):', phone);
+            console.log('Full entity_users data:', entityUserData);
             
             const { error: linkError } = await supabase
               .from('entity_users')
@@ -974,7 +980,7 @@ export default function CompaniesTab() {
             user_id: newUser.id,
             company_id: companyId,
             position: position || 'Administrator',
-            phone: phone,
+            phone: phone || null, // Ensure null if empty string
             department: null,
             employee_id: null,
             hire_date: new Date().toISOString().split('T')[0],
@@ -985,7 +991,8 @@ export default function CompaniesTab() {
             updated_at: new Date().toISOString()
           };
           
-          console.log('Creating new entity_user with data:', entityUserData);
+          console.log('Creating new entity_user with phone:', phone);
+          console.log('Full entity_user data:', entityUserData);
           
           const { error: entityError } = await supabase
             .from('entity_users')
@@ -1431,9 +1438,14 @@ export default function CompaniesTab() {
     const formData = new FormData();
     formData.append('name', adminFormState.name);
     formData.append('email', adminFormState.email);
-    formData.append('phone', adminFormState.phone?.trim() || '');
+    // Ensure phone is trimmed and handled properly
+    const phoneValue = adminFormState.phone?.trim() || '';
+    formData.append('phone', phoneValue);
     formData.append('position', adminFormState.position || '');
     formData.append('password', adminFormState.password || '');
+    
+    console.log('Submitting admin form with phone:', phoneValue);
+    console.log('Full adminFormState:', adminFormState);
     
     tenantAdminMutation.mutate(formData);
   };
@@ -1601,14 +1613,19 @@ export default function CompaniesTab() {
       console.log('Setting admin form for editing:', editingAdmin);
       console.log('Phone value from entity_users:', editingAdmin.phone);
       
+      // Ensure phone is a string (not null or undefined)
+      const phoneValue = editingAdmin.phone || '';
+      
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || '', // Phone is only in entity_users
+        phone: phoneValue, // Ensure it's always a string
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
       });
+      
+      console.log('Admin form state set with phone:', phoneValue);
       setGeneratePassword(false);
     } else {
       resetAdminForm();
@@ -2583,7 +2600,10 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.phone || '—'}
+                                    {(() => {
+                                      console.log(`Admin ${admin.users?.email} phone:`, admin.phone);
+                                      return admin.phone || '—';
+                                    })()}
                                   </span>
                                 </div>
                               </div>
