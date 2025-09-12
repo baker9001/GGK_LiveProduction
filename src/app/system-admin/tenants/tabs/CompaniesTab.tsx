@@ -764,11 +764,8 @@ export default function CompaniesTab() {
             userUpdates.verified_at = null;
           }
 
-          // Update phone
-          const currentPhone = editingAdmin.phone || editingAdmin.users?.phone;
-          if (phone !== currentPhone) {
-            userUpdates.phone = phone;
-          }
+          // Phone is only stored in entity_users table, not in users table
+          // No need to update phone in users table
 
           const { error: userError } = await supabase
             .from('users')
@@ -929,7 +926,6 @@ export default function CompaniesTab() {
               user_type: 'entity',
               is_active: true,
               email_verified: false,
-              phone: phone,
               verification_token: verificationToken,
               verification_sent_at: new Date().toISOString(),
               verified_at: null,
@@ -1580,7 +1576,7 @@ export default function CompaniesTab() {
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || editingAdmin.users?.phone || '',
+        phone: editingAdmin.phone || '', // Phone is only in entity_users
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -2556,7 +2552,7 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.phone || admin.users?.phone || '—'}
+                                    {admin.phone || '—'}
                                   </span>
                                 </div>
                               </div>
