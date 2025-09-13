@@ -265,7 +265,7 @@ export const userCreationService = {
     const adminData = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
+      email: (payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in entity_users
       admin_level: payload.admin_level,
@@ -342,7 +342,7 @@ export const userCreationService = {
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
+      email: (payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in students table
       student_code: payload.student_code,
