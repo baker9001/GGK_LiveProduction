@@ -8,18 +8,18 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Get environment variables
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // Validation
 if (!SUPABASE_URL) {
-  console.error('❌ NEXT_PUBLIC_SUPABASE_URL is not set');
+  console.error('❌ VITE_SUPABASE_URL is not set');
 }
 
 if (!SERVICE_ROLE_KEY) {
-  console.error('❌ NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is not set');
+  console.error('❌ VITE_SUPABASE_SERVICE_ROLE_KEY is not set');
   console.log('To enable Supabase Auth invitations, add to your .env.local:');
-  console.log('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here');
+  console.log('VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here');
 }
 
 // Initialize admin client only if we have both required values
