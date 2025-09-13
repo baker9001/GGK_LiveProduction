@@ -12,7 +12,8 @@
  * - Configure email templates in Supabase dashboard
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
@@ -47,7 +48,7 @@ import {
 const authEnabled = isAuthEnabled();
 
 // Verify Auth connection on component mount
-React.useEffect(() => {
+useEffect(() => {
   if (authEnabled) {
     supabaseAuthService.verifyConnection().then(isConnected => {
       if (!isConnected) {
@@ -1406,7 +1407,7 @@ export default function CompaniesTab() {
   // ===== EFFECTS =====
   
   // Update form state when editing company changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingCompany) {
       setFormState({
         name: editingCompany.name,
@@ -1433,7 +1434,7 @@ export default function CompaniesTab() {
   }, [editingCompany]);
 
   // Update admin form when editing
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
@@ -1451,7 +1452,7 @@ export default function CompaniesTab() {
   }, [editingAdmin]);
 
   // Reset password form when closing
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isPasswordFormOpen) {
       setPasswordFormState({
         newPassword: '',
