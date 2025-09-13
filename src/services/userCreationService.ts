@@ -87,7 +87,7 @@ function validateEmail(email: string): boolean {
  * Sanitize input strings
  */
 function sanitizeString(input: string): string {
-  return (input || '').trim().replace(/[<>]/g, '');
+  return input.trim().replace(/[<>]/g, '');
 }
 
 /**
@@ -215,7 +215,7 @@ export const userCreationService = {
     delete cleanMetadata.phone; // Ensure phone is never in users table metadata
     
     const userData = {
-      email: String(payload.email || '').toLowerCase(),
+      email: payload.email.toLowerCase(),
       user_type: userTypes[0],
       user_types: userTypes,
       primary_type: userTypes[0],
@@ -265,8 +265,8 @@ export const userCreationService = {
     const adminData = {
       user_id: userId,
       company_id: payload.company_id,
-      email: String(payload.email || '').toLowerCase() || '',
-      name: sanitizeString(payload.name || '') || '',
+      email: payload.email.toLowerCase(),
+      name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in entity_users
       admin_level: payload.admin_level,
       permissions: finalPermissions,
@@ -342,7 +342,7 @@ export const userCreationService = {
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: String(payload.email || '').toLowerCase(),
+      email: payload.email.toLowerCase(),
       name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in students table
       student_code: payload.student_code,
@@ -446,7 +446,7 @@ export const userCreationService = {
     const { data: user, error } = await supabase
       .from('users')
       .select('id, password_hash, is_active')
-      .eq('email', String(email || '').toLowerCase())
+      .eq('email', email.toLowerCase())
       .single();
 
     if (error || !user) {
