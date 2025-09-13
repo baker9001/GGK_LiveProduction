@@ -215,7 +215,7 @@ export const userCreationService = {
     delete cleanMetadata.phone; // Ensure phone is never in users table metadata
     
     const userData = {
-      email: payload.email.toLowerCase(),
+      email: String(payload.email || '').toLowerCase(),
       user_type: userTypes[0],
       user_types: userTypes,
       primary_type: userTypes[0],
@@ -265,7 +265,7 @@ export const userCreationService = {
     const adminData = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
+      email: String(payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in entity_users
       admin_level: payload.admin_level,
@@ -342,7 +342,7 @@ export const userCreationService = {
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
+      email: String(payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
       phone: payload.phone || null, // Phone stored in students table
       student_code: payload.student_code,
@@ -446,7 +446,7 @@ export const userCreationService = {
     const { data: user, error } = await supabase
       .from('users')
       .select('id, password_hash, is_active')
-      .eq('email', email.toLowerCase())
+      .eq('email', String(email || '').toLowerCase())
       .single();
 
     if (error || !user) {
