@@ -670,6 +670,8 @@ export default function CompaniesTab() {
           
           // Update entity_users profile
           const entityUpdates: any = {
+            email: email.toLowerCase(), // Update email in entity_users too
+            name: name, // Update name in entity_users too
             position: position || editingAdmin.position || 'Administrator',
             phone: phone,
             updated_at: new Date().toISOString()
@@ -727,6 +729,8 @@ export default function CompaniesTab() {
             const entityUserData = {
               user_id: existingUser.id,
               company_id: companyId,
+              email: existingUser.email, // Required NOT NULL column
+              name: existingUser.raw_user_meta_data?.name || name, // Required NOT NULL column
               position: position || 'Administrator',
               phone: phone,
               department: null,
@@ -843,6 +847,8 @@ export default function CompaniesTab() {
                 id: crypto.randomUUID(),
                 user_id: newUserId,
                 company_id: companyId,
+                email: email.toLowerCase(), // Required NOT NULL column
+                name: name, // Required NOT NULL column
                 position: position || 'Administrator',
                 phone: phone,
                 hire_date: new Date().toISOString().split('T')[0],
@@ -953,6 +959,8 @@ export default function CompaniesTab() {
               id: crypto.randomUUID(),
               user_id: authData.user.id,
               company_id: companyId,
+              email: email.toLowerCase(), // Required NOT NULL column
+              name: name, // Required NOT NULL column
               position: position || 'Administrator',
               phone: phone,
               hire_date: new Date().toISOString().split('T')[0],
