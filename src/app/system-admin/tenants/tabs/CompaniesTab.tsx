@@ -40,7 +40,6 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { supabase } from '../../../../lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -305,7 +304,34 @@ function generateComplexPassword(length: number = 12): string {
 }
 
 function generateVerificationToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function generateUUID(): string {
+  // Use crypto.randomUUID if available (modern browsers)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  
+  // Fallback to manual UUID v4 generation
+  const array = new Uint8Array(16);
+  window.crypto.getRandomValues(array);
+  
+  // Set version (4) and variant bits
+  array[6] = (array[6] & 0x0f) | 0x40;
+  array[8] = (array[8] & 0x3f) | 0x80;
+  
+  const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32)
+  ].join('-');
 }
 
 // ===== MAIN COMPONENT =====
@@ -606,6 +632,438 @@ export default function CompaniesTab() {
     async (formData: FormData) => {
       try {
         const name = formData.get('name') as string;
+        const email = (formData.get('email') as string).toLowerCase().trim();
+        const password = formData.get('password') as string | null;
+        const phoneValue = formData.get('phone') as string;
+        
+        // Keep the full phone number as entered (with country code)
+        const phone = phoneValue?.trim() || null;
+        
+        const position = formData.get('position') as string || 'Administrator';
+
+        // Basic validation
+        if (!name || name.length < 2) {
+          throw new Error('Name must be at least 2 characters');
+        }
+        if (!email || !email.includes('@')) {
+          throw new Error('Please enter a valid email address');
+        }
+
+        if (!selectedCompanyForAdmin?.id) {
+          throw new Error('No company selected');
+        }
+
+        const companyId = selectedCompanyForAdmin.id;
+
+        if (editingAdmin) {
+          // ===== UPDATE EXISTING ADMIN =====
+          
+          // Update users table
+          const userUpdates: any = {
+            email: email,
+            updated_at: new Date().toISOString(),
+            raw_user_meta_data: {
+              ...(editingAdmin.users as any)?.raw_user_meta_data,
+              name: name,
+              updated_by: currentUser?.email,
+              updated_by_id: currentUser?.id,
+              last_updated: new Date().toISOString()
+            }
+          };
+
+          // Check if email is changing
+          if (email !== editingAdmin.users?.email) {
+            userUpdates.email_verified = false;
+            userUpdates.verification_token = generateVerificationToken();
+            userUpdates.verification_sent_at = new Date().toISOString();
+            userUpdates.verified_at = null;
+          }
+
+          const { error: userError } = await supabase
+            .from('users')
+            .update(userUpdates)
+            .eq('id', editingAdmin.user_id);
+
+          if (userError) throw userError;
+          
+          // Update entity_users profile
+          const entityUpdates: any = {
+            email: email, // Update email in entity_users too
+            name: name, // Update name in entity_users too
+            position: position,
+            phone: phone,
+            updated_at: new Date().toISOString()
+          };
+
+          const { error: entityError } = await supabase
+            .from('entity_users')
+            .update(entityUpdates)
+            .eq('id', editingAdmin.id);
+
+          if (entityError) throw entityError;
+
+          await createAuditLog(
+            'update_entity_admin',
+            'entity_user',
+            editingAdmin.user_id,
+            {
+              company_id: companyId,
+              updated_fields: { name, email, phone, position },
+              updated_by: currentUser?.email
+            }
+          );
+
+          return { 
+            success: true, 
+            message: 'Admin updated successfully',
+            company: selectedCompanyForAdmin,
+            type: 'updated'
+          };
+
+        } else {
+          // ===== CREATE NEW ADMIN =====
+          
+          // Check if user already exists in users table (not entity_users)
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+          if (existingUser) {
+            // User exists - check if already linked to this company
+            const { data: existingLink } = await supabase
+              .from('entity_users')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .eq('company_id', companyId)
+              .maybeSingle();
+
+            if (existingLink) {
+              throw new Error('This user is already associated with this company');
+            }
+
+            // Link existing user to company as admin
+            const newEntityId = generateUUID();
+            const entityUserData = {
+              id: newEntityId,
+              user_id: existingUser.id,
+              company_id: companyId,
+              email: email, // Required NOT NULL column
+              name: existingUser.raw_user_meta_data?.name || name, // Required NOT NULL column
+              position: position,
+              phone: phone,
+              department: null,
+              employee_id: null,
+              hire_date: new Date().toISOString().split('T')[0],
+              is_company_admin: true,
+              employee_status: 'active',
+              department_id: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            const { error: linkError } = await supabase
+              .from('entity_users')
+              .insert([entityUserData]);
+
+            if (linkError) throw linkError;
+
+            await createAuditLog(
+              'link_entity_admin',
+              'entity_user',
+              existingUser.id,
+              {
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                linked_by: currentUser?.email
+              }
+            );
+
+            return { 
+              success: true,
+              type: 'linked', 
+              user: existingUser,
+              company: selectedCompanyForAdmin,
+              message: 'Existing user linked as admin'
+            };
+          }
+
+          // Create new user - Generate password if needed
+          const finalPassword = password || generateComplexPassword();
+          const isGeneratedPassword = !password;
+          
+          try {
+            // Check if we have admin capabilities
+            const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+            
+            let newUserId: string;
+            let authCreated = false;
+            
+            if (hasServiceRoleKey && supabaseAdmin) {
+              // Try to create user with admin client
+              try {
+                const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+                  email: email,
+                  password: finalPassword,
+                  email_confirm: false,
+                  user_metadata: {
+                    name: name,
+                    position: position,
+                    company_id: companyId,
+                    company_name: selectedCompanyForAdmin.name,
+                    created_by: currentUser?.email,
+                    role: 'entity_admin'
+                  },
+                  app_metadata: {
+                    user_type: 'entity',
+                    is_company_admin: true,
+                    requires_password_change: isGeneratedPassword
+                  }
+                });
+                
+                if (authError) {
+                  console.error('Admin create error:', authError);
+                  // If admin creation fails, fall back to regular signup
+                  throw authError;
+                }
+                
+                if (!authData.user) {
+                  throw new Error('Failed to create user in authentication system');
+                }
+                
+                newUserId = authData.user.id;
+                authCreated = true;
+                console.log('User created via admin API:', newUserId);
+                
+              } catch (adminError) {
+                console.warn('Admin API failed, falling back to regular signup:', adminError);
+                // Continue to fallback
+              }
+            }
+            
+            // Fallback to regular signup if admin API not available or failed
+            if (!authCreated) {
+              const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: email,
+                password: finalPassword,
+                options: {
+                  data: {
+                    name: name,
+                    position: position,
+                    company_id: companyId,
+                    company_name: selectedCompanyForAdmin.name,
+                    created_by: currentUser?.email,
+                    role: 'entity_admin'
+                  }
+                }
+              });
+              
+              if (authError) {
+                console.error('Signup error:', authError);
+                if (authError.message?.includes('already registered')) {
+                  throw new Error('Email already registered in authentication system');
+                }
+                throw authError;
+              }
+              
+              if (!authData.user) {
+                throw new Error('Failed to create user in authentication system');
+              }
+              
+              newUserId = authData.user.id;
+              console.log('User created via regular signup:', newUserId);
+            }
+            
+            // Hash password for legacy system
+            const salt = await bcrypt.genSalt(10);
+            const passwordHash = await bcrypt.hash(finalPassword, salt);
+            
+            // Create/Update user in users table
+            const { error: userError } = await supabase
+              .from('users')
+              .upsert({
+                id: newUserId,
+                email: email,
+                password_hash: passwordHash,
+                user_type: 'entity',
+                is_active: true,
+                email_verified: false,
+                verification_token: generateVerificationToken(),
+                verification_sent_at: new Date().toISOString(),
+                requires_password_change: isGeneratedPassword,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                raw_user_meta_data: {
+                  name: name,
+                  company_id: companyId,
+                  company_name: selectedCompanyForAdmin.name,
+                  created_by: currentUser?.email,
+                  created_by_id: currentUser?.id
+                },
+                raw_app_meta_data: {
+                  user_type: 'entity',
+                  is_company_admin: true
+                },
+                user_types: ['entity'],
+                primary_type: 'entity'
+              });
+            
+            if (userError) {
+              console.error('Users table error:', userError);
+              // Try to clean up auth user if database insert fails
+              if (authCreated && supabaseAdmin) {
+                try {
+                  await supabaseAdmin.auth.admin.deleteUser(newUserId);
+                } catch (cleanupError) {
+                  console.error('Failed to cleanup auth user:', cleanupError);
+                }
+              }
+              throw userError;
+            }
+            
+            // Create entity user profile
+            const newEntityId = generateUUID();
+            const { error: entityError } = await supabase
+              .from('entity_users')
+              .insert({
+                id: newEntityId,
+                user_id: newUserId,
+                company_id: companyId,
+                email: email, // Required NOT NULL column
+                name: name, // Required NOT NULL column
+                position: position,
+                phone: phone,
+                hire_date: new Date().toISOString().split('T')[0],
+                is_company_admin: true,
+                employee_status: 'active',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+            
+            if (entityError) {
+              console.error('Entity users table error:', entityError);
+              // Rollback: delete from users table
+              await supabase.from('users').delete().eq('id', newUserId);
+              // Try to delete auth user if it was created
+              if (authCreated && supabaseAdmin) {
+                try {
+                  await supabaseAdmin.auth.admin.deleteUser(newUserId);
+                } catch (cleanupError) {
+                  console.error('Failed to cleanup auth user:', cleanupError);
+                }
+              }
+              throw entityError;
+            }
+            
+            await createAuditLog(
+              'create_entity_admin',
+              'entity_user',
+              newUserId,
+              {
+                email: email,
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                is_company_admin: true,
+                created_by: currentUser?.email,
+                password_generated: isGeneratedPassword,
+                auth_created: authCreated
+              }
+            );
+            
+            return {
+              success: true,
+              type: 'created',
+              user: {
+                id: newUserId,
+                email: email,
+                name: name,
+                temporary_password: isGeneratedPassword ? finalPassword : undefined
+              },
+              company: selectedCompanyForAdmin,
+              message: authCreated 
+                ? 'Admin created successfully with temporary password' 
+                : 'Admin created successfully. Confirmation email sent.'
+            };
+            
+          } catch (error) {
+            console.error('Error in user creation:', error);
+            if (error instanceof Error) {
+              if (error.message.includes('already registered') || error.message.includes('already exists')) {
+                throw new Error('This email is already registered. Please use a different email address.');
+              }
+            }
+            throw error;
+          }
+        }
+      } catch (error) {
+        console.error('Mutation error:', error);
+        if (error instanceof z.ZodError) {
+          throw { validationErrors: error.flatten().fieldErrors };
+        }
+        throw error;
+      }
+    },
+    {
+      onSuccess: (result) => {
+        queryClient.invalidateQueries(['companies']);
+        
+        if (result.type === 'created' && result.user?.temporary_password) {
+          // Show password modal for new users with generated password
+          setGeneratedPassword(result.user.temporary_password);
+          toast.success('Admin created successfully. Copy the temporary password!');
+        } else {
+          setIsAdminFormOpen(false);
+          setSelectedCompanyForAdmin(null);
+          setEditingAdmin(null);
+          setAdminFormErrors({});
+          resetAdminForm();
+          
+          // Return to View Admins modal if we came from there
+          if (returnToViewAfterAdd && selectedCompanyForView) {
+            const companyId = result.company?.id || selectedCompanyForView.id;
+            fetchCompanyAdmins(companyId);
+            setIsViewAdminsOpen(true);
+            setReturnToViewAfterAdd(false);
+          }
+          
+          toast.success(result.message || 'Operation successful');
+          
+          // Show additional info about verification for new users
+          if (result.type === 'created' && result.user) {
+            toast.info('User can sign in after verifying their email.', {
+              duration: 5000
+            });
+          }
+        }
+      },
+      onError: (error: any) => {
+        if (error.validationErrors) {
+          const errors: Record<string, string> = {};
+          Object.entries(error.validationErrors).forEach(([key, value]) => {
+            errors[key] = Array.isArray(value) ? value[0] : value as string;
+          });
+          setAdminFormErrors(errors);
+        } else {
+          console.error('Error:', error);
+          const errorMessage = error.message || 'Operation failed';
+          
+          if (errorMessage.includes('already exists') || errorMessage.includes('already registered')) {
+            setAdminFormErrors({ email: 'This email is already registered' });
+          } else if (errorMessage.includes('null value in column')) {
+            setAdminFormErrors({ form: 'Missing required fields. Please ensure all fields are filled.' });
+          } else {
+            setAdminFormErrors({ form: errorMessage });
+          }
+          
+          toast.error(errorMessage);
+        }
+      }
+    }
+  );
+    async (formData: FormData) => {
+      try {
+        const name = formData.get('name') as string;
         const email = formData.get('email') as string;
         const password = formData.get('password') as string | null;
         const phoneValue = formData.get('phone') as string;
@@ -844,7 +1302,7 @@ export default function CompaniesTab() {
             const { error: entityError } = await supabase
               .from('entity_users')
               .insert({
-                id: crypto.randomUUID(),
+                id: generateUUID(),
                 user_id: newUserId,
                 company_id: companyId,
                 email: email.toLowerCase(), // Required NOT NULL column
@@ -956,7 +1414,7 @@ export default function CompaniesTab() {
           const { error: entityError } = await supabase
             .from('entity_users')
             .insert({
-              id: crypto.randomUUID(),
+              id: generateUUID(),
               user_id: authData.user.id,
               company_id: companyId,
               email: email.toLowerCase(), // Required NOT NULL column
@@ -1288,21 +1746,11 @@ export default function CompaniesTab() {
       // Create user map
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
-      // Combine data - ensure phone is properly handled
-      const adminsWithUsers = entityUsers.map(entityUser => {
-        // Ensure phone is properly formatted
-        let phone = entityUser.phone;
-        if (phone && !phone.startsWith('+')) {
-          // If phone doesn't have country code, assume Kuwait +965
-          phone = `+965 ${phone}`;
-        }
-        
-        return {
-          ...entityUser,
-          phone: phone || '',
-          users: userMap.get(entityUser.user_id) || null
-        };
-      });
+      // Combine data - DO NOT modify phone here, let components handle display
+      const adminsWithUsers = entityUsers.map(entityUser => ({
+        ...entityUser,
+        users: userMap.get(entityUser.user_id) || null
+      }));
 
       setCompanyAdmins(adminsWithUsers);
     } catch (error) {
@@ -1527,18 +1975,13 @@ export default function CompaniesTab() {
   // Update admin form when editing
   React.useEffect(() => {
     if (editingAdmin) {
-      // Parse phone number for display in PhoneInput component
-      let phoneForDisplay = editingAdmin.phone || '';
-      
-      // If phone exists and doesn't have country code, add default Kuwait code
-      if (phoneForDisplay && !phoneForDisplay.startsWith('+')) {
-        phoneForDisplay = `+965 ${phoneForDisplay}`;
-      }
+      // Use phone as stored (should already have country code from PhoneInput)
+      const phoneForDisplay = editingAdmin.phone || '';
       
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: phoneForDisplay, // Use formatted phone for display
+        phone: phoneForDisplay, // Use phone as is
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -2506,14 +2949,7 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {(() => {
-                                      const phoneNum = admin.phone;
-                                      if (!phoneNum) return '—';
-                                      // If phone already has country code, display as is
-                                      if (phoneNum.startsWith('+')) return phoneNum;
-                                      // Otherwise, add Kuwait code for display
-                                      return `+965 ${phoneNum}`;
-                                    })()}
+                                    {admin.phone || '—'}
                                   </span>
                                 </div>
                               </div>
