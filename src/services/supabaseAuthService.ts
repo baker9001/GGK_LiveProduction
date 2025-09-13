@@ -24,7 +24,7 @@ if (!SERVICE_ROLE_KEY) {
 
 // Initialize admin client only if we have both required values
 let supabaseAdmin: any = null;
-let isAuthEnabled = false;
+let _isAuthEnabledInternal = false;
 
 if (SUPABASE_URL && SERVICE_ROLE_KEY) {
   try {
@@ -39,7 +39,7 @@ if (SUPABASE_URL && SERVICE_ROLE_KEY) {
       }
     });
     
-    isAuthEnabled = true;
+    _isAuthEnabledInternal = true;
     console.log('✅ Supabase Auth Service initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize Supabase Admin client:', error);
@@ -51,7 +51,7 @@ export const supabaseAuthService = {
    * Check if Auth is properly configured
    */
   isEnabled(): boolean {
-    return isAuthEnabled && supabaseAdmin !== null;
+    return _isAuthEnabledInternal && supabaseAdmin !== null;
   },
 
   /**
