@@ -24,7 +24,7 @@ if (!SERVICE_ROLE_KEY) {
 
 // Initialize admin client only if we have both required values
 let supabaseAdmin: any = null;
-let isAuthEnabled = false;
+let _isAuthServiceEnabled = false;
 
 if (SUPABASE_URL && SERVICE_ROLE_KEY) {
   try {
@@ -39,7 +39,7 @@ if (SUPABASE_URL && SERVICE_ROLE_KEY) {
       }
     });
     
-    isAuthEnabled = true;
+    _isAuthServiceEnabled = true;
     console.log('✅ Supabase Auth Service initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize Supabase Admin client:', error);
@@ -51,7 +51,7 @@ export const supabaseAuthService = {
    * Check if Auth is properly configured
    */
   isEnabled(): boolean {
-    return isAuthEnabled && supabaseAdmin !== null;
+    return _isAuthServiceEnabled && supabaseAdmin !== null;
   },
 
   /**
@@ -408,7 +408,7 @@ export const {
 } = supabaseAuthService;
 
 // Auto-verify connection on module load (in development)
-if (process.env.NODE_ENV === 'development' && isAuthEnabled()) {
+if (process.env.NODE_ENV === 'development' && _isAuthServiceEnabled) {
   supabaseAuthService.verifyConnection().then(isConnected => {
     if (!isConnected) {
       console.error('⚠️ Supabase Auth connection failed. Check your service role key.');
