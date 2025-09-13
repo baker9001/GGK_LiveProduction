@@ -13,7 +13,6 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
