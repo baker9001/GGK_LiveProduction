@@ -1,10 +1,13 @@
 /**
  * File: /src/app/system-admin/tenants/tabs/CompaniesTab.tsx
- * Fixed Version - Handles missing Supabase Auth configuration gracefully
+ * Updated Version - Supabase Auth Integration with Invitation Flow
  * 
- * This version works with or without Supabase Auth integration.
- * When NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is not set, it falls back
- * to the original behavior (custom auth only).
+ * Key Changes:
+ * - Uses Supabase Auth Admin API for invitations
+ * - Sends invitation emails instead of creating users directly
+ * - Properly syncs with auth.users table
+ * - Handles auth_user_id field in entity_users table
+ * - Falls back gracefully when service role key not available
  */
 
 import React, { useState, useEffect } from 'react';
@@ -12,11 +15,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, ImageOff, UserPlus, Shield, AlertCircle, Edit, Trash2, Users, X, 
   Mail, Phone, Briefcase, Building, Check, Calendar, Hash, Globe, Key,
-  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw
+  Eye, EyeOff, Copy, CheckCircle, XCircle, Printer, Loader2, RefreshCw,
+  Send
 } from 'lucide-react';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { supabase } from '../../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
@@ -30,97 +36,20 @@ import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
 
-// ===== OPTIONAL SUPABASE AUTH INTEGRATION =====
-// Import Supabase admin client setup (if available)
-let supabaseAuthHelper: any = null;
-
-// Try to import the auth helper if environment is configured
-try {
-  // Get Supabase configuration from the main supabase client
-  const supabaseUrl = supabase.supabaseUrl || '';
-  const serviceRoleKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
-  
-  if (supabaseUrl && serviceRoleKey) {
-    const { createClient } = await import('@supabase/supabase-js');
-    
-    // Create admin client
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-
-    // Create helper functions
-    supabaseAuthHelper = {
-      isEnabled: true,
-      
-      async createUser(userData: any) {
-        try {
-          const { data, error } = await supabaseAdmin.auth.admin.createUser(userData);
-          return { data, error };
-        } catch (err) {
-          console.error('Auth create error:', err);
-          return { data: null, error: err };
-        }
-      },
-      
-      async updateUser(userId: string, updates: any) {
-        try {
-          const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, updates);
-          return { data, error };
-        } catch (err) {
-          console.error('Auth update error:', err);
-          return { data: null, error: err };
-        }
-      },
-      
-      async deleteUser(userId: string) {
-        try {
-          const { data, error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-          return { data, error };
-        } catch (err) {
-          console.error('Auth delete error:', err);
-          return { data: null, error: err };
-        }
-      },
-      
-      async inviteUser(email: string, data: any) {
-        try {
-          await supabaseAdmin.auth.admin.inviteUserByEmail(email, { data });
-        } catch (err) {
-          console.error('Auth invite error:', err);
-        }
-      },
-      
-      async generateLink(type: 'signup' | 'recovery', email: string) {
-        try {
-          await supabaseAdmin.auth.admin.generateLink({ type, email });
-        } catch (err) {
-          console.error('Auth link error:', err);
-        }
-      },
-      
-      async findUserByEmail(email: string) {
-        try {
-          const { data } = await supabaseAdmin.auth.admin.listUsers({
-            filter: `email.eq.${email}`
-          });
-          return data?.users?.[0] || null;
-        } catch (err) {
-          console.error('Auth find error:', err);
-          return null;
-        }
-      }
-    };
-    
-    console.log('✅ Supabase Auth integration enabled');
-  } else {
-    console.log('ℹ️ Supabase Auth integration disabled (missing configuration)');
+// ===== SUPABASE ADMIN CLIENT =====
+const supabaseAdmin = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
   }
-} catch (error) {
-  console.log('ℹ️ Supabase Auth integration disabled:', error);
-}
+);
+
+// Check if we have admin capabilities
+const hasAdminCapabilities = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -136,24 +65,10 @@ const companySchema = z.object({
 
 const tenantAdminSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
+  email: z.string().email('Please enter a valid email address').transform(e => e.toLowerCase()),
   phone: z.string().optional(),
   position: z.string().optional(),
-  password: z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain uppercase letter')
-    .regex(/[a-z]/, 'Password must contain lowercase letter')
-    .regex(/[0-9]/, 'Password must contain number')
-    .optional(),
-  confirmPassword: z.string().optional()
-}).refine((data) => {
-  if (data.password && data.password !== data.confirmPassword) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  sendInvitation: z.boolean().optional()
 });
 
 const passwordChangeSchema = z.object({
@@ -260,8 +175,7 @@ interface TenantAdminFormData {
   email: string;
   phone: string;
   position: string;
-  password: string;
-  confirmPassword: string;
+  sendInvitation: boolean;
 }
 
 interface CompanyAdmin {
@@ -278,10 +192,12 @@ interface CompanyAdmin {
   phone?: string;
   created_at: string;
   updated_at: string;
+  email: string;
+  name: string;
+  auth_user_id?: string;
   users?: {
     id: string;
     email: string;
-    phone?: string;
     user_type: string;
     is_active: boolean;
     last_sign_in_at?: string;
@@ -294,50 +210,6 @@ interface CompanyAdmin {
 }
 
 // ===== HELPER FUNCTIONS =====
-
-// UUID validation helper
-function isValidUUID(uuid: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
-}
-
-// Safe audit log insertion
-async function createAuditLog(
-  action: string,
-  entityType: string,
-  entityId: string | null,
-  details: any
-) {
-  try {
-    const currentUser = getAuthenticatedUser();
-    
-    if (currentUser?.id && isValidUUID(currentUser.id)) {
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: currentUser.id,
-          action: action,
-          entity_type: entityType,
-          entity_id: entityId,
-          details: {
-            ...details,
-            auth_sync_enabled: !!supabaseAuthHelper?.isEnabled
-          },
-          created_at: new Date().toISOString()
-        });
-    } else {
-      console.log('Audit Log (dev mode):', {
-        user: currentUser?.email || 'unknown',
-        action,
-        entityType,
-        entityId,
-        details
-      });
-    }
-  } catch (error) {
-    console.error('Failed to create audit log:', error);
-  }
-}
 
 function generateComplexPassword(length: number = 12): string {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -360,27 +232,7 @@ function generateComplexPassword(length: number = 12): string {
 }
 
 function generateVerificationToken(): string {
-  const array = new Uint8Array(32);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function generateUUID(): string {
-  const array = new Uint8Array(16);
-  window.crypto.getRandomValues(array);
-  
-  array[6] = (array[6] & 0x0f) | 0x40;
-  array[8] = (array[8] & 0x3f) | 0x80;
-  
-  const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-  
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32)
-  ].join('-');
+  return crypto.randomBytes(32).toString('hex');
 }
 
 // ===== MAIN COMPONENT =====
@@ -409,22 +261,20 @@ export default function CompaniesTab() {
   const [editingAdmin, setEditingAdmin] = useState<CompanyAdmin | null>(null);
   
   // Password management state
-  const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [generatePassword, setGeneratePassword] = useState(true);
   const [generateNewPassword, setGenerateNewPassword] = useState(true);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
   const [selectedAdminForPassword, setSelectedAdminForPassword] = useState<CompanyAdmin | null>(null);
+  const [invitationSent, setInvitationSent] = useState(false);
   
   const [adminFormState, setAdminFormState] = useState<TenantAdminFormData>({
     name: '',
     email: '',
     phone: '',
     position: '',
-    password: '',
-    confirmPassword: ''
+    sendInvitation: true
   });
 
   const [passwordFormState, setPasswordFormState] = useState({
@@ -438,8 +288,6 @@ export default function CompaniesTab() {
   const [companyAdmins, setCompanyAdmins] = useState<CompanyAdmin[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [returnToViewAfterAdd, setReturnToViewAfterAdd] = useState(false);
-  const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
-  const [editAdminData, setEditAdminData] = useState<any>({});
 
   const [formState, setFormState] = useState<FormState>({
     name: '',
@@ -479,7 +327,7 @@ export default function CompaniesTab() {
       let query = supabase
         .from('countries')
         .select('id, name, region_id, status')
-        .or('status.eq.active,status.eq.Active')
+        .eq('status', 'active')
         .order('name');
 
       if (filters.region_ids.length > 0) {
@@ -488,11 +336,7 @@ export default function CompaniesTab() {
 
       const { data, error } = await query;
       if (error) throw error;
-      
-      return (data || []).map(country => ({
-        ...country,
-        status: country.status?.toLowerCase() as 'active' | 'inactive'
-      }));
+      return data || [];
     },
     {
       staleTime: 5 * 60 * 1000,
@@ -509,15 +353,11 @@ export default function CompaniesTab() {
         .from('countries')
         .select('id, name, region_id, status')
         .eq('region_id', formState.region_id)
-        .or('status.eq.active,status.eq.Active')
+        .eq('status', 'active')
         .order('name');
 
       if (error) throw error;
-      
-      return (data || []).map(country => ({
-        ...country,
-        status: country.status?.toLowerCase() as 'active' | 'inactive'
-      }));
+      return data || [];
     },
     {
       enabled: !!formState.region_id,
@@ -529,7 +369,8 @@ export default function CompaniesTab() {
   const { 
     data: companies = [], 
     isLoading, 
-    isFetching 
+    isFetching,
+    refetch: refetchCompanies
   } = useQuery<Company[]>(
     ['companies', filters],
     async () => {
@@ -554,17 +395,11 @@ export default function CompaniesTab() {
       }
 
       if (filters.region_ids.length > 0) {
-        const regionIds = filters.region_ids.filter(id => typeof id === 'string' && id.trim() !== '');
-        if (regionIds.length > 0) {
-          query = query.in('region_id', regionIds);
-        }
+        query = query.in('region_id', filters.region_ids);
       }
 
       if (filters.country_ids.length > 0) {
-        const countryIds = filters.country_ids.filter(id => typeof id === 'string' && id.trim() !== '');
-        if (countryIds.length > 0) {
-          query = query.in('country_id', countryIds);
-        }
+        query = query.in('country_id', filters.country_ids);
       }
 
       if (filters.status.length > 0) {
@@ -574,7 +409,7 @@ export default function CompaniesTab() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Fetch related data separately for performance
+      // Fetch related data
       const companyIds = data?.map(item => item.id) || [];
       const regionIds = [...new Set(data?.map(item => item.region_id) || [])].filter(Boolean);
       const countryIds = [...new Set(data?.map(item => item.country_id) || [])].filter(Boolean);
@@ -676,27 +511,14 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation with optional Auth sync
+  // Tenant admin mutation with Supabase Auth invitation
   const tenantAdminMutation = useMutation(
-    async (formData: FormData) => {
+    async (formData: TenantAdminFormData) => {
       try {
-        const name = formData.get('name') as string;
-        const email = formData.get('email') as string;
-        const password = formData.get('password') as string | null;
-        const phoneValue = formData.get('phone') as string;
-        const phone = phoneValue?.trim() || null;
-        const position = formData.get('position') as string;
+        const { name, email, phone, position, sendInvitation } = formData;
 
-        // Debug logging
-        console.log('Admin form submission:', { name, email, phone, position });
-
-        // Basic validation
-        if (!name || name.length < 2) {
-          throw new Error('Name must be at least 2 characters');
-        }
-        if (!email || !email.includes('@')) {
-          throw new Error('Please enter a valid email address');
-        }
+        // Validation
+        const validatedData = tenantAdminSchema.parse(formData);
 
         if (!selectedCompanyForAdmin?.id) {
           throw new Error('No company selected');
@@ -707,34 +529,14 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update Supabase Auth if available and linked
-          if (supabaseAuthHelper?.isEnabled && editingAdmin.users?.auth_user_id) {
-            try {
-              await supabaseAuthHelper.updateUser(editingAdmin.users.auth_user_id, {
-                email: email.toLowerCase(),
-                phone: phone || undefined,
-                user_metadata: {
-                  name: name,
-                  position: position || 'Administrator',
-                  company_id: companyId,
-                  company_name: selectedCompanyForAdmin.name,
-                  updated_by: currentUser?.email,
-                  updated_at: new Date().toISOString()
-                }
-              });
-            } catch (authError) {
-              console.error('Auth sync error (non-fatal):', authError);
-            }
-          }
-          
-          // Update entity_users profile
+          // Update entity_users table
           const entityUpdates: any = {
-            position: position || editingAdmin.position || 'Administrator',
-            phone: phone,
+            name: name,
+            email: email.toLowerCase(),
+            position: position || 'Administrator',
+            phone: phone || null,
             updated_at: new Date().toISOString()
           };
-
-          console.log('Updating entity_users with:', entityUpdates);
 
           const { error: entityError } = await supabase
             .from('entity_users')
@@ -743,293 +545,344 @@ export default function CompaniesTab() {
 
           if (entityError) throw entityError;
 
-          // Update users table
-          const userUpdates: any = {
-            updated_at: new Date().toISOString(),
-            raw_user_meta_data: {
-              ...(editingAdmin.users as any)?.raw_user_meta_data,
-              name: name,
-              updated_by: currentUser?.email,
-              updated_by_id: currentUser?.id,
-              last_updated: new Date().toISOString()
-            }
-          };
+          // Update users table if linked
+          if (editingAdmin.user_id) {
+            const userUpdates: any = {
+              email: email.toLowerCase(),
+              updated_at: new Date().toISOString(),
+              raw_user_meta_data: {
+                name: name,
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                updated_by: currentUser?.email,
+                updated_at: new Date().toISOString()
+              }
+            };
 
-          // Check if email is changing
-          if (email !== editingAdmin.users?.email) {
-            userUpdates.email = email.toLowerCase();
-            userUpdates.email_verified = false;
-            userUpdates.verification_token = generateVerificationToken();
-            userUpdates.verification_sent_at = new Date().toISOString();
-            userUpdates.verified_at = null;
+            const { error: userError } = await supabase
+              .from('users')
+              .update(userUpdates)
+              .eq('id', editingAdmin.user_id);
+
+            if (userError) throw userError;
+
+            // Update Supabase Auth if linked
+            if (hasAdminCapabilities && editingAdmin.auth_user_id) {
+              try {
+                await supabaseAdmin.auth.admin.updateUserById(editingAdmin.auth_user_id, {
+                  email: email.toLowerCase(),
+                  user_metadata: {
+                    name: name,
+                    position: position || 'Administrator',
+                    company_id: companyId,
+                    company_name: selectedCompanyForAdmin.name,
+                    updated_by: currentUser?.email,
+                    updated_at: new Date().toISOString()
+                  }
+                });
+              } catch (authError) {
+                console.error('Auth update error (non-fatal):', authError);
+              }
+            }
           }
 
-          // Phone is only stored in entity_users table, not in users table
-          // No need to update phone in users table
-
-          const { error: userError } = await supabase
-            .from('users')
-            .update(userUpdates)
-            .eq('id', editingAdmin.user_id);
-
-          if (userError) throw userError;
-
-          await createAuditLog(
-            'update_entity_admin',
-            'entity_user',
-            editingAdmin.user_id,
-            {
-              company_id: companyId,
-              updated_fields: { name, email, phone, position },
-              updated_by: currentUser?.email
-            }
-          );
+          // Log the update
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'update_entity_admin',
+              entity_type: 'entity_user',
+              entity_id: editingAdmin.id,
+              details: {
+                company_id: companyId,
+                updated_fields: { name, email, phone, position },
+                updated_by: currentUser?.email
+              },
+              created_at: new Date().toISOString()
+            });
 
           return { 
             success: true, 
             message: 'Admin updated successfully',
-            company: selectedCompanyForAdmin,
             type: 'updated'
           };
 
         } else {
           // ===== CREATE NEW ADMIN =====
           
-          // Check if user already exists
+          // Check if admin already exists for this company
+          const { data: existingAdmin } = await supabase
+            .from('entity_users')
+            .select('id')
+            .eq('email', email.toLowerCase())
+            .eq('company_id', companyId)
+            .maybeSingle();
+
+          if (existingAdmin) {
+            throw new Error('An admin with this email already exists for this company');
+          }
+
+          // Check if user exists in users table
           const { data: existingUser } = await supabase
             .from('users')
             .select('*')
             .eq('email', email.toLowerCase())
             .maybeSingle();
 
-          if (existingUser) {
-            // User exists - check if already linked to this company
-            const { data: existingLink } = await supabase
-              .from('entity_users')
-              .select('id')
-              .eq('user_id', existingUser.id)
-              .eq('company_id', companyId)
-              .maybeSingle();
-
-            if (existingLink) {
-              throw new Error('This user is already associated with this company');
-            }
-
-            // Link existing user to company as admin
-            const entityUserData = {
-              user_id: existingUser.id,
-              company_id: companyId,
-              position: position || 'Administrator',
-              phone: phone,
-              department: null,
-              employee_id: null,
-              hire_date: new Date().toISOString().split('T')[0],
-              is_company_admin: true,
-              employee_status: 'active',
-              department_id: null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            
-            console.log('Linking existing user with entity_users data:', entityUserData);
-            
-            const { error: linkError } = await supabase
-              .from('entity_users')
-              .insert([entityUserData]);
-
-            if (linkError) throw linkError;
-
-            await createAuditLog(
-              'link_entity_admin',
-              'entity_user',
-              existingUser.id,
-              {
-                company_id: companyId,
-                company_name: selectedCompanyForAdmin.name,
-                linked_by: currentUser?.email
-              }
-            );
-
-            return { 
-              success: true,
-              type: 'linked', 
-              user: existingUser,
-              company: selectedCompanyForAdmin,
-              message: 'Existing user linked as admin'
-            };
-          }
-
-          // Create new user
-          const finalPassword = password || generateComplexPassword();
-          const isGeneratedPassword = !password;
-          
-          // Try to create in Supabase Auth if available
+          let userId: string;
           let authUserId: string | null = null;
-          
-          if (supabaseAuthHelper?.isEnabled) {
-            try {
-              const authResult = await supabaseAuthHelper.createUser({
+          let temporaryPassword: string | null = null;
+
+          if (existingUser) {
+            // User exists - link to company
+            userId = existingUser.id;
+            authUserId = existingUser.auth_user_id;
+
+            // Create entity_user record
+            const { error: entityError } = await supabase
+              .from('entity_users')
+              .insert({
+                user_id: userId,
+                company_id: companyId,
+                name: name,
                 email: email.toLowerCase(),
-                password: finalPassword,
-                email_confirm: false,
-                phone: phone || undefined,
-                user_metadata: {
-                  name: name,
-                  position: position || 'Administrator',
-                  company_id: companyId,
-                  company_name: selectedCompanyForAdmin.name,
-                  created_by: currentUser?.email,
-                  created_by_id: currentUser?.id,
-                  is_invited: true,
-                  invite_accepted: false,
-                  companies: [{ id: companyId, name: selectedCompanyForAdmin.name, role: 'admin' }]
-                },
-                app_metadata: {
-                  user_type: 'entity',
-                  is_company_admin: true,
-                  requires_password_change: isGeneratedPassword
-                }
+                position: position || 'Administrator',
+                phone: phone || null,
+                department: null,
+                employee_id: null,
+                hire_date: new Date().toISOString().split('T')[0],
+                is_company_admin: true,
+                employee_status: 'active',
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                auth_user_id: authUserId
               });
 
-              if (authResult.data) {
-                authUserId = authResult.data.id;
+            if (entityError) throw entityError;
+
+            toast.info('Existing user linked as company admin');
+
+          } else {
+            // New user - create and send invitation
+            
+            if (sendInvitation && hasAdminCapabilities) {
+              // ===== SUPABASE AUTH INVITATION FLOW =====
+              try {
+                // Send invitation through Supabase Auth
+                const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+                  email.toLowerCase(),
+                  {
+                    data: {
+                      name: name,
+                      position: position || 'Administrator',
+                      company_id: companyId,
+                      company_name: selectedCompanyForAdmin.name,
+                      invited_by: currentUser?.email,
+                      invited_at: new Date().toISOString(),
+                      user_type: 'entity',
+                      is_company_admin: true
+                    }
+                  }
+                );
+
+                if (inviteError) {
+                  console.error('Invitation error:', inviteError);
+                  throw new Error('Failed to send invitation email');
+                }
+
+                // Get the created auth user
+                authUserId = inviteData.user?.id || null;
+
+                // Create placeholder in users table
+                temporaryPassword = generateComplexPassword();
+                const salt = await bcrypt.genSalt(10);
+                const passwordHash = await bcrypt.hash(temporaryPassword, salt);
+
+                const { data: newUser, error: userError } = await supabase
+                  .from('users')
+                  .insert({
+                    email: email.toLowerCase(),
+                    password_hash: passwordHash,
+                    user_type: 'entity',
+                    is_active: false, // Inactive until they accept invitation
+                    email_verified: false,
+                    verification_token: generateVerificationToken(),
+                    verification_sent_at: new Date().toISOString(),
+                    requires_password_change: true,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    auth_user_id: authUserId,
+                    auth_invitation_sent_at: new Date().toISOString(),
+                    raw_user_meta_data: {
+                      name: name,
+                      company_id: companyId,
+                      company_name: selectedCompanyForAdmin.name,
+                      invited_by: currentUser?.email,
+                      invitation_pending: true
+                    }
+                  })
+                  .select()
+                  .single();
+
+                if (userError) {
+                  // Try to clean up auth user if database insert fails
+                  if (authUserId) {
+                    try {
+                      await supabaseAdmin.auth.admin.deleteUser(authUserId);
+                    } catch (deleteError) {
+                      console.error('Failed to rollback auth user:', deleteError);
+                    }
+                  }
+                  throw userError;
+                }
+
+                userId = newUser.id;
+                setInvitationSent(true);
+
+              } catch (authError) {
+                console.error('Auth invitation error:', authError);
                 
-                // Try to send invite email
-                try {
-                  await supabaseAuthHelper.inviteUser(email.toLowerCase(), {
+                // Fallback: Create user without auth invitation
+                temporaryPassword = generateComplexPassword();
+                const salt = await bcrypt.genSalt(10);
+                const passwordHash = await bcrypt.hash(temporaryPassword, salt);
+
+                const { data: newUser, error: userError } = await supabase
+                  .from('users')
+                  .insert({
+                    email: email.toLowerCase(),
+                    password_hash: passwordHash,
+                    user_type: 'entity',
+                    is_active: true,
+                    email_verified: false,
+                    verification_token: generateVerificationToken(),
+                    verification_sent_at: new Date().toISOString(),
+                    requires_password_change: true,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    raw_user_meta_data: {
+                      name: name,
+                      company_id: companyId,
+                      company_name: selectedCompanyForAdmin.name,
+                      created_by: currentUser?.email
+                    }
+                  })
+                  .select()
+                  .single();
+
+                if (userError) throw userError;
+                userId = newUser.id;
+                
+                // Show generated password since invitation failed
+                setGeneratedPassword(temporaryPassword);
+              }
+            } else {
+              // Create without invitation
+              temporaryPassword = generateComplexPassword();
+              const salt = await bcrypt.genSalt(10);
+              const passwordHash = await bcrypt.hash(temporaryPassword, salt);
+
+              const { data: newUser, error: userError } = await supabase
+                .from('users')
+                .insert({
+                  email: email.toLowerCase(),
+                  password_hash: passwordHash,
+                  user_type: 'entity',
+                  is_active: true,
+                  email_verified: false,
+                  verification_token: generateVerificationToken(),
+                  verification_sent_at: new Date().toISOString(),
+                  requires_password_change: true,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  raw_user_meta_data: {
+                    name: name,
+                    company_id: companyId,
                     company_name: selectedCompanyForAdmin.name,
-                    invited_by: currentUser?.email,
-                    temporary_password: isGeneratedPassword ? finalPassword : undefined
-                  });
-                } catch (inviteError) {
-                  console.error('Failed to send invite (non-fatal):', inviteError);
+                    created_by: currentUser?.email
+                  }
+                })
+                .select()
+                .single();
+
+              if (userError) throw userError;
+              userId = newUser.id;
+              
+              // Show generated password
+              setGeneratedPassword(temporaryPassword);
+            }
+
+            // Create entity_user record
+            const { error: entityError } = await supabase
+              .from('entity_users')
+              .insert({
+                user_id: userId,
+                company_id: companyId,
+                name: name,
+                email: email.toLowerCase(),
+                position: position || 'Administrator',
+                phone: phone || null,
+                department: null,
+                employee_id: null,
+                hire_date: new Date().toISOString().split('T')[0],
+                is_company_admin: true,
+                employee_status: 'active',
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                auth_user_id: authUserId
+              });
+
+            if (entityError) {
+              // Rollback user creation
+              await supabase.from('users').delete().eq('id', userId);
+              if (authUserId) {
+                try {
+                  await supabaseAdmin.auth.admin.deleteUser(authUserId);
+                } catch (deleteError) {
+                  console.error('Failed to rollback auth user:', deleteError);
                 }
               }
-            } catch (authError) {
-              console.error('Auth creation error (non-fatal):', authError);
+              throw entityError;
             }
           }
-          
-          // Hash password
-          const salt = await bcrypt.genSalt(10);
-          const passwordHash = await bcrypt.hash(finalPassword, salt);
-          
-          // Generate verification token
-          const verificationToken = generateVerificationToken();
-          
-          // Create user in users table
-          const { data: newUser, error: userError } = await supabase
-            .from('users')
+
+          // Log the creation
+          await supabase
+            .from('audit_logs')
             .insert({
-              email: email.toLowerCase(),
-              password_hash: passwordHash,
-              user_type: 'entity',
-              is_active: true,
-              email_verified: false,
-              verification_token: verificationToken,
-              verification_sent_at: new Date().toISOString(),
-              verified_at: null,
-              requires_password_change: isGeneratedPassword,
-              failed_login_attempts: 0,
-              locked_until: null,
-              last_sign_in_at: null,
-              last_login_at: null,
-              password_updated_at: new Date().toISOString(),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              auth_user_id: authUserId, // May be null if auth not available
-              auth_invitation_sent_at: authUserId ? new Date().toISOString() : null,
-              raw_user_meta_data: {
-                name: name,
+              user_id: currentUser?.id,
+              action: 'create_entity_admin',
+              entity_type: 'entity_user',
+              entity_id: userId,
+              details: {
+                email: email,
                 company_id: companyId,
                 company_name: selectedCompanyForAdmin.name,
+                is_company_admin: true,
                 created_by: currentUser?.email,
-                created_by_id: currentUser?.id
+                invitation_sent: sendInvitation && !generatedPassword,
+                auth_synced: !!authUserId
               },
-              raw_app_meta_data: {},
-              user_types: ['entity'],
-              primary_type: 'entity'
-            })
-            .select()
-            .single();
-          
-          if (userError) {
-            // Rollback: delete auth user if it was created
-            if (authUserId && supabaseAuthHelper?.isEnabled) {
-              try {
-                await supabaseAuthHelper.deleteUser(authUserId);
-              } catch (deleteError) {
-                console.error('Failed to rollback auth user:', deleteError);
-              }
-            }
-            
-            if (userError.code === '23505') {
-              throw new Error('This email is already registered');
-            }
-            throw userError;
-          }
-          
-          // Create entity user profile
-          const entityUserData = {
-            user_id: newUser.id,
-            company_id: companyId,
-            position: position || 'Administrator',
-            phone: phone,
-            department: null,
-            employee_id: null,
-            hire_date: new Date().toISOString().split('T')[0],
-            is_company_admin: true,
-            employee_status: 'active',
-            department_id: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          console.log('Creating new entity_user with data:', entityUserData);
-          
-          const { error: entityError } = await supabase
-            .from('entity_users')
-            .insert(entityUserData);
-          
-          if (entityError) {
-            // Rollback: delete the user if entity_users insert fails
-            await supabase.from('users').delete().eq('id', newUser.id);
-            if (authUserId && supabaseAuthHelper?.isEnabled) {
-              try {
-                await supabaseAuthHelper.deleteUser(authUserId);
-              } catch (deleteError) {
-                console.error('Failed to rollback auth user:', deleteError);
-              }
-            }
-            throw entityError;
-          }
-          
-          await createAuditLog(
-            'create_entity_admin',
-            'entity_user',
-            newUser.id,
-            {
-              email: email,
-              company_id: companyId,
-              company_name: selectedCompanyForAdmin.name,
-              is_company_admin: true,
-              created_by: currentUser?.email,
-              password_generated: isGeneratedPassword,
-              auth_synced: !!authUserId
-            }
-          );
-          
+              created_at: new Date().toISOString()
+            });
+
           return {
             success: true,
             type: 'created',
             user: {
-              id: newUser.id,
-              email: newUser.email,
+              id: userId,
+              email: email,
               name: name,
-              temporary_password: isGeneratedPassword ? finalPassword : undefined
+              temporary_password: temporaryPassword,
+              invitation_sent: sendInvitation && !generatedPassword
             },
             company: selectedCompanyForAdmin,
-            message: isGeneratedPassword ? 'Admin created with temporary password' : 'Admin created successfully'
+            message: invitationSent 
+              ? 'Admin created and invitation sent successfully' 
+              : (temporaryPassword ? 'Admin created with temporary password' : 'Admin created successfully')
           };
         }
       } catch (error) {
@@ -1043,8 +896,24 @@ export default function CompaniesTab() {
       onSuccess: (result) => {
         queryClient.invalidateQueries(['companies']);
         
-        if (result.type === 'created' && result.user?.temporary_password) {
-          // Show password modal for new users with generated password
+        if (result.user?.invitation_sent) {
+          // Show success message for invitation
+          setIsAdminFormOpen(false);
+          setSelectedCompanyForAdmin(null);
+          setEditingAdmin(null);
+          setAdminFormErrors({});
+          resetAdminForm();
+          
+          toast.success('Invitation sent successfully! The user will receive an email to set up their account.');
+          
+          // Return to View Admins if needed
+          if (returnToViewAfterAdd && selectedCompanyForView) {
+            fetchCompanyAdmins(selectedCompanyForView.id);
+            setIsViewAdminsOpen(true);
+            setReturnToViewAfterAdd(false);
+          }
+        } else if (result.user?.temporary_password) {
+          // Show password modal for manual setup
           setGeneratedPassword(result.user.temporary_password);
           toast.success('Admin created successfully. Copy the temporary password!');
         } else {
@@ -1054,15 +923,14 @@ export default function CompaniesTab() {
           setAdminFormErrors({});
           resetAdminForm();
           
-          // Return to View Admins modal if we came from there
+          toast.success(result.message || 'Operation successful');
+          
+          // Return to View Admins if needed
           if (returnToViewAfterAdd && selectedCompanyForView) {
-            const companyId = result.company?.id || selectedCompanyForView.id;
-            fetchCompanyAdmins(companyId);
+            fetchCompanyAdmins(selectedCompanyForView.id);
             setIsViewAdminsOpen(true);
             setReturnToViewAfterAdd(false);
           }
-          
-          toast.success(result.message || 'Operation successful');
         }
       },
       onError: (error: any) => {
@@ -1082,7 +950,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Change password mutation with optional Auth sync
+  // Change password mutation
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
       // Hash the new password
@@ -1096,10 +964,10 @@ export default function CompaniesTab() {
         .eq('id', data.userId)
         .single();
       
-      // Update password in Supabase Auth if available and linked
-      if (supabaseAuthHelper?.isEnabled && user?.auth_user_id) {
+      // Update password in Supabase Auth if linked
+      if (hasAdminCapabilities && user?.auth_user_id) {
         try {
-          await supabaseAuthHelper.updateUser(user.auth_user_id, {
+          await supabaseAdmin.auth.admin.updateUserById(user.auth_user_id, {
             password: data.password,
             app_metadata: {
               requires_password_change: false,
@@ -1127,29 +995,26 @@ export default function CompaniesTab() {
       
       if (updateError) throw updateError;
       
-      await createAuditLog(
-        'admin_password_change',
-        'entity_user',
-        data.userId,
-        {
-          changed_by: currentUser?.email,
-          target_user: selectedAdminForPassword?.users?.email,
-          notification_sent: data.sendEmail,
-          auth_synced: !!(supabaseAuthHelper?.isEnabled && user?.auth_user_id)
-        }
-      );
+      // Log the change
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser?.id,
+          action: 'admin_password_change',
+          entity_type: 'entity_user',
+          entity_id: data.userId,
+          details: {
+            changed_by: currentUser?.email,
+            target_user: selectedAdminForPassword?.email,
+            notification_sent: data.sendEmail,
+            auth_synced: !!(hasAdminCapabilities && user?.auth_user_id)
+          },
+          created_at: new Date().toISOString()
+        });
       
       // Send email notification if requested
-      if (data.sendEmail) {
-        console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
-        
-        if (supabaseAuthHelper?.isEnabled && user?.auth_user_id && user?.email) {
-          try {
-            await supabaseAuthHelper.generateLink('recovery', user.email);
-          } catch (emailError) {
-            console.error('Failed to send password reset email:', emailError);
-          }
-        }
+      if (data.sendEmail && user?.email) {
+        console.log('Password change email would be sent to:', user.email);
       }
       
       return { success: true, password: data.password };
@@ -1172,6 +1037,57 @@ export default function CompaniesTab() {
       onError: (error: any) => {
         console.error('Error changing password:', error);
         toast.error(error.message || 'Failed to change password');
+      }
+    }
+  );
+
+  // Resend invitation mutation
+  const resendInvitationMutation = useMutation(
+    async (admin: CompanyAdmin) => {
+      if (!hasAdminCapabilities) {
+        throw new Error('Admin capabilities required to send invitations');
+      }
+
+      // Resend invitation through Supabase Auth
+      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+        admin.email.toLowerCase(),
+        {
+          data: {
+            name: admin.name,
+            position: admin.position || 'Administrator',
+            company_id: admin.company_id,
+            company_name: selectedCompanyForView?.name,
+            reinvited_by: currentUser?.email,
+            reinvited_at: new Date().toISOString(),
+            user_type: 'entity',
+            is_company_admin: true
+          }
+        }
+      );
+
+      if (inviteError) throw inviteError;
+
+      // Update invitation sent timestamp
+      await supabase
+        .from('users')
+        .update({
+          auth_invitation_sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', admin.user_id);
+
+      return { success: true };
+    },
+    {
+      onSuccess: () => {
+        toast.success('Invitation resent successfully');
+        if (selectedCompanyForView?.id) {
+          fetchCompanyAdmins(selectedCompanyForView.id);
+        }
+      },
+      onError: (error: any) => {
+        console.error('Error:', error);
+        toast.error(error.message || 'Failed to resend invitation');
       }
     }
   );
@@ -1218,13 +1134,48 @@ export default function CompaniesTab() {
 
   // Remove admin mutation
   const removeAdminMutation = useMutation(
-    async ({ entityUserId, userId }: { entityUserId: string; userId: string }) => {
+    async ({ entityUserId, userId, authUserId }: { entityUserId: string; userId: string; authUserId?: string }) => {
+      // Remove from entity_users
       const { error } = await supabase
         .from('entity_users')
         .delete()
         .eq('id', entityUserId);
 
       if (error) throw error;
+
+      // If this was the only company for the user, consider deactivating them
+      const { data: otherCompanies } = await supabase
+        .from('entity_users')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (!otherCompanies || otherCompanies.length === 0) {
+        // Deactivate user if no other companies
+        await supabase
+          .from('users')
+          .update({
+            is_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        // Also deactivate in Supabase Auth if linked
+        if (hasAdminCapabilities && authUserId) {
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+              app_metadata: {
+                is_active: false,
+                deactivated_at: new Date().toISOString(),
+                deactivated_by: currentUser?.email
+              }
+            });
+          } catch (authError) {
+            console.error('Auth deactivation error (non-fatal):', authError);
+          }
+        }
+      }
+
       return { entityUserId };
     },
     {
@@ -1242,60 +1193,6 @@ export default function CompaniesTab() {
     }
   );
 
-  // Resend verification mutation
-  const resendVerificationMutation = useMutation(
-    async (userId: string) => {
-      // Generate new verification token
-      const token = generateVerificationToken();
-      
-      // Update user with new token
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          verification_token: token,
-          verification_sent_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-      
-      if (updateError) throw updateError;
-      
-      // Get user email
-      const { data: user } = await supabase
-        .from('users')
-        .select('email, auth_user_id, raw_user_meta_data')
-        .eq('id', userId)
-        .single();
-      
-      if (!user) throw new Error('User not found');
-      
-      // Send verification through Supabase Auth if available
-      if (supabaseAuthHelper?.isEnabled && user.auth_user_id) {
-        try {
-          await supabaseAuthHelper.generateLink('signup', user.email);
-        } catch (authError) {
-          console.error('Failed to resend auth verification:', authError);
-        }
-      }
-      
-      console.log('Verification email would be sent to:', user.email);
-      console.log('Verification token:', token);
-      
-      return { success: true };
-    },
-    {
-      onSuccess: () => {
-        toast.success('Verification email sent successfully');
-        if (selectedCompanyForView?.id) {
-          fetchCompanyAdmins(selectedCompanyForView.id);
-        }
-      },
-      onError: (error: any) => {
-        console.error('Error:', error);
-        toast.error(error.message || 'Failed to send verification email');
-      }
-    }
-  );
-
   // ===== HELPER FUNCTIONS =====
   
   const resetAdminForm = () => {
@@ -1304,54 +1201,40 @@ export default function CompaniesTab() {
       email: '',
       phone: '',
       position: '',
-      password: '',
-      confirmPassword: ''
+      sendInvitation: true
     });
     setAdminFormErrors({});
-    setGeneratePassword(true);
-    setShowPassword(false);
+    setInvitationSent(false);
   };
 
   const fetchCompanyAdmins = async (companyId: string) => {
     setLoadingAdmins(true);
     try {
-      // Small delay to ensure database has updated
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Fetch entity_users with user details
-      const { data: entityUsers, error: entityError } = await supabase
+      // Fetch entity_users with user details joined
+      const { data: admins, error } = await supabase
         .from('entity_users')
-        .select('*')
+        .select(`
+          *,
+          users!entity_users_user_id_fkey (
+            id,
+            email,
+            user_type,
+            is_active,
+            email_verified,
+            requires_password_change,
+            last_sign_in_at,
+            last_login_at,
+            raw_user_meta_data,
+            auth_user_id
+          )
+        `)
         .eq('company_id', companyId)
         .eq('is_company_admin', true)
         .order('created_at', { ascending: false });
 
-      if (entityError) throw entityError;
+      if (error) throw error;
 
-      if (!entityUsers || entityUsers.length === 0) {
-        setCompanyAdmins([]);
-        return;
-      }
-
-      // Fetch user details
-      const userIds = entityUsers.map(eu => eu.user_id);
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .in('id', userIds);
-
-      if (usersError) throw usersError;
-
-      // Create user map
-      const userMap = new Map(users?.map(u => [u.id, u]) || []);
-
-      // Combine data
-      const adminsWithUsers = entityUsers.map(entityUser => ({
-        ...entityUser,
-        users: userMap.get(entityUser.user_id) || null
-      }));
-
-      setCompanyAdmins(adminsWithUsers);
+      setCompanyAdmins(admins || []);
     } catch (error) {
       console.error('Error fetching company admins:', error);
       toast.error('Failed to fetch company admins');
@@ -1364,12 +1247,10 @@ export default function CompaniesTab() {
   const getLogoUrl = (path: string | null) => {
     if (!path) return null;
     
-    // If path is already a full URL, return it
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
     
-    // Otherwise, get public URL from Supabase storage
     const { data } = supabase.storage
       .from('company-logos')
       .getPublicUrl(path);
@@ -1381,14 +1262,7 @@ export default function CompaniesTab() {
     setFormState(prev => ({
       ...prev,
       region_id: regionId,
-      country_id: '' // Reset country when region changes
-    }));
-  };
-
-  const handleCountryChange = (countryId: string) => {
-    setFormState(prev => ({
-      ...prev,
-      country_id: countryId
+      country_id: ''
     }));
   };
 
@@ -1401,16 +1275,7 @@ export default function CompaniesTab() {
   const handleAdminSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAdminFormErrors({});
-    
-    // Use state values directly instead of FormData
-    const formData = new FormData();
-    formData.append('name', adminFormState.name);
-    formData.append('email', adminFormState.email);
-    formData.append('phone', adminFormState.phone?.trim() || '');
-    formData.append('position', adminFormState.position || '');
-    formData.append('password', adminFormState.password || '');
-    
-    tenantAdminMutation.mutate(formData);
+    tenantAdminMutation.mutate(adminFormState);
   };
 
   const handlePasswordChange = (e: React.FormEvent<HTMLFormElement>) => {
@@ -1423,7 +1288,6 @@ export default function CompaniesTab() {
     const newPassword = formData.get('newPassword') as string;
     const sendEmail = formData.get('sendEmail') === 'on';
     
-    // Validate password
     try {
       passwordChangeSchema.parse({ newPassword, sendEmail });
     } catch (error) {
@@ -1439,7 +1303,6 @@ export default function CompaniesTab() {
       }
     }
     
-    // Use generated password if checkbox is checked
     const passwordToSet = generateNewPassword ? generateComplexPassword() : newPassword;
     
     changePasswordMutation.mutate({
@@ -1458,11 +1321,6 @@ export default function CompaniesTab() {
     deleteMutation.mutate(companiesToDelete);
   };
 
-  const cancelDelete = () => {
-    setIsConfirmDialogOpen(false);
-    setCompaniesToDelete([]);
-  };
-
   const copyPassword = () => {
     if (generatedPassword) {
       navigator.clipboard.writeText(generatedPassword);
@@ -1475,14 +1333,14 @@ export default function CompaniesTab() {
   const printPassword = () => {
     if (generatedPassword) {
       const adminInfo = editingAdmin || selectedAdminForPassword || 
-        (selectedCompanyForAdmin ? { users: { email: adminFormState.email, name: adminFormState.name } } : null);
+        (selectedCompanyForAdmin ? { email: adminFormState.email, name: adminFormState.name } : null);
       
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Password for ${adminInfo?.users?.name || 'User'}</title>
+              <title>Password for ${adminInfo?.name || 'User'}</title>
               <style>
                 body { font-family: Arial, sans-serif; padding: 20px; }
                 .header { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
@@ -1500,15 +1358,14 @@ export default function CompaniesTab() {
             </head>
             <body>
               <div class="header">GGK Learning System - Password Information</div>
-              <div class="info"><strong>User:</strong> ${adminInfo?.users?.name || 'N/A'}</div>
-              <div class="info"><strong>Email:</strong> ${adminInfo?.users?.email || 'N/A'}</div>
+              <div class="info"><strong>User:</strong> ${adminInfo?.name || 'N/A'}</div>
+              <div class="info"><strong>Email:</strong> ${adminInfo?.email || 'N/A'}</div>
               <div class="info"><strong>Company:</strong> ${selectedCompanyForAdmin?.name || selectedCompanyForView?.name || 'N/A'}</div>
               <div class="info"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
               <div class="password">${generatedPassword}</div>
               <div class="footer">
                 Please share this password securely with the user. 
-                They will receive a verification email and must verify their email before logging in.
-                The user should change this password after first login.
+                They should change this password after first login.
               </div>
             </body>
           </html>
@@ -1533,7 +1390,6 @@ export default function CompaniesTab() {
     });
     setGenerateNewPassword(true);
     
-    // Return to View Admins modal if needed
     if (returnToViewAfterAdd && selectedCompanyForView) {
       fetchCompanyAdmins(selectedCompanyForView.id);
       setIsViewAdminsOpen(true);
@@ -1543,8 +1399,7 @@ export default function CompaniesTab() {
 
   // ===== EFFECTS =====
   
-  // Update form state when editing company changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingCompany) {
       setFormState({
         name: editingCompany.name,
@@ -1570,25 +1425,21 @@ export default function CompaniesTab() {
     }
   }, [editingCompany]);
 
-  // Update admin form when editing
-  React.useEffect(() => {
+  useEffect(() => {
     if (editingAdmin) {
       setAdminFormState({
-        name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
-        email: editingAdmin.users?.email || '',
-        phone: editingAdmin.phone || '', // Phone is only in entity_users
+        name: editingAdmin.name || editingAdmin.users?.raw_user_meta_data?.name || '',
+        email: editingAdmin.email || editingAdmin.users?.email || '',
+        phone: editingAdmin.phone || '',
         position: editingAdmin.position || '',
-        password: '',
-        confirmPassword: ''
+        sendInvitation: false
       });
-      setGeneratePassword(false);
     } else {
       resetAdminForm();
     }
   }, [editingAdmin]);
 
-  // Reset password form when closing
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isPasswordFormOpen) {
       setPasswordFormState({
         newPassword: '',
@@ -1699,23 +1550,19 @@ export default function CompaniesTab() {
   ];
 
   // ===== RENDER =====
-  // [Rest of the render code remains exactly the same as original - all UI components, modals, forms unchanged]
   
   return (
     <div className="space-y-6">
-      {/* Display Auth status in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className={`p-2 text-xs rounded ${supabaseAuthHelper?.isEnabled ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-          Supabase Auth Integration: {supabaseAuthHelper?.isEnabled ? 'Enabled' : 'Disabled (using custom auth only)'}
-        </div>
-      )}
-
       <div className="flex justify-between items-center">
-        <div>
+        <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Companies</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {companies.length} companies • {companies.reduce((acc, c) => acc + (c.admin_count || 0), 0)} total admins
-          </p>
+          <button
+            onClick={() => refetchCompanies()}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
         </div>
         <Button
           onClick={() => {
@@ -1727,6 +1574,13 @@ export default function CompaniesTab() {
           Add Company
         </Button>
       </div>
+
+      {/* Show Auth status in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className={`p-2 text-xs rounded ${hasAdminCapabilities ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'}`}>
+          Supabase Auth: {hasAdminCapabilities ? '✓ Admin API enabled (invitations available)' : '⚠ Limited mode (manual password setup only)'}
+        </div>
+      )}
 
       {/* Filter Card */}
       <FilterCard
@@ -1843,10 +1697,7 @@ export default function CompaniesTab() {
         emptyMessage="No companies found"
       />
 
-      {/* All modals remain exactly the same - Company Form, Admin Form, Password Form, View Admins, etc. */}
-      {/* [Keeping all the modal code unchanged from the original] */}
-      
-      {/* Company Form Modal */}
+      {/* Company Form Modal - Unchanged */}
       <SlideInForm
         key={editingCompany?.id || 'new'}
         title={editingCompany ? 'Edit Company' : 'Create Company'}
@@ -1911,7 +1762,7 @@ export default function CompaniesTab() {
                 label: country.name
               }))}
               value={formState.country_id}
-              onChange={(value) => handleCountryChange(value)}
+              onChange={(value) => setFormState(prev => ({ ...prev, country_id: value }))}
               disabled={!formState.region_id}
             />
           </FormField>
@@ -1964,7 +1815,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Tenant Admin Form Modal */}
+      {/* Tenant Admin Form Modal - Updated for Invitations */}
       <SlideInForm
         key={`${selectedCompanyForAdmin?.id || 'admin-new'}-${editingAdmin?.id || 'new'}`}
         title={editingAdmin ? `Edit Admin for ${selectedCompanyForAdmin?.name}` : `Add Tenant Admin for ${selectedCompanyForAdmin?.name || ''}`}
@@ -2008,7 +1859,7 @@ export default function CompaniesTab() {
               label="Email Address" 
               required 
               error={adminFormErrors.email}
-              helpText={editingAdmin ? "Changing email will require re-verification" : "Verification email will be sent"}
+              helpText={editingAdmin ? "Changing email will update the admin's login credentials" : "An invitation will be sent to this email"}
             >
               <Input
                 id="tenant-email"
@@ -2041,103 +1892,63 @@ export default function CompaniesTab() {
             </FormField>
           </div>
 
-          {/* Password Section (only for new admins) */}
+          {/* Invitation Options (only for new admins) */}
           {!editingAdmin && (
             <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Invitation Options</h3>
               
-              <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                  Password Options
-                </p>
-                
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
+              {hasAdminCapabilities ? (
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <label className="flex items-start gap-3 cursor-pointer">
                     <input
-                      type="radio"
-                      name="passwordOption"
-                      checked={generatePassword}
-                      onChange={() => {
-                        setGeneratePassword(true);
-                        setAdminFormState({ ...adminFormState, password: '', confirmPassword: '' });
-                      }}
-                      className="text-[#8CC63F]"
+                      type="checkbox"
+                      checked={adminFormState.sendInvitation}
+                      onChange={(e) => setAdminFormState(prev => ({ ...prev, sendInvitation: e.target.checked }))}
+                      className="rounded border-gray-300 text-[#8CC63F] mt-1"
                     />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Auto-generate secure password
-                    </span>
-                  </label>
-                  
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="passwordOption"
-                      checked={!generatePassword}
-                      onChange={() => setGeneratePassword(false)}
-                      className="text-[#8CC63F]"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Set password manually
-                    </span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Send email invitation
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {adminFormState.sendInvitation 
+                          ? "The user will receive an email to set up their account and choose their password"
+                          : "A temporary password will be generated that you must share with the user"}
+                      </p>
+                    </div>
                   </label>
                 </div>
-              </div>
-
-              {!generatePassword && (
-                <>
-                  <FormField 
-                    id="tenant-password" 
-                    label="Password" 
-                    required 
-                    error={adminFormErrors.password}
-                  >
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <Input
-                          id="tenant-password"
-                          name="password"
-                          type={showPassword ? "text" : "password"}
-                          value={adminFormState.password}
-                          onChange={(e) => setAdminFormState(prev => ({ ...prev, password: e.target.value }))}
-                          placeholder="Minimum 8 characters"
-                          autoComplete="new-password"
-                          className={`pr-10 ${
-                            adminFormState.password && 
-                            passwordRequirements.every(req => req.test(adminFormState.password))
-                              ? 'border-green-500 focus:border-green-500'
-                              : ''
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <PasswordRequirementsChecker password={adminFormState.password} />
+              ) : (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        Email invitations are not available. A temporary password will be generated.
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        To enable email invitations, configure VITE_SUPABASE_SERVICE_ROLE_KEY in your environment.
+                      </p>
                     </div>
-                  </FormField>
-
-                  <FormField id="tenant-confirm-password" label="Confirm Password" required error={adminFormErrors.confirmPassword}>
-                    <Input
-                      id="tenant-confirm-password"
-                      name="confirmPassword"
-                      type="password"
-                      value={adminFormState.confirmPassword}
-                      onChange={(e) => setAdminFormState(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Re-enter password"
-                    />
-                  </FormField>
-                </>
+                  </div>
+                </div>
               )}
-              
-              {generatePassword && (
+
+              {adminFormState.sendInvitation && hasAdminCapabilities && (
                 <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    ✓ A secure password will be automatically generated when you save
-                  </p>
+                  <div className="flex items-start gap-2">
+                    <Send className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        An invitation email will be sent automatically
+                      </p>
+                      <ul className="text-xs text-green-600 dark:text-green-400 mt-2 list-disc list-inside space-y-1">
+                        <li>User receives secure link to set password</li>
+                        <li>Account is activated upon accepting invitation</li>
+                        <li>No temporary password needed</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2159,198 +1970,15 @@ export default function CompaniesTab() {
                   Company Administrator Access
                 </p>
                 <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  This user will be set as a company administrator with full access to:
+                  This user will be set as a company administrator with full access to manage company settings and users.
                 </p>
-                <ul className="text-xs text-blue-700 dark:text-blue-300 mt-2 list-disc list-inside space-y-1">
-                  <li>Manage company settings and data</li>
-                  <li>Access all company modules</li>
-                  <li>Manage other company users</li>
-                  <li>View company reports and analytics</li>
-                </ul>
               </div>
             </div>
           </div>
         </form>
       </SlideInForm>
 
-      {/* Change Password Form */}
-      {isPasswordFormOpen && !generatedPassword && (
-        <div className="fixed inset-0 z-[70]">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => {
-            setIsPasswordFormOpen(false);
-            setSelectedAdminForPassword(null);
-            setFormErrors({});
-            setShowNewPassword(false);
-            setGenerateNewPassword(true);
-            setPasswordFormState({
-              newPassword: '',
-              sendEmail: false
-            });
-          }}></div>
-          <div className="relative z-[71]">
-            <SlideInForm
-              key={`${selectedAdminForPassword?.id || 'new'}-password`}
-              title={`Change Password for ${selectedAdminForPassword?.users?.email || ''}`}
-              isOpen={true}
-              onClose={() => {
-                setIsPasswordFormOpen(false);
-                setSelectedAdminForPassword(null);
-                setFormErrors({});
-                setShowNewPassword(false);
-                setGenerateNewPassword(true);
-                setPasswordFormState({
-                  newPassword: '',
-                  sendEmail: false
-                });
-              }}
-              onSave={() => {
-                const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
-                if (form) form.requestSubmit();
-              }}
-              loading={changePasswordMutation.isLoading}
-            >
-              <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
-                {formErrors.form && (
-                  <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-                    {formErrors.form}
-                  </div>
-                )}
-
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    <Shield className="h-4 w-4 inline mr-1" />
-                    You can directly set a new password for this user.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                      Password Options
-                    </p>
-                    
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="passwordChangeOption"
-                          checked={generateNewPassword}
-                          onChange={() => {
-                            setGenerateNewPassword(true);
-                            setPasswordFormState({ ...passwordFormState, newPassword: '' });
-                          }}
-                          className="text-[#8CC63F]"
-                        />
-                        <div>
-                          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                            Generate secure password
-                          </span>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            System will create a strong 12-character password
-                          </p>
-                        </div>
-                      </label>
-                      
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="passwordChangeOption"
-                          checked={!generateNewPassword}
-                          onChange={() => setGenerateNewPassword(false)}
-                          className="text-[#8CC63F]"
-                        />
-                        <div>
-                          <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                            Set custom password
-                          </span>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Enter your own password meeting complexity requirements
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {!generateNewPassword && (
-                    <FormField 
-                      id="newPassword" 
-                      label="New Password" 
-                      required 
-                      error={formErrors.newPassword}
-                    >
-                      <div className="space-y-2">
-                        <div className="relative">
-                          <Input
-                            type={showNewPassword ? "text" : "password"}
-                            id="newPassword"
-                            name="newPassword"
-                            placeholder="Enter new password"
-                            value={passwordFormState.newPassword}
-                            onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
-                            className={`pr-10 ${
-                              passwordFormState.newPassword && 
-                              passwordRequirements.every(req => req.test(passwordFormState.newPassword))
-                                ? 'border-green-500 focus:border-green-500'
-                                : ''
-                            }`}
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-                            onClick={() => setShowNewPassword(!showNewPassword)}
-                          >
-                            {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        </div>
-                        <PasswordRequirementsChecker password={passwordFormState.newPassword} />
-                      </div>
-                    </FormField>
-                  )}
-                  
-                  {generateNewPassword && (
-                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-                      <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4" />
-                        A strong password will be generated automatically
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="border-t pt-4">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="sendEmail"
-                        name="sendEmail"
-                        checked={passwordFormState.sendEmail}
-                        onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
-                        className="rounded border-gray-300 text-[#8CC63F]"
-                      />
-                      <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                          Send password to user's email
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Email the new password to {selectedAdminForPassword?.users?.email}
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
-                  <p className="text-sm text-amber-700 dark:text-amber-400">
-                    <strong>Note:</strong> The user can log in immediately with the new password.
-                    {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
-                  </p>
-                </div>
-              </form>
-            </SlideInForm>
-          </div>
-        </div>
-      )}
-
-      {/* View/Manage Admins Modal */}
+      {/* View/Manage Admins Modal - Updated */}
       {isViewAdminsOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -2359,8 +1987,6 @@ export default function CompaniesTab() {
               setSelectedCompanyForView(null);
               setCompanyAdmins([]);
               setReturnToViewAfterAdd(false);
-              setEditingAdminId(null);
-              setEditAdminData({});
             }}></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
@@ -2378,8 +2004,6 @@ export default function CompaniesTab() {
                     setSelectedCompanyForView(null);
                     setCompanyAdmins([]);
                     setReturnToViewAfterAdd(false);
-                    setEditingAdminId(null);
-                    setEditAdminData({});
                   }} 
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
@@ -2413,6 +2037,7 @@ export default function CompaniesTab() {
               ) : (
                 <div className="space-y-4">
                   {companyAdmins.map((admin) => {
+                    const userInfo = admin.users || {};
                     return (
                       <div 
                         key={admin.id} 
@@ -2427,10 +2052,10 @@ export default function CompaniesTab() {
                               </div>
                               <div>
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                  {admin.users?.raw_user_meta_data?.name || admin.users?.email?.split('@')[0] || 'Unknown'}
+                                  {admin.name || userInfo.raw_user_meta_data?.name || admin.email?.split('@')[0] || 'Unknown'}
                                 </h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                  {admin.users?.is_active ? (
+                                  {(admin.is_active || userInfo.is_active) ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                       Active
                                     </span>
@@ -2439,7 +2064,7 @@ export default function CompaniesTab() {
                                       Inactive
                                     </span>
                                   )}
-                                  {admin.users?.email_verified ? (
+                                  {userInfo.email_verified ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                       Verified
                                     </span>
@@ -2448,13 +2073,13 @@ export default function CompaniesTab() {
                                       Unverified
                                     </span>
                                   )}
-                                  {admin.users?.requires_password_change && (
+                                  {userInfo.requires_password_change && (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                                       <Key className="h-3 w-3 mr-1" />
                                       Password Change Required
                                     </span>
                                   )}
-                                  {admin.users?.auth_user_id && (
+                                  {(admin.auth_user_id || userInfo.auth_user_id) && (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                                       Auth Synced
                                     </span>
@@ -2464,24 +2089,24 @@ export default function CompaniesTab() {
                             </div>
                             
                             <div className="flex items-center gap-2">
-                              {/* Resend Verification */}
-                              {admin.users?.is_active && !admin.users?.email_verified && (
+                              {/* Resend Invitation */}
+                              {hasAdminCapabilities && !userInfo.email_verified && admin.auth_user_id && (
                                 <button
-                                  onClick={() => resendVerificationMutation.mutate(admin.user_id)}
-                                  disabled={resendVerificationMutation.isLoading}
+                                  onClick={() => resendInvitationMutation.mutate(admin)}
+                                  disabled={resendInvitationMutation.isLoading}
                                   className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
-                                  title="Resend verification email"
+                                  title="Resend invitation email"
                                 >
-                                  {resendVerificationMutation.isLoading ? (
+                                  {resendInvitationMutation.isLoading ? (
                                     <Loader2 className="h-5 w-5 animate-spin" />
                                   ) : (
-                                    <Mail className="h-5 w-5" />
+                                    <Send className="h-5 w-5" />
                                   )}
                                 </button>
                               )}
                               
                               {/* Change Password */}
-                              {admin.users?.is_active && (
+                              {(admin.is_active || userInfo.is_active) && (
                                 <button
                                   onClick={() => {
                                     setSelectedAdminForPassword(admin);
@@ -2520,7 +2145,8 @@ export default function CompaniesTab() {
                                   if (confirm('Are you sure you want to remove this admin? They will lose all administrative access to this company.')) {
                                     removeAdminMutation.mutate({
                                       entityUserId: admin.id,
-                                      userId: admin.user_id
+                                      userId: admin.user_id,
+                                      authUserId: admin.auth_user_id || userInfo.auth_user_id
                                     });
                                   }
                                 }}
@@ -2545,7 +2171,7 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {admin.users?.email || '—'}
+                                    {admin.email || userInfo.email || '—'}
                                   </span>
                                 </div>
                                 
@@ -2595,10 +2221,10 @@ export default function CompaniesTab() {
                           </div>
 
                           {/* Footer Info */}
-                          {admin.users?.last_sign_in_at && (
+                          {userInfo.last_sign_in_at && (
                             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                               <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Last login: {new Date(admin.users.last_sign_in_at).toLocaleDateString()} at {new Date(admin.users.last_sign_in_at).toLocaleTimeString()}
+                                Last login: {new Date(userInfo.last_sign_in_at).toLocaleDateString()} at {new Date(userInfo.last_sign_in_at).toLocaleTimeString()}
                               </p>
                             </div>
                           )}
@@ -2631,7 +2257,167 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal */}
+      {/* Password Change Form - Unchanged from original */}
+      <SlideInForm
+        key={`${selectedAdminForPassword?.id || 'new'}-password`}
+        title={`Change Password for ${selectedAdminForPassword?.name || selectedAdminForPassword?.email || ''}`}
+        isOpen={isPasswordFormOpen && !generatedPassword}
+        onClose={() => {
+          setIsPasswordFormOpen(false);
+          setSelectedAdminForPassword(null);
+          setFormErrors({});
+          setShowNewPassword(false);
+          setGenerateNewPassword(true);
+          setPasswordFormState({
+            newPassword: '',
+            sendEmail: false
+          });
+        }}
+        onSave={() => {
+          const form = document.querySelector('form[name="passwordForm"]') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+        loading={changePasswordMutation.isLoading}
+      >
+        <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <Shield className="h-4 w-4 inline mr-1" />
+              You can directly set a new password for this user.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Password Options
+              </p>
+              
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={generateNewPassword}
+                    onChange={() => {
+                      setGenerateNewPassword(true);
+                      setPasswordFormState({ ...passwordFormState, newPassword: '' });
+                    }}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Generate secure password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      System will create a strong 12-character password
+                    </p>
+                  </div>
+                </label>
+                
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="passwordChangeOption"
+                    checked={!generateNewPassword}
+                    onChange={() => setGenerateNewPassword(false)}
+                    className="text-[#8CC63F]"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                      Set custom password
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Enter your own password meeting complexity requirements
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {!generateNewPassword && (
+              <FormField 
+                id="newPassword" 
+                label="New Password" 
+                required 
+                error={formErrors.newPassword}
+              >
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      id="newPassword"
+                      name="newPassword"
+                      placeholder="Enter new password"
+                      value={passwordFormState.newPassword}
+                      onChange={(e) => setPasswordFormState({ ...passwordFormState, newPassword: e.target.value })}
+                      className={`pr-10 ${
+                        passwordFormState.newPassword && 
+                        passwordRequirements.every(req => req.test(passwordFormState.newPassword))
+                          ? 'border-green-500 focus:border-green-500'
+                          : ''
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <PasswordRequirementsChecker password={passwordFormState.newPassword} />
+                </div>
+              </FormField>
+            )}
+            
+            {generateNewPassword && (
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4" />
+                  A strong password will be generated automatically
+                </p>
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="sendEmail"
+                  name="sendEmail"
+                  checked={passwordFormState.sendEmail}
+                  onChange={(e) => setPasswordFormState({ ...passwordFormState, sendEmail: e.target.checked })}
+                  className="rounded border-gray-300 text-[#8CC63F]"
+                />
+                <div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    Send password to user's email
+                  </span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Email the new password to {selectedAdminForPassword?.email}
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              <strong>Note:</strong> The user can log in immediately with the new password.
+              {passwordFormState.sendEmail && " They will receive an email with their new credentials."}
+            </p>
+          </div>
+        </form>
+      </SlideInForm>
+
+      {/* Generated Password Modal - Unchanged */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
@@ -2642,15 +2428,13 @@ export default function CompaniesTab() {
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {selectedAdminForPassword 
-                  ? `A new password has been set for ${selectedAdminForPassword.users?.email}.`
-                  : `A temporary password has been generated for ${selectedCompanyForAdmin?.name}.`
+                  ? `A new password has been set for ${selectedAdminForPassword.name || selectedAdminForPassword.email}.`
+                  : `A temporary password has been generated for the new admin.`
                 }
               </p>
-              {!selectedAdminForPassword && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  The user will receive a verification email and must verify their email before logging in.
-                </p>
-              )}
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Please share this password securely with the user. They should change it after first login.
+              </p>
             </div>
 
             <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
@@ -2719,7 +2503,10 @@ export default function CompaniesTab() {
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
-        onCancel={cancelDelete}
+        onCancel={() => {
+          setIsConfirmDialogOpen(false);
+          setCompaniesToDelete([]);
+        }}
       />
     </div>
   );
