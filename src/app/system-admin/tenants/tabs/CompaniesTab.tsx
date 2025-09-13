@@ -5,9 +5,8 @@
  * Key Features:
  * - Sends invitation emails through Supabase Auth
  * - Creates users in both auth.users and custom users table
- * - Properly syncs with auth_user_id field
+ * - Properly includes email and name in entity_users (they ARE required fields)
  * - Handles failures gracefully with clear feedback
- * - No entity_users table field mismatches
  */
 
 import React, { useState, useEffect } from 'react';
@@ -188,6 +187,8 @@ interface CompanyAdmin {
   id: string;
   user_id: string;
   company_id: string;
+  email: string;
+  name: string;
   position?: string;
   department?: string;
   employee_id?: string;
@@ -536,8 +537,10 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update entity_users table (NO email/name fields - they don't exist)
+          // Update entity_users table (WITH email and name fields)
           const entityUpdates: any = {
+            email: email.toLowerCase(),  // Required field
+            name: name,                  // Required field
             position: position || 'Administrator',
             phone: phone || null,
             updated_at: new Date().toISOString()
@@ -548,7 +551,10 @@ export default function CompaniesTab() {
             .update(entityUpdates)
             .eq('id', editingAdmin.id);
 
-          if (entityError) throw entityError;
+          if (entityError) {
+            console.error('Entity update error:', entityError);
+            throw entityError;
+          }
 
           // Update users table if linked
           if (editingAdmin.user_id) {
@@ -647,12 +653,14 @@ export default function CompaniesTab() {
             userId = existingUser.id;
             authUserId = existingUser.auth_user_id;
 
-            // Create entity_user record (WITHOUT email and name)
+            // Create entity_user record (WITH email and name - they're required)
             const { error: entityError } = await supabase
               .from('entity_users')
               .insert({
                 user_id: userId,
                 company_id: companyId,
+                email: email.toLowerCase(),  // Required field
+                name: name,                  // Required field
                 position: position || 'Administrator',
                 phone: phone || null,
                 department: null,
@@ -778,12 +786,14 @@ export default function CompaniesTab() {
             userId = newUser.id;
             console.log('User created in database with ID:', userId);
 
-            // Create entity_user record (WITHOUT email and name fields)
+            // Create entity_user record (WITH email and name fields - they're required)
             const { error: entityError } = await supabase
               .from('entity_users')
               .insert({
                 user_id: userId,
                 company_id: companyId,
+                email: email.toLowerCase(),  // Required field
+                name: name,                  // Required field
                 position: position || 'Administrator',
                 phone: phone || null,
                 department: null,
@@ -980,7 +990,7 @@ export default function CompaniesTab() {
           entity_id: data.userId,
           details: {
             changed_by: currentUser?.email,
-            target_user: selectedAdminForPassword?.users?.email,
+            target_user: selectedAdminForPassword?.email,
             notification_sent: data.sendEmail,
             auth_synced: !!(hasAdminCapabilities && user?.auth_user_id)
           },
@@ -1023,12 +1033,15 @@ export default function CompaniesTab() {
         throw new Error('Admin capabilities required to send invitations');
       }
 
+      const adminEmail = admin.email || admin.users?.email || '';
+      const adminName = admin.name || admin.users?.raw_user_meta_data?.name || '';
+
       // Resend invitation through Supabase Auth
       const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-        admin.users?.email?.toLowerCase() || '',
+        adminEmail.toLowerCase(),
         {
           data: {
-            name: admin.users?.raw_user_meta_data?.name || '',
+            name: adminName,
             position: admin.position || 'Administrator',
             company_id: admin.company_id,
             company_name: selectedCompanyForView?.name,
@@ -1210,6 +1223,7 @@ export default function CompaniesTab() {
 
       if (error) throw error;
 
+      // Entity_users already has email and name, so we can use them directly
       setCompanyAdmins(admins || []);
     } catch (error) {
       console.error('Error fetching company admins:', error);
@@ -1310,16 +1324,25 @@ export default function CompaniesTab() {
     if (generatedPassword) {
       const adminInfo = editingAdmin || selectedAdminForPassword || 
         (selectedCompanyForAdmin ? { 
-          users: { email: adminFormState.email }, 
+          email: adminFormState.email,
           name: adminFormState.name 
         } : null);
+      
+      const adminName = adminInfo?.name || 
+                       adminInfo?.users?.raw_user_meta_data?.name || 
+                       'User';
+      
+      const adminEmail = adminInfo?.email || 
+                        adminInfo?.users?.email || 
+                        adminFormState.email || 
+                        'N/A';
       
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Password for ${adminInfo?.name || adminInfo?.users?.raw_user_meta_data?.name || 'User'}</title>
+              <title>Password for ${adminName}</title>
               <style>
                 body { font-family: Arial, sans-serif; padding: 20px; }
                 .header { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
@@ -1337,8 +1360,8 @@ export default function CompaniesTab() {
             </head>
             <body>
               <div class="header">GGK Learning System - Password Information</div>
-              <div class="info"><strong>User:</strong> ${adminInfo?.name || adminInfo?.users?.raw_user_meta_data?.name || 'N/A'}</div>
-              <div class="info"><strong>Email:</strong> ${adminInfo?.users?.email || adminFormState.email || 'N/A'}</div>
+              <div class="info"><strong>User:</strong> ${adminName}</div>
+              <div class="info"><strong>Email:</strong> ${adminEmail}</div>
               <div class="info"><strong>Company:</strong> ${selectedCompanyForAdmin?.name || selectedCompanyForView?.name || 'N/A'}</div>
               <div class="info"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
               <div class="password">${generatedPassword}</div>
@@ -1406,12 +1429,17 @@ export default function CompaniesTab() {
 
   useEffect(() => {
     if (editingAdmin) {
-      const userName = editingAdmin.users?.raw_user_meta_data?.name || 
-                      editingAdmin.users?.email?.split('@')[0] || '';
+      // Use name and email from entity_users first, fallback to users table
+      const adminName = editingAdmin.name || 
+                       editingAdmin.users?.raw_user_meta_data?.name || 
+                       editingAdmin.users?.email?.split('@')[0] || '';
+      
+      const adminEmail = editingAdmin.email || 
+                        editingAdmin.users?.email || '';
       
       setAdminFormState({
-        name: userName,
-        email: editingAdmin.users?.email || '',
+        name: adminName,
+        email: adminEmail,
         phone: editingAdmin.phone || '',
         position: editingAdmin.position || '',
         sendInvitation: false
@@ -1531,7 +1559,7 @@ export default function CompaniesTab() {
     },
   ];
 
-  // ===== RENDER - Keeping all UI components exactly as they are =====
+  // ===== RENDER =====
   
   return (
     <div className="space-y-6">
@@ -1564,11 +1592,6 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Rest of the UI components remain exactly the same */}
-      {/* Filter Card, Data Table, all modals, etc. - keeping everything as is */}
-      
-      {/* I'm including just the key parts for brevity, but ALL UI components should remain unchanged */}
-      
       {/* Filter Card */}
       <FilterCard
         title="Filters"
@@ -1582,7 +1605,6 @@ export default function CompaniesTab() {
           });
         }}
       >
-        {/* Filter fields remain the same */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <FormField id="search" label="Search">
             <Input
@@ -1685,9 +1707,6 @@ export default function CompaniesTab() {
         emptyMessage="No companies found"
       />
 
-      {/* All modals remain exactly the same - Company Form, Admin Form, View Admins, Password Modal, etc. */}
-      {/* Including them here for completeness but they're unchanged from the original */}
-      
       {/* Company Form Modal */}
       <SlideInForm
         key={editingCompany?.id || 'new'}
@@ -2029,9 +2048,12 @@ export default function CompaniesTab() {
                 <div className="space-y-4">
                   {companyAdmins.map((admin) => {
                     const userInfo = admin.users || {};
-                    const adminName = userInfo.raw_user_meta_data?.name || 
+                    // Use entity_users name and email first, then fallback to users table
+                    const adminName = admin.name || 
+                                     userInfo.raw_user_meta_data?.name || 
                                      userInfo.email?.split('@')[0] || 
                                      'Unknown';
+                    const adminEmail = admin.email || userInfo.email || '';
                     
                     return (
                       <div 
@@ -2050,7 +2072,7 @@ export default function CompaniesTab() {
                                   {adminName}
                                 </h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                  {userInfo.is_active ? (
+                                  {(admin.is_active && userInfo.is_active !== false) ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                       Active
                                     </span>
@@ -2101,7 +2123,7 @@ export default function CompaniesTab() {
                               )}
                               
                               {/* Change Password */}
-                              {userInfo.is_active && (
+                              {(admin.is_active && userInfo.is_active !== false) && (
                                 <button
                                   onClick={() => {
                                     setSelectedAdminForPassword(admin);
@@ -2166,7 +2188,7 @@ export default function CompaniesTab() {
                                 <div className="flex items-center gap-3">
                                   <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
                                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {userInfo.email || '—'}
+                                    {adminEmail || '—'}
                                   </span>
                                 </div>
                                 
@@ -2252,10 +2274,10 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Password Change Form - keeping exactly as is */}
+      {/* Password Change Form */}
       <SlideInForm
         key={`${selectedAdminForPassword?.id || 'new'}-password`}
-        title={`Change Password for ${selectedAdminForPassword?.users?.raw_user_meta_data?.name || selectedAdminForPassword?.users?.email || ''}`}
+        title={`Change Password for ${selectedAdminForPassword?.name || selectedAdminForPassword?.email || ''}`}
         isOpen={isPasswordFormOpen && !generatedPassword}
         onClose={() => {
           setIsPasswordFormOpen(false);
@@ -2274,9 +2296,7 @@ export default function CompaniesTab() {
         }}
         loading={changePasswordMutation.isLoading}
       >
-        {/* Password form content remains the same */}
         <form name="passwordForm" onSubmit={handlePasswordChange} className="space-y-4">
-          {/* All password form fields remain unchanged */}
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
@@ -2398,7 +2418,7 @@ export default function CompaniesTab() {
                     Send password to user's email
                   </span>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Email the new password to {selectedAdminForPassword?.users?.email}
+                    Email the new password to {selectedAdminForPassword?.email || selectedAdminForPassword?.users?.email}
                   </p>
                 </div>
               </label>
@@ -2414,7 +2434,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Generated Password Modal - keeping exactly as is */}
+      {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
@@ -2425,7 +2445,7 @@ export default function CompaniesTab() {
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {selectedAdminForPassword 
-                  ? `A new password has been set for ${selectedAdminForPassword.users?.raw_user_meta_data?.name || selectedAdminForPassword.users?.email}.`
+                  ? `A new password has been set for ${selectedAdminForPassword.name || selectedAdminForPassword.email}.`
                   : `A temporary password has been generated for the new admin.`
                 }
               </p>
