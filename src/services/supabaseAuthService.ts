@@ -8,23 +8,23 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Get environment variables
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Validation
 if (!SUPABASE_URL) {
-  console.error('❌ VITE_SUPABASE_URL is not set');
+  console.error('❌ NEXT_PUBLIC_SUPABASE_URL is not set');
 }
 
 if (!SERVICE_ROLE_KEY) {
-  console.error('❌ VITE_SUPABASE_SERVICE_ROLE_KEY is not set');
+  console.error('❌ NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY is not set');
   console.log('To enable Supabase Auth invitations, add to your .env.local:');
-  console.log('VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here');
+  console.log('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here');
 }
 
 // Initialize admin client only if we have both required values
 let supabaseAdmin: any = null;
-let _isAuthServiceEnabled = false;
+let isAuthEnabled = false;
 
 if (SUPABASE_URL && SERVICE_ROLE_KEY) {
   try {
@@ -39,7 +39,7 @@ if (SUPABASE_URL && SERVICE_ROLE_KEY) {
       }
     });
     
-    _isAuthServiceEnabled = true;
+    isAuthEnabled = true;
     console.log('✅ Supabase Auth Service initialized successfully');
   } catch (error) {
     console.error('❌ Failed to initialize Supabase Admin client:', error);
@@ -51,7 +51,7 @@ export const supabaseAuthService = {
    * Check if Auth is properly configured
    */
   isEnabled(): boolean {
-    return _isAuthServiceEnabled && supabaseAdmin !== null;
+    return isAuthEnabled && supabaseAdmin !== null;
   },
 
   /**
@@ -394,21 +394,19 @@ export const supabaseAuthService = {
   }
 };
 
-// Export for convenience
-export const {
-  isEnabled: isAuthEnabled,
-  verifyConnection: verifyAuthConnection,
-  createUserAndSendInvitation,
-  getUserByEmail: getAuthUserByEmail,
-  updateUser: updateAuthUser,
-  deleteUser: deleteAuthUser,
-  sendPasswordResetEmail,
-  resendInvitation: resendAuthInvitation,
-  listAllAuthUsers
-} = supabaseAuthService;
+// Export for convenience (with proper binding)
+export const isAuthEnabled = () => supabaseAuthService.isEnabled();
+export const verifyAuthConnection = () => supabaseAuthService.verifyConnection();
+export const createUserAndSendInvitation = supabaseAuthService.createUserAndSendInvitation.bind(supabaseAuthService);
+export const getAuthUserByEmail = supabaseAuthService.getUserByEmail.bind(supabaseAuthService);
+export const updateAuthUser = supabaseAuthService.updateUser.bind(supabaseAuthService);
+export const deleteAuthUser = supabaseAuthService.deleteUser.bind(supabaseAuthService);
+export const sendPasswordResetEmail = supabaseAuthService.sendPasswordResetEmail.bind(supabaseAuthService);
+export const resendAuthInvitation = supabaseAuthService.resendInvitation.bind(supabaseAuthService);
+export const listAllAuthUsers = supabaseAuthService.listAllAuthUsers.bind(supabaseAuthService);
 
 // Auto-verify connection on module load (in development)
-if (process.env.NODE_ENV === 'development' && _isAuthServiceEnabled) {
+if (process.env.NODE_ENV === 'development' && supabaseAuthService.isEnabled()) {
   supabaseAuthService.verifyConnection().then(isConnected => {
     if (!isConnected) {
       console.error('⚠️ Supabase Auth connection failed. Check your service role key.');
