@@ -264,7 +264,7 @@ export function AdminCreationForm({
         const userType = userData?.user_type || initialData.user_type || 'entity';
         setFormData({
           name: initialData.name,
-          email: initialData.email,
+          email: initialData.email || '',
           password: '', // Always start with empty password for security
           phone: initialData.phone || '',
           admin_level: initialData.admin_level,
