@@ -1062,10 +1062,6 @@ export default function CompaniesTab() {
     }
   );
 
-  // Change password mutation {
-
-  );
-
   // Change password mutation
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
