@@ -806,7 +806,7 @@ export default function CompaniesTab() {
                 const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
                   email: email,
                   password: finalPassword,
-                  email_confirm: false,
+                  email_confirm: true, // Changed to true - this enables automatic confirmation email
                   user_metadata: {
                     name: name,
                     position: position,
@@ -855,7 +855,8 @@ export default function CompaniesTab() {
                     company_name: selectedCompanyForAdmin.name,
                     created_by: currentUser?.email,
                     role: 'entity_admin'
-                  }
+                  },
+                  emailRedirectTo: `${window.location.origin}/auth/callback` // Add redirect URL for email verification
                 }
               });
               
@@ -982,8 +983,8 @@ export default function CompaniesTab() {
               },
               company: selectedCompanyForAdmin,
               message: authCreated 
-                ? 'Admin created successfully with temporary password' 
-                : 'Admin created successfully. Confirmation email sent.'
+                ? 'Admin created successfully. A confirmation email has been sent automatically.' 
+                : 'Admin created successfully. A confirmation email has been sent automatically.'
             };
             
           } catch (error) {
