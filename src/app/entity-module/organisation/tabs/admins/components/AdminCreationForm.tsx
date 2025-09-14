@@ -472,9 +472,7 @@ export function AdminCreationForm({
     if (emailError) newErrors.email = emailError;
     
     // Password validation
-    if (!isEditing && !formData.password) {
-      newErrors.password = 'Password is required for new administrators';
-    } else if (formData.password) {
+    if (isEditing && formData.password) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
     }
@@ -669,62 +667,66 @@ export function AdminCreationForm({
             />
           </FormField>
 
-          <FormField
-            id="password"
-            label={isEditing ? "New Password (leave blank to keep current)" : "Password"}
-            required={!isEditing}
-            error={errors.password}
-            helpText="Password will be securely hashed and stored in users table"
-          >
-            <div className="relative">
-              <Input
+          {/* Password field - only show when editing existing users */}
+          {isEditing && (
+            <>
+              <FormField
                 id="password"
-                type={showPassword ? "text" : "password"}
-                value={formData.password}
-                onChange={(e) => handleFieldChange('password', e.target.value)}
-                placeholder={isEditing ? "Leave blank to keep current password" : "Enter a secure password"}
-                disabled={!canModifyThisAdmin}
-                leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
-                rightIcon={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                }
-              />
-            </div>
-          </FormField>
-          
-          {/* Password Strength Indicator */}
-          {formData.password && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Password Strength</span>
-                <span className={`font-medium ${
-                  passwordStrength >= 75 ? 'text-green-600' :
-                  passwordStrength >= 50 ? 'text-yellow-600' :
-                  'text-red-600'
-                }`}>
-                  {passwordStrength >= 75 ? 'Strong' :
-                   passwordStrength >= 50 ? 'Medium' :
-                   passwordStrength > 0 ? 'Weak' : ''}
-                </span>
-              </div>
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    passwordStrength >= 75 ? 'bg-green-500' :
-                    passwordStrength >= 50 ? 'bg-yellow-500' :
-                    'bg-red-500'
-                  }`}
-                  style={{ width: `${passwordStrength}%` }}
-                />
-              </div>
-            </div>
+                label="New Password (leave blank to keep current)"
+                error={errors.password}
+                helpText="Leave blank to keep current password, or enter new password to reset"
+              >
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => handleFieldChange('password', e.target.value)}
+                    placeholder="Leave blank to keep current password"
+                    disabled={!canModifyThisAdmin}
+                    leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    }
+                  />
+                </div>
+              </FormField>
+              
+              {/* Password Strength Indicator - only when editing and password is entered */}
+              {formData.password && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Password Strength</span>
+                    <span className={`font-medium ${
+                      passwordStrength >= 75 ? 'text-green-600' :
+                      passwordStrength >= 50 ? 'text-yellow-600' :
+                      'text-red-600'
+                    }`}>
+                      {passwordStrength >= 75 ? 'Strong' :
+                       passwordStrength >= 50 ? 'Medium' :
+                       passwordStrength > 0 ? 'Weak' : ''}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        passwordStrength >= 75 ? 'bg-green-500' :
+                        passwordStrength >= 50 ? 'bg-yellow-500' :
+                        'bg-red-500'
+                      }`}
+                      style={{ width: `${passwordStrength}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
           
           <FormField
