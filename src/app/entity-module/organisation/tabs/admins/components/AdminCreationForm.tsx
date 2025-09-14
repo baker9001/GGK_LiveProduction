@@ -471,7 +471,7 @@ export function AdminCreationForm({
     const emailError = validateField('email', formData.email);
     if (emailError) newErrors.email = emailError;
     
-    // Password validation
+    // Password validation - only for editing existing users
     if (isEditing && formData.password) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
