@@ -1,87 +1,91 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+// Edge Function: create-admin-user-auth
+// This function creates users in Supabase Auth with admin privileges
+// Path: supabase/functions/create-admin-user-auth/index.ts
+
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json'
+}
 
 serve(async (req) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': '*',
-    'Content-Type': 'application/json'
-  };
-
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers });
+    return new Response(null, { status: 200, headers: corsHeaders })
   }
 
   try {
-    const body = await req.json();
+    const body = await req.json()
     
-    // These environment variables are automatically provided by Supabase
-    const url = Deno.env.get('SUPABASE_URL') || '';
-    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    
-    if (!url || !key) {
+    // Validate input
+    if (!body.email || !body.name || !body.role_id) {
       return new Response(
         JSON.stringify({ 
-          error: 'Server configuration error',
-          message: 'Environment variables not found'
+          error: 'Missing required fields: email, name, and role_id' 
         }),
-        { status: 500, headers }
-      );
+        { status: 400, headers: corsHeaders }
+      )
     }
-    
-    const supabase = createClient(url, key);
-    
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: body.email || `test${Date.now()}@example.com`,
-      password: '12345678',
-      email_confirm: true,
-      user_metadata: { 
-        name: body.name || 'Test User'
+
+    // Initialize admin client with service role
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
       }
-    });
+    )
 
-    if (error) {
+    // Use provided password or generate secure one
+    const password = body.password || (crypto.randomUUID() + 'Aa1!')
+
+    // Create user in Supabase Auth
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: body.email.toLowerCase(),
+      password: password,
+      email_confirm: false, // Require email verification
+      user_metadata: {
+        name: body.name,
+        role_id: body.role_id,
+        created_at: new Date().toISOString()
+      }
+    })
+
+    if (authError) {
+      console.error('Auth creation error:', authError)
       return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 400, headers }
-      );
-    }
-
-    // Try to add to admin_users table
-    const { data: roles } = await supabase
-      .from('roles')
-      .select('id')
-      .limit(1)
-      .single();
-    
-    if (roles) {
-      await supabase
-        .from('admin_users')
-        .insert({
-          id: data.user.id,
-          name: body.name || 'Test User',
-          role_id: roles.id
-        });
+        JSON.stringify({ 
+          error: authError.message 
+        }),
+        { status: 400, headers: corsHeaders }
+      )
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
-        user: data.user,
-        password: '12345678',
-        message: 'User created successfully!'
+        user: {
+          id: authUser.user.id,
+          email: authUser.user.email,
+          created_at: authUser.user.created_at
+        }
       }),
-      { status: 200, headers }
-    );
+      { status: 200, headers: corsHeaders }
+    )
 
-  } catch (err) {
-    console.error('Error:', err);
+  } catch (error) {
+    console.error('Unexpected error:', error)
     return new Response(
       JSON.stringify({ 
-        error: 'Server error',
-        message: err.message 
+        error: error.message || 'Internal server error' 
       }),
-      { status: 500, headers }
-    );
+      { status: 500, headers: corsHeaders }
+    )
   }
-});
+})
