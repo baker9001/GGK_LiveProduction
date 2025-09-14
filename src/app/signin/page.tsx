@@ -153,7 +153,7 @@ export default function SignInPage() {
         .from('users')
         .select(`
           *,
-          entity_users!inner(*)
+          entity_users!entity_users_user_id_fkey!inner(*)
         `)
         .eq('auth_user_id', authData.user.id)
         .eq('is_active', true)
@@ -165,7 +165,7 @@ export default function SignInPage() {
           .from('users')
           .select(`
             *,
-            entity_users!inner(*)
+            entity_users!entity_users_user_id_fkey!inner(*)
           `)
           .eq('email', normalizedEmail)
           .eq('is_active', true)
