@@ -157,7 +157,7 @@ export default function SignInPage() {
         `)
         .eq('auth_user_id', authData.user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       // Fallback to email lookup if auth_user_id lookup fails (for backward compatibility)
       if (userError && userError.code === 'PGRST116') {
@@ -169,7 +169,7 @@ export default function SignInPage() {
           `)
           .eq('email', normalizedEmail)
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
         if (!fallbackError && fallbackUserData) {
           userData = fallbackUserData;
