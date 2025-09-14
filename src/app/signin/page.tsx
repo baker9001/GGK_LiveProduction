@@ -101,42 +101,16 @@ export default function SignInPage() {
       clearAuthenticatedUser();
       
       console.log('[Auth] Attempting login for:', normalizedEmail);
-      // Fetch user data from our database using auth_user_id for better reliability
-      let { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          *,
-          entity_users!inner(*)
-        `)
-        .eq('auth_user_id', authData.user.id)
-        .eq('is_active', true)
-        .single();
-
-      // Fallback to email lookup if auth_user_id lookup fails (for backward compatibility)
-      if (userError && userError.code === 'PGRST116') {
-        const { data: fallbackUserData, error: fallbackError } = await supabase
-          .from('users')
-          .select(`
-            *,
-            entity_users!inner(*)
-          `)
-          .eq('email', formData.email.toLowerCase().trim())
-          .eq('is_active', true)
-          .single();
-
-        if (!fallbackError && fallbackUserData) {
-          userData = fallbackUserData;
-          userError = null;
-          
-          // Update the user record to include auth_user_id for future lookups
-          await supabase
-            .from('users')
-            .update({ auth_user_id: authData.user.id })
-            .eq('id', fallbackUserData.id);
-        } else {
-          userError = fallbackError;
-        }
-      }
+      
+      // Attempt to sign in with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: password
+      });
+      
+      if (authError) {
+        console.error('[Auth] Login error:', authError);
+        
         // Handle specific Supabase Auth errors
         if (authError.message?.toLowerCase().includes('email not confirmed') || 
             authError.message?.toLowerCase().includes('email confirmation')) {
@@ -174,6 +148,43 @@ export default function SignInPage() {
       
       console.log('[Auth] Login successful for:', authData.user.email);
       
+      // Fetch user data from our database using auth_user_id for better reliability
+      let { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          *,
+          entity_users!inner(*)
+        `)
+        .eq('auth_user_id', authData.user.id)
+        .eq('is_active', true)
+        .single();
+
+      // Fallback to email lookup if auth_user_id lookup fails (for backward compatibility)
+      if (userError && userError.code === 'PGRST116') {
+        const { data: fallbackUserData, error: fallbackError } = await supabase
+          .from('users')
+          .select(`
+            *,
+            entity_users!inner(*)
+          `)
+          .eq('email', normalizedEmail)
+          .eq('is_active', true)
+          .single();
+
+        if (!fallbackError && fallbackUserData) {
+          userData = fallbackUserData;
+          userError = null;
+          
+          // Update the user record to include auth_user_id for future lookups
+          await supabase
+            .from('users')
+            .update({ auth_user_id: authData.user.id })
+            .eq('id', fallbackUserData.id);
+        } else {
+          userError = fallbackError;
+        }
+      }
+      
       // Get user metadata from custom tables
       let userId = authData.user.id;
       let userType = 'user';
@@ -181,7 +192,7 @@ export default function SignInPage() {
       let userRole: UserRole = 'VIEWER';
       
       // Fetch additional user data
-      const { data: userData } = await supabase
+      const { data: userDataFetch } = await supabase
         .from('users')
         .select(`
           id,
@@ -194,21 +205,21 @@ export default function SignInPage() {
         .eq('email', normalizedEmail)
         .maybeSingle();
       
-      if (userData) {
+      if (userDataFetch) {
         // Check if account is active
-        if (!userData.is_active) {
+        if (!userDataFetch.is_active) {
           await supabase.auth.signOut();
           setError('Your account is inactive. Please contact support.');
           setLoading(false);
           return;
         }
         
-        userId = userData.id;
-        userType = userData.user_type || 'user';
-        userName = userData.raw_user_meta_data?.name || userName;
+        userId = userDataFetch.id;
+        userType = userDataFetch.user_type || 'user';
+        userName = userDataFetch.raw_user_meta_data?.name || userName;
         
         // Update email_verified in custom table to match Supabase Auth
-        if (!userData.email_verified && authData.user.email_confirmed_at) {
+        if (!userDataFetch.email_verified && authData.user.email_confirmed_at) {
           await supabase
             .from('users')
             .update({ 
@@ -320,7 +331,7 @@ export default function SignInPage() {
       setAuthenticatedUser(authenticatedUser);
       
       // Check for password change requirement
-      if (userData?.requires_password_change) {
+      if (userDataFetch?.requires_password_change) {
         toast.warning('Please change your password');
         navigate('/app/settings/change-password');
         return;
