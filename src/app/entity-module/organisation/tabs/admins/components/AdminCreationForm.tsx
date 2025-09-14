@@ -127,7 +127,7 @@ export function AdminCreationForm({
   const [formData, setFormData] = useState<AdminFormData>({
     name: '',
     email: '',
-    password: '', // Only used for editing existing users (password reset)
+    password: '',
     phone: '',
     admin_level: 'branch_admin',
     is_active: true,
@@ -290,7 +290,7 @@ export function AdminCreationForm({
         setFormData({
           name: '',
           email: '',
-          password: '',
+          password: '', // Will not be used for new users
           phone: '',
           admin_level: defaultLevel,
           is_active: true,
@@ -320,7 +320,8 @@ export function AdminCreationForm({
           emailSchema.parse(value);
           break;
         case 'password':
-          if (!isEditing || value) {
+          // Only validate password when editing AND a password is provided
+          if (isEditing && value) {
             passwordSchema.parse(value);
           }
           break;
@@ -471,8 +472,8 @@ export function AdminCreationForm({
     const emailError = validateField('email', formData.email);
     if (emailError) newErrors.email = emailError;
     
-    // Password validation - only for editing existing users
-    if (isEditing && formData.password) {
+    // Password validation - only for editing existing users when password is provided
+    if (isEditing && formData.password && formData.password.trim()) {
       const passwordError = validateField('password', formData.password);
       if (passwordError) newErrors.password = passwordError;
     }
@@ -550,10 +551,7 @@ export function AdminCreationForm({
           user_type: 'entity' // Admins are always entity users
         };
 
-        // Only include password if provided (for direct creation, otherwise invitation will be sent)
-        if (formData.password) {
-          createData.password = formData.password;
-        }
+        // No password needed - Supabase invitation will handle password setting
 
         await createAdminMutation.mutateAsync(createData);
       }
@@ -586,6 +584,7 @@ export function AdminCreationForm({
       width="lg"
     >
       <div className="space-y-6">
+        {/* Invitation Process Notice - Only for new users */}
         {!isEditing && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start">
@@ -595,7 +594,7 @@ export function AdminCreationForm({
                   Invitation Process
                 </h4>
                 <p className="text-sm text-blue-700">
-                  An invitation email will be sent to the administrator. They will need to click the link in the email to set their password and activate their account.
+                  An invitation email will be sent to the administrator. They will need to click the link in the email to set their own secure password and activate their account.
                 </p>
               </div>
             </div>
@@ -667,14 +666,14 @@ export function AdminCreationForm({
             />
           </FormField>
 
-          {/* Password field - only show when editing existing users */}
+          {/* Password Reset Field - Only for editing existing users */}
           {isEditing && (
             <>
               <FormField
                 id="password"
-                label="New Password (leave blank to keep current)"
+                label="Reset Password (optional)"
                 error={errors.password}
-                helpText="Leave blank to keep current password, or enter new password to reset"
+                description="Leave blank to keep current password, or enter a new password to reset it"
               >
                 <div className="relative">
                   <Input
@@ -682,7 +681,7 @@ export function AdminCreationForm({
                     type={showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={(e) => handleFieldChange('password', e.target.value)}
-                    placeholder="Leave blank to keep current password"
+                    placeholder="Enter new password to reset (optional)"
                     disabled={!canModifyThisAdmin}
                     leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
                     rightIcon={
@@ -699,7 +698,7 @@ export function AdminCreationForm({
                 </div>
               </FormField>
               
-              {/* Password Strength Indicator - only when editing and password is entered */}
+              {/* Password Strength Indicator - only when password is being reset */}
               {formData.password && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
