@@ -112,14 +112,18 @@ export default function SignInPage() {
         console.error('[Auth] Login error:', authError);
         
         // Handle specific Supabase Auth errors
-        if (authError.message?.toLowerCase().includes('email not confirmed') || 
-            authError.message?.toLowerCase().includes('email confirmation')) {
+        if (authError.message?.toLowerCase().includes('database error granting user')) {
+          setError('Authentication service is temporarily unavailable. Please try again in a few moments or contact support if the issue persists.');
+        } else if (authError.message?.toLowerCase().includes('email not confirmed') || 
+                   authError.message?.toLowerCase().includes('email confirmation')) {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message?.toLowerCase().includes('invalid login credentials')) {
           setError('Invalid email or password. Please check your credentials.');
         } else if (authError.message?.toLowerCase().includes('too many requests')) {
           setError('Too many login attempts. Please try again later.');
+        } else if (authError.message?.toLowerCase().includes('unexpected_failure')) {
+          setError('Authentication service encountered an unexpected error. Please try again or contact support.');
         } else {
           setError(authError.message || 'Login failed. Please try again.');
         }

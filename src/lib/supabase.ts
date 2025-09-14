@@ -144,6 +144,15 @@ export async function checkSupabaseConnection(): Promise<boolean> {
 export const handleSupabaseError = (error: any, context?: string) => {
   const errorMessage = error?.message || 'An error occurred while connecting to the database';
   
+  // Check for Supabase backend errors
+  if (errorMessage.includes('Database error granting user') || 
+      errorMessage.includes('unexpected_failure')) {
+    console.error(`🔧 Supabase Backend Error${context ? ` in ${context}` : ''}:`, errorMessage);
+    console.error('This is a Supabase service issue. Check Supabase dashboard for service status.');
+    
+    throw new Error('Authentication service is temporarily unavailable. Please try again in a few moments.');
+  }
+  
   // Check for common WebContainer issues
   if (errorMessage.includes('Failed to fetch') || errorMessage.includes('TypeError')) {
     console.error(`🔌 Connection Error${context ? ` in ${context}` : ''}:`, errorMessage);
