@@ -184,7 +184,7 @@ async function createAdminUserWithAuth(data: {
     }
 
     // Step 5: Create invitation record for tracking
-    const token = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const inviteToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     const { data: invitation, error: inviteError } = await supabase
@@ -195,7 +195,7 @@ async function createAdminUserWithAuth(data: {
         name: data.name,
         role_id: data.role_id,
         invited_by: currentUser.id,
-        token: token,
+        token: inviteToken,
         expires_at: expiresAt.toISOString(),
         status: 'pending',
         personal_message: data.personal_message
@@ -252,13 +252,13 @@ async function createAdminUserWithAuth(data: {
 }
 
 async function resendInvitation(invitationId: string) {
-  const token = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
+  const resendToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const { error } = await supabase
     .from('admin_invitations')
     .update({
-      token: token,
+      token: resendToken,
       expires_at: expiresAt.toISOString(),
       resent_at: new Date().toISOString()
     })
