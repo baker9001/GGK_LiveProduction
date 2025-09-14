@@ -541,6 +541,7 @@ export function AdminCreationForm({
         const createData: any = {
           email: formData.email,
           name: formData.name,
+          password: formData.password || 'temp-password-123!', // Temporary password for creation
           admin_level: formData.admin_level,
           company_id: companyId,
           permissions,
@@ -550,8 +551,6 @@ export function AdminCreationForm({
           phone: formData.phone,
           user_type: 'entity' // Admins are always entity users
         };
-
-        // No password needed - Supabase invitation will handle password setting
 
         await createAdminMutation.mutateAsync(createData);
       }
