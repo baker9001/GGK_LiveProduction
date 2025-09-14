@@ -67,6 +67,15 @@ export default function AuthCallbackPage() {
 
         if (data.session) {
           // Email verified successfully
+          setStatus('success');
+          setMessage('Email verified successfully! Redirecting...');
+          setTimeout(() => navigate('/dashboard'), 2000);
+        } else {
+          setStatus('error');
+          setMessage('No session found');
+          setTimeout(() => navigate('/signin'), 3000);
+        }
+      } catch (error) {
         console.error('Callback error:', error);
         setStatus('error');
         setMessage('An unexpected error occurred');
