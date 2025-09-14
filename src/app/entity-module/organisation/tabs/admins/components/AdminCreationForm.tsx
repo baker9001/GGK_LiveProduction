@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
-import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, Building, School, MapPin } from 'lucide-react';
+import { User, Mail, Lock, Shield, AlertCircle, Eye, EyeOff, CheckCircle, Building, School, MapPin, Phone } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select } from '@/components/shared/FormField';
@@ -83,6 +83,8 @@ interface AdminFormData {
   admin_level: AdminLevel;
   is_active: boolean;
   user_type?: string; // Added to track user type
+  assigned_schools: string[];
+  assigned_branches: string[];
 }
 
 interface AdminCreationFormProps {
@@ -128,10 +130,9 @@ export function AdminCreationForm({
     password: '', // Only used for editing existing users (password reset)
     phone: '',
     admin_level: 'branch_admin',
-    phone: '',
     is_active: true,
     assigned_schools: [] as string[],
-    assigned_branches: [] as string[]
+    assigned_branches: [] as string[],
     user_type: 'entity' // Default to entity for admins
   });
   
@@ -150,7 +151,6 @@ export function AdminCreationForm({
   const updateAdminMutation = useUpdateAdmin();
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
-          phone: editingAdmin.phone || '',
   // ===== FETCH USER TYPE (for existing user) =====
   const { data: userData } = useQuery(
     ['user-type', initialData?.user_id],
@@ -273,7 +273,9 @@ export function AdminCreationForm({
           phone: initialData.phone || '',
           admin_level: initialData.admin_level,
           is_active: initialData.is_active,
-          user_type: userType
+          user_type: userType,
+          assigned_schools: initialData.assigned_schools || [],
+          assigned_branches: initialData.assigned_branches || []
         });
         setSelectedSchools(initialData.assigned_schools || []);
         setSelectedBranches(initialData.assigned_branches || []);
@@ -292,7 +294,9 @@ export function AdminCreationForm({
           phone: '',
           admin_level: defaultLevel,
           is_active: true,
-          user_type: 'entity' // Admins are entity users by default
+          user_type: 'entity', // Admins are entity users by default
+          assigned_schools: [],
+          assigned_branches: []
         });
         setSelectedSchools([]);
         setSelectedBranches([]);
@@ -532,46 +536,20 @@ export function AdminCreationForm({
             assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
             user_type: formData.user_type // Pass user type to mutation
           }
-          assigned_schools: editingAdmin.assigned_schools || [],
-          assigned_branches: editingAdmin.assigned_branches || []
         });
       } else {
         // Create new admin (always entity user type)
-        await createAdminMutation.mutateAsync({
+        const createData: any = {
           email: formData.email,
           name: formData.name,
-          password: formData.password,              // Creates users.password_hash
-          phone: formData.phone || undefined,       // Creates in entity_users.phone
           admin_level: formData.admin_level,
-          phone: formData.phone,
           company_id: companyId,
           permissions,
-          assigned_schools: formData.assigned_schools,
-          assigned_branches: formData.assigned_branches,
           is_active: formData.is_active,
           assigned_schools: formData.admin_level === 'school_admin' ? selectedSchools : undefined,
           assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
-          phone: '',
-          user_type: 'entity' // Admins are always entity users
-          assigned_schools: [],
-          assigned_branches: []
-        });
-      }
-      
-      onSuccess();
-      onClose();
-    } catch (error: any) {
-      console.error('Form submission error:', error);
-        const createData: any = {
-    }
-  }, [
-    selectedSchools,
-    selectedBranches,
           phone: formData.phone,
-    isEditing, 
-          assigned_schools: formData.assigned_schools,
-          assigned_branches: formData.assigned_branches,
-    initialData, 
+          user_type: 'entity' // Admins are always entity users
         };
 
         // Only include password if provided (for direct creation, otherwise invitation will be sent)
@@ -580,12 +558,21 @@ export function AdminCreationForm({
         }
 
         await createAdminMutation.mutateAsync(createData);
+      }
+      
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Form submission error:', error);
+    }
+  }, [
+    selectedSchools,
+    selectedBranches,
+    isEditing, 
+    initialData, 
     canModifyThisAdmin, 
     isSelfEdit,
     validateField,
-    // Password validation only for editing (password reset)
-    if (editingAdmin && formData.password && formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters long';
     emailExistsError,
     handleEmailBlur
   ]);
@@ -601,7 +588,7 @@ export function AdminCreationForm({
       width="lg"
     >
       <div className="space-y-6">
-        {!editingAdmin && (
+        {!isEditing && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start">
               <Mail className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
@@ -648,26 +635,24 @@ export function AdminCreationForm({
             required
             error={errors.email || emailExistsError || undefined}
             helpText={isValidatingEmail ? 'Checking email availability...' : undefined}
-        {/* Phone Field */}
-        <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-            Phone Number
-          </label>
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="tel"
-              id="phone"
-              value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter phone number"
-              disabled={isLoading}
+          >
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleFieldChange('email', e.target.value)}
+              onBlur={handleEmailBlur}
+              placeholder="Enter email address"
+              disabled={!canModifyThisAdmin}
+              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+              rightIcon={isValidatingEmail ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+              ) : emailExistsError ? (
+                <AlertCircle className="h-4 w-4 text-red-500" />
+              ) : formData.email && !errors.email ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : null}
             />
-          </div>
-        </div>
-
-            )}
           </FormField>
 
           <FormField
@@ -734,42 +719,13 @@ export function AdminCreationForm({
                   className={`h-full transition-all duration-300 ${
                     passwordStrength >= 75 ? 'bg-green-500' :
                     passwordStrength >= 50 ? 'bg-yellow-500' :
-        {/* Password Field - Only for editing (password reset) */}
-        {editingAdmin && (
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Reset Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                value={formData.password}
-                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                }`}
-                placeholder="Enter new password to reset"
-                disabled={isLoading}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+                    'bg-red-500'
+                  }`}
+                  style={{ width: `${passwordStrength}%` }}
+                />
+              </div>
             </div>
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-            )}
-            <p className="mt-1 text-sm text-gray-500">
-              Leave blank to keep the current password. Enter a new password to reset it.
-            </p>
-          </div>
-        )}
-          </div>
+          )}
           
           <FormField
             id="admin_level"
@@ -800,7 +756,7 @@ export function AdminCreationForm({
               currentUserId={user?.id}
               targetUserId={initialData?.user_id}
             />
-              {editingAdmin ? 'Enable or disable this administrator' : 'Administrator will be inactive until they accept the invitation'}
+          </div>
           
           {/* Self-edit warning */}
           {isSelfEdit && (
