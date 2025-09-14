@@ -256,7 +256,7 @@ export default function SignInPage() {
           const { data: adminUser } = await supabase
             .from('admin_users')
             .select('role_id, roles!inner(name)')
-            .eq('email', normalizedEmail)
+            .eq('id', authData.user.id)
             .maybeSingle();
           
           if (adminUser?.roles?.name) {
