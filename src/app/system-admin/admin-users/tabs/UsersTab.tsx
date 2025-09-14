@@ -1,6 +1,6 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * UPDATED VERSION with proper Supabase Auth integration and improved workflow
+ * FIXED VERSION with proper error handling and Edge Function integration
  */
 
 import React, { useState, useEffect } from 'react';
@@ -108,31 +108,48 @@ async function createAdminUserViaAPI(data: {
   status: string;
   send_invite: boolean;
 }) {
-  // Check if we're in development mode without proper backend
-  const isDevelopment = import.meta.env.DEV;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   
-  if (isDevelopment) {
-    // Development fallback - create invitation record
-    console.warn('Using development mode - creating invitation instead of user');
-    return createAdminInvitation(data);
-  }
-  
-  // Production - call backend API
-  const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin-users`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getAuthToken()}`
-    },
-    body: JSON.stringify(data)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create user');
+  if (!supabaseUrl) {
+    throw new Error('Supabase URL not configured');
   }
 
-  return response.json();
+  const apiUrl = `${supabaseUrl}/functions/v1/create-admin-user`;
+  const token = getAuthToken();
+  
+  if (!token) {
+    throw new Error('No authentication token available');
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('API call failed:', error);
+    
+    // Fallback to invitation-only mode in development
+    if (import.meta.env.DEV) {
+      console.warn('API call failed, falling back to invitation mode');
+      return createAdminInvitation(data);
+    }
+    
+    throw error;
+  }
 }
 
 async function createAdminInvitation(data: {
@@ -193,17 +210,10 @@ async function createAdminInvitation(data: {
       }
     });
 
-  // In production, this would trigger an email
-  console.log('Invitation created:', {
-    email: data.email,
-    inviteUrl: `${window.location.origin}/accept-invite?token=${token}`
-  });
-
   return invitation;
 }
 
 async function resendInvitation(invitationId: string) {
-  // Extend expiration and generate new token
   const token = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -218,7 +228,6 @@ async function resendInvitation(invitationId: string) {
 
   if (error) throw error;
 
-  // Log the action
   const currentUser = getAuthenticatedUser();
   await supabase
     .from('audit_logs')
@@ -237,7 +246,6 @@ export default function UsersTab() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   
-  // Get current user
   const currentUser = getAuthenticatedUser();
   
   // Form states
@@ -302,11 +310,11 @@ export default function UsersTab() {
     data: users = [], 
     isLoading, 
     isFetching,
-    refetch: refetchUsers
+    refetch: refetchUsers,
+    error: usersError
   } = useQuery<AdminUser[]>(
     ['admin-users', filters],
     async () => {
-      // Use the view instead of the table
       let query = supabase
         .from('admin_users_view')
         .select('*')
@@ -326,14 +334,22 @@ export default function UsersTab() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
 
       return data || [];
     },
     { 
       keepPreviousData: true, 
       staleTime: 30 * 1000,
-      refetchInterval: 30 * 1000 
+      refetchInterval: 30 * 1000,
+      retry: 3,
+      onError: (error) => {
+        console.error('Query error:', error);
+        toast.error('Failed to load users. Please check your database connection.');
+      }
     }
   );
 
@@ -370,10 +386,45 @@ export default function UsersTab() {
 
   // ===== MUTATIONS =====
   
-  // Update user mutation (simplified - only updates admin_users)
+  // Create user mutation
+  const createUserMutation = useMutation(
+    async (data: any) => {
+      const validatedData = adminUserSchema.parse(data);
+      return await createAdminUserViaAPI(validatedData);
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['admin-users']);
+        queryClient.invalidateQueries(['admin-invitations']);
+        setIsFormOpen(false);
+        setFormState({
+          name: '',
+          email: '',
+          role_id: '',
+          status: 'active'
+        });
+        toast.success('User created successfully');
+      },
+      onError: (error: any) => {
+        console.error('Create user error:', error);
+        if (error instanceof z.ZodError) {
+          const errors: Record<string, string> = {};
+          error.errors.forEach((err) => {
+            if (err.path.length > 0) {
+              errors[err.path[0] as string] = err.message;
+            }
+          });
+          setFormErrors(errors);
+        } else {
+          setFormErrors({ form: error.message || 'Failed to create user' });
+        }
+      }
+    }
+  );
+
+  // Update user mutation
   const updateUserMutation = useMutation(
     async (data: { id: string; updates: any }) => {
-      // Update admin_users record
       const { error: adminError } = await supabase
         .from('admin_users')
         .update({
@@ -385,7 +436,6 @@ export default function UsersTab() {
 
       if (adminError) throw adminError;
 
-      // Update users table for status
       const { error: userError } = await supabase
         .from('users')
         .update({
@@ -466,12 +516,10 @@ export default function UsersTab() {
       
       for (const user of users) {
         try {
-          // Check if user can be deactivated
           if (user.id === currentUser?.id) {
             throw new Error('Cannot deactivate your own account');
           }
 
-          // Deactivate the user
           const { error } = await supabase
             .from('users')
             .update({
@@ -482,7 +530,6 @@ export default function UsersTab() {
           
           if (error) throw error;
           
-          // Log the deactivation
           await supabase
             .from('audit_logs')
             .insert({
@@ -544,10 +591,14 @@ export default function UsersTab() {
     setFormErrors({});
     
     if (editingUser) {
-      // Update existing user
       updateUserMutation.mutate({
         id: editingUser.id,
         updates: formState
+      });
+    } else {
+      createUserMutation.mutate({
+        ...formState,
+        send_invite: false
       });
     }
   };
@@ -559,7 +610,6 @@ export default function UsersTab() {
   };
 
   const handleDelete = (users: AdminUser[]) => {
-    // Filter out current user
     const validUsers = users.filter(u => u.id !== currentUser?.id);
     
     if (validUsers.length === 0) {
@@ -610,7 +660,6 @@ export default function UsersTab() {
         userType: 'system'
       };
 
-      // Start test mode
       startTestMode(testUser);
       
       toast.success(`Starting test mode as ${testUser.name}`);
@@ -717,7 +766,6 @@ export default function UsersTab() {
 
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
-      {/* Test Mode Button */}
       {isSSA && !inTestMode && row.status === 'active' && row.email_verified && (
         <button
           onClick={() => handleTestAsUser(row)}
@@ -728,7 +776,6 @@ export default function UsersTab() {
         </button>
       )}
       
-      {/* Edit */}
       <button
         onClick={() => {
           setEditingUser(row);
@@ -740,7 +787,6 @@ export default function UsersTab() {
         <Edit2 className="h-4 w-4" />
       </button>
       
-      {/* Deactivate */}
       {row.id !== currentUser?.id && (
         <button
           onClick={() => handleDelete([row])}
@@ -804,6 +850,26 @@ export default function UsersTab() {
     </div>
   );
 
+  // ===== ERROR HANDLING UI =====
+  
+  if (usersError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          Failed to Load Users
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400 mb-4 text-center max-w-md">
+          There was an error loading the user data. Please check that the database view exists and try again.
+        </p>
+        <Button onClick={() => refetchUsers()}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   // ===== RENDER =====
   
   return (
@@ -829,12 +895,17 @@ export default function UsersTab() {
           </Button>
           
           <Button
-            onClick={() => {
-              setIsInviteFormOpen(true);
-            }}
+            onClick={() => setIsInviteFormOpen(true)}
             leftIcon={<Send className="h-4 w-4" />}
           >
             Invite User
+          </Button>
+          
+          <Button
+            onClick={() => setIsFormOpen(true)}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            Create User
           </Button>
         </div>
       </div>
@@ -926,10 +997,10 @@ export default function UsersTab() {
         emptyMessage="No system users found"
       />
 
-      {/* Edit User Form */}
+      {/* Create/Edit User Form */}
       <SlideInForm
-        key={editingUser?.id || 'edit'}
-        title="Edit System User"
+        key={editingUser?.id || 'create'}
+        title={editingUser ? 'Edit System User' : 'Create System User'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
@@ -937,12 +1008,12 @@ export default function UsersTab() {
           setFormErrors({});
         }}
         onSave={() => {
-          const form = document.querySelector('form#edit-user-form') as HTMLFormElement;
+          const form = document.querySelector('form#user-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
-        loading={updateUserMutation.isLoading}
+        loading={editingUser ? updateUserMutation.isLoading : createUserMutation.isLoading}
       >
-        <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
           {formErrors.form && (
             <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
               {formErrors.form}
@@ -959,18 +1030,22 @@ export default function UsersTab() {
             />
           </FormField>
 
-          <FormField id="email" label="Email" disabled>
+          <FormField id="email" label="Email" required error={formErrors.email} disabled={!!editingUser}>
             <Input
               id="email"
               name="email"
               type="email"
+              placeholder="Enter email address"
               value={formState.email}
-              disabled
+              onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+              disabled={!!editingUser}
               leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Email cannot be changed after user creation
-            </p>
+            {editingUser && (
+              <p className="text-xs text-gray-500 mt-1">
+                Email cannot be changed after user creation
+              </p>
+            )}
           </FormField>
 
           <FormField id="role_id" label="Role" required error={formErrors.role_id}>
@@ -998,6 +1073,14 @@ export default function UsersTab() {
               onChange={(value) => setFormState({ ...formState, status: value as 'active' | 'inactive' })}
             />
           </FormField>
+
+          {!editingUser && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                A temporary password will be generated. The user will be required to change it on first login.
+              </p>
+            </div>
+          )}
         </form>
       </SlideInForm>
 
