@@ -101,16 +101,42 @@ export default function SignInPage() {
       clearAuthenticatedUser();
       
       console.log('[Auth] Attempting login for:', normalizedEmail);
-      
-      // Sign in with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: password
-      });
-      
-      if (authError) {
-        console.error('[Auth] Login error:', authError);
-        
+      // Fetch user data from our database using auth_user_id for better reliability
+      let { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          *,
+          entity_users!inner(*)
+        `)
+        .eq('auth_user_id', authData.user.id)
+        .eq('is_active', true)
+        .single();
+
+      // Fallback to email lookup if auth_user_id lookup fails (for backward compatibility)
+      if (userError && userError.code === 'PGRST116') {
+        const { data: fallbackUserData, error: fallbackError } = await supabase
+          .from('users')
+          .select(`
+            *,
+            entity_users!inner(*)
+          `)
+          .eq('email', formData.email.toLowerCase().trim())
+          .eq('is_active', true)
+          .single();
+
+        if (!fallbackError && fallbackUserData) {
+          userData = fallbackUserData;
+          userError = null;
+          
+          // Update the user record to include auth_user_id for future lookups
+          await supabase
+            .from('users')
+            .update({ auth_user_id: authData.user.id })
+            .eq('id', fallbackUserData.id);
+        } else {
+          userError = fallbackError;
+        }
+      }
         // Handle specific Supabase Auth errors
         if (authError.message?.toLowerCase().includes('email not confirmed') || 
             authError.message?.toLowerCase().includes('email confirmation')) {

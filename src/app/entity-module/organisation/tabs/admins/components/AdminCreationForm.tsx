@@ -125,10 +125,13 @@ export function AdminCreationForm({
   const [formData, setFormData] = useState<AdminFormData>({
     name: '',
     email: '',
-    password: '',
+    password: '', // Only used for editing existing users (password reset)
     phone: '',
     admin_level: 'branch_admin',
+    phone: '',
     is_active: true,
+    assigned_schools: [] as string[],
+    assigned_branches: [] as string[]
     user_type: 'entity' // Default to entity for admins
   });
   
@@ -147,6 +150,7 @@ export function AdminCreationForm({
   const updateAdminMutation = useUpdateAdmin();
   const isSubmitting = createAdminMutation.isPending || updateAdminMutation.isPending;
 
+          phone: editingAdmin.phone || '',
   // ===== FETCH USER TYPE (for existing user) =====
   const { data: userData } = useQuery(
     ['user-type', initialData?.user_id],
@@ -528,6 +532,8 @@ export function AdminCreationForm({
             assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
             user_type: formData.user_type // Pass user type to mutation
           }
+          assigned_schools: editingAdmin.assigned_schools || [],
+          assigned_branches: editingAdmin.assigned_branches || []
         });
       } else {
         // Create new admin (always entity user type)
@@ -537,12 +543,18 @@ export function AdminCreationForm({
           password: formData.password,              // Creates users.password_hash
           phone: formData.phone || undefined,       // Creates in entity_users.phone
           admin_level: formData.admin_level,
+          phone: formData.phone,
           company_id: companyId,
           permissions,
+          assigned_schools: formData.assigned_schools,
+          assigned_branches: formData.assigned_branches,
           is_active: formData.is_active,
           assigned_schools: formData.admin_level === 'school_admin' ? selectedSchools : undefined,
           assigned_branches: formData.admin_level === 'branch_admin' ? selectedBranches : undefined,
+          phone: '',
           user_type: 'entity' // Admins are always entity users
+          assigned_schools: [],
+          assigned_branches: []
         });
       }
       
@@ -550,22 +562,30 @@ export function AdminCreationForm({
       onClose();
     } catch (error: any) {
       console.error('Form submission error:', error);
-      // Error toast is handled by the mutation hooks
+        const createData: any = {
     }
   }, [
-    formData, 
     selectedSchools,
     selectedBranches,
+          phone: formData.phone,
     isEditing, 
+          assigned_schools: formData.assigned_schools,
+          assigned_branches: formData.assigned_branches,
     initialData, 
-    companyId, 
+        };
+
+        // Only include password if provided (for direct creation, otherwise invitation will be sent)
+        if (formData.password) {
+          createData.password = formData.password;
+        }
+
+        await createAdminMutation.mutateAsync(createData);
     canModifyThisAdmin, 
     isSelfEdit,
     validateField,
-    createAdminMutation,
-    updateAdminMutation,
-    onSuccess,
-    onClose,
+    // Password validation only for editing (password reset)
+    if (editingAdmin && formData.password && formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters long';
     emailExistsError,
     handleEmailBlur
   ]);
@@ -581,6 +601,22 @@ export function AdminCreationForm({
       width="lg"
     >
       <div className="space-y-6">
+        {!editingAdmin && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <Mail className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h4 className="text-sm font-medium text-blue-900 mb-1">
+                  Invitation Process
+                </h4>
+                <p className="text-sm text-blue-700">
+                  An invitation email will be sent to the administrator. They will need to click the link in the email to set their password and activate their account.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SECTION 1: Basic Information */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
@@ -612,25 +648,25 @@ export function AdminCreationForm({
             required
             error={errors.email || emailExistsError || undefined}
             helpText={isValidatingEmail ? 'Checking email availability...' : undefined}
-          >
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => {
-                handleFieldChange('email', e.target.value);
-                setEmailExistsError(null);
-              }}
-              onBlur={handleEmailBlur}
-              placeholder="admin@example.com"
-              disabled={!canModifyThisAdmin}
-              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+        {/* Phone Field */}
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+            Phone Number
+          </label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="tel"
+              id="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter phone number"
+              disabled={isLoading}
             />
-            {isValidatingEmail && (
-              <div className="mt-1 flex items-center text-xs text-blue-600 dark:text-blue-400">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 mr-2"></div>
-                Checking email availability...
-              </div>
+          </div>
+        </div>
+
             )}
           </FormField>
 
@@ -698,22 +734,41 @@ export function AdminCreationForm({
                   className={`h-full transition-all duration-300 ${
                     passwordStrength >= 75 ? 'bg-green-500' :
                     passwordStrength >= 50 ? 'bg-yellow-500' :
-                    'bg-red-500'
-                  }`}
-                  style={{ width: `${passwordStrength}%` }}
-                />
-              </div>
+        {/* Password Field - Only for editing (password reset) */}
+        {editingAdmin && (
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Reset Password
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                value={formData.password}
+                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.password ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="Enter new password to reset"
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
-          )}
-        </div>
-
-        {/* SECTION 2: Role & Status */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-            <Shield className="h-5 w-5 text-[#8CC63F]" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Role & Status
-            </h3>
+            {errors.password && (
+              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+            )}
+            <p className="mt-1 text-sm text-gray-500">
+              Leave blank to keep the current password. Enter a new password to reset it.
+            </p>
+          </div>
+        )}
           </div>
           
           <FormField
@@ -745,7 +800,7 @@ export function AdminCreationForm({
               currentUserId={user?.id}
               targetUserId={initialData?.user_id}
             />
-          </div>
+              {editingAdmin ? 'Enable or disable this administrator' : 'Administrator will be inactive until they accept the invitation'}
           
           {/* Self-edit warning */}
           {isSelfEdit && (
