@@ -1,6 +1,6 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * FIXED VERSION with proper error handling and Edge Function integration
+ * UPDATED VERSION - Invitation creates auth.users first
  */
 
 import React, { useState, useEffect } from 'react';
@@ -47,14 +47,6 @@ import {
 } from '../../../../lib/auth';
 
 // ===== VALIDATION SCHEMAS =====
-const adminUserSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address').transform(e => e.toLowerCase()),
-  role_id: z.string().uuid('Please select a role'),
-  status: z.enum(['active', 'inactive']),
-  send_invite: z.boolean().optional()
-});
-
 const inviteUserSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address').transform(e => e.toLowerCase()),
@@ -101,58 +93,12 @@ interface AdminInvitation {
 }
 
 // ===== API FUNCTIONS =====
-async function createAdminUserViaAPI(data: {
-  email: string;
-  name: string;
-  role_id: string;
-  status: string;
-  send_invite: boolean;
-}) {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  
-  if (!supabaseUrl) {
-    throw new Error('Supabase URL not configured');
-  }
 
-  const apiUrl = `${supabaseUrl}/functions/v1/create-admin-user`;
-  const token = getAuthToken();
-  
-  if (!token) {
-    throw new Error('No authentication token available');
-  }
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-      },
-      body: JSON.stringify(data)
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return result;
-  } catch (error) {
-    console.error('API call failed:', error);
-    
-    // Fallback to invitation-only mode in development
-    if (import.meta.env.DEV) {
-      console.warn('API call failed, falling back to invitation mode');
-      return createAdminInvitation(data);
-    }
-    
-    throw error;
-  }
-}
-
-async function createAdminInvitation(data: {
+/**
+ * Creates admin user with auth.users record first
+ * This ensures every admin has a proper auth account
+ */
+async function createAdminUserWithAuth(data: {
   email: string;
   name: string;
   role_id: string;
@@ -161,56 +107,148 @@ async function createAdminInvitation(data: {
   const currentUser = getAuthenticatedUser();
   if (!currentUser) throw new Error('Not authenticated');
 
-  // Generate secure token
-  const token = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-  // Check if invitation already exists
-  const { data: existing } = await supabase
-    .from('admin_invitations')
-    .select('id, status')
-    .eq('email', data.email)
-    .eq('status', 'pending')
-    .single();
-
-  if (existing) {
-    throw new Error('An invitation has already been sent to this email');
-  }
-
-  // Create invitation record
-  const { data: invitation, error } = await supabase
-    .from('admin_invitations')
-    .insert({
-      email: data.email,
-      name: data.name,
-      role_id: data.role_id,
-      invited_by: currentUser.id,
-      token: token,
-      expires_at: expiresAt.toISOString(),
-      status: 'pending',
-      personal_message: data.personal_message
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Log the invitation
-  await supabase
-    .from('audit_logs')
-    .insert({
-      user_id: currentUser.id,
-      action: 'invite_admin_user',
-      entity_type: 'admin_invitation',
-      entity_id: invitation.id,
-      details: {
+  try {
+    // Step 1: Generate temporary password
+    const tempPassword = crypto.randomUUID() + 'Aa1!';
+    
+    // Step 2: Create user in Supabase Auth first
+    // We need to use the service role for this, so we'll call our Edge Function
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const token = getAuthToken();
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-admin-user-auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify({
         email: data.email,
-        role_id: data.role_id,
-        invited_by: currentUser.email
-      }
+        name: data.name,
+        password: tempPassword,
+        role_id: data.role_id
+      })
     });
 
-  return invitation;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create auth user');
+    }
+
+    const authResult = await response.json();
+    const authUserId = authResult.user.id;
+
+    console.log('Auth user created with ID:', authUserId);
+
+    // Step 3: Create record in custom users table
+    const { error: usersError } = await supabase
+      .from('users')
+      .insert({
+        id: authUserId,
+        email: data.email.toLowerCase(),
+        user_type: 'system',
+        is_active: true,
+        email_verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        raw_user_meta_data: {
+          name: data.name,
+          role_id: data.role_id
+        }
+      });
+
+    if (usersError) {
+      console.error('Failed to create users record:', usersError);
+      // Note: We should ideally rollback the auth user here
+      throw usersError;
+    }
+
+    // Step 4: Create admin_users record
+    const { error: adminError } = await supabase
+      .from('admin_users')
+      .insert({
+        id: authUserId,
+        name: data.name,
+        email: data.email.toLowerCase(),
+        role_id: data.role_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (adminError) {
+      console.error('Failed to create admin_users record:', adminError);
+      // Rollback users table entry
+      await supabase.from('users').delete().eq('id', authUserId);
+      throw adminError;
+    }
+
+    // Step 5: Create invitation record for tracking
+    const token = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const { data: invitation, error: inviteError } = await supabase
+      .from('admin_invitations')
+      .insert({
+        user_id: authUserId, // Link to the auth user
+        email: data.email,
+        name: data.name,
+        role_id: data.role_id,
+        invited_by: currentUser.id,
+        token: token,
+        expires_at: expiresAt.toISOString(),
+        status: 'pending',
+        personal_message: data.personal_message
+      })
+      .select()
+      .single();
+
+    if (inviteError) {
+      console.error('Failed to create invitation record:', inviteError);
+      // Don't fail the whole operation if invitation fails
+    }
+
+    // Step 6: Send password reset email
+    // This should be done via Edge Function to use service role
+    await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify({
+        email: data.email,
+        name: data.name,
+        invitationId: invitation?.id
+      })
+    });
+
+    // Step 7: Log the action
+    await supabase
+      .from('audit_logs')
+      .insert({
+        user_id: currentUser.id,
+        action: 'create_admin_user',
+        entity_type: 'admin_user',
+        entity_id: authUserId,
+        details: {
+          email: data.email,
+          role_id: data.role_id,
+          invited_by: currentUser.email
+        }
+      });
+
+    return {
+      success: true,
+      userId: authUserId,
+      message: 'Admin user created and invitation sent'
+    };
+
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    throw error;
+  }
 }
 
 async function resendInvitation(invitationId: string) {
@@ -249,7 +287,6 @@ export default function UsersTab() {
   const currentUser = getAuthenticatedUser();
   
   // Form states
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [isInviteFormOpen, setIsInviteFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -272,14 +309,6 @@ export default function UsersTab() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
 
-  // Form state
-  const [formState, setFormState] = useState({
-    name: '',
-    email: '',
-    role_id: '',
-    status: 'active' as 'active' | 'inactive'
-  });
-
   // Invite form state
   const [inviteFormState, setInviteFormState] = useState({
     name: '',
@@ -287,6 +316,16 @@ export default function UsersTab() {
     role_id: '',
     personal_message: ''
   });
+
+  // Edit form state
+  const [editFormState, setEditFormState] = useState({
+    name: '',
+    email: '',
+    role_id: '',
+    status: 'active' as 'active' | 'inactive'
+  });
+
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
 
   // ===== QUERIES =====
   
@@ -386,27 +425,26 @@ export default function UsersTab() {
 
   // ===== MUTATIONS =====
   
-  // Create user mutation
-  const createUserMutation = useMutation(
+  // Invite user mutation - now creates auth user first
+  const inviteUserMutation = useMutation(
     async (data: any) => {
-      const validatedData = adminUserSchema.parse(data);
-      return await createAdminUserViaAPI(validatedData);
+      const validatedData = inviteUserSchema.parse(data);
+      return await createAdminUserWithAuth(validatedData);
     },
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['admin-users']);
         queryClient.invalidateQueries(['admin-invitations']);
-        setIsFormOpen(false);
-        setFormState({
+        setIsInviteFormOpen(false);
+        setInviteFormState({
           name: '',
           email: '',
           role_id: '',
-          status: 'active'
+          personal_message: ''
         });
-        toast.success('User created successfully');
+        toast.success('Admin user created and invitation sent successfully');
       },
       onError: (error: any) => {
-        console.error('Create user error:', error);
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
@@ -416,7 +454,7 @@ export default function UsersTab() {
           });
           setFormErrors(errors);
         } else {
-          setFormErrors({ form: error.message || 'Failed to create user' });
+          toast.error(error.message || 'Failed to create admin user');
         }
       }
     }
@@ -451,46 +489,12 @@ export default function UsersTab() {
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['admin-users']);
-        setIsFormOpen(false);
+        setIsEditFormOpen(false);
         setEditingUser(null);
         toast.success('User updated successfully');
       },
       onError: (error: any) => {
         toast.error(error.message || 'Failed to update user');
-      }
-    }
-  );
-
-  // Invite user mutation
-  const inviteUserMutation = useMutation(
-    async (data: any) => {
-      const validatedData = inviteUserSchema.parse(data);
-      return await createAdminInvitation(validatedData);
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['admin-invitations']);
-        setIsInviteFormOpen(false);
-        setInviteFormState({
-          name: '',
-          email: '',
-          role_id: '',
-          personal_message: ''
-        });
-        toast.success('Invitation sent successfully');
-      },
-      onError: (error: any) => {
-        if (error instanceof z.ZodError) {
-          const errors: Record<string, string> = {};
-          error.errors.forEach((err) => {
-            if (err.path.length > 0) {
-              errors[err.path[0] as string] = err.message;
-            }
-          });
-          setFormErrors(errors);
-        } else {
-          toast.error(error.message || 'Failed to send invitation');
-        }
       }
     }
   );
@@ -586,27 +590,22 @@ export default function UsersTab() {
 
   // ===== HANDLERS =====
   
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleInviteSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormErrors({});
+    inviteUserMutation.mutate(inviteFormState);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormErrors({});
     
     if (editingUser) {
       updateUserMutation.mutate({
         id: editingUser.id,
-        updates: formState
-      });
-    } else {
-      createUserMutation.mutate({
-        ...formState,
-        send_invite: false
+        updates: editFormState
       });
     }
-  };
-
-  const handleInviteSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setFormErrors({});
-    inviteUserMutation.mutate(inviteFormState);
   };
 
   const handleDelete = (users: AdminUser[]) => {
@@ -673,14 +672,14 @@ export default function UsersTab() {
   
   useEffect(() => {
     if (editingUser) {
-      setFormState({
+      setEditFormState({
         name: editingUser.name,
         email: editingUser.email,
         role_id: editingUser.role_id,
         status: editingUser.status
       });
     } else {
-      setFormState({
+      setEditFormState({
         name: '',
         email: '',
         role_id: '',
@@ -779,7 +778,7 @@ export default function UsersTab() {
       <button
         onClick={() => {
           setEditingUser(row);
-          setIsFormOpen(true);
+          setIsEditFormOpen(true);
         }}
         className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
         title="Edit"
@@ -898,14 +897,7 @@ export default function UsersTab() {
             onClick={() => setIsInviteFormOpen(true)}
             leftIcon={<Send className="h-4 w-4" />}
           >
-            Invite User
-          </Button>
-          
-          <Button
-            onClick={() => setIsFormOpen(true)}
-            leftIcon={<Plus className="h-4 w-4" />}
-          >
-            Create User
+            Create Admin User
           </Button>
         </div>
       </div>
@@ -997,97 +989,10 @@ export default function UsersTab() {
         emptyMessage="No system users found"
       />
 
-      {/* Create/Edit User Form */}
-      <SlideInForm
-        key={editingUser?.id || 'create'}
-        title={editingUser ? 'Edit System User' : 'Create System User'}
-        isOpen={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingUser(null);
-          setFormErrors({});
-        }}
-        onSave={() => {
-          const form = document.querySelector('form#user-form') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }}
-        loading={editingUser ? updateUserMutation.isLoading : createUserMutation.isLoading}
-      >
-        <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
-          {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-              {formErrors.form}
-            </div>
-          )}
-
-          <FormField id="name" label="Name" required error={formErrors.name}>
-            <Input
-              id="name"
-              name="name"
-              placeholder="Enter name"
-              value={formState.name}
-              onChange={(e) => setFormState({ ...formState, name: e.target.value })}
-            />
-          </FormField>
-
-          <FormField id="email" label="Email" required error={formErrors.email} disabled={!!editingUser}>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="Enter email address"
-              value={formState.email}
-              onChange={(e) => setFormState({ ...formState, email: e.target.value })}
-              disabled={!!editingUser}
-              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-            />
-            {editingUser && (
-              <p className="text-xs text-gray-500 mt-1">
-                Email cannot be changed after user creation
-              </p>
-            )}
-          </FormField>
-
-          <FormField id="role_id" label="Role" required error={formErrors.role_id}>
-            <Select
-              id="role_id"
-              name="role_id"
-              options={roles.map(role => ({
-                value: role.id,
-                label: role.name
-              }))}
-              value={formState.role_id}
-              onChange={(value) => setFormState({ ...formState, role_id: value })}
-            />
-          </FormField>
-
-          <FormField id="status" label="Status" required error={formErrors.status}>
-            <Select
-              id="status"
-              name="status"
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              value={formState.status}
-              onChange={(value) => setFormState({ ...formState, status: value as 'active' | 'inactive' })}
-            />
-          </FormField>
-
-          {!editingUser && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                A temporary password will be generated. The user will be required to change it on first login.
-              </p>
-            </div>
-          )}
-        </form>
-      </SlideInForm>
-
-      {/* Invite User Form */}
+      {/* Create Admin User Form (Invitation) */}
       <SlideInForm
         key="invite"
-        title="Invite System User"
+        title="Create System Admin User"
         isOpen={isInviteFormOpen}
         onClose={() => {
           setIsInviteFormOpen(false);
@@ -1161,10 +1066,85 @@ export default function UsersTab() {
 
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              An invitation email will be sent with a secure link to set up their account.
+              This will create the admin user account and send an invitation email with a secure link to set their password.
               The invitation will expire in 7 days.
             </p>
           </div>
+        </form>
+      </SlideInForm>
+
+      {/* Edit User Form */}
+      <SlideInForm
+        key={editingUser?.id || 'edit'}
+        title="Edit System User"
+        isOpen={isEditFormOpen}
+        onClose={() => {
+          setIsEditFormOpen(false);
+          setEditingUser(null);
+          setFormErrors({});
+        }}
+        onSave={() => {
+          const form = document.querySelector('form#edit-user-form') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }}
+        loading={updateUserMutation.isLoading}
+      >
+        <form id="edit-user-form" onSubmit={handleEditSubmit} className="space-y-4">
+          {formErrors.form && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+              {formErrors.form}
+            </div>
+          )}
+
+          <FormField id="edit-name" label="Name" required error={formErrors.name}>
+            <Input
+              id="edit-name"
+              name="name"
+              placeholder="Enter name"
+              value={editFormState.name}
+              onChange={(e) => setEditFormState({ ...editFormState, name: e.target.value })}
+            />
+          </FormField>
+
+          <FormField id="edit-email" label="Email" disabled>
+            <Input
+              id="edit-email"
+              name="email"
+              type="email"
+              value={editFormState.email}
+              disabled
+              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Email cannot be changed after user creation
+            </p>
+          </FormField>
+
+          <FormField id="edit-role" label="Role" required error={formErrors.role_id}>
+            <Select
+              id="edit-role"
+              name="role_id"
+              options={roles.map(role => ({
+                value: role.id,
+                label: role.name
+              }))}
+              value={editFormState.role_id}
+              onChange={(value) => setEditFormState({ ...editFormState, role_id: value })}
+            />
+          </FormField>
+
+          <FormField id="edit-status" label="Status" required error={formErrors.status}>
+            <Select
+              id="edit-status"
+              name="status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              value={editFormState.status}
+              onChange={(value) => setEditFormState({ ...editFormState, status: value as 'active' | 'inactive' })}
+            />
+          </FormField>
         </form>
       </SlideInForm>
 
