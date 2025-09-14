@@ -153,41 +153,6 @@ export default function SignInPage() {
       console.log('[Auth] Login successful for:', authData.user.email);
       
       // Fetch user data from our database using auth_user_id for better reliability
-      let { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          *,
-          entity_users!entity_users_user_id_fkey!inner(*)
-        `)
-        .eq('auth_user_id', authData.user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      // Fallback to email lookup if auth_user_id lookup fails (for backward compatibility)
-      if (userError && userError.code === 'PGRST116') {
-        const { data: fallbackUserData, error: fallbackError } = await supabase
-          .from('users')
-          .select(`
-            *,
-            entity_users!entity_users_user_id_fkey!inner(*)
-          `)
-          .eq('email', normalizedEmail)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        if (!fallbackError && fallbackUserData) {
-          userData = fallbackUserData;
-          userError = null;
-          
-          // Update the user record to include auth_user_id for future lookups
-          await supabase
-            .from('users')
-            .update({ auth_user_id: authData.user.id })
-            .eq('id', fallbackUserData.id);
-        } else {
-          userError = fallbackError;
-        }
-      }
       
       // Get user metadata from custom tables
       let userId = authData.user.id;
@@ -203,7 +168,6 @@ export default function SignInPage() {
           email,
           user_type,
           is_active,
-          requires_password_change,
           raw_user_meta_data
         `)
         .eq('email', normalizedEmail)
@@ -239,7 +203,7 @@ export default function SignInPage() {
         
         await supabase
           .from('users')
-          .insert({
+          .upsert({
             id: authData.user.id,
             email: normalizedEmail,
             user_type: 'user',
@@ -248,7 +212,7 @@ export default function SignInPage() {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             raw_user_meta_data: authData.user.user_metadata
-          });
+          }, { onConflict: 'id' });
         
         userId = authData.user.id;
         userName = authData.user.user_metadata?.name || userName;
@@ -299,8 +263,6 @@ export default function SignInPage() {
       await supabase
         .from('users')
         .update({
-          last_login_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
@@ -333,13 +295,6 @@ export default function SignInPage() {
       
       // Set authenticated user
       setAuthenticatedUser(authenticatedUser);
-      
-      // Check for password change requirement
-      if (userDataFetch?.requires_password_change) {
-        toast.warning('Please change your password');
-        navigate('/app/settings/change-password');
-        return;
-      }
       
       // Success
       toast.success(`Welcome back, ${authenticatedUser.name}!`);
