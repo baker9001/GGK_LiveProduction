@@ -658,9 +658,13 @@ export default function CompaniesTab() {
           // Check if email is changing
           if (email !== editingAdmin.users?.email) {
             userUpdates.email_verified = false;
-            userUpdates.verification_token = generateVerificationToken();
-            userUpdates.verification_sent_at = new Date().toISOString();
-            userUpdates.verified_at = null;
+            // Store verification data in metadata instead of non-existent columns
+            userUpdates.raw_user_meta_data = {
+              ...userUpdates.raw_user_meta_data,
+              verification_token: generateVerificationToken(),
+              verification_sent_at: new Date().toISOString(),
+              verified_at: null
+            };
           }
 
           const { error: userError } = await supabase
@@ -871,9 +875,6 @@ export default function CompaniesTab() {
                 user_type: 'entity',
                 is_active: true,
                 email_verified: false,
-                verification_token: generateVerificationToken(),
-                verification_sent_at: new Date().toISOString(),
-                requires_password_change: isGeneratedPassword,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 raw_user_meta_data: {
@@ -881,13 +882,16 @@ export default function CompaniesTab() {
                   company_id: companyId,
                   company_name: selectedCompanyForAdmin.name,
                   created_by: currentUser?.email,
-                  created_by_id: currentUser?.id
+                  created_by_id: currentUser?.id,
+                  verification_token: generateVerificationToken(),
+                  verification_sent_at: new Date().toISOString(),
+                  requires_password_change: isGeneratedPassword
                 },
                 raw_app_meta_data: {
                   user_type: 'entity',
                   is_company_admin: true
                 }
-                // Removed user_types and primary_type as they don't exist in the database
+                // Moved all potentially non-existent columns to metadata
               });
             
             if (userError) {
@@ -1034,16 +1038,26 @@ export default function CompaniesTab() {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(data.password, salt);
       
-      // Update password in users table
+      // Get current user metadata
+      const { data: currentUserData } = await supabase
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', data.userId)
+        .single();
+      
+      // Update password in users table and metadata
       const { error: updateError } = await supabase
         .from('users')
         .update({
           password_hash: passwordHash,
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          failed_login_attempts: 0,
-          locked_until: null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          raw_user_meta_data: {
+            ...currentUserData?.raw_user_meta_data,
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
+            failed_login_attempts: 0,
+            locked_until: null
+          }
         })
         .eq('id', data.userId);
       
@@ -1161,12 +1175,22 @@ export default function CompaniesTab() {
       // Generate new verification token
       const token = generateVerificationToken();
       
-      // Update user with new token
+      // Get current user data first
+      const { data: currentUser } = await supabase
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+      
+      // Update user with new token in metadata
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          verification_token: token,
-          verification_sent_at: new Date().toISOString()
+          raw_user_meta_data: {
+            ...currentUser?.raw_user_meta_data,
+            verification_token: token,
+            verification_sent_at: new Date().toISOString()
+          }
         })
         .eq('id', userId);
       
