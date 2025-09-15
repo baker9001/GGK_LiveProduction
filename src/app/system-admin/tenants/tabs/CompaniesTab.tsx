@@ -886,9 +886,8 @@ export default function CompaniesTab() {
                 raw_app_meta_data: {
                   user_type: 'entity',
                   is_company_admin: true
-                },
-                user_types: ['entity'],
-                primary_type: 'entity'
+                }
+                // Removed user_types and primary_type as they don't exist in the database
               });
             
             if (userError) {
