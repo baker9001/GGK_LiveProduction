@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { type User, getCurrentUserSync, isInTestMode, getRealAdminUserSync } from '../lib/auth';
+import { type User, getCurrentUser, isInTestMode, getRealAdminUser } from '../lib/auth';
 
 interface UserContextType {
   user: User | null;
