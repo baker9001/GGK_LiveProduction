@@ -642,7 +642,52 @@ export default function CompaniesTab() {
         if (editingAdmin) {
           // ===== UPDATE EXISTING ADMIN =====
           
-          // Update users table
+          const oldEmail = editingAdmin.users?.email;
+          
+          // First, try to update in Supabase Auth using Edge Function
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          
+          // Get current session for authorization
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
+          
+          try {
+            // Call Edge Function to update user in Supabase Auth
+            const response = await fetch(`${supabaseUrl}/functions/v1/update-tenant-admin`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+                'apikey': anonKey
+              },
+              body: JSON.stringify({
+                user_id: editingAdmin.user_id,
+                email: email,
+                old_email: oldEmail,
+                name: name,
+                position: position,
+                phone: phone,
+                company_id: companyId,
+                company_name: selectedCompanyForAdmin.name,
+                updated_by: currentUser?.email,
+                send_verification_email: email !== oldEmail
+              })
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              console.warn('Edge Function update failed:', error.message);
+              // Continue to update custom tables even if Edge Function fails
+            } else {
+              console.log('User updated in Supabase Auth');
+            }
+          } catch (edgeFunctionError) {
+            console.warn('Edge Function not available for update:', edgeFunctionError);
+            // Continue to update custom tables
+          }
+          
+          // Update custom users table
           const userUpdates: any = {
             email: email,
             updated_at: new Date().toISOString(),
@@ -656,7 +701,7 @@ export default function CompaniesTab() {
           };
 
           // Check if email is changing
-          if (email !== editingAdmin.users?.email) {
+          if (email !== oldEmail) {
             userUpdates.email_verified = false;
             // Store verification data in metadata instead of non-existent columns
             userUpdates.raw_user_meta_data = {
