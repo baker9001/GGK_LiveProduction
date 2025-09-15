@@ -9,7 +9,7 @@ import { getRealAdminUser, isInTestMode } from '../../../lib/auth';
 export default function DashboardPage() {
   const [showTestModal, setShowTestModal] = useState(false);
   
-  const realAdmin = getRealAdminUserSync();
+  const realAdmin = getRealAdminUser();
   const isSSA = realAdmin?.role === 'SSA';
   const inTestMode = isInTestMode();
 

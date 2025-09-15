@@ -1,7 +1,7 @@
 /**
  * File: /src/lib/auth.ts
  * Dependencies: 
- *   - None (Supabase auth removed)
+ *   - supabase client for session management
  * 
  * SECURITY FIXES:
  *   - Added auth change events
@@ -9,6 +9,8 @@
  *   - Prevent redirect loops
  *   - Complete session cleanup
  */
+
+import { supabase } from './supabase';
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
