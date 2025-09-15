@@ -126,8 +126,7 @@ export const SAFE_USER_COLUMNS = [
   'verification_token',
   'verification_sent_at',
   'verified_at',
-  'user_types',
-  'primary_type'
+  'user_types'
 ].join(', ');
 
 // ============= MAIN USER CREATION SERVICE =============
@@ -218,7 +217,6 @@ export const userCreationService = {
       email: payload.email.toLowerCase(),
       user_type: userTypes[0],
       user_types: userTypes,
-      primary_type: userTypes[0],
       is_active: payload.is_active !== false,
       email_verified: false,
       password_hash: hashedPassword,
