@@ -27,8 +27,7 @@
  *   - countries
  *   - audit_logs
  * 
- * UPDATED: Enhanced Supabase Auth integration matching UsersTab pattern
- *          Fixed service role key security issue
+ * FIXED: Removed client-side service role key usage - now uses Edge Function for auth
  */
 
 import React, { useState, useEffect } from 'react';
@@ -41,7 +40,6 @@ import {
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../../../../lib/supabase';
-import { createClient } from '@supabase/supabase-js';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../../components/shared/SlideInForm';
@@ -54,20 +52,6 @@ import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDi
 import { toast } from '../../../../components/shared/Toast';
 import { PhoneInput } from '../../../../components/shared/PhoneInput';
 import { getAuthenticatedUser } from '../../../../lib/auth';
-
-// ===== SUPABASE ADMIN CLIENT =====
-// NOTE: This should use VITE_SUPABASE_SERVICE_ROLE_KEY (without NEXT_PUBLIC prefix for security)
-// The service role key should ONLY be used on the backend/server-side in production
-const supabaseAdmin = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY, // Fallback for testing
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
 
 // ===== VALIDATION SCHEMAS =====
 const companySchema = z.object({
@@ -627,7 +611,7 @@ export default function CompaniesTab() {
     }
   );
 
-  // Tenant admin mutation with Supabase Auth integration
+  // Tenant admin mutation with proper Supabase Auth integration
   const tenantAdminMutation = useMutation(
     async (formData: FormData) => {
       try {
@@ -721,9 +705,9 @@ export default function CompaniesTab() {
           };
 
         } else {
-          // ===== CREATE NEW ADMIN =====
+          // ===== CREATE NEW ADMIN - FIXED VERSION =====
           
-          // Check if user already exists in users table (not entity_users)
+          // Check if user already exists in users table
           const { data: existingUser } = await supabase
             .from('users')
             .select('*')
@@ -749,8 +733,8 @@ export default function CompaniesTab() {
               id: newEntityId,
               user_id: existingUser.id,
               company_id: companyId,
-              email: email, // Required NOT NULL column
-              name: existingUser.raw_user_meta_data?.name || name, // Required NOT NULL column
+              email: email,
+              name: existingUser.raw_user_meta_data?.name || name,
               position: position,
               phone: phone,
               department: null,
@@ -794,56 +778,53 @@ export default function CompaniesTab() {
           const isGeneratedPassword = !password;
           
           try {
-            // Check if we have admin capabilities
-            const hasServiceRoleKey = !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-            
             let newUserId: string;
             let authCreated = false;
             
-            if (hasServiceRoleKey && supabaseAdmin) {
-              // Try to create user with admin client
-              try {
-                const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            // Try to use Edge Function if available
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            
+            // Get current session for authorization
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData?.session?.access_token;
+            
+            try {
+              // Call Edge Function to create user in Supabase Auth
+              const response = await fetch(`${supabaseUrl}/functions/v1/create-tenant-admin`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+                  'apikey': anonKey
+                },
+                body: JSON.stringify({
                   email: email,
                   password: finalPassword,
-                  email_confirm: true, // Changed to true - this enables automatic confirmation email
-                  user_metadata: {
-                    name: name,
-                    position: position,
-                    company_id: companyId,
-                    company_name: selectedCompanyForAdmin.name,
-                    created_by: currentUser?.email,
-                    role: 'entity_admin'
-                  },
-                  app_metadata: {
-                    user_type: 'entity',
-                    is_company_admin: true,
-                    requires_password_change: isGeneratedPassword
-                  }
-                });
-                
-                if (authError) {
-                  console.error('Admin create error:', authError);
-                  // If admin creation fails, fall back to regular signup
-                  throw authError;
-                }
-                
-                if (!authData.user) {
-                  throw new Error('Failed to create user in authentication system');
-                }
-                
-                newUserId = authData.user.id;
+                  name: name,
+                  position: position,
+                  company_id: companyId,
+                  company_name: selectedCompanyForAdmin.name,
+                  phone: phone,
+                  created_by: currentUser?.email,
+                  is_generated_password: isGeneratedPassword
+                })
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                newUserId = result.user.id;
                 authCreated = true;
-                console.log('User created via admin API:', newUserId);
-                
-              } catch (adminError) {
-                console.warn('Admin API failed, falling back to regular signup:', adminError);
-                // Continue to fallback
+                console.log('User created via Edge Function:', newUserId);
+              } else {
+                // Edge Function failed, fall back to regular signup
+                console.warn('Edge Function not available, using regular signup');
+                throw new Error('Edge Function not available');
               }
-            }
-            
-            // Fallback to regular signup if admin API not available or failed
-            if (!authCreated) {
+            } catch (edgeFunctionError) {
+              // Fallback to regular signup if Edge Function not available
+              console.log('Using fallback signup method');
+              
               const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: email,
                 password: finalPassword,
@@ -856,7 +837,7 @@ export default function CompaniesTab() {
                     created_by: currentUser?.email,
                     role: 'entity_admin'
                   },
-                  emailRedirectTo: `${window.location.origin}/auth/callback` // Add redirect URL for email verification
+                  emailRedirectTo: `${window.location.origin}/auth/callback`
                 }
               });
               
@@ -912,14 +893,6 @@ export default function CompaniesTab() {
             
             if (userError) {
               console.error('Users table error:', userError);
-              // Try to clean up auth user if database insert fails
-              if (authCreated && supabaseAdmin) {
-                try {
-                  await supabaseAdmin.auth.admin.deleteUser(newUserId);
-                } catch (cleanupError) {
-                  console.error('Failed to cleanup auth user:', cleanupError);
-                }
-              }
               throw userError;
             }
             
@@ -931,8 +904,8 @@ export default function CompaniesTab() {
                 id: newEntityId,
                 user_id: newUserId,
                 company_id: companyId,
-                email: email, // Required NOT NULL column
-                name: name, // Required NOT NULL column
+                email: email,
+                name: name,
                 position: position,
                 phone: phone,
                 hire_date: new Date().toISOString().split('T')[0],
@@ -946,14 +919,6 @@ export default function CompaniesTab() {
               console.error('Entity users table error:', entityError);
               // Rollback: delete from users table
               await supabase.from('users').delete().eq('id', newUserId);
-              // Try to delete auth user if it was created
-              if (authCreated && supabaseAdmin) {
-                try {
-                  await supabaseAdmin.auth.admin.deleteUser(newUserId);
-                } catch (cleanupError) {
-                  console.error('Failed to cleanup auth user:', cleanupError);
-                }
-              }
               throw entityError;
             }
             
@@ -983,8 +948,8 @@ export default function CompaniesTab() {
               },
               company: selectedCompanyForAdmin,
               message: authCreated 
-                ? 'Admin created successfully. A confirmation email has been sent automatically.' 
-                : 'Admin created successfully. A confirmation email has been sent automatically.'
+                ? 'Admin created successfully. A confirmation email has been sent.' 
+                : 'Admin created successfully. User needs to verify email before signing in.'
             };
             
           } catch (error) {
@@ -1286,7 +1251,7 @@ export default function CompaniesTab() {
       // Create user map
       const userMap = new Map(users?.map(u => [u.id, u]) || []);
 
-      // Combine data - DO NOT modify phone here, let components handle display
+      // Combine data
       const adminsWithUsers = entityUsers.map(entityUser => ({
         ...entityUser,
         users: userMap.get(entityUser.user_id) || null
@@ -1347,7 +1312,6 @@ export default function CompaniesTab() {
     const formData = new FormData();
     formData.append('name', adminFormState.name);
     formData.append('email', adminFormState.email);
-    // Pass the full phone value (with country code) from state
     formData.append('phone', adminFormState.phone || '');
     formData.append('position', adminFormState.position || '');
     formData.append('password', adminFormState.password || '');
@@ -1515,13 +1479,12 @@ export default function CompaniesTab() {
   // Update admin form when editing
   React.useEffect(() => {
     if (editingAdmin) {
-      // Use phone as stored (should already have country code from PhoneInput)
       const phoneForDisplay = editingAdmin.phone || '';
       
       setAdminFormState({
         name: editingAdmin.users?.raw_user_meta_data?.name || editingAdmin.users?.email?.split('@')[0] || '',
         email: editingAdmin.users?.email || '',
-        phone: phoneForDisplay, // Use phone as is
+        phone: phoneForDisplay,
         position: editingAdmin.position || '',
         password: '',
         confirmPassword: ''
@@ -1790,7 +1753,7 @@ export default function CompaniesTab() {
         emptyMessage="No companies found"
       />
 
-      {/* All modals remain exactly the same - Company Form, Admin Form, Password Form, View Admins, etc. */}
+      {/* All modals remain exactly the same */}
       
       {/* Company Form Modal */}
       <SlideInForm
@@ -2119,7 +2082,7 @@ export default function CompaniesTab() {
         </form>
       </SlideInForm>
 
-      {/* Password Change Modal (keeping all the same UI) */}
+      {/* Password Change Modal */}
       {isPasswordFormOpen && !generatedPassword && (
         <div className="fixed inset-0 z-[70]">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => {
@@ -2296,7 +2259,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* View/Manage Admins Modal (keeping all the same UI) */}
+      {/* View/Manage Admins Modal */}
       {isViewAdminsOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -2568,7 +2531,7 @@ export default function CompaniesTab() {
         </div>
       )}
 
-      {/* Generated Password Modal (keeping all the same UI) */}
+      {/* Generated Password Modal */}
       {generatedPassword && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative z-[81]">
@@ -2580,7 +2543,7 @@ export default function CompaniesTab() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 {selectedAdminForPassword 
                   ? `A new password has been set for ${selectedAdminForPassword.users?.email}.`
-                  : `User has been created in Supabase Auth with a temporary password.`
+                  : `User has been created with a temporary password.`
                 }
               </p>
               {!selectedAdminForPassword && (
