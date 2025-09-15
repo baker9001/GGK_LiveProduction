@@ -1,7 +1,7 @@
 // /src/components/auth/ProtectedRoute.tsx
 
 import { Navigate, useLocation } from 'react-router-dom';
-import { getCurrentUserSync, getRealAdminUserSync, isInTestMode } from '../../lib/auth';
+import { getCurrentUser, getRealAdminUser, isInTestMode } from '../../lib/auth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,8 +11,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
   
   // Check if there's a real admin user (for test mode) or a regular authenticated user
-  const realAdmin = getRealAdminUserSync();
-  const currentUser = getCurrentUserSync();
+  const realAdmin = getRealAdminUser();
+  const currentUser = getCurrentUser();
   const testMode = isInTestMode();
   
   // Allow access if:

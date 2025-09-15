@@ -318,11 +318,11 @@ export function getCurrentUser(): User | null {
   if (testUser) {
     return JSON.parse(testUser);
   }
-  return getAuthenticatedUser();
+  return getAuthenticatedUserSync();
 }
 
 export function getRealAdminUser(): User | null {
-  return getAuthenticatedUser();
+  return getAuthenticatedUserSync();
 }
 
 // Simplified session refresh (no Supabase)

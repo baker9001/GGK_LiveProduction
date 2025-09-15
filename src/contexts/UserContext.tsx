@@ -68,7 +68,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     
     // Check periodically for changes (backup)
     const interval = setInterval(() => {
-      const currentUser = getCurrentUserSync();
+      const currentUser = getCurrentUser();
       if (currentUser?.id !== user?.id) {
         console.log('[UserContext] User mismatch detected, refreshing');
         refreshUser();
