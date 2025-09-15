@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { type User, getCurrentUser, isInTestMode, getRealAdminUser } from '../lib/auth';
+import { type User, getCurrentUserSync, isInTestMode, getRealAdminUserSync } from '../lib/auth';
 
 interface UserContextType {
   user: User | null;
@@ -68,7 +68,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     
     // Check periodically for changes (backup)
     const interval = setInterval(() => {
-      const currentUser = getCurrentUser();
+      const currentUser = getCurrentUserSync();
       if (currentUser?.id !== user?.id) {
         console.log('[UserContext] User mismatch detected, refreshing');
         refreshUser();

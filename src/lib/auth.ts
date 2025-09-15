@@ -79,7 +79,23 @@ export function setAuthenticatedUser(user: User): void {
 }
 
 // Get authenticated user
-export function getAuthenticatedUser(): User | null {
+export async function getAuthenticatedUser(): Promise<User | null> {
+  // Check Supabase session first
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
+      // Clear local storage if Supabase session is invalid
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error checking Supabase session:', error);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    return null;
+  }
+
   // First check if token is valid
   const token = getAuthToken();
   if (!token) {
@@ -100,6 +116,12 @@ export function getAuthenticatedUser(): User | null {
     return null;
   }
   
+  const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
+  return storedUser ? JSON.parse(storedUser) : null;
+}
+
+// Synchronous version for backward compatibility (deprecated)
+export function getAuthenticatedUserSync(): User | null {
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
@@ -305,7 +327,7 @@ export function getRealAdminUser(): User | null {
 
 // Simplified session refresh (no Supabase)
 export async function refreshSession(): Promise<boolean> {
-  const user = getAuthenticatedUser();
+  const user = await getAuthenticatedUser();
   if (user) {
     // Regenerate token with same remember me setting
     const token = getAuthToken();

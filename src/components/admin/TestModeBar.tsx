@@ -3,7 +3,7 @@
 import React from 'react';
 import { X, Eye, AlertTriangle } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import { isInTestMode, exitTestMode, getTestModeUser, getRealAdminUser } from '../../lib/auth';
+import { isInTestMode, exitTestMode, getTestModeUser, getRealAdminUserSync } from '../../lib/auth';
 
 // List of public pages where test mode bar should NOT appear
 const PUBLIC_PAGES = [
@@ -33,7 +33,7 @@ export function TestModeBar() {
   }
 
   const testUser = getTestModeUser();
-  const adminUser = getRealAdminUser();
+  const adminUser = getRealAdminUserSync();
 
   if (!testUser || !adminUser) {
     // If we can't get the users, exit test mode for safety
