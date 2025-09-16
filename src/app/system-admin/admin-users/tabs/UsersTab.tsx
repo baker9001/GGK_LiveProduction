@@ -184,7 +184,7 @@ async function createAdminUserSimple(data: {
       throw usersError;
     }
 
-    // Step 2: Create admin_users record
+    // Step 2: Create admin_users record (without email - it's only in users table)
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
@@ -375,7 +375,7 @@ async function createAdminUserWithAuth(data: {
       throw usersError;
     }
 
-    // Step 5: Create admin_users record
+    // Step 5: Create admin_users record (without email - it's only in users table)
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
