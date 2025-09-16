@@ -1055,6 +1055,58 @@ export default function UsersTab() {
     }
   };
 
+  // Handle resending verification email
+  const handleResendVerification = async (adminUser: AdminUser) => {
+    try {
+      // Get fresh session
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        toast.error('Session expired. Please refresh the page.');
+        return;
+      }
+
+      // Try to send verification email via Edge Function if available
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-verification-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+        },
+        body: JSON.stringify({
+          email: adminUser.email,
+          name: adminUser.name
+        })
+      });
+
+      if (response.ok) {
+        toast.success(`Verification email sent to ${adminUser.email}`);
+      } else {
+        // Fallback message if Edge Function doesn't exist
+        toast.info(`Please manually verify the email for ${adminUser.email}`);
+      }
+
+      // Log the action
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser?.id,
+          action: 'resend_verification_email',
+          entity_type: 'admin_user',
+          entity_id: adminUser.id,
+          details: {
+            email: adminUser.email
+          }
+        })
+        .catch(err => console.warn('Failed to log action:', err));
+
+    } catch (error) {
+      console.error('Error resending verification:', error);
+      toast.error('Failed to resend verification email');
+    }
+  };
+
   // Handle invitation toggle with debugging
   const handleToggleInvitations = () => {
     console.log('Toggling invitations from', showInvitations, 'to', !showInvitations);
@@ -1169,8 +1221,12 @@ export default function UsersTab() {
       cell: (row: AdminUser) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={row.status} />
+          {/* Email Unverified badge - doesn't block access, just indicates email not confirmed */}
           {row.status === 'active' && !row.email_verified && (
-            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full">
+            <span 
+              className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 rounded-full"
+              title="User can access the system but hasn't verified their email address"
+            >
               Unverified
             </span>
           )}
@@ -1210,6 +1266,17 @@ export default function UsersTab() {
 
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
+      {/* Resend verification email for unverified users */}
+      {row.status === 'active' && !row.email_verified && (
+        <button
+          onClick={() => handleResendVerification(row)}
+          className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
+          title="Resend verification email"
+        >
+          <Mail className="h-4 w-4" />
+        </button>
+      )}
+      
       {isSSA && !inTestMode && row.status === 'active' && row.email_verified && (
         <button
           onClick={() => handleTestAsUser(row)}
@@ -1471,6 +1538,26 @@ export default function UsersTab() {
         onDelete={handleDelete}
         emptyMessage="No system users found"
       />
+
+      {/* Info about email verification */}
+      {users.some(u => u.status === 'active' && !u.email_verified) && (
+        <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div className="text-sm text-amber-700 dark:text-amber-300">
+              <p className="font-semibold mb-1">About Email Verification</p>
+              <p>
+                Users marked as "Unverified" can still access the system normally. The unverified status only indicates 
+                they haven't confirmed their email address yet. This doesn't affect their ability to log in or use the system.
+              </p>
+              <p className="mt-2">
+                Email verification is optional for system administrators. You can send verification emails using the 
+                envelope icon in the actions column if needed.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Admin User Form (Invitation) */}
       <SlideInForm
