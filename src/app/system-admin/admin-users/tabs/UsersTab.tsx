@@ -459,21 +459,25 @@ async function createAdminUserWithAuth(data: {
       }
     }
 
-    // Step 8: Log the action
-    await supabase
-      .from('audit_logs')
-      .insert({
-        user_id: currentUser.id,
-        action: 'create_admin_user',
-        entity_type: 'admin_user',
-        entity_id: authUserId,
-        details: {
-          email: data.email,
-          role_id: data.role_id,
-          invited_by: currentUser.email
-        }
-      })
-      .catch(err => console.warn('Failed to log action:', err)); // Don't fail if audit log fails
+    // Step 8: Log the action (wrapped in try-catch for safety)
+    try {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser.id,
+          action: 'create_admin_user',
+          entity_type: 'admin_user',
+          entity_id: authUserId,
+          details: {
+            email: data.email,
+            role_id: data.role_id,
+            invited_by: currentUser.email
+          }
+        });
+    } catch (logError) {
+      console.warn('Failed to log action:', logError);
+      // Don't fail if audit log fails
+    }
 
     return {
       success: true,
@@ -522,15 +526,21 @@ async function resendInvitation(invitationId: string) {
   if (error) throw error;
 
   const currentUser = getAuthenticatedUser();
-  await supabase
-    .from('audit_logs')
-    .insert({
-      user_id: currentUser?.id,
-      action: 'resend_invitation',
-      entity_type: 'admin_invitation',
-      entity_id: invitationId
-    })
-    .catch(err => console.warn('Failed to log action:', err));
+  
+  // Log the action (wrapped in try-catch for safety)
+  try {
+    await supabase
+      .from('audit_logs')
+      .insert({
+        user_id: currentUser?.id,
+        action: 'resend_invitation',
+        entity_type: 'admin_invitation',
+        entity_id: invitationId
+      });
+  } catch (logError) {
+    console.warn('Failed to log action:', logError);
+    // Don't fail if audit log fails
+  }
 
   return { success: true };
 }
@@ -583,7 +593,8 @@ export default function UsersTab() {
   
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [usersToDelete, setUsersToDelete] = useState<AdminUser[]>([]);
+  const [confirmAction, setConfirmAction] = useState<'deactivate' | 'delete'>('deactivate');
+  const [usersToProcess, setUsersToProcess] = useState<AdminUser[]>([]);
 
   // Invite form state
   const [inviteFormState, setInviteFormState] = useState({
@@ -887,60 +898,95 @@ export default function UsersTab() {
     }
   );
 
-  // Deactivate users mutation
-  const deactivateMutation = useMutation(
-    async (users: AdminUser[]) => {
+  // Process users mutation (deactivate or delete)
+  const processUsersMutation = useMutation(
+    async ({ users, action }: { users: AdminUser[], action: 'deactivate' | 'delete' }) => {
       const results = [];
       
       for (const user of users) {
         try {
           if (user.id === currentUser?.id) {
-            throw new Error('Cannot deactivate your own account');
+            throw new Error(`Cannot ${action} your own account`);
           }
 
-          const { error } = await supabase
-            .from('users')
-            .update({
-              is_active: false,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
+          if (action === 'deactivate') {
+            // Deactivate: Just set is_active to false
+            const { error } = await supabase
+              .from('users')
+              .update({
+                is_active: false,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user.id);
+            
+            if (error) throw error;
+            
+          } else if (action === 'delete') {
+            // Delete: Remove from all tables
+            // Order matters due to foreign key constraints
+            
+            // 1. Delete from admin_invitations if exists
+            await supabase
+              .from('admin_invitations')
+              .delete()
+              .eq('user_id', user.id);
+            
+            // 2. Delete from admin_users
+            const { error: adminError } = await supabase
+              .from('admin_users')
+              .delete()
+              .eq('id', user.id);
+            
+            if (adminError) throw adminError;
+            
+            // 3. Delete from users table
+            const { error: userError } = await supabase
+              .from('users')
+              .delete()
+              .eq('id', user.id);
+            
+            if (userError) throw userError;
+          }
           
-          if (error) throw error;
-          
-          await supabase
-            .from('audit_logs')
-            .insert({
-              user_id: currentUser?.id,
-              action: 'deactivate_admin_user',
-              entity_type: 'admin_user',
-              entity_id: user.id,
-              details: {
-                email: user.email,
-                deactivated_by: currentUser?.email
-              }
-            });
+          // Log the action
+          try {
+            await supabase
+              .from('audit_logs')
+              .insert({
+                user_id: currentUser?.id,
+                action: `${action}_admin_user`,
+                entity_type: 'admin_user',
+                entity_id: user.id,
+                details: {
+                  email: user.email,
+                  action: action,
+                  performed_by: currentUser?.email
+                }
+              });
+          } catch (logError) {
+            console.warn('Failed to log action:', logError);
+          }
           
           results.push({ success: true });
         } catch (error: any) {
-          console.error(`Error deactivating user ${user.id}:`, error);
+          console.error(`Error ${action}ing user ${user.id}:`, error);
           results.push({ success: false, error: error.message });
         }
       }
       
-      return results;
+      return { results, action };
     },
     {
-      onSuccess: (results) => {
+      onSuccess: ({ results, action }) => {
         queryClient.invalidateQueries(['admin-users']);
         setIsConfirmDialogOpen(false);
-        setUsersToDelete([]);
+        setUsersToProcess([]);
         
         const successCount = results.filter(r => r.success).length;
         const failCount = results.filter(r => !r.success).length;
         
         if (failCount === 0) {
-          toast.success(`${successCount} user(s) deactivated successfully`);
+          toast.success(`${successCount} user(s) ${action}d successfully`);
         } else {
           const errorMessages = results
             .filter(r => !r.success && r.error)
@@ -949,15 +995,15 @@ export default function UsersTab() {
           if (errorMessages.length > 0) {
             errorMessages.forEach(msg => toast.error(msg));
           } else {
-            toast.error(`${failCount} user(s) failed to deactivate`);
+            toast.error(`${failCount} user(s) failed to ${action}`);
           }
         }
       },
       onError: (error) => {
-        console.error('Error deactivating users:', error);
-        toast.error('Failed to deactivate user(s)');
+        console.error('Error processing users:', error);
+        toast.error(`Failed to ${confirmAction} user(s)`);
         setIsConfirmDialogOpen(false);
-        setUsersToDelete([]);
+        setUsersToProcess([]);
       }
     }
   );
@@ -995,7 +1041,7 @@ export default function UsersTab() {
     }
   };
 
-  const handleDelete = (users: AdminUser[]) => {
+  const handleDeactivate = (users: AdminUser[]) => {
     const validUsers = users.filter(u => u.id !== currentUser?.id);
     
     if (validUsers.length === 0) {
@@ -1007,12 +1053,30 @@ export default function UsersTab() {
       toast.warning('Your account has been excluded from deactivation');
     }
     
-    setUsersToDelete(validUsers);
+    setUsersToProcess(validUsers);
+    setConfirmAction('deactivate');
     setIsConfirmDialogOpen(true);
   };
 
-  const confirmDelete = () => {
-    deactivateMutation.mutate(usersToDelete);
+  const handleDelete = (users: AdminUser[]) => {
+    const validUsers = users.filter(u => u.id !== currentUser?.id);
+    
+    if (validUsers.length === 0) {
+      toast.error('You cannot delete your own account');
+      return;
+    }
+    
+    if (validUsers.length < users.length) {
+      toast.warning('Your account has been excluded from deletion');
+    }
+    
+    setUsersToProcess(validUsers);
+    setConfirmAction('delete');
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmUserAction = () => {
+    processUsersMutation.mutate({ users: usersToProcess, action: confirmAction });
   };
 
   const handleTestAsUser = async (adminUser: AdminUser) => {
@@ -1072,20 +1136,24 @@ export default function UsersTab() {
         toast.success(`${adminUser.name} marked as verified`);
         queryClient.invalidateQueries(['admin-users']);
         
-        // Log the manual verification
-        await supabase
-          .from('audit_logs')
-          .insert({
-            user_id: currentUser?.id,
-            action: 'manually_verify_email',
-            entity_type: 'admin_user',
-            entity_id: adminUser.id,
-            details: {
-              email: adminUser.email,
-              reason: 'Admin user manually verified by administrator'
-            }
-          })
-          .catch(err => console.warn('Failed to log action:', err));
+        // Log the manual verification (wrapped in try-catch for safety)
+        try {
+          await supabase
+            .from('audit_logs')
+            .insert({
+              user_id: currentUser?.id,
+              action: 'manually_verify_email',
+              entity_type: 'admin_user',
+              entity_id: adminUser.id,
+              details: {
+                email: adminUser.email,
+                reason: 'Admin user manually verified by administrator'
+              }
+            });
+        } catch (logError) {
+          console.warn('Failed to log action:', logError);
+          // Don't fail the whole operation if logging fails
+        }
       } else {
         throw updateError;
       }
@@ -1288,14 +1356,27 @@ export default function UsersTab() {
       </button>
       
       {row.id !== currentUser?.id && (
-        <button
-          onClick={() => handleDelete([row])}
-          disabled={deactivateMutation.isLoading}
-          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors disabled:opacity-50"
-          title="Deactivate"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <>
+          {/* Deactivate button - toggles active status */}
+          <button
+            onClick={() => handleDeactivate([row])}
+            disabled={processUsersMutation.isLoading}
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors disabled:opacity-50"
+            title={row.status === 'active' ? 'Deactivate user' : 'User already inactive'}
+          >
+            <XCircle className="h-4 w-4" />
+          </button>
+          
+          {/* Delete button - permanently removes user */}
+          <button
+            onClick={() => handleDelete([row])}
+            disabled={processUsersMutation.isLoading}
+            className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors disabled:opacity-50"
+            title="Delete user permanently"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </>
       )}
     </div>
   );
@@ -1524,7 +1605,6 @@ export default function UsersTab() {
         loading={isLoading}
         isFetching={isFetching}
         renderActions={renderActions}
-        onDelete={handleDelete}
         emptyMessage="No system users found"
       />
 
@@ -1744,14 +1824,18 @@ export default function UsersTab() {
       {/* Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
-        title="Deactivate User"
-        message={`Are you sure you want to deactivate ${usersToDelete.length} user(s)? They will not be able to log in until reactivated.`}
-        confirmText="Deactivate"
+        title={confirmAction === 'delete' ? 'Delete User Permanently' : 'Deactivate User'}
+        message={
+          confirmAction === 'delete'
+            ? `Are you sure you want to permanently delete ${usersToProcess.length} user(s)? This action cannot be undone. All user data will be permanently removed.`
+            : `Are you sure you want to deactivate ${usersToProcess.length} user(s)? They will not be able to log in until reactivated.`
+        }
+        confirmText={confirmAction === 'delete' ? 'Delete Permanently' : 'Deactivate'}
         cancelText="Cancel"
-        onConfirm={confirmDelete}
+        onConfirm={confirmUserAction}
         onCancel={() => {
           setIsConfirmDialogOpen(false);
-          setUsersToDelete([]);
+          setUsersToProcess([]);
         }}
       />
     </div>
