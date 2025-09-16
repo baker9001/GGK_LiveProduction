@@ -99,6 +99,36 @@ interface AdminInvitation {
 // ===== API FUNCTIONS =====
 
 /**
+ * Check if a user with the given email already exists
+ */
+async function checkUserExists(email: string): Promise<{ exists: boolean; isActive?: boolean; userName?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, is_active, raw_user_meta_data')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - user doesn't exist
+        return { exists: false };
+      }
+      throw error;
+    }
+
+    return { 
+      exists: true, 
+      isActive: data?.is_active || false,
+      userName: data?.raw_user_meta_data?.name || email
+    };
+  } catch (error) {
+    console.error('Error checking user existence:', error);
+    return { exists: false };
+  }
+}
+
+/**
  * Simplified admin user creation without Edge Functions
  * Creates admin user directly in database tables
  */
@@ -112,6 +142,17 @@ async function createAdminUserSimple(data: {
   if (!currentUser) throw new Error('Not authenticated');
 
   try {
+    // Check if user already exists
+    const userCheck = await checkUserExists(data.email);
+    
+    if (userCheck.exists) {
+      if (userCheck.isActive) {
+        throw new Error(`An active user with email ${data.email} already exists in the system.`);
+      } else {
+        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate the existing user instead.`);
+      }
+    }
+
     // Generate a unique ID for the new user
     const newUserId = crypto.randomUUID();
     
@@ -240,6 +281,17 @@ async function createAdminUserWithAuth(data: {
   if (!currentUser) throw new Error('Not authenticated');
 
   try {
+    // Check if user already exists before attempting to create
+    const userCheck = await checkUserExists(data.email);
+    
+    if (userCheck.exists) {
+      if (userCheck.isActive) {
+        throw new Error(`An active user with email ${data.email} already exists in the system.`);
+      } else {
+        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate the existing user from the users list.`);
+      }
+    }
+
     // Step 1: Get a fresh session token
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     
@@ -539,6 +591,16 @@ export default function UsersTab() {
     email: '',
     role_id: '',
     personal_message: ''
+  });
+
+  // Email validation state
+  const [emailValidation, setEmailValidation] = useState<{
+    checking: boolean;
+    exists: boolean;
+    message?: string;
+  }>({
+    checking: false,
+    exists: false
   });
 
   // Edit form state
@@ -905,6 +967,19 @@ export default function UsersTab() {
   const handleInviteSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormErrors({});
+    
+    // Don't submit if email already exists
+    if (emailValidation.exists) {
+      toast.error('Cannot create user: ' + (emailValidation.message || 'Email already exists'));
+      return;
+    }
+    
+    // Don't submit if we're still checking
+    if (emailValidation.checking) {
+      toast.info('Please wait while we validate the email...');
+      return;
+    }
+    
     inviteUserMutation.mutate(inviteFormState);
   };
 
@@ -987,6 +1062,48 @@ export default function UsersTab() {
   };
 
   // ===== EFFECTS =====
+  
+  // Email validation effect
+  useEffect(() => {
+    const validateEmail = async () => {
+      const email = inviteFormState.email.trim().toLowerCase();
+      
+      // Only validate if email is valid format and at least 5 characters
+      if (email.length < 5 || !email.includes('@')) {
+        setEmailValidation({ checking: false, exists: false });
+        return;
+      }
+
+      setEmailValidation({ checking: true, exists: false });
+
+      try {
+        const userCheck = await checkUserExists(email);
+        
+        if (userCheck.exists) {
+          setEmailValidation({
+            checking: false,
+            exists: true,
+            message: userCheck.isActive 
+              ? `User "${userCheck.userName}" with this email already exists and is active.`
+              : `User "${userCheck.userName}" with this email exists but is inactive. Please reactivate from the users list.`
+          });
+        } else {
+          setEmailValidation({
+            checking: false,
+            exists: false,
+            message: undefined
+          });
+        }
+      } catch (error) {
+        console.error('Email validation error:', error);
+        setEmailValidation({ checking: false, exists: false });
+      }
+    };
+
+    // Debounce the validation
+    const timeoutId = setTimeout(validateEmail, 500);
+    return () => clearTimeout(timeoutId);
+  }, [inviteFormState.email]);
   
   useEffect(() => {
     if (editingUser) {
@@ -1369,12 +1486,18 @@ export default function UsersTab() {
             personal_message: ''
           });
           setFormErrors({});
+          setEmailValidation({ checking: false, exists: false });
         }}
         onSave={() => {
+          // Don't allow saving if email exists
+          if (emailValidation.exists) {
+            toast.error('Cannot create user: Email already exists');
+            return;
+          }
           const form = document.querySelector('form#invite-user-form') as HTMLFormElement;
           if (form) form.requestSubmit();
         }}
-        loading={inviteUserMutation.isLoading}
+        loading={inviteUserMutation.isLoading || emailValidation.checking}
       >
         <form id="invite-user-form" onSubmit={handleInviteSubmit} className="space-y-4">
           {formErrors.form && (
@@ -1393,16 +1516,44 @@ export default function UsersTab() {
             />
           </FormField>
 
-          <FormField id="invite-email" label="Email" required error={formErrors.email}>
-            <Input
-              id="invite-email"
-              name="email"
-              type="email"
-              placeholder="Enter email address"
-              value={inviteFormState.email}
-              onChange={(e) => setInviteFormState({ ...inviteFormState, email: e.target.value })}
-              leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-            />
+          <FormField 
+            id="invite-email" 
+            label="Email" 
+            required 
+            error={formErrors.email || (emailValidation.exists ? emailValidation.message : undefined)}
+          >
+            <div className="relative">
+              <Input
+                id="invite-email"
+                name="email"
+                type="email"
+                placeholder="Enter email address"
+                value={inviteFormState.email}
+                onChange={(e) => setInviteFormState({ ...inviteFormState, email: e.target.value })}
+                leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                className={emailValidation.exists ? 'border-red-300 dark:border-red-600' : ''}
+              />
+              {emailValidation.checking && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                </div>
+              )}
+              {!emailValidation.checking && emailValidation.exists && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                </div>
+              )}
+              {!emailValidation.checking && !emailValidation.exists && inviteFormState.email.includes('@') && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                </div>
+              )}
+            </div>
+            {emailValidation.exists && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {emailValidation.message}
+              </p>
+            )}
           </FormField>
 
           <FormField id="invite-role" label="Role" required error={formErrors.role_id}>
