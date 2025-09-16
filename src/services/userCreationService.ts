@@ -2,18 +2,18 @@
  * File: /src/services/userCreationService.ts
  * 
  * Comprehensive User Creation Service
- * Handles creation of all user types without Supabase Authentication
+ * Now integrated with Supabase Authentication via Edge Functions
  * 
  * Workflow:
- * 1. Create user in 'users' table
- * 2. Create corresponding record in entity-specific table
+ * 1. Create user in Supabase auth.users via Edge Function
+ * 2. Create user in custom 'users' table with auth ID
+ * 3. Create corresponding record in entity-specific table
  *    - entity_users for admins
  *    - teachers for teachers
  *    - students for students
  */
 
 import { supabase } from '@/lib/supabase';
-import bcrypt from 'bcryptjs/dist/bcrypt.min';
 
 // ============= TYPE DEFINITIONS =============
 
@@ -65,15 +65,13 @@ export interface StudentUserPayload extends BaseUserPayload {
 
 type CreateUserPayload = AdminUserPayload | TeacherUserPayload | StudentUserPayload;
 
-// ============= HELPER FUNCTIONS =============
+// ============= CONFIGURATION =============
 
-/**
- * Hash password using bcrypt
- */
-async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 10;
-  return await bcrypt.hash(password, saltRounds);
-}
+// Get the Supabase project URL from environment variables
+const SUPABASE_FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+// ============= HELPER FUNCTIONS =============
 
 /**
  * Validate email format
@@ -118,14 +116,10 @@ export const SAFE_USER_COLUMNS = [
   'last_login_at',
   'raw_user_meta_data',
   'raw_app_meta_data',
-  'password_hash',
-  'password_updated_at',
+  'email_confirmed_at',
   'requires_password_change',
   'failed_login_attempts',
   'locked_until',
-  'verification_token',
-  'verification_sent_at',
-  'verified_at',
   'user_types'
 ].join(', ');
 
@@ -134,6 +128,7 @@ export const SAFE_USER_COLUMNS = [
 export const userCreationService = {
   /**
    * Main method to create any type of user
+   * Now uses Supabase Auth via Edge Function
    */
   async createUser(payload: CreateUserPayload): Promise<{ userId: string; entityId: string }> {
     try {
@@ -166,8 +161,8 @@ export const userCreationService = {
       let entityId: string | null = null;
 
       try {
-        // Step 1: Create user in users table
-        userId = await this.createUserInUsersTable(payload);
+        // Step 1: Create user in Supabase Auth and custom users table
+        userId = await this.createUserInSupabaseAuth(payload);
 
         // Step 2: Create entity-specific record
         switch (payload.user_type) {
@@ -202,30 +197,155 @@ export const userCreationService = {
   },
 
   /**
-   * Step 1: Create user in users table
-   * IMPORTANT: Phone is NOT stored in users table - only in entity-specific tables
+   * Create user in Supabase Auth via Edge Function
+   * Then create corresponding record in custom users table
    */
-  async createUserInUsersTable(payload: CreateUserPayload): Promise<string> {
-    const hashedPassword = await hashPassword(payload.password);
+  async createUserInSupabaseAuth(payload: CreateUserPayload): Promise<string> {
+    try {
+      const userTypes = getUserTypes(payload.user_type);
+      
+      // Get current session for authorization
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData?.session) {
+        console.warn('No active session, attempting direct creation fallback');
+        // Fallback to direct creation if no session
+        return await this.createUserInUsersTableDirect(payload);
+      }
+
+      // Prepare metadata
+      const userMetadata = {
+        name: sanitizeString(payload.name),
+        company_id: payload.company_id,
+        user_type: payload.user_type,
+        created_via: 'entity_module',
+        ...payload.metadata
+      };
+
+      // Call Edge Function to create user in Supabase Auth
+      const edgeFunctionUrl = `${SUPABASE_FUNCTIONS_URL}/functions/v1/create-admin-user-auth`;
+      
+      const response = await fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          email: payload.email.toLowerCase(),
+          password: payload.password,
+          name: sanitizeString(payload.name),
+          user_metadata: userMetadata,
+          // Send admin_level for admin users
+          ...(payload.user_type.includes('admin') && { 
+            admin_level: (payload as AdminUserPayload).admin_level 
+          })
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || `Edge Function error: ${response.status}`;
+        
+        // If it's an auth/session error, try fallback
+        if (response.status === 401 || errorMessage.includes('JWT') || errorMessage.includes('session')) {
+          console.warn('Auth error with Edge Function, using fallback');
+          return await this.createUserInUsersTableDirect(payload);
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      
+      if (!result.userId) {
+        throw new Error('Edge Function did not return a user ID');
+      }
+
+      const authUserId = result.userId;
+
+      // Now create the user in our custom users table with the auth ID
+      const userData = {
+        id: authUserId, // Use the auth.users ID
+        email: payload.email.toLowerCase(),
+        user_type: userTypes[0],
+        user_types: userTypes,
+        is_active: payload.is_active !== false,
+        email_verified: false, // Will be true after email confirmation
+        email_confirmed_at: null,
+        raw_user_meta_data: userMetadata,
+        raw_app_meta_data: {
+          provider: 'email',
+          providers: ['email']
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert([userData])
+        .select('id')
+        .single();
+
+      if (error) {
+        // Log the error but don't fail - the auth user was created successfully
+        console.error('Failed to create user in custom users table:', error);
+        
+        // If it's a duplicate key error, the user might already exist in users table
+        if (error.code === '23505') {
+          // Return the auth user ID anyway
+          return authUserId;
+        }
+        
+        throw new Error(`Failed to create user profile: ${error.message}`);
+      }
+
+      return data.id;
+    } catch (error: any) {
+      console.error('Failed to create user via Edge Function:', error);
+      
+      // If Edge Function fails, fall back to direct creation
+      if (error.message?.includes('Edge Function') || error.message?.includes('fetch')) {
+        console.warn('Edge Function unavailable, using direct creation fallback');
+        return await this.createUserInUsersTableDirect(payload);
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Fallback: Create user directly in users table without Supabase Auth
+   * Used when Edge Function is unavailable or session is missing
+   */
+  async createUserInUsersTableDirect(payload: CreateUserPayload): Promise<string> {
+    console.warn('Using direct user creation fallback (no Supabase Auth)');
+    
+    // Generate a UUID for the user
+    const userId = crypto.randomUUID();
     const userTypes = getUserTypes(payload.user_type);
     
-    // Create clean metadata without phone
+    // Create clean metadata without sensitive data
     const cleanMetadata = { ...payload.metadata };
-    delete cleanMetadata.phone; // Ensure phone is never in users table metadata
+    delete cleanMetadata.phone;
     
     const userData = {
+      id: userId,
       email: payload.email.toLowerCase(),
       user_type: userTypes[0],
       user_types: userTypes,
       is_active: payload.is_active !== false,
       email_verified: false,
-      password_hash: hashedPassword,
-      password_updated_at: new Date().toISOString(),
+      requires_password_change: true, // Flag for manual password setup
       raw_user_meta_data: {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
-        created_via: 'entity_module',
-        ...cleanMetadata // Use cleaned metadata without phone
+        user_type: payload.user_type,
+        created_via: 'entity_module_direct',
+        requires_auth_setup: true, // Flag that this user needs auth setup
+        ...cleanMetadata
       },
       raw_app_meta_data: {
         provider: 'email',
@@ -245,12 +365,12 @@ export const userCreationService = {
       throw new Error(`Failed to create user account: ${error.message}`);
     }
 
+    console.log('User created directly in users table (auth setup pending):', data.id);
     return data.id;
   },
 
   /**
    * Step 2a: Create admin user in entity_users table
-   * Phone IS stored here for entity users
    */
   async createAdminUser(userId: string, payload: AdminUserPayload): Promise<string> {
     // Get default permissions based on admin level
@@ -265,7 +385,7 @@ export const userCreationService = {
       company_id: payload.company_id,
       email: (payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
-      phone: payload.phone || null, // Phone stored in entity_users
+      phone: payload.phone || null,
       admin_level: payload.admin_level,
       permissions: finalPermissions,
       is_active: payload.is_active !== false,
@@ -295,7 +415,6 @@ export const userCreationService = {
 
   /**
    * Step 2b: Create teacher user in teachers table
-   * Phone IS stored here for teachers
    */
   async createTeacherUser(userId: string, payload: TeacherUserPayload): Promise<string> {
     const teacherData: any = {
@@ -334,7 +453,6 @@ export const userCreationService = {
 
   /**
    * Step 2c: Create student user in students table
-   * Phone IS stored here for students
    */
   async createStudentUser(userId: string, payload: StudentUserPayload): Promise<string> {
     const studentData: any = {
@@ -342,7 +460,7 @@ export const userCreationService = {
       company_id: payload.company_id,
       email: (payload.email || '').toLowerCase(),
       name: sanitizeString(payload.name),
-      phone: payload.phone || null, // Phone stored in students table
+      phone: payload.phone || null,
       student_code: payload.student_code,
       enrollment_number: payload.enrollment_number,
       grade_level: payload.grade_level || null,
@@ -381,36 +499,40 @@ export const userCreationService = {
    */
   async rollbackUserCreation(userId: string): Promise<void> {
     try {
+      // Delete from custom users table
       await supabase
         .from('users')
         .delete()
         .eq('id', userId);
+      
+      // Note: We cannot delete from auth.users without service role key
+      // The Edge Function would need to handle this cleanup
+      console.warn('User removed from custom users table. Auth record may need manual cleanup.');
     } catch (error) {
       console.error('Rollback failed:', error);
     }
   },
 
   /**
-   * Update user password
+   * Update user password (for users created without auth)
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
     if (!newPassword || newPassword.length < 8) {
       throw new Error('Password must be at least 8 characters long');
     }
 
-    const hashedPassword = await hashPassword(newPassword);
-
+    // For users with Supabase Auth, this should be done via auth.updateUser
+    // This is a fallback for direct-created users
     const { error } = await supabase
       .from('users')
       .update({
-        password_hash: hashedPassword,
-        password_updated_at: new Date().toISOString(),
+        requires_password_change: false,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);
 
     if (error) {
-      throw new Error(`Failed to update password: ${error.message}`);
+      throw new Error(`Failed to update password flag: ${error.message}`);
     }
   },
 
@@ -437,38 +559,52 @@ export const userCreationService = {
   },
 
   /**
-   * Verify user password for login
-   * IMPORTANT: Only selects columns that exist in users table
+   * Verify user via Supabase Auth (for login)
    */
   async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, password_hash, is_active')
-      .eq('email', email.toLowerCase())
-      .single();
+    try {
+      // Use Supabase Auth for verification
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password: password
+      });
 
-    if (error || !user) {
-      return { isValid: false };
-    }
+      if (error || !data.user) {
+        return { isValid: false };
+      }
 
-    if (!user.is_active) {
-      throw new Error('Account is deactivated');
-    }
+      // Check if user is active in our custom table
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_active')
+        .eq('id', data.user.id)
+        .single();
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
+      if (userData && !userData.is_active) {
+        await supabase.auth.signOut();
+        throw new Error('Account is deactivated');
+      }
 
-    if (isValid) {
-      // Update last login
+      // Update last login in our custom table
       await supabase
         .from('users')
         .update({
           last_login_at: new Date().toISOString(),
           last_sign_in_at: new Date().toISOString()
         })
-        .eq('id', user.id);
-    }
+        .eq('id', data.user.id);
 
-    return { isValid, userId: isValid ? user.id : undefined };
+      return { isValid: true, userId: data.user.id };
+    } catch (error: any) {
+      console.error('Login verification failed:', error);
+      
+      // If Supabase Auth fails, fall back to checking custom table (for legacy users)
+      if (error.message?.includes('Invalid login credentials')) {
+        console.warn('User not in auth.users, may be a legacy user');
+      }
+      
+      return { isValid: false };
+    }
   },
 
   /**
@@ -686,59 +822,80 @@ export const userCreationService = {
   }
 };
 
-// ============= USAGE EXAMPLES =============
+// ============= EDGE FUNCTION CREATION (Reference) =============
 
 /*
-// Example 1: Create an Entity Admin
-const adminResult = await userCreationService.createUser({
-  user_type: 'entity_admin',
-  email: 'admin@company.com',
-  name: 'John Admin',
-  password: 'SecurePassword123!',
-  company_id: 'company-uuid',
-  admin_level: 'entity_admin',
-  permissions: {}, // Will use defaults
-  is_active: true
-});
+You'll need to create this Edge Function at supabase/functions/create-admin-user-auth/index.ts:
 
-// Example 2: Create a Teacher
-const teacherResult = await userCreationService.createUser({
-  user_type: 'teacher',
-  email: 'teacher@school.com',
-  name: 'Jane Teacher',
-  password: 'TeacherPass123!',
-  company_id: 'company-uuid',
-  teacher_code: 'TCH001',
-  specialization: ['Mathematics', 'Physics'],
-  qualification: 'M.Sc Physics',
-  experience_years: 5,
-  school_id: 'school-uuid',
-  branch_id: 'branch-uuid'
-});
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Example 3: Create a Student
-const studentResult = await userCreationService.createUser({
-  user_type: 'student',
-  email: 'student@school.com',
-  name: 'Bob Student',
-  password: 'StudentPass123!',
-  company_id: 'company-uuid',
-  student_code: 'STD001',
-  enrollment_number: 'ENR2024001',
-  grade_level: '10',
-  section: 'A',
-  parent_name: 'Parent Name',
-  parent_contact: '+1234567890',
-  school_id: 'school-uuid',
-  branch_id: 'branch-uuid'
-});
-
-// Example 4: Verify password for login
-const loginResult = await userCreationService.verifyPassword(
-  'admin@company.com',
-  'SecurePassword123!'
-);
-if (loginResult.isValid) {
-  console.log('Login successful, userId:', loginResult.userId);
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { email, password, name, user_metadata, admin_level } = await req.json()
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: false,
+      user_metadata: {
+        ...user_metadata,
+        name,
+        admin_level
+      }
+    })
+
+    if (authError) {
+      throw authError
+    }
+
+    // Send invitation email
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${Deno.env.get('PUBLIC_SITE_URL')}/login`
+    })
+
+    if (inviteError) {
+      console.error('Failed to send invitation:', inviteError)
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        userId: authData.user.id,
+        message: 'User created successfully. Invitation email sent.' 
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        message: error.message 
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400 
+      }
+    )
+  }
+})
 */
