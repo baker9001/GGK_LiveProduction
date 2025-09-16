@@ -1520,7 +1520,7 @@ export default function UsersTab() {
             id="invite-email" 
             label="Email" 
             required 
-            error={formErrors.email || (emailValidation.exists ? emailValidation.message : undefined)}
+            error={formErrors.email}
           >
             <div className="relative">
               <Input
@@ -1549,7 +1549,7 @@ export default function UsersTab() {
                 </div>
               )}
             </div>
-            {emailValidation.exists && (
+            {emailValidation.exists && emailValidation.message && (
               <p className="mt-1 text-sm text-red-600 dark:text-red-400">
                 {emailValidation.message}
               </p>
