@@ -1,6 +1,6 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * CORRECTED VERSION - Using admin_users_view instead of complex joins
+ * FIXED VERSION - With working Show Invitations functionality
  */
 
 import React, { useState, useEffect } from 'react';
@@ -87,10 +87,13 @@ interface AdminInvitation {
   email: string;
   name: string;
   role_id: string;
+  role_name?: string;
   status: 'pending' | 'accepted' | 'expired';
   expires_at: string;
   created_at: string;
   invited_by_name?: string;
+  invited_by?: string;
+  user_id?: string;
 }
 
 // ===== API FUNCTIONS =====
@@ -203,6 +206,7 @@ async function createAdminUserWithAuth(data: {
 
     if (inviteError) {
       console.error('Failed to create invitation record:', inviteError);
+      // Don't fail the whole operation if invitation fails
     }
 
     // Step 6: Send password reset email
@@ -389,25 +393,94 @@ export default function UsersTab() {
     }
   );
 
-  // Fetch pending invitations
-  const { data: invitations = [] } = useQuery<AdminInvitation[]>(
+  // FIXED: Fetch pending invitations with proper joins and error handling
+  const { 
+    data: invitations = [],
+    isLoading: invitationsLoading,
+    error: invitationsError,
+    refetch: refetchInvitations
+  } = useQuery<AdminInvitation[]>(
     ['admin-invitations', showInvitations],
     async () => {
       if (!showInvitations) return [];
 
-      const { data, error } = await supabase
-        .from('admin_invitations')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+      console.log('Fetching invitations...');
+      
+      try {
+        // First, let's try a simple query to see if the table exists and has data
+        const { data: invitationsData, error: invitationsError } = await supabase
+          .from('admin_invitations')
+          .select('*')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
 
-      if (error) throw error;
+        if (invitationsError) {
+          console.error('Error fetching invitations:', invitationsError);
+          throw invitationsError;
+        }
 
-      return data || [];
+        console.log('Raw invitations data:', invitationsData);
+
+        if (!invitationsData || invitationsData.length === 0) {
+          console.log('No pending invitations found');
+          return [];
+        }
+
+        // Get role names for the invitations
+        const roleIds = [...new Set(invitationsData.map(inv => inv.role_id).filter(Boolean))];
+        let roleMap = new Map<string, string>();
+
+        if (roleIds.length > 0) {
+          const { data: rolesData } = await supabase
+            .from('roles')
+            .select('id, name')
+            .in('id', roleIds);
+
+          if (rolesData) {
+            roleMap = new Map(rolesData.map(r => [r.id, r.name]));
+          }
+        }
+
+        // Get inviter names if we have invited_by IDs
+        const inviterIds = [...new Set(invitationsData.map(inv => inv.invited_by).filter(Boolean))];
+        let inviterMap = new Map<string, string>();
+
+        if (inviterIds.length > 0) {
+          const { data: invitersData } = await supabase
+            .from('admin_users')
+            .select('id, name')
+            .in('id', inviterIds);
+
+          if (invitersData) {
+            inviterMap = new Map(invitersData.map(u => [u.id, u.name]));
+          }
+        }
+
+        // Map the data with role names and inviter names
+        const mappedInvitations = invitationsData.map(inv => ({
+          ...inv,
+          role_name: inv.role_id ? (roleMap.get(inv.role_id) || 'Unknown Role') : 'No Role',
+          invited_by_name: inv.invited_by ? (inviterMap.get(inv.invited_by) || 'Unknown') : 'System'
+        }));
+
+        console.log('Mapped invitations:', mappedInvitations);
+        return mappedInvitations;
+
+      } catch (error) {
+        console.error('Failed to fetch invitations:', error);
+        // Return empty array instead of throwing to prevent UI breaking
+        toast.warning('Unable to load invitations. The invitations table may not be set up yet.');
+        return [];
+      }
     },
     { 
       enabled: showInvitations,
-      staleTime: 30 * 1000 
+      staleTime: 30 * 1000,
+      retry: 1, // Only retry once
+      onError: (error) => {
+        console.error('Invitations query error:', error);
+        // Don't show error toast here since we handle it in the query function
+      }
     }
   );
 
@@ -656,6 +729,12 @@ export default function UsersTab() {
     }
   };
 
+  // Handle invitation toggle with debugging
+  const handleToggleInvitations = () => {
+    console.log('Toggling invitations from', showInvitations, 'to', !showInvitations);
+    setShowInvitations(!showInvitations);
+  };
+
   // ===== EFFECTS =====
   
   useEffect(() => {
@@ -675,6 +754,16 @@ export default function UsersTab() {
       });
     }
   }, [editingUser]);
+
+  // Debug effect to log when invitations should be shown
+  useEffect(() => {
+    console.log('Show invitations state changed:', showInvitations);
+    if (showInvitations) {
+      console.log('Invitations data:', invitations);
+      console.log('Invitations loading:', invitationsLoading);
+      console.log('Invitations error:', invitationsError);
+    }
+  }, [showInvitations, invitations, invitationsLoading, invitationsError]);
 
   // ===== TABLE CONFIGURATION =====
   
@@ -800,6 +889,24 @@ export default function UsersTab() {
       accessorKey: 'name',
     },
     {
+      id: 'role',
+      header: 'Role',
+      accessorKey: 'role_name',
+      cell: (row: AdminInvitation) => (
+        <span>{row.role_name || 'No Role'}</span>
+      ),
+    },
+    {
+      id: 'invited_by',
+      header: 'Invited By',
+      accessorKey: 'invited_by_name',
+      cell: (row: AdminInvitation) => (
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          {row.invited_by_name || 'System'}
+        </span>
+      ),
+    },
+    {
       id: 'expires',
       header: 'Expires',
       accessorKey: 'expires_at',
@@ -807,8 +914,9 @@ export default function UsersTab() {
         const expiresAt = new Date(row.expires_at);
         const isExpired = expiresAt < new Date();
         return (
-          <span className={isExpired ? 'text-red-600' : 'text-gray-600'}>
+          <span className={isExpired ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}>
             {expiresAt.toLocaleDateString()}
+            {isExpired && ' (Expired)'}
           </span>
         );
       }
@@ -820,7 +928,7 @@ export default function UsersTab() {
       <button
         onClick={() => resendInviteMutation.mutate(row.id)}
         disabled={resendInviteMutation.isLoading}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors disabled:opacity-50"
         title="Resend invitation"
       >
         {resendInviteMutation.isLoading ? (
@@ -871,9 +979,14 @@ export default function UsersTab() {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() => setShowInvitations(!showInvitations)}
+            onClick={handleToggleInvitations}
           >
             {showInvitations ? 'Hide' : 'Show'} Invitations
+            {showInvitations && invitations.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 rounded-full">
+                {invitations.length}
+              </span>
+            )}
           </Button>
           
           <Button
@@ -942,19 +1055,38 @@ export default function UsersTab() {
         </div>
       </FilterCard>
 
-      {/* Pending Invitations Table */}
-      {showInvitations && invitations.length > 0 && (
+      {/* Pending Invitations Section - FIXED to show when toggle is on */}
+      {showInvitations && (
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-          <h3 className="text-sm font-semibold mb-3">Pending Invitations</h3>
-          <DataTable
-            data={invitations}
-            columns={invitationColumns}
-            keyField="id"
-            caption="Pending admin user invitations"
-            ariaLabel="Pending invitations table"
-            renderActions={renderInvitationActions}
-            compact
-          />
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold">Pending Invitations</h3>
+            {invitationsLoading && (
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+            )}
+          </div>
+          
+          {invitationsError ? (
+            <div className="text-sm text-amber-600 dark:text-amber-400 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-md">
+              <p className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Unable to load invitations. The admin_invitations table may need to be created.
+              </p>
+            </div>
+          ) : invitations.length > 0 ? (
+            <DataTable
+              data={invitations}
+              columns={invitationColumns}
+              keyField="id"
+              caption="Pending admin user invitations"
+              ariaLabel="Pending invitations table"
+              renderActions={renderInvitationActions}
+              compact
+            />
+          ) : !invitationsLoading ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400 py-4 text-center">
+              No pending invitations found
+            </p>
+          ) : null}
         </div>
       )}
 
