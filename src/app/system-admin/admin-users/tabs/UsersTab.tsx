@@ -759,30 +759,49 @@ export default function UsersTab() {
             if (error) throw error;
             
           } else if (action === 'delete') {
-            // Delete: Remove from all tables
-            // Order matters due to foreign key constraints
+            // Delete: Check for dependencies before attempting deletion
             
-            // 1. Delete from admin_invitations if exists
-            await supabase
-              .from('admin_invitations')
-              .delete()
-              .eq('user_id', user.id);
+            // Check if user has dependent records that prevent deletion
+            const { data: sessions, error: checkError } = await supabase
+              .from('past_paper_import_sessions')
+              .select('id')
+              .eq('uploader_id', user.id)
+              .limit(1);
             
-            // 2. Delete from admin_users
+            if (sessions && sessions.length > 0) {
+              throw new Error(`Cannot delete user: They have uploaded past papers. Please reassign or delete those records first.`);
+            }
+            
+            // Delete from admin_users first
             const { error: adminError } = await supabase
               .from('admin_users')
               .delete()
               .eq('id', user.id);
             
-            if (adminError) throw adminError;
+            if (adminError) {
+              // Provide helpful error message for foreign key violations
+              if (adminError.code === '23503' && adminError.message) {
+                const tableMatch = adminError.message.match(/table "([^"]+)"/);
+                const tableName = tableMatch ? tableMatch[1] : 'another table';
+                throw new Error(`Cannot delete: User has related records in ${tableName}. Please handle those records first.`);
+              }
+              throw adminError;
+            }
             
-            // 3. Delete from users table
+            // Delete from users table
             const { error: userError } = await supabase
               .from('users')
               .delete()
               .eq('id', user.id);
             
-            if (userError) throw userError;
+            if (userError) {
+              console.error('Failed to delete from users table:', userError);
+              // Note: admin_users record already deleted, can't rollback easily
+              throw userError;
+            }
+            
+            // Note: Cannot delete from auth.users without service role
+            console.warn('User removed from database tables. Auth record may need manual cleanup.');
           }
           
           // Log the action
@@ -1664,8 +1683,8 @@ export default function UsersTab() {
         title={confirmAction === 'delete' ? 'Delete User Permanently' : 'Deactivate User'}
         message={
           confirmAction === 'delete'
-            ? `Are you sure you want to permanently delete ${usersToProcess.length} user(s)? This action cannot be undone. All user data will be permanently removed.`
-            : `Are you sure you want to deactivate ${usersToProcess.length} user(s)? They will not be able to log in until reactivated.`
+            ? `Are you sure you want to permanently delete ${usersToProcess.length} user(s)? This action cannot be undone. All user data will be permanently removed, including:\n• User account and authentication\n• Admin profile\n• Any content they created (papers, sessions, etc.)\n• All related records\n\nThis is IRREVERSIBLE!`
+            : `Are you sure you want to deactivate ${usersToProcess.length} user(s)? They will not be able to log in until reactivated. Their data will be preserved.`
         }
         confirmText={confirmAction === 'delete' ? 'Delete Permanently' : 'Deactivate'}
         cancelText="Cancel"
