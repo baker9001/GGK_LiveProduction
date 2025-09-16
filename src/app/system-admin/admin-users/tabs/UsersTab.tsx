@@ -299,6 +299,7 @@ async function createAdminUserWithAuth(data: {
       }
     }
 
+    // Generate a temporary password for the auth user
     const tempPassword = crypto.randomUUID() + 'Temp1!';
 
     // Step 2: Create user in Supabase Auth with invitation
@@ -648,7 +649,7 @@ export default function UsersTab() {
     ['admin-invitations', showInvitations],
     async () => {
       if (!showInvitations) return [];
-      
+
       try {
         // First get the invitations
         const { data: invitationsData, error: invitationsError } = await supabase
