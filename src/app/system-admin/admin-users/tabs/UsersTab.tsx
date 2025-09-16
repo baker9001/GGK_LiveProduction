@@ -1055,55 +1055,44 @@ export default function UsersTab() {
     }
   };
 
-  // Handle resending verification email
+  // Handle email verification - for admin users, we just mark as verified
   const handleResendVerification = async (adminUser: AdminUser) => {
     try {
-      // Get fresh session
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session) {
-        toast.error('Session expired. Please refresh the page.');
-        return;
-      }
-
-      // Try to send verification email via Edge Function if available
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/send-verification-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-        },
-        body: JSON.stringify({
-          email: adminUser.email,
-          name: adminUser.name
+      // For admin users created manually, we can simply mark them as verified
+      // They don't need email verification since they're manually vetted
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          email_verified: true,
+          updated_at: new Date().toISOString()
         })
-      });
+        .eq('id', adminUser.id);
 
-      if (response.ok) {
-        toast.success(`Verification email sent to ${adminUser.email}`);
+      if (!updateError) {
+        toast.success(`${adminUser.name} marked as verified`);
+        queryClient.invalidateQueries(['admin-users']);
+        
+        // Log the manual verification
+        await supabase
+          .from('audit_logs')
+          .insert({
+            user_id: currentUser?.id,
+            action: 'manually_verify_email',
+            entity_type: 'admin_user',
+            entity_id: adminUser.id,
+            details: {
+              email: adminUser.email,
+              reason: 'Admin user manually verified by administrator'
+            }
+          })
+          .catch(err => console.warn('Failed to log action:', err));
       } else {
-        // Fallback message if Edge Function doesn't exist
-        toast.info(`Please manually verify the email for ${adminUser.email}`);
+        throw updateError;
       }
 
-      // Log the action
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: currentUser?.id,
-          action: 'resend_verification_email',
-          entity_type: 'admin_user',
-          entity_id: adminUser.id,
-          details: {
-            email: adminUser.email
-          }
-        })
-        .catch(err => console.warn('Failed to log action:', err));
-
-    } catch (error) {
-      console.error('Error resending verification:', error);
-      toast.error('Failed to resend verification email');
+    } catch (error: any) {
+      console.error('Error marking as verified:', error);
+      toast.error('Failed to mark user as verified');
     }
   };
 
@@ -1266,14 +1255,14 @@ export default function UsersTab() {
 
   const renderActions = (row: AdminUser) => (
     <div className="flex items-center justify-end space-x-2">
-      {/* Resend verification email for unverified users */}
+      {/* Handle email verification for unverified users */}
       {row.status === 'active' && !row.email_verified && (
         <button
           onClick={() => handleResendVerification(row)}
           className="text-amber-600 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 p-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-full transition-colors"
-          title="Resend verification email"
+          title="Mark as verified (admin users don't require email verification)"
         >
-          <Mail className="h-4 w-4" />
+          <CheckCircle className="h-4 w-4" />
         </button>
       )}
       
@@ -1545,14 +1534,14 @@ export default function UsersTab() {
           <div className="flex items-start gap-2">
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
             <div className="text-sm text-amber-700 dark:text-amber-300">
-              <p className="font-semibold mb-1">About Email Verification</p>
+              <p className="font-semibold mb-1">About Email Verification for Admin Users</p>
               <p>
-                Users marked as "Unverified" can still access the system normally. The unverified status only indicates 
-                they haven't confirmed their email address yet. This doesn't affect their ability to log in or use the system.
+                Admin users marked as "Unverified" can access the system normally. Since these are manually-created 
+                administrative accounts, email verification is optional.
               </p>
               <p className="mt-2">
-                Email verification is optional for system administrators. You can send verification emails using the 
-                envelope icon in the actions column if needed.
+                To remove the "Unverified" badge, click the <CheckCircle className="inline h-3 w-3" /> check icon 
+                in the actions column. This will mark the user as verified without requiring email confirmation.
               </p>
             </div>
           </div>
