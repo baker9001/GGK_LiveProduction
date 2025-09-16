@@ -211,7 +211,30 @@ async function createAdminUserSimple(data: {
       throw adminError;
     }
 
-    // Step 3: Log the action (optional)
+    // Step 3: Create invitation record (optional - if table exists)
+    try {
+      const inviteToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      await supabase
+        .from('admin_invitations')
+        .insert({
+          user_id: newUserId,
+          email: data.email,
+          name: data.name,
+          role_id: data.role_id,
+          invited_by: currentUser.id,
+          token: inviteToken,
+          expires_at: expiresAt.toISOString(),
+          status: 'pending',
+          personal_message: data.personal_message
+        });
+    } catch (inviteError) {
+      console.warn('Invitation record could not be created:', inviteError);
+      // Continue anyway - invitation tracking is optional
+    }
+
+    // Step 4: Log the action (optional)
     try {
       await supabase
         .from('audit_logs')
@@ -272,11 +295,10 @@ async function createAdminUserWithAuth(data: {
       if (userCheck.isActive) {
         throw new Error(`An active user with email ${data.email} already exists in the system.`);
       } else {
-        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate from the users list.`);
+        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate the existing user instead.`);
       }
     }
 
-    // Step 1: Generate a random password (user will reset it via email)
     const tempPassword = crypto.randomUUID() + 'Temp1!';
 
     // Step 2: Create user in Supabase Auth with invitation
@@ -363,7 +385,30 @@ async function createAdminUserWithAuth(data: {
       throw adminError;
     }
 
-    // Step 5: Log the action (optional)
+    // Step 5: Create tracking record for invitation (optional)
+    try {
+      const inviteToken = btoa(Math.random().toString(36).substring(2));
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await supabase
+        .from('admin_invitations')
+        .insert({
+          user_id: authUserId,
+          email: data.email,
+          name: data.name,
+          role_id: data.role_id,
+          invited_by: currentUser.id,
+          token: inviteToken,
+          expires_at: expiresAt.toISOString(),
+          status: 'pending',
+          personal_message: data.personal_message
+        });
+    } catch (inviteTrackingError) {
+      console.warn('Failed to create invitation tracking:', inviteTrackingError);
+      // Don't fail - this is optional tracking
+    }
+
+    // Step 6: Log the action (optional)
     try {
       await supabase
         .from('audit_logs')
@@ -593,7 +638,7 @@ export default function UsersTab() {
     }
   );
 
-  // FIXED: Fetch pending invitations (simplified - table structure may vary)
+  // FIXED: Fetch pending invitations with proper joins and error handling
   const { 
     data: invitations = [],
     isLoading: invitationsLoading,
@@ -603,18 +648,82 @@ export default function UsersTab() {
     ['admin-invitations', showInvitations],
     async () => {
       if (!showInvitations) return [];
-
-      console.log('Fetching invitations...');
       
-      // Since admin_invitations table structure is uncertain, 
-      // we'll just return empty array for now
-      // Supabase Auth handles the actual email invitations
-      return [];
+      try {
+        // First get the invitations
+        const { data: invitationsData, error: invitationsError } = await supabase
+          .from('admin_invitations')
+          .select('*')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+
+        if (invitationsError) {
+          console.error('Error fetching invitations:', invitationsError);
+          throw invitationsError;
+        }
+
+        console.log('Raw invitations data:', invitationsData);
+
+        if (!invitationsData || invitationsData.length === 0) {
+          console.log('No pending invitations found');
+          return [];
+        }
+
+        // Get role names for the invitations
+        const roleIds = [...new Set(invitationsData.map(inv => inv.role_id).filter(Boolean))];
+        let roleMap = new Map<string, string>();
+
+        if (roleIds.length > 0) {
+          const { data: rolesData } = await supabase
+            .from('roles')
+            .select('id, name')
+            .in('id', roleIds);
+
+          if (rolesData) {
+            roleMap = new Map(rolesData.map(r => [r.id, r.name]));
+          }
+        }
+
+        // Get inviter names if we have invited_by IDs
+        const inviterIds = [...new Set(invitationsData.map(inv => inv.invited_by).filter(Boolean))];
+        let inviterMap = new Map<string, string>();
+
+        if (inviterIds.length > 0) {
+          const { data: invitersData } = await supabase
+            .from('admin_users')
+            .select('id, name')
+            .in('id', inviterIds);
+
+          if (invitersData) {
+            inviterMap = new Map(invitersData.map(u => [u.id, u.name]));
+          }
+        }
+
+        // Map the data with role names and inviter names
+        const mappedInvitations = invitationsData.map(inv => ({
+          ...inv,
+          role_name: inv.role_id ? (roleMap.get(inv.role_id) || 'Unknown Role') : 'No Role',
+          invited_by_name: inv.invited_by ? (inviterMap.get(inv.invited_by) || 'Unknown') : 'System'
+        }));
+
+        console.log('Mapped invitations:', mappedInvitations);
+        return mappedInvitations;
+
+      } catch (error) {
+        console.error('Failed to fetch invitations:', error);
+        // Return empty array instead of throwing to prevent UI breaking
+        toast.warning('Unable to load invitations. The invitations table may not be set up yet.');
+        return [];
+      }
     },
     { 
       enabled: showInvitations,
       staleTime: 30 * 1000,
-      retry: 1,
+      retry: 1, // Only retry once
+      onError: (error) => {
+        console.error('Invitations query error:', error);
+        // Don't show error toast here since we handle it in the query function
+      }
     }
   );
 
@@ -759,49 +868,30 @@ export default function UsersTab() {
             if (error) throw error;
             
           } else if (action === 'delete') {
-            // Delete: Check for dependencies before attempting deletion
+            // Delete: Remove from all tables
+            // Order matters due to foreign key constraints
             
-            // Check if user has dependent records that prevent deletion
-            const { data: sessions, error: checkError } = await supabase
-              .from('past_paper_import_sessions')
-              .select('id')
-              .eq('uploader_id', user.id)
-              .limit(1);
+            // 1. Delete from admin_invitations if exists
+            await supabase
+              .from('admin_invitations')
+              .delete()
+              .eq('user_id', user.id);
             
-            if (sessions && sessions.length > 0) {
-              throw new Error(`Cannot delete user: They have uploaded past papers. Please reassign or delete those records first.`);
-            }
-            
-            // Delete from admin_users first
+            // 2. Delete from admin_users
             const { error: adminError } = await supabase
               .from('admin_users')
               .delete()
               .eq('id', user.id);
             
-            if (adminError) {
-              // Provide helpful error message for foreign key violations
-              if (adminError.code === '23503' && adminError.message) {
-                const tableMatch = adminError.message.match(/table "([^"]+)"/);
-                const tableName = tableMatch ? tableMatch[1] : 'another table';
-                throw new Error(`Cannot delete: User has related records in ${tableName}. Please handle those records first.`);
-              }
-              throw adminError;
-            }
+            if (adminError) throw adminError;
             
-            // Delete from users table
+            // 3. Delete from users table
             const { error: userError } = await supabase
               .from('users')
               .delete()
               .eq('id', user.id);
             
-            if (userError) {
-              console.error('Failed to delete from users table:', userError);
-              // Note: admin_users record already deleted, can't rollback easily
-              throw userError;
-            }
-            
-            // Note: Cannot delete from auth.users without service role
-            console.warn('User removed from database tables. Auth record may need manual cleanup.');
+            if (userError) throw userError;
           }
           
           // Log the action
@@ -1683,8 +1773,8 @@ export default function UsersTab() {
         title={confirmAction === 'delete' ? 'Delete User Permanently' : 'Deactivate User'}
         message={
           confirmAction === 'delete'
-            ? `Are you sure you want to permanently delete ${usersToProcess.length} user(s)? This action cannot be undone. All user data will be permanently removed, including:\n• User account and authentication\n• Admin profile\n• Any content they created (papers, sessions, etc.)\n• All related records\n\nThis is IRREVERSIBLE!`
-            : `Are you sure you want to deactivate ${usersToProcess.length} user(s)? They will not be able to log in until reactivated. Their data will be preserved.`
+            ? `Are you sure you want to permanently delete ${usersToProcess.length} user(s)? This action cannot be undone. All user data will be permanently removed.`
+            : `Are you sure you want to deactivate ${usersToProcess.length} user(s)? They will not be able to log in until reactivated.`
         }
         confirmText={confirmAction === 'delete' ? 'Delete Permanently' : 'Deactivate'}
         cancelText="Cancel"
