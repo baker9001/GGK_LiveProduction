@@ -1,6 +1,6 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * UPDATED VERSION - Invitation creates auth.users first
+ * CORRECTED VERSION - Using admin_users_view instead of complex joins
  */
 
 import React, { useState, useEffect } from 'react';
@@ -67,6 +67,7 @@ interface AdminUser {
   requires_password_change?: boolean;
   last_login_at?: string;
   invitation_status?: 'pending' | 'accepted' | 'expired';
+  updated_at?: string;
 }
 
 interface Role {
@@ -112,7 +113,6 @@ async function createAdminUserWithAuth(data: {
     const tempPassword = crypto.randomUUID() + 'Aa1!';
     
     // Step 2: Create user in Supabase Auth first
-    // We need to use the service role for this, so we'll call our Edge Function
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const token = getAuthToken();
     
@@ -160,7 +160,6 @@ async function createAdminUserWithAuth(data: {
 
     if (usersError) {
       console.error('Failed to create users record:', usersError);
-      // Note: We should ideally rollback the auth user here
       throw usersError;
     }
 
@@ -170,7 +169,6 @@ async function createAdminUserWithAuth(data: {
       .insert({
         id: authUserId,
         name: data.name,
-        email: data.email.toLowerCase(),
         role_id: data.role_id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -205,11 +203,9 @@ async function createAdminUserWithAuth(data: {
 
     if (inviteError) {
       console.error('Failed to create invitation record:', inviteError);
-      // Don't fail the whole operation if invitation fails
     }
 
     // Step 6: Send password reset email
-    // This should be done via Edge Function to use service role
     await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
       method: 'POST',
       headers: {
@@ -344,7 +340,7 @@ export default function UsersTab() {
     { staleTime: 10 * 60 * 1000 }
   );
 
-  // Fetch users using the view
+  // CORRECTED: Fetch users using the admin_users_view
   const { 
     data: users = [], 
     isLoading, 
@@ -354,40 +350,23 @@ export default function UsersTab() {
   } = useQuery<AdminUser[]>(
     ['admin-users', filters],
     async () => {
+      // Use the view instead of complex joins
       let query = supabase
-        .from('admin_users')
-        .select(`
-          id,
-          name,
-          role_id,
-          created_at,
-          updated_at,
-          roles!inner(name),
-          users!inner(
-            email,
-            is_active,
-            email_verified,
-            created_at
-          ),
-          admin_invitations(
-            status,
-            expires_at
-          )
-        `)
+        .from('admin_users_view')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (filters.name) {
         query = query.ilike('name', `%${filters.name}%`);
       }
       if (filters.email) {
-        query = query.ilike('users.email', `%${filters.email}%`);
+        query = query.ilike('email', `%${filters.email}%`);
       }
       if (filters.role) {
         query = query.eq('role_id', filters.role);
       }
       if (filters.status.length > 0) {
-        const activeStatuses = filters.status.map(s => s === 'active');
-        query = query.in('users.is_active', activeStatuses);
+        query = query.in('status', filters.status);
       }
 
       const { data, error } = await query;
@@ -396,22 +375,7 @@ export default function UsersTab() {
         throw error;
       }
 
-      // Transform the data to match the expected AdminUser interface
-      return (data || []).map(user => ({
-        id: user.id,
-        name: user.name,
-        email: user.users.email,
-        role_id: user.role_id,
-        role_name: user.roles.name,
-        status: user.users.is_active ? 'active' : 'inactive',
-        created_at: user.created_at,
-        email_verified: user.users.email_verified || false,
-        requires_password_change: false, // Default value since not in schema
-        last_login_at: null, // Default value since not in schema
-        invitation_status: user.admin_invitations?.[0]?.status === 'pending' && 
-                          new Date(user.admin_invitations[0].expires_at) > new Date() 
-                          ? 'pending' : undefined
-      }));
+      return data || [];
     },
     { 
       keepPreviousData: true, 
@@ -433,22 +397,13 @@ export default function UsersTab() {
 
       const { data, error } = await supabase
         .from('admin_invitations')
-        .select(`
-          *,
-          roles (name),
-          users!invited_by (
-            raw_user_meta_data
-          )
-        `)
+        .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      return (data || []).map(inv => ({
-        ...inv,
-        invited_by_name: inv.users?.raw_user_meta_data?.name || 'Unknown'
-      }));
+      return data || [];
     },
     { 
       enabled: showInvitations,
@@ -458,7 +413,7 @@ export default function UsersTab() {
 
   // ===== MUTATIONS =====
   
-  // Invite user mutation - now creates auth user first
+  // Invite user mutation
   const inviteUserMutation = useMutation(
     async (data: any) => {
       const validatedData = inviteUserSchema.parse(data);
@@ -857,11 +812,6 @@ export default function UsersTab() {
           </span>
         );
       }
-    },
-    {
-      id: 'invited_by',
-      header: 'Invited By',
-      accessorKey: 'invited_by_name',
     }
   ];
 
