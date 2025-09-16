@@ -384,15 +384,15 @@ async function createAdminUserWithAuth(data: {
     }
 
     // Step 7: Try to send invitation email (optional - if Edge Function exists)
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session) {
+    const { data: emailSessionData } = await supabase.auth.getSession();
+    if (emailSessionData?.session) {
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'Authorization': `Bearer ${emailSessionData.session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
           },
           body: JSON.stringify({
