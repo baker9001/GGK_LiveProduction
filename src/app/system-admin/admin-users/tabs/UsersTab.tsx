@@ -184,15 +184,17 @@ async function createAdminUserSimple(data: {
       throw usersError;
     }
 
-    // Step 2: Create admin_users record (without email - it's only in users table)
+    // Step 2: Create admin_users record (matching actual table structure)
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
         id: newUserId,
         name: data.name,
         role_id: data.role_id,
+        can_manage_users: false, // Default value
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
+        // NO email field - it doesn't exist in this table
       });
 
     if (adminError) {
@@ -202,6 +204,9 @@ async function createAdminUserSimple(data: {
       
       if (adminError.code === '23505') {
         throw new Error('An admin user with this ID already exists');
+      }
+      if (adminError.code === '42703') {
+        throw new Error(`Database error: ${adminError.message}. Check table structure.`);
       }
       throw adminError;
     }
@@ -375,15 +380,17 @@ async function createAdminUserWithAuth(data: {
       throw usersError;
     }
 
-    // Step 5: Create admin_users record (without email - it's only in users table)
+    // Step 5: Create admin_users record (matching actual table structure)
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
         id: authUserId,
         name: data.name,
         role_id: data.role_id,
+        can_manage_users: false, // Default value from table structure
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
+        // NO email field - it doesn't exist in this table
       });
 
     if (adminError) {
@@ -393,6 +400,9 @@ async function createAdminUserWithAuth(data: {
       
       if (adminError.code === '23505') {
         throw new Error('An admin user with this ID already exists');
+      }
+      if (adminError.code === '42703') {
+        throw new Error(`Database error: ${adminError.message}. Check table structure.`);
       }
       throw adminError;
     }
