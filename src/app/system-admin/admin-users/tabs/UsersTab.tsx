@@ -158,13 +158,13 @@ async function createAdminUserSimple(data: {
     // Generate a unique ID for the new user
     const newUserId = crypto.randomUUID();
     
-    // Step 1: Create record in users table
+    // Step 1: Create record in users table (matching your exact schema)
     const { error: usersError } = await supabase
       .from('users')
       .insert({
         id: newUserId,
-        email: data.email.toLowerCase(),
-        user_type: 'system',
+        email: data.email.toLowerCase(), // text field
+        user_type: 'system', // CRITICAL: Must be 'system' not 'entity' (default)
         is_active: true,
         email_verified: false,
         created_at: new Date().toISOString(),
@@ -275,8 +275,8 @@ async function createAdminUserSimple(data: {
 }
 
 /**
- * Creates admin user with auth.users record first
- * This ensures every admin has a proper auth account
+ * Creates admin user using Supabase Auth with email invitation
+ * Workflow: auth.users → email invite → public.users → public.admin_users → view
  */
 async function createAdminUserWithAuth(data: {
   email: string;
@@ -288,190 +288,128 @@ async function createAdminUserWithAuth(data: {
   if (!currentUser) throw new Error('Not authenticated');
 
   try {
-    // Check if user already exists before attempting to create
+    // Check if user already exists
     const userCheck = await checkUserExists(data.email);
     
     if (userCheck.exists) {
       if (userCheck.isActive) {
         throw new Error(`An active user with email ${data.email} already exists in the system.`);
       } else {
-        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate the existing user from the users list.`);
+        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate from the users list.`);
       }
     }
 
-    // Step 1: Get a fresh session token
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !sessionData?.session) {
-      console.error('Session error:', sessionError);
-      throw new Error('Session expired. Please refresh the page and try again.');
-    }
+    // Step 1: Generate a random password (user will reset it via email)
+    const tempPassword = crypto.randomUUID() + 'Temp1!';
 
-    const freshToken = sessionData.session.access_token;
-    
-    // Step 2: Generate temporary password
-    const tempPassword = crypto.randomUUID() + 'Aa1!';
-    
-    // Step 3: Create user in Supabase Auth first via Edge Function
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    
-    // Try Edge Function first if it exists
-    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/create-admin-user-auth`;
-    let authUserId: string;
-    
-    try {
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${freshToken}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-        },
-        body: JSON.stringify({
-          email: data.email,
+    // Step 2: Create user in Supabase Auth with invitation
+    // This will automatically send an invitation email if configured in Supabase
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: data.email,
+      password: tempPassword,
+      options: {
+        data: {
           name: data.name,
-          password: tempPassword,
-          role_id: data.role_id
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create auth user via Edge Function');
+          role_id: data.role_id,
+          user_type: 'system'
+        },
+        emailRedirectTo: `${window.location.origin}/admin/login`
       }
+    });
 
-      const authResult = await response.json();
-      authUserId = authResult.user.id;
-      console.log('Auth user created via Edge Function with ID:', authUserId);
-      
-    } catch (edgeFunctionError) {
-      console.warn('Edge Function not available, using direct approach:', edgeFunctionError);
-      
-      // Fallback: Create user directly using Supabase Admin API (requires service role key)
-      // For now, we'll create the user in our tables with a generated ID
-      authUserId = crypto.randomUUID();
-      console.log('Generated user ID for direct creation:', authUserId);
+    if (authError) {
+      console.error('Failed to create auth user:', authError);
+      throw new Error(authError.message || 'Failed to create user in Supabase Auth');
     }
 
-    // Step 4: Create record in custom users table
+    if (!authData.user) {
+      throw new Error('Failed to create user - no user returned');
+    }
+
+    const authUserId = authData.user.id;
+    console.log('Auth user created with ID:', authUserId);
+    console.log('Supabase will send confirmation email to:', data.email);
+
+    // Step 3: Create record in custom users table (matching your exact schema)
     const { error: usersError } = await supabase
       .from('users')
       .insert({
         id: authUserId,
-        email: data.email.toLowerCase(),
-        user_type: 'system',
-        is_active: true,
-        email_verified: false,
+        email: data.email.toLowerCase(), // text field in your schema
+        user_type: 'system', // IMPORTANT: 'system' for admin users (default is 'entity')
+        is_active: true, // boolean, default true
+        email_verified: false, // Will be true after they confirm email
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         raw_user_meta_data: {
           name: data.name,
-          role_id: data.role_id
+          role_id: data.role_id,
+          temp_password: true // Flag to force password change on first login
         }
+        // Note: email_confirmed_at, last_sign_in_at etc. are managed by Supabase Auth
       });
 
     if (usersError) {
       console.error('Failed to create users record:', usersError);
       
-      // Check if it's a duplicate key error
+      // Note: We can't delete auth.users record without service role key
+      // The orphaned auth record will need manual cleanup if this fails
+      
       if (usersError.code === '23505') {
         throw new Error('A user with this email already exists');
       }
       throw usersError;
     }
 
-    // Step 5: Create admin_users record (matching actual table structure)
+    // Step 4: Create admin_users record (based on actual table structure)
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
         id: authUserId,
         name: data.name,
         role_id: data.role_id,
-        can_manage_users: false, // Default value from table structure
+        can_manage_users: false, // Default from table structure
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-        // NO email field - it doesn't exist in this table
+        // NO email field in admin_users table
       });
 
     if (adminError) {
       console.error('Failed to create admin_users record:', adminError);
+      
       // Rollback users table entry
       await supabase.from('users').delete().eq('id', authUserId);
       
-      if (adminError.code === '23505') {
-        throw new Error('An admin user with this ID already exists');
-      }
-      if (adminError.code === '42703') {
-        throw new Error(`Database error: ${adminError.message}. Check table structure.`);
-      }
+      // Note: auth.users record remains and needs manual cleanup
+      console.warn('Auth user created but admin setup failed. Manual cleanup may be needed for auth.users record.');
+      
       throw adminError;
     }
 
-    // Step 6: Create invitation record for tracking
-    const inviteToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    // Step 5: Create tracking record for invitation (optional)
+    try {
+      const inviteToken = btoa(Math.random().toString(36).substring(2));
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    const { data: invitation, error: inviteError } = await supabase
-      .from('admin_invitations')
-      .insert({
-        user_id: authUserId,
-        email: data.email,
-        name: data.name,
-        role_id: data.role_id,
-        invited_by: currentUser.id,
-        token: inviteToken,
-        expires_at: expiresAt.toISOString(),
-        status: 'pending',
-        personal_message: data.personal_message
-      })
-      .select()
-      .single();
-
-    if (inviteError) {
-      console.error('Failed to create invitation record:', inviteError);
-      // Don't fail the whole operation if invitation fails
-      // But let's try to create a simpler version without the select
-      if (inviteError.code !== '42P01') { // Not a "table doesn't exist" error
-        await supabase
-          .from('admin_invitations')
-          .insert({
-            user_id: authUserId,
-            email: data.email,
-            name: data.name,
-            role_id: data.role_id,
-            invited_by: currentUser.id,
-            token: inviteToken,
-            expires_at: expiresAt.toISOString(),
-            status: 'pending'
-          });
-      }
-    }
-
-    // Step 7: Try to send invitation email (optional - if Edge Function exists)
-    const { data: emailSessionData } = await supabase.auth.getSession();
-    if (emailSessionData?.session) {
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${emailSessionData.session.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-          },
-          body: JSON.stringify({
-            email: data.email,
-            name: data.name,
-            invitationId: invitation?.id
-          })
+      await supabase
+        .from('admin_invitations')
+        .insert({
+          user_id: authUserId,
+          email: data.email,
+          name: data.name,
+          role_id: data.role_id,
+          invited_by: currentUser.id,
+          token: inviteToken,
+          expires_at: expiresAt.toISOString(),
+          status: 'pending',
+          personal_message: data.personal_message
         });
-      } catch (emailError) {
-        console.warn('Could not send invitation email:', emailError);
-        // Don't fail the operation if email sending fails
-      }
+    } catch (inviteTrackingError) {
+      console.warn('Failed to create invitation tracking:', inviteTrackingError);
+      // Don't fail - this is optional tracking
     }
 
-    // Step 8: Log the action (wrapped in try-catch for safety)
+    // Step 6: Log the action (optional)
     try {
       await supabase
         .from('audit_logs')
@@ -488,24 +426,23 @@ async function createAdminUserWithAuth(data: {
         });
     } catch (logError) {
       console.warn('Failed to log action:', logError);
-      // Don't fail if audit log fails
     }
 
     return {
       success: true,
       userId: authUserId,
-      message: 'Admin user created successfully'
+      message: 'Admin user created successfully. A confirmation email has been sent by Supabase.'
     };
 
   } catch (error: any) {
     console.error('Error creating admin user:', error);
     
-    // Provide more user-friendly error messages
+    // Provide user-friendly error messages
     if (error.message?.includes('JWT')) {
       throw new Error('Your session has expired. Please refresh the page and try again.');
     }
-    if (error.message?.includes('duplicate key') || error.message?.includes('already exists')) {
-      throw new Error('A user with this email already exists in the system.');
+    if (error.message?.includes('already exists')) {
+      throw new Error(error.message);
     }
     if (error.message?.includes('violates foreign key')) {
       throw new Error('Invalid role selected. Please refresh and try again.');
