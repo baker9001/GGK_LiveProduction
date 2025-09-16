@@ -293,13 +293,13 @@ async function createAdminUserWithAuth(data: {
     
     if (userCheck.exists) {
       if (userCheck.isActive) {
-        throw new Error(`An active user with email ${data.email} already exists in the system.`);
-      } else {
-        throw new Error(`A user with email ${data.email} exists but is inactive. Please reactivate from the users list.`);
+        if (adminError) {
+          console.error('Error fetching admin users:', adminError);
+          throw new Error(`Error fetching users: ${adminError.message}`);
       }
     }
-
-    // Step 1: Generate a random password (user will reset it via email)
+        // Transform the data to match AdminUser interface  
+        const transformedData = adminData?.map(user => ({
     const tempPassword = crypto.randomUUID() + 'Temp1!';
 
     // Step 2: Create user in Supabase Auth with invitation
@@ -649,15 +649,16 @@ export default function UsersTab() {
     ['admin-invitations', showInvitations],
     async () => {
       if (!showInvitations) return [];
-
-      console.log('Fetching invitations...');
-      
-      try {
-        // First, let's try a simple query to see if the table exists and has data
-        const { data: invitationsData, error: invitationsError } = await supabase
-          .from('admin_invitations')
-          .select('*')
-          .eq('status', 'pending')
+        // First get admin users with roles
+        const { data: adminData, error: adminError } = await supabase
+          .from('admin_users')
+          .select(`
+            *,
+            roles:role_id (
+              id,
+              name
+            )
+          `)
           .order('created_at', { ascending: false });
 
         if (invitationsError) {
