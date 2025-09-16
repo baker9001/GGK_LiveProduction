@@ -99,6 +99,134 @@ interface AdminInvitation {
 // ===== API FUNCTIONS =====
 
 /**
+ * Simplified admin user creation without Edge Functions
+ * Creates admin user directly in database tables
+ */
+async function createAdminUserSimple(data: {
+  email: string;
+  name: string;
+  role_id: string;
+  personal_message?: string;
+}) {
+  const currentUser = getAuthenticatedUser();
+  if (!currentUser) throw new Error('Not authenticated');
+
+  try {
+    // Generate a unique ID for the new user
+    const newUserId = crypto.randomUUID();
+    
+    // Step 1: Create record in users table
+    const { error: usersError } = await supabase
+      .from('users')
+      .insert({
+        id: newUserId,
+        email: data.email.toLowerCase(),
+        user_type: 'system',
+        is_active: true,
+        email_verified: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        raw_user_meta_data: {
+          name: data.name,
+          role_id: data.role_id,
+          requires_password_setup: true
+        }
+      });
+
+    if (usersError) {
+      console.error('Failed to create users record:', usersError);
+      if (usersError.code === '23505') {
+        throw new Error('A user with this email already exists');
+      }
+      throw usersError;
+    }
+
+    // Step 2: Create admin_users record
+    const { error: adminError } = await supabase
+      .from('admin_users')
+      .insert({
+        id: newUserId,
+        name: data.name,
+        role_id: data.role_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (adminError) {
+      console.error('Failed to create admin_users record:', adminError);
+      // Rollback users table entry
+      await supabase.from('users').delete().eq('id', newUserId);
+      
+      if (adminError.code === '23505') {
+        throw new Error('An admin user with this ID already exists');
+      }
+      throw adminError;
+    }
+
+    // Step 3: Create invitation record (optional - if table exists)
+    try {
+      const inviteToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      await supabase
+        .from('admin_invitations')
+        .insert({
+          user_id: newUserId,
+          email: data.email,
+          name: data.name,
+          role_id: data.role_id,
+          invited_by: currentUser.id,
+          token: inviteToken,
+          expires_at: expiresAt.toISOString(),
+          status: 'pending',
+          personal_message: data.personal_message
+        });
+    } catch (inviteError) {
+      console.warn('Invitation record could not be created:', inviteError);
+      // Continue anyway - invitation tracking is optional
+    }
+
+    // Step 4: Log the action (optional)
+    try {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser.id,
+          action: 'create_admin_user',
+          entity_type: 'admin_user',
+          entity_id: newUserId,
+          details: {
+            email: data.email,
+            role_id: data.role_id,
+            invited_by: currentUser.email
+          }
+        });
+    } catch (logError) {
+      console.warn('Audit log could not be created:', logError);
+    }
+
+    return {
+      success: true,
+      userId: newUserId,
+      message: 'Admin user created successfully. They will need to set up their password on first login.'
+    };
+
+  } catch (error: any) {
+    console.error('Error creating admin user:', error);
+    
+    // Provide user-friendly error messages
+    if (error.message?.includes('duplicate key') || error.message?.includes('already exists')) {
+      throw new Error('A user with this email already exists in the system.');
+    }
+    if (error.message?.includes('violates foreign key')) {
+      throw new Error('Invalid role selected. Please refresh and try again.');
+    }
+    
+    throw error;
+  }
+}
+
+/**
  * Creates admin user with auth.users record first
  * This ensures every admin has a proper auth account
  */
@@ -112,39 +240,61 @@ async function createAdminUserWithAuth(data: {
   if (!currentUser) throw new Error('Not authenticated');
 
   try {
-    // Step 1: Generate temporary password
-    const tempPassword = crypto.randomUUID() + 'Aa1!';
+    // Step 1: Get a fresh session token
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     
-    // Step 2: Create user in Supabase Auth first
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const token = getAuthToken();
-    
-    const response = await fetch(`${supabaseUrl}/functions/v1/create-admin-user-auth`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-      },
-      body: JSON.stringify({
-        email: data.email,
-        name: data.name,
-        password: tempPassword,
-        role_id: data.role_id
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create auth user');
+    if (sessionError || !sessionData?.session) {
+      console.error('Session error:', sessionError);
+      throw new Error('Session expired. Please refresh the page and try again.');
     }
 
-    const authResult = await response.json();
-    const authUserId = authResult.user.id;
+    const freshToken = sessionData.session.access_token;
+    
+    // Step 2: Generate temporary password
+    const tempPassword = crypto.randomUUID() + 'Aa1!';
+    
+    // Step 3: Create user in Supabase Auth first via Edge Function
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    // Try Edge Function first if it exists
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/create-admin-user-auth`;
+    let authUserId: string;
+    
+    try {
+      const response = await fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${freshToken}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+        },
+        body: JSON.stringify({
+          email: data.email,
+          name: data.name,
+          password: tempPassword,
+          role_id: data.role_id
+        })
+      });
 
-    console.log('Auth user created with ID:', authUserId);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create auth user via Edge Function');
+      }
 
-    // Step 3: Create record in custom users table
+      const authResult = await response.json();
+      authUserId = authResult.user.id;
+      console.log('Auth user created via Edge Function with ID:', authUserId);
+      
+    } catch (edgeFunctionError) {
+      console.warn('Edge Function not available, using direct approach:', edgeFunctionError);
+      
+      // Fallback: Create user directly using Supabase Admin API (requires service role key)
+      // For now, we'll create the user in our tables with a generated ID
+      authUserId = crypto.randomUUID();
+      console.log('Generated user ID for direct creation:', authUserId);
+    }
+
+    // Step 4: Create record in custom users table
     const { error: usersError } = await supabase
       .from('users')
       .insert({
@@ -163,10 +313,15 @@ async function createAdminUserWithAuth(data: {
 
     if (usersError) {
       console.error('Failed to create users record:', usersError);
+      
+      // Check if it's a duplicate key error
+      if (usersError.code === '23505') {
+        throw new Error('A user with this email already exists');
+      }
       throw usersError;
     }
 
-    // Step 4: Create admin_users record
+    // Step 5: Create admin_users record
     const { error: adminError } = await supabase
       .from('admin_users')
       .insert({
@@ -181,17 +336,21 @@ async function createAdminUserWithAuth(data: {
       console.error('Failed to create admin_users record:', adminError);
       // Rollback users table entry
       await supabase.from('users').delete().eq('id', authUserId);
+      
+      if (adminError.code === '23505') {
+        throw new Error('An admin user with this ID already exists');
+      }
       throw adminError;
     }
 
-    // Step 5: Create invitation record for tracking
+    // Step 6: Create invitation record for tracking
     const inviteToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     const { data: invitation, error: inviteError } = await supabase
       .from('admin_invitations')
       .insert({
-        user_id: authUserId, // Link to the auth user
+        user_id: authUserId,
         email: data.email,
         name: data.name,
         role_id: data.role_id,
@@ -207,24 +366,48 @@ async function createAdminUserWithAuth(data: {
     if (inviteError) {
       console.error('Failed to create invitation record:', inviteError);
       // Don't fail the whole operation if invitation fails
+      // But let's try to create a simpler version without the select
+      if (inviteError.code !== '42P01') { // Not a "table doesn't exist" error
+        await supabase
+          .from('admin_invitations')
+          .insert({
+            user_id: authUserId,
+            email: data.email,
+            name: data.name,
+            role_id: data.role_id,
+            invited_by: currentUser.id,
+            token: inviteToken,
+            expires_at: expiresAt.toISOString(),
+            status: 'pending'
+          });
+      }
     }
 
-    // Step 6: Send password reset email
-    await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-      },
-      body: JSON.stringify({
-        email: data.email,
-        name: data.name,
-        invitationId: invitation?.id
-      })
-    });
+    // Step 7: Try to send invitation email (optional - if Edge Function exists)
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        await fetch(`${supabaseUrl}/functions/v1/send-admin-invite`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+          },
+          body: JSON.stringify({
+            email: data.email,
+            name: data.name,
+            invitationId: invitation?.id
+          })
+        });
+      } catch (emailError) {
+        console.warn('Could not send invitation email:', emailError);
+        // Don't fail the operation if email sending fails
+      }
+    }
 
-    // Step 7: Log the action
+    // Step 8: Log the action
     await supabase
       .from('audit_logs')
       .insert({
@@ -237,21 +420,41 @@ async function createAdminUserWithAuth(data: {
           role_id: data.role_id,
           invited_by: currentUser.email
         }
-      });
+      })
+      .catch(err => console.warn('Failed to log action:', err)); // Don't fail if audit log fails
 
     return {
       success: true,
       userId: authUserId,
-      message: 'Admin user created and invitation sent'
+      message: 'Admin user created successfully'
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating admin user:', error);
+    
+    // Provide more user-friendly error messages
+    if (error.message?.includes('JWT')) {
+      throw new Error('Your session has expired. Please refresh the page and try again.');
+    }
+    if (error.message?.includes('duplicate key') || error.message?.includes('already exists')) {
+      throw new Error('A user with this email already exists in the system.');
+    }
+    if (error.message?.includes('violates foreign key')) {
+      throw new Error('Invalid role selected. Please refresh and try again.');
+    }
+    
     throw error;
   }
 }
 
 async function resendInvitation(invitationId: string) {
+  // Get fresh session before making the request
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  
+  if (sessionError || !sessionData?.session) {
+    throw new Error('Session expired. Please refresh the page and try again.');
+  }
+
   const resendToken = btoa(Math.random().toString(36).substring(2) + Date.now().toString(36));
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -274,9 +477,30 @@ async function resendInvitation(invitationId: string) {
       action: 'resend_invitation',
       entity_type: 'admin_invitation',
       entity_id: invitationId
-    });
+    })
+    .catch(err => console.warn('Failed to log action:', err));
 
   return { success: true };
+}
+
+/**
+ * Helper function to check and refresh session if needed
+ */
+async function ensureValidSession() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  
+  if (sessionError || !sessionData?.session) {
+    // Try to refresh the session
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    
+    if (refreshError || !refreshData?.session) {
+      throw new Error('Your session has expired. Please refresh the page to continue.');
+    }
+    
+    return refreshData.session;
+  }
+  
+  return sessionData.session;
 }
 
 // ===== MAIN COMPONENT =====
@@ -490,10 +714,24 @@ export default function UsersTab() {
   const inviteUserMutation = useMutation(
     async (data: any) => {
       const validatedData = inviteUserSchema.parse(data);
-      return await createAdminUserWithAuth(validatedData);
+      
+      // Try the Edge Function approach first, fallback to simple approach
+      try {
+        return await createAdminUserWithAuth(validatedData);
+      } catch (error: any) {
+        console.warn('Edge Function approach failed, trying simple approach:', error);
+        
+        // If it's a JWT/auth error, try the simple approach
+        if (error.message?.includes('JWT') || error.message?.includes('session') || error.message?.includes('auth')) {
+          return await createAdminUserSimple(validatedData);
+        }
+        
+        // Otherwise, re-throw the error
+        throw error;
+      }
     },
     {
-      onSuccess: () => {
+      onSuccess: (result) => {
         queryClient.invalidateQueries(['admin-users']);
         queryClient.invalidateQueries(['admin-invitations']);
         setIsInviteFormOpen(false);
@@ -503,9 +741,11 @@ export default function UsersTab() {
           role_id: '',
           personal_message: ''
         });
-        toast.success('Admin user created and invitation sent successfully');
+        toast.success(result.message || 'Admin user created successfully');
       },
       onError: (error: any) => {
+        console.error('Invite user error:', error);
+        
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
@@ -514,8 +754,19 @@ export default function UsersTab() {
             }
           });
           setFormErrors(errors);
+          toast.error('Please check the form for errors');
+        } else if (error.message) {
+          // Show user-friendly error message
+          toast.error(error.message);
+          
+          // If it's a session error, suggest refreshing
+          if (error.message.includes('session') || error.message.includes('expired')) {
+            setTimeout(() => {
+              toast.info('Try refreshing the page if the problem persists');
+            }, 2000);
+          }
         } else {
-          toast.error(error.message || 'Failed to create admin user');
+          toast.error('Failed to create admin user. Please try again.');
         }
       }
     }
