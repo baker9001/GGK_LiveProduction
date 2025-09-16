@@ -355,21 +355,39 @@ export default function UsersTab() {
     ['admin-users', filters],
     async () => {
       let query = supabase
-        .from('admin_users_view')
-        .select('*')
+        .from('admin_users')
+        .select(`
+          id,
+          name,
+          role_id,
+          created_at,
+          updated_at,
+          roles!inner(name),
+          users!inner(
+            email,
+            is_active,
+            email_verified,
+            created_at
+          ),
+          admin_invitations(
+            status,
+            expires_at
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (filters.name) {
         query = query.ilike('name', `%${filters.name}%`);
       }
       if (filters.email) {
-        query = query.ilike('email', `%${filters.email}%`);
+        query = query.ilike('users.email', `%${filters.email}%`);
       }
       if (filters.role) {
         query = query.eq('role_id', filters.role);
       }
       if (filters.status.length > 0) {
-        query = query.in('status', filters.status);
+        const activeStatuses = filters.status.map(s => s === 'active');
+        query = query.in('users.is_active', activeStatuses);
       }
 
       const { data, error } = await query;
@@ -378,7 +396,22 @@ export default function UsersTab() {
         throw error;
       }
 
-      return data || [];
+      // Transform the data to match the expected AdminUser interface
+      return (data || []).map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.users.email,
+        role_id: user.role_id,
+        role_name: user.roles.name,
+        status: user.users.is_active ? 'active' : 'inactive',
+        created_at: user.created_at,
+        email_verified: user.users.email_verified || false,
+        requires_password_change: false, // Default value since not in schema
+        last_login_at: null, // Default value since not in schema
+        invitation_status: user.admin_invitations?.[0]?.status === 'pending' && 
+                          new Date(user.admin_invitations[0].expires_at) > new Date() 
+                          ? 'pending' : undefined
+      }));
     },
     { 
       keepPreviousData: true, 
