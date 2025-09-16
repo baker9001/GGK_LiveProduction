@@ -107,20 +107,22 @@ async function checkUserExists(email: string): Promise<{ exists: boolean; isActi
       .from('users')
       .select('id, email, is_active, raw_user_meta_data')
       .eq('email', email.toLowerCase())
-      .single();
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No rows returned - user doesn't exist
-        return { exists: false };
-      }
-      throw error;
+      console.error('Error checking user existence:', error);
+      return { exists: false };
+    }
+
+    if (!data) {
+      // No user found - this is normal and expected
+      return { exists: false };
     }
 
     return { 
       exists: true, 
-      isActive: data?.is_active || false,
-      userName: data?.raw_user_meta_data?.name || email
+      isActive: data.is_active || false,
+      userName: data.raw_user_meta_data?.name || email
     };
   } catch (error) {
     console.error('Error checking user existence:', error);
