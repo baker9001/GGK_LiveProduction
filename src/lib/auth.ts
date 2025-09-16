@@ -214,13 +214,14 @@ export function markUserLogout(): void {
 }
 
 // Check if authenticated
-export function isAuthenticated(): boolean {
-  return !!getAuthenticatedUser();
+export async function isAuthenticated(): Promise<boolean> {
+  const user = await getAuthenticatedUser();
+  return !!user;
 }
 
 // Async version for compatibility
 export async function isAuthenticatedAsync(): Promise<boolean> {
-  return isAuthenticated();
+  return await isAuthenticated();
 }
 
 // Get user role
@@ -379,7 +380,7 @@ export function startSessionMonitoring(): void {
   setTimeout(() => {
     isMonitoringActive = true;
     
-    sessionCheckInterval = setInterval(() => {
+    sessionCheckInterval = setInterval(async () => {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
       
@@ -391,7 +392,7 @@ export function startSessionMonitoring(): void {
         return;
       }
       
-      const user = getAuthenticatedUser();
+      const user = await getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
         console.log('Session expired. Redirecting to login.');
@@ -429,7 +430,7 @@ export function stopSessionMonitoring(): void {
 export function setupSessionRefresh(): void {
   setInterval(async () => {
     // Only refresh if authenticated and not on public page
-    if (isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
+    if (await isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
       await refreshSession();
     }
   }, 30 * 60 * 1000); // 30 minutes
