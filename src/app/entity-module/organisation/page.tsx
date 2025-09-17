@@ -226,21 +226,62 @@ export default function OrganizationManagement() {
   // Fetch user's company
   useEffect(() => {
     const fetchUserCompany = async () => {
-      if (!authenticatedUser) return;
+      if (!authenticatedUser) {
+        console.log('[OrganisationManagement] No authenticated user found');
+        return;
+      }
+
+      // CRITICAL FIX: Validate user.id is a valid UUID before making Supabase queries
+      if (!authenticatedUser.id || 
+          typeof authenticatedUser.id !== 'string' || 
+          authenticatedUser.id === 'undefined' || 
+          authenticatedUser.id === 'null' || 
+          authenticatedUser.id.trim() === '') {
+        console.error('[OrganisationManagement] Invalid user ID detected:', {
+          userId: authenticatedUser.id,
+          userType: typeof authenticatedUser.id,
+          userObject: authenticatedUser
+        });
+        toast.error('Invalid user session. Please sign in again.');
+        return;
+      }
+
+      // Additional UUID format validation
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(authenticatedUser.id)) {
+        console.error('[OrganisationManagement] User ID is not a valid UUID format:', {
+          userId: authenticatedUser.id,
+          length: authenticatedUser.id.length
+        });
+        toast.error('Invalid user session format. Please sign in again.');
+        return;
+      }
 
       try {
+        console.log('[OrganisationManagement] Fetching company for user:', authenticatedUser.id);
+        
         const { data: entityUserData, error: entityUserError } = await supabase
           .from('entity_users')
           .select('company_id')
           .eq('user_id', authenticatedUser.id)
           .maybeSingle();
 
-        if (!entityUserError && entityUserData?.company_id) {
+        if (entityUserError) {
+          console.error('[OrganisationManagement] Error fetching entity user data:', entityUserError);
+          toast.error('Failed to load organization data. Please try refreshing the page.');
+          return;
+        }
+
+        if (entityUserData?.company_id) {
+          console.log('[OrganisationManagement] Company ID found:', entityUserData.company_id);
           setUserCompanyId(entityUserData.company_id);
+        } else {
+          console.warn('[OrganisationManagement] No company association found for user:', authenticatedUser.id);
+          toast.warning('No organization found for your account. Please contact your administrator.');
         }
       } catch (error) {
-        console.error('Error fetching user company:', error);
-        toast.error('Failed to load organization data');
+        console.error('[OrganisationManagement] Unexpected error fetching user company:', error);
+        toast.error('Failed to load organization data. Please try refreshing the page.');
       }
     };
 
