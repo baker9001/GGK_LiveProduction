@@ -1,2065 +1,1113 @@
 /**
- * File: /src/app/entity-module/organisation/tabs/organization-structure/page.tsx
- * Dependencies: 
+ * File: /src/app/entity-module/organisation/page.tsx
+ * 
+ * FIXED VERSION - School Admin can now see Schools tab
+ * 
+ * Fix Applied:
+ * - Changed from using permissionService.canAccessTab() to canViewTab() from useAccessControl
+ * - This ensures School Admins can properly see the Schools tab
+ * 
+ * Dependencies:
  *   - @/lib/supabase
- *   - @/lib/layout/treeLayout
- *   - @/hooks/useNodeMeasurements
- *   - @/components/forms/BranchFormContent
- *   - @/components/shared/SlideInForm
+ *   - @/lib/auth
+ *   - @/contexts/UserContext
+ *   - @/contexts/PermissionContext
+ *   - @/hooks/useAccessControl
+ *   - @/app/entity-module/organisation/tabs/* (all tab components)
  *   - External: react, @tanstack/react-query, lucide-react, react-hot-toast
- * 
- * FINAL CLEAN VERSION - Organization Structure Component
- * 
- * Enhanced Features:
- *   - Improved diagram centering and sizing
- *   - Dynamic spacing based on hierarchy complexity
- *   - Coordinated auto-refit system for level toggles
- *   - Enhanced connection lines with dynamic styling
- *   - All original features preserved
- * 
- * Database Tables:
- *   - companies, schools, branches, grade_levels, class_sections
- *   - companies_additional, schools_additional, branches_additional
  */
 
 'use client';
 
-import React, { useState, useCallback, memo, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense, useMemo, useRef } from 'react';
 import { 
-  Building2, School, MapPin, ChevronDown, ChevronUp,
-  PlusCircle, Users, User, Eye, EyeOff,
-  ZoomIn, ZoomOut, Maximize2, Minimize2, 
-  RotateCcw, Loader2, X, GraduationCap, BookOpen, Expand,
-  ToggleLeft, ToggleRight, Move, MousePointer, Navigation
+  Building2, School, MapPin, Plus, Users, 
+  Activity, AlertCircle, Loader2, GraduationCap, Shield,
+  Calendar, RefreshCw, User, Info, Lock, Crown
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { 
-  TreeLayoutEngine, 
-  buildTreeFromData, 
-  generateConnectionPath,
-  type NodePosition,
-  type NodeDimensions,
-  type LayoutConfig
-} from '@/lib/layout/treeLayout';
-import { useNodeMeasurements } from '@/hooks/useNodeMeasurements';
-import { BranchFormContent } from '@/components/forms/BranchFormContent';
-import { SlideInForm } from '@/components/shared/SlideInForm';
 import { toast } from 'react-hot-toast';
+import { usePermissions } from '@/contexts/PermissionContext';
+import { useAccessControl } from '@/hooks/useAccessControl';
+import { getAuthenticatedUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
+import { Button } from '@/components/shared/Button';
 
-// Enhanced zoom/pan hook with better centering
-const useZoomPan = (
-  containerRef: React.RefObject<HTMLDivElement>,
-  contentRef: React.RefObject<HTMLDivElement>,
-  initialZoom: number = 1,
-  minZoom: number = 0.25,
-  maxZoom: number = 2
-) => {
-  const [zoom, setZoom] = useState(initialZoom);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing' | 'move'>('default');
-  
-  const lastMousePosRef = useRef({ x: 0, y: 0 });
-  const animationFrameRef = useRef<number | null>(null);
-  const wheelTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pinchDistanceRef = useRef<number | null>(null);
-
-  // Enhanced zoom with focal point
-  const handleZoom = useCallback((delta: number, clientX?: number, clientY?: number) => {
-    if (!containerRef.current || !contentRef.current) return;
-
-    const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-    
-    const focalX = clientX !== undefined ? clientX - rect.left : rect.width / 2;
-    const focalY = clientY !== undefined ? clientY - rect.top : rect.height / 2;
-    
-    setZoom(prevZoom => {
-      const newZoom = Math.max(minZoom, Math.min(maxZoom, prevZoom + delta));
-      
-      if (clientX !== undefined && clientY !== undefined) {
-        setPan(prevPan => {
-          const zoomRatio = newZoom / prevZoom;
-          return {
-            x: focalX - (focalX - prevPan.x) * zoomRatio,
-            y: focalY - (focalY - prevPan.y) * zoomRatio
-          };
-        });
-      }
-      
-      return newZoom;
-    });
-  }, [containerRef, contentRef, minZoom, maxZoom]);
-
-  // Mouse wheel handler
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return;
-    
-    e.preventDefault();
-    
-    if (wheelTimeoutRef.current) {
-      clearTimeout(wheelTimeoutRef.current);
-    }
-    
-    const delta = -e.deltaY * 0.001;
-    const zoomDelta = delta * (e.shiftKey ? 0.5 : 0.25);
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    
-    animationFrameRef.current = requestAnimationFrame(() => {
-      handleZoom(zoomDelta, e.clientX, e.clientY);
-    });
-    
-    wheelTimeoutRef.current = setTimeout(() => {
-      animationFrameRef.current = null;
-    }, 150);
-  }, [handleZoom]);
-
-  // Touch handlers
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      pinchDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
-    }
-  }, []);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (e.touches.length === 2 && pinchDistanceRef.current) {
-      e.preventDefault();
-      
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      const delta = (distance - pinchDistanceRef.current) * 0.003;
-      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      
-      handleZoom(delta, centerX, centerY);
-      pinchDistanceRef.current = distance;
-    }
-  }, [handleZoom]);
-
-  const handleTouchEnd = useCallback(() => {
-    pinchDistanceRef.current = null;
-  }, []);
-
-  // Mouse handlers for panning
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    
-    const target = e.target as HTMLElement;
-    const clickedCard = target.closest('[data-card-id]');
-    
-    if (clickedCard && !isSpacePressed) return;
-    
-    setIsPanning(true);
-    setCursor('grabbing');
-    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-  }, [isSpacePressed]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isPanning) {
-      const dx = e.clientX - lastMousePosRef.current.x;
-      const dy = e.clientY - lastMousePosRef.current.y;
-      
-      setPan(prevPan => ({
-        x: prevPan.x + dx,
-        y: prevPan.y + dy
-      }));
-      
-      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-      return;
-    }
-    
-    const target = e.target as HTMLElement;
-    const hoveringCard = target.closest('[data-card-id]');
-    
-    if (hoveringCard && !isSpacePressed) {
-      setCursor('default');
-    } else {
-      setCursor('grab');
-    }
-  }, [isPanning, isSpacePressed]);
-
-  const handleMouseUp = useCallback(() => {
-    if (isPanning) {
-      setIsPanning(false);
-      setCursor('grab');
-    }
-  }, [isPanning]);
-
-  const handleMouseEnter = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const hoveringCard = target.closest('[data-card-id]');
-    
-    if (!hoveringCard || isSpacePressed) {
-      setCursor('grab');
-    }
-  }, [isSpacePressed]);
-
-  const handleMouseLeave = useCallback(() => {
-    setIsPanning(false);
-    setCursor('default');
-  }, []);
-
-  // Keyboard handlers
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.code === 'Space' && !e.repeat) {
-      e.preventDefault();
-      setIsSpacePressed(true);
-      setCursor('grab');
-    }
-    
-    if (e.ctrlKey || e.metaKey) {
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        handleZoom(0.1);
-      } else if (e.key === '-') {
-        e.preventDefault();
-        handleZoom(-0.1);
-      } else if (e.key === '0') {
-        e.preventDefault();
-        setZoom(1);
-        setPan({ x: 0, y: 0 });
-      }
-    }
-    
-    const panSpeed = e.shiftKey ? 50 : 20;
-    switch (e.key) {
-      case 'ArrowUp':
-        e.preventDefault();
-        setPan(p => ({ ...p, y: p.y + panSpeed }));
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        setPan(p => ({ ...p, y: p.y - panSpeed }));
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        setPan(p => ({ ...p, x: p.x + panSpeed }));
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        setPan(p => ({ ...p, x: p.x - panSpeed }));
-        break;
-    }
-  }, [handleZoom]);
-
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    if (e.code === 'Space') {
-      setIsSpacePressed(false);
-      setCursor('default');
-    }
-  }, []);
-
-  const resetView = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    setCursor('default');
-  }, []);
-
-  // Effect to attach event listeners
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    container.addEventListener('touchstart', handleTouchStart);
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('touchend', handleTouchEnd);
-    
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    
-    setCursor('grab');
-
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-      
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (wheelTimeoutRef.current) {
-        clearTimeout(wheelTimeoutRef.current);
-      }
-    };
-  }, [containerRef, handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd, handleKeyDown, handleKeyUp]);
-
-  return {
-    zoom,
-    pan,
-    isPanning,
-    cursor,
-    setZoom,
-    setPan,
-    resetView,
-    handleMouseEnter,
-    handleMouseDown,
-    handleMouseMove,
-    handleMouseUp,
-    handleMouseLeave,
-    handleZoom
-  };
-};
-
-// Props interface
-export interface OrgStructureProps {
-  companyData: any;
-  companyId: string;
-  onAddClick: (parentItem: any, parentType: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
-  onEditClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
-  onItemClick: (item: any, type: 'company' | 'school' | 'branch' | 'year' | 'section') => void;
-  refreshData?: () => void;
-}
-
-// Skeleton loader component
-const CardSkeleton = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-gray-200 dark:border-gray-700 
-                  w-[260px] p-4 animate-pulse">
-    <div className="flex items-start justify-between mb-3">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
-        <div>
-          <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-1"></div>
-          <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    </div>
-    <div className="mb-3">
-      <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded mb-1"></div>
-      <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-    </div>
-    <div className="h-3 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
-  </div>
+// ===== LAZY LOAD TAB COMPONENTS =====
+const OrganizationStructureTab = lazy(() => 
+  import('./tabs/organization-structure/page')
+);
+const SchoolsTab = lazy(() => 
+  import('./tabs/schools/page')
+);
+const BranchesTab = lazy(() => 
+  import('./tabs/branches/page').then(module => ({ default: module.default }))
+);
+const AdminsTab = lazy(() => 
+  import('./tabs/admins/page')
+);
+const StudentsTab = lazy(() => 
+  import('./tabs/students/page')
+);
+const TeachersTab = lazy(() => 
+  import('./tabs/teachers/page')
 );
 
-// Enhanced org card with ref forwarding and logo support
-const OrgCard = memo(React.forwardRef<HTMLDivElement, { 
-  item: any; 
-  type: 'company' | 'school' | 'branch' | 'year' | 'section';
-  onItemClick: (item: any, type: any) => void;
-  onAddClick?: (item: any, type: any) => void;
-  hasChildren?: boolean;
-  isExpanded?: boolean;
-  onToggleExpand?: () => void;
-  hierarchicalData?: any;
-}>(({ 
-  item, 
-  type, 
-  onItemClick, 
-  onAddClick,
-  hasChildren = false,
-  isExpanded = false,
-  onToggleExpand,
-  hierarchicalData = {}
-}, ref) => {
-  // Helper function to get logo URL
-  const getLogoUrl = () => {
-    let logoPath = null;
-    let bucketName = '';
-    
-    switch (type) {
-      case 'company':
-        logoPath = item.logo || item.additional?.logo_url || item.additional?.logo;
-        bucketName = 'company-logos';
-        break;
-      case 'school':
-        logoPath = item.logo;
-        bucketName = 'school-logos';
-        break;
-      case 'branch':
-        logoPath = item.logo;
-        bucketName = 'branch-logos';
-        break;
-      default:
-        return null;
-    }
-    
-    if (!logoPath) return null;
-    
-    if (logoPath.startsWith('http')) {
-      return logoPath;
-    }
-    
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (!supabaseUrl) {
-      console.warn('VITE_SUPABASE_URL is not defined');
-      return null;
-    }
-    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${logoPath}`;
-  };
+// ===== TYPE DEFINITIONS =====
+interface Company {
+  id: string;
+  name: string;
+  code: string;
+  status: 'active' | 'inactive';
+  logo?: string;
+  created_at: string;
+  updated_at?: string;
+  schools?: School[];
+  additional?: any;
+}
 
-  const getConfig = () => {
-    switch (type) {
-      case 'company':
-        return {
-          icon: Building2,
-          bgColor: 'bg-blue-500',
-          cardBg: 'bg-blue-50 dark:bg-blue-900/10',
-          borderColor: 'border-blue-200 dark:border-blue-800',
-          iconBg: 'bg-blue-500',
-          title: 'CEO',
-          nameField: 'ceo_name',
-          stats: [
-            { label: 'Schools', value: hierarchicalData.totalSchools || 0, icon: School },
-            { label: 'Branches', value: hierarchicalData.totalBranches || 0, icon: MapPin },
-            { label: 'Teachers', value: hierarchicalData.totalTeachers || 0, icon: Users },
-            { label: 'Students', value: hierarchicalData.totalStudents || 0, icon: GraduationCap },
-            { label: 'Users', value: hierarchicalData.totalUsers || 0, icon: User }
-          ]
-        };
-      case 'school':
-        return {
-          icon: School,
-          bgColor: 'bg-green-500',
-          cardBg: 'bg-green-50 dark:bg-green-900/10',
-          borderColor: 'border-green-200 dark:border-green-800',
-          iconBg: 'bg-green-500',
-          title: 'Principal',
-          nameField: 'principal_name',
-          stats: [
-            { label: 'Branches', value: item.branch_count || 0, icon: MapPin },
-            { label: 'Grades', value: item.total_grades || 0, icon: GraduationCap },
-            { label: 'Teachers', value: item.additional?.teachers_count || 0, icon: Users },
-            { label: 'Students', value: item.student_count || item.additional?.student_count || 0, icon: GraduationCap },
-            { label: 'Users', value: item.additional?.admin_users_count || 0, icon: User }
-          ]
-        };
-      case 'branch':
-        return {
-          icon: MapPin,
-          bgColor: 'bg-purple-500',
-          cardBg: 'bg-purple-50 dark:bg-purple-900/10',
-          borderColor: 'border-purple-300 dark:border-purple-700',
-          iconBg: 'bg-purple-500',
-          title: 'Branch Head',
-          nameField: 'branch_head_name',
-          stats: [
-            { label: 'Grades', value: item.grade_count || 0, icon: GraduationCap },
-            { label: 'Teachers', value: item.additional?.teachers_count || item.additional?.active_teachers_count || 0, icon: Users },
-            { label: 'Students', value: item.student_count || item.additional?.student_count || item.additional?.current_students || 0, icon: GraduationCap },
-            { label: 'Users', value: item.additional?.admin_users_count || 0, icon: User }
-          ]
-        };
-      case 'year':
-        return {
-          icon: GraduationCap,
-          bgColor: 'bg-orange-500',
-          cardBg: 'bg-orange-50 dark:bg-orange-900/10',
-          borderColor: 'border-orange-200 dark:border-orange-800',
-          iconBg: 'bg-orange-500',
-          title: 'Coordinator',
-          nameField: 'grade_coordinator',
-          stats: [
-            { label: 'Sections', value: item.class_sections?.length || 0, icon: BookOpen },
-            { label: 'Max/Section', value: item.max_students_per_section || 30, icon: Users },
-            { label: 'Total Sections', value: item.total_sections || item.class_sections?.length || 0, icon: BookOpen }
-          ]
-        };
-      case 'section':
-        return {
-          icon: BookOpen,
-          bgColor: 'bg-indigo-500',
-          cardBg: 'bg-indigo-50 dark:bg-indigo-900/10',
-          borderColor: 'border-indigo-200 dark:border-indigo-800',
-          iconBg: 'bg-indigo-500',
-          title: 'Teacher',
-          nameField: 'section_teacher',
-          stats: [
-            { label: 'Capacity', value: item.max_capacity || 30, icon: Users },
-            { label: 'Current', value: item.current_students || 0, icon: GraduationCap },
-            { label: 'Room', value: item.room_number || item.classroom_number || 'N/A', icon: Building2 }
-          ]
-        };
-    }
-  };
+interface School {
+  id: string;
+  name: string;
+  code: string;
+  company_id: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  branches?: Branch[];
+  additional?: any;
+  student_count?: number;
+  teachers_count?: number;
+  branch_count?: number;
+}
 
-  const config = getConfig();
-  const Icon = config.icon;
-  const managerName = item.additional?.[config.nameField] || item[config.nameField];
-  const logoUrl = getLogoUrl();
+interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  school_id: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  additional?: any;
+  student_count?: number;
+  teachers_count?: number;
+}
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onItemClick(item, type);
-  };
+interface OrganizationStats {
+  company_id: string;
+  total_schools: number;
+  total_branches: number;
+  total_students: number;
+  total_teachers: number;
+  total_users: number;
+}
 
-  const getDisplayName = () => {
-    switch (type) {
-      case 'year':
-        return item.grade_name || item.name;
-      case 'section':
-        return item.section_name || item.name;
-      default:
-        return item.name || item.grade_name || item.section_name;
-    }
-  };
+// ===== REF INTERFACES FOR TAB COMPONENTS =====
+export interface SchoolsTabRef {
+  openEditSchoolModal: (school: any) => void;
+}
 
-  return (
-    <div className="relative inline-block">
-      <div 
-        ref={ref}
-        onClick={handleCardClick}
-        className={`${config.cardBg} ${config.borderColor} rounded-xl border-2
-                   hover:shadow-lg transition-all duration-200 cursor-pointer
-                   min-w-[260px] max-w-[300px] flex-grow p-4 relative`}
-        data-card-id={`${type}-${item.id}`}
-        data-card-type={type}
-      >
-        {/* Header with Icon */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 ${config.iconBg} rounded-lg flex items-center justify-center text-white font-bold shadow-md overflow-hidden relative bg-white`}>
-              {logoUrl ? (
-                <>
-                  <img
-                    src={logoUrl}
-                    alt={`${getDisplayName()} logo`}
-                    className="w-full h-full object-contain p-0.5"
-                    style={{ maxWidth: '100%', maxHeight: '100%' }}
-                    onError={(e) => {
-                      const imgElement = e.currentTarget as HTMLImageElement;
-                      imgElement.style.display = 'none';
-                      const parent = imgElement.parentElement;
-                      if (parent) {
-                        const fallback = parent.querySelector('.logo-fallback') as HTMLElement;
-                        if (fallback) {
-                          fallback.style.display = 'flex';
-                          fallback.classList.remove('bg-white');
-                          fallback.classList.add(config.iconBg);
-                        }
-                      }
-                    }}
-                  />
-                  <span className={`text-sm font-bold logo-fallback hidden items-center justify-center w-full h-full absolute inset-0 ${config.iconBg}`}>
-                    {item.code?.substring(0, 2).toUpperCase() || 
-                     getDisplayName()?.substring(0, 2).toUpperCase() || 
-                     <Icon className="w-6 h-6" />}
-                  </span>
-                </>
-              ) : (
-                <span className={`text-sm font-bold flex items-center justify-center w-full h-full ${config.iconBg} text-white`}>
-                  {item.code?.substring(0, 2).toUpperCase() || 
-                   getDisplayName()?.substring(0, 2).toUpperCase() || 
-                   <Icon className="w-6 h-6" />}
-                </span>
-              )}
-            </div>
-            
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                <Icon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                {getDisplayName()}
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {item.code || item.grade_code || item.section_code || `${type.charAt(0).toUpperCase()}${type.slice(1)}`}
-              </p>
-            </div>
-          </div>
-        </div>
+export interface BranchesTabRef {
+  openEditBranchModal: (branch: any) => void;
+}
 
-        {/* Manager/Teacher Info */}
-        <div className="mb-3">
-          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {config.title}
-          </p>
-          <p className="text-sm font-medium text-gray-900 dark:text-white">
-            {managerName || 'Not Assigned'}
-          </p>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          {config.stats.slice(0, 4).map((stat, idx) => {
-            const StatIcon = stat.icon;
-            return (
-              <div key={idx} className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                <StatIcon className="w-3 h-3 flex-shrink-0" />
-                <span className="font-semibold text-gray-900 dark:text-white">{stat.value}</span>
-                <span className="truncate">{stat.label}</span>
-              </div>
-            );
-          })}
-        </div>
-        
-        {config.stats.length > 4 && (
-          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-              <User className="w-3 h-3 flex-shrink-0" />
-              <span className="font-semibold text-gray-900 dark:text-white">{config.stats[4].value}</span>
-              <span className="truncate">{config.stats[4].label} (Admin)</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {hasChildren && onToggleExpand && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleExpand();
-          }}
-          className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 
-                     bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 
-                     rounded-full p-1 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors z-10"
-        >
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          )}
-        </button>
-      )}
-    </div>
-  );
-}));
-
-OrgCard.displayName = 'OrgCard';
-
-// Color-coded level tabs
-const LevelTabs = ({ visibleLevels, onToggleLevel }: {
-  visibleLevels: Set<string>;
-  onToggleLevel: (level: string) => void;
-}) => {
-  const levels = [
-    { id: 'entity', label: 'Entity', icon: Building2, color: 'blue' },
-    { id: 'schools', label: 'Schools', icon: School, color: 'green' },
-    { id: 'branches', label: 'Branches', icon: MapPin, color: 'purple' },
-    { id: 'years', label: 'Grade/Years', icon: GraduationCap, color: 'orange' },
-    { id: 'sections', label: 'Class/Section', icon: BookOpen, color: 'indigo' }
-  ];
-
-  const getColorClasses = (color: string, isVisible: boolean) => {
-    if (!isVisible) {
-      return 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
-    }
-    
-    const colorMap: Record<string, string> = {
-      blue: 'bg-blue-500 text-white',
-      green: 'bg-green-500 text-white',
-      purple: 'bg-purple-500 text-white',
-      orange: 'bg-orange-500 text-white',
-      indigo: 'bg-indigo-500 text-white'
-    };
-    return colorMap[color] || colorMap.blue;
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      {levels.map(level => {
-        const Icon = level.icon;
-        const isVisible = visibleLevels.has(level.id);
-        
-        return (
-          <button
-            key={level.id}
-            onClick={() => onToggleLevel(level.id)}
-            className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-              ${getColorClasses(level.color, isVisible)}
-              hover:shadow-md transform hover:scale-105
-            `}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            <span>{level.label}</span>
-            {isVisible ? (
-              <Eye className="w-3 h-3" />
-            ) : (
-              <EyeOff className="w-3 h-3 opacity-70" />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-
-// Zoom slider component
-const ZoomSlider = ({ zoom, onZoomChange, min = 0.25, max = 2 }: {
-  zoom: number;
-  onZoomChange: (value: number) => void;
-  min?: number;
-  max?: number;
-}) => {
-  return (
-    <div className="flex items-center gap-2">
-      <ZoomOut className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-      <input
-        type="range"
-        min={min * 100}
-        max={max * 100}
-        value={zoom * 100}
-        onChange={(e) => onZoomChange(Number(e.target.value) / 100)}
-        className="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer
-                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 
-                   [&::-webkit-slider-thumb]:bg-[#8CC63F] [&::-webkit-slider-thumb]:rounded-full 
-                   [&::-webkit-slider-thumb]:hover:bg-[#7AB635] [&::-webkit-slider-thumb]:transition-colors
-                   [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-[#8CC63F]
-                   [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-full
-                   [&::-moz-range-thumb]:hover:bg-[#7AB635] [&::-moz-range-thumb]:transition-colors"
-      />
-      <ZoomIn className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 min-w-[3rem]">
-        {Math.round(zoom * 100)}%
-      </span>
-    </div>
-  );
-};
-
-// Keyboard shortcuts helper
-const KeyboardShortcuts = () => {
-  const [isOpen, setIsOpen] = useState(false);
+// ===== MAIN COMPONENT =====
+export default function OrganizationManagement() {
+  const queryClient = useQueryClient();
+  const { user } = useUser();
+  const { permissions, adminLevel } = usePermissions();
+  const authenticatedUser = getAuthenticatedUser();
+  const { canView } = usePermissions();
   
-  const shortcuts = [
-    { key: 'Ctrl/Cmd + Scroll', action: 'Zoom in/out' },
-    { key: 'Drag Canvas', action: 'Pan view' },
-    { key: 'Space + Drag', action: 'Force pan mode' },
-    { key: 'Arrow Keys', action: 'Pan view' },
-    { key: 'Ctrl/Cmd + 0', action: 'Reset zoom' },
-    { key: 'Ctrl/Cmd + +/-', action: 'Zoom in/out' },
-    { key: 'F11', action: 'Toggle fullscreen' },
-    { key: 'Shift + Arrow', action: 'Fast pan' },
-  ];
-  
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-        title="Keyboard shortcuts"
-      >
-        <Navigation className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-      </button>
-      
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg 
-                        border border-gray-200 dark:border-gray-700 p-3 z-50 w-64">
-          <h4 className="font-semibold text-sm mb-2 text-gray-900 dark:text-white">
-            Keyboard Shortcuts
-          </h4>
-          <div className="space-y-1">
-            {shortcuts.map((s, i) => (
-              <div key={i} className="flex justify-between text-xs">
-                <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-700 dark:text-gray-300 font-mono">
-                  {s.key}
-                </kbd>
-                <span className="text-gray-600 dark:text-gray-400">{s.action}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Main component
-export default function OrganizationStructureTab({ 
-  companyData,
-  companyId,
-  onAddClick, 
-  onEditClick, 
-  onItemClick,
-  refreshData
-}: OrgStructureProps) {
-  // State management
-  const [visibleLevels, setVisibleLevels] = useState<Set<string>>(
-    new Set(['entity', 'schools'])
-  );
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['company']));
-  const [lazyLoadedData, setLazyLoadedData] = useState<Map<string, any[]>>(new Map());
-  const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [layoutPositions, setLayoutPositions] = useState<Map<string, NodePosition>>(new Map());
-  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
-  const [hasInitialized, setHasInitialized] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  // Branch form state
-  const [showBranchForm, setShowBranchForm] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<any>(null);
-  const [branchFormData, setBranchFormData] = useState<any>({});
-  const [branchFormErrors, setBranchFormErrors] = useState<Record<string, string>>({});
-  const [branchFormActiveTab, setBranchFormActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
-  
-  // Refs
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<Map<string, React.RefObject<HTMLDivElement>>>(new Map());
-  const layoutUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingRefitRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Check for dark mode on mount
-  useEffect(() => {
-    const checkDarkMode = () => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    };
-    
-    checkDarkMode();
-    
-    const observer = new MutationObserver(checkDarkMode);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    
-    return () => observer.disconnect();
-  }, []);
-
-  // Use the enhanced zoom/pan hook
+  // Use the access control hook
   const {
-    zoom,
-    pan,
-    cursor,
-    setZoom,
-    setPan,
-    resetView,
-    handleMouseEnter,
-    handleMouseDown,
-    handleMouseMove,
-    handleMouseUp,
-    handleMouseLeave,
-    handleZoom
-  } = useZoomPan(scrollAreaRef, contentRef, 1, 0.25, 2);
+    canViewTab,
+    can,
+    getScopeFilters,
+    getUserContext,
+    isLoading: isAccessControlLoading,
+    isAuthenticated,
+    isEntityAdmin,
+    isSubEntityAdmin,
+    isSchoolAdmin,
+    isBranchAdmin
+  } = useAccessControl();
+  
+  // State management - Start with null to ensure proper initialization
+  const [activeTab, setActiveTab] = useState<'structure' | 'schools' | 'branches' | 'admins' | 'teachers' | 'students' | null>(null);
+  const [userCompanyId, setUserCompanyId] = useState<string | null>(null);
+  const [companyData, setCompanyData] = useState<Company | null>(null);
+  const [isRefreshingStats, setIsRefreshingStats] = useState(false);
 
-  // Filter schools based on active/inactive toggle
-  const filteredSchools = useMemo(() => {
-    if (!companyData?.schools) return [];
+  // Refs for tab components
+  const schoolsTabRef = useRef<SchoolsTabRef>(null);
+  const branchesTabRef = useRef<BranchesTabRef>(null);
+
+  // FIX: Get accessible tabs using canViewTab from useAccessControl
+  const accessibleTabs = useMemo(() => {
+    // Wait for access control to be loaded
+    if (isAccessControlLoading) return [];
     
-    return showInactive 
-      ? companyData.schools 
-      : companyData.schools.filter((s: any) => s.status === 'active');
-  }, [companyData?.schools, showInactive]);
+    const tabs = [];
+    
+    // Check each tab using canViewTab from useAccessControl
+    // Structure tab - only for entity_admin and sub_entity_admin
+    if (canViewTab('structure')) {
+      tabs.push('structure');
+    }
+    
+    // Schools tab - entity, sub-entity, and school admins
+    if (canViewTab('schools')) {
+      tabs.push('schools');
+    }
+    
+    // Branches tab - all admin levels
+    if (canViewTab('branches')) {
+      tabs.push('branches');
+    }
+    
+    // Admins tab - entity, sub-entity, and school admins
+    if (canViewTab('admins')) {
+      tabs.push('admins');
+    }
+    
+    // Teachers tab - all admin levels
+    if (canViewTab('teachers')) {
+      tabs.push('teachers');
+    }
+    
+    // Students tab - all admin levels
+    if (canViewTab('students')) {
+      tabs.push('students');
+    }
+    
+    // Debug logging to help diagnose issues
+    console.log('Tab Access Debug:', {
+      adminLevel: getUserContext()?.adminLevel,
+      isEntityAdmin,
+      isSubEntityAdmin,
+      isSchoolAdmin,
+      isBranchAdmin,
+      canViewStructure: canViewTab('structure'),
+      canViewSchools: canViewTab('schools'),
+      canViewBranches: canViewTab('branches'),
+      canViewAdmins: canViewTab('admins'),
+      canViewTeachers: canViewTab('teachers'),
+      canViewStudents: canViewTab('students'),
+      resultingTabs: tabs
+    });
+    
+    return tabs;
+  }, [
+    canViewTab, 
+    isEntityAdmin, 
+    isSubEntityAdmin, 
+    isSchoolAdmin, 
+    isBranchAdmin, 
+    isAccessControlLoading,
+    getUserContext
+  ]);
 
-  // Fetch schools for branch form dropdown
-  const { data: schoolsForForm = [] } = useQuery(
-    ['schools-for-form', companyId],
-    async () => {
-      const { data, error } = await supabase
-        .from('schools')
-        .select('id, name')
-        .eq('company_id', companyId)
-        .eq('status', 'active')
-        .order('name');
-      
-      if (error) throw error;
-      return data || [];
-    },
-    { enabled: !!companyId }
-  );
-
-  // Fetch complete hierarchical data
-  const { data: completeHierarchyData, isLoading: isHierarchyLoading } = useQuery(
-    ['complete-hierarchy', companyId, showInactive, expandedNodes],
-    async () => {
-      if (!companyId || !filteredSchools || filteredSchools.length === 0) return null;
-
-      const schoolIds = filteredSchools.map((s: any) => s.id);
-      
-      // Fetch branches
-      let branchQuery = supabase
-        .from('branches')
-        .select(`
-          *,
-          branches_additional (*)
-        `)
-        .in('school_id', schoolIds)
-        .order('name');
-      
-      if (!showInactive) {
-        branchQuery = branchQuery.eq('status', 'active');
+  // Set default active tab to the first accessible tab
+  useEffect(() => {
+    // Only set tab after permissions are loaded and tabs are calculated
+    if (isAccessControlLoading) return;
+    
+    if (accessibleTabs.length > 0) {
+      // If no tab is active or current tab is not accessible
+      if (!activeTab || !accessibleTabs.includes(activeTab)) {
+        const defaultTab = accessibleTabs[0] as any;
+        console.log('Setting default active tab to:', defaultTab);
+        setActiveTab(defaultTab);
       }
-      
-      const { data: branches, error: branchError } = await branchQuery;
-      if (branchError) throw branchError;
-      
-      const branchIds = branches?.map(b => b.id) || [];
-      
-      // Fetch grade levels
-      let gradeLevelsQuery = supabase
-        .from('grade_levels')
+    }
+  }, [accessibleTabs, activeTab, isAccessControlLoading]);
+
+  // Fetch user's company
+  useEffect(() => {
+    const fetchUserCompany = async () => {
+      if (!authenticatedUser) return;
+
+      try {
+        const { data: entityUserData, error: entityUserError } = await supabase
+          .from('entity_users')
+          .select('company_id')
+          .eq('user_id', authenticatedUser.id)
+          .maybeSingle();
+
+        if (!entityUserError && entityUserData?.company_id) {
+          setUserCompanyId(entityUserData.company_id);
+        }
+      } catch (error) {
+        console.error('Error fetching user company:', error);
+        toast.error('Failed to load organization data');
+      }
+    };
+
+    fetchUserCompany();
+  }, [authenticatedUser]);
+
+  // Fetch complete organization data including schools and branches
+  const { 
+    data: organizationData, 
+    isLoading: isLoadingOrgData,
+    refetch: refetchOrgData 
+  } = useQuery(
+    ['organization-complete', userCompanyId],
+    async () => {
+      if (!userCompanyId) return null;
+
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
         .select('*')
-        .order('grade_order');
+        .eq('id', userCompanyId)
+        .single();
 
-      if (schoolIds.length > 0 || branchIds.length > 0) {
-        const conditions = [];
-        
-        if (schoolIds.length > 0) {
-          conditions.push(`school_id.in.(${schoolIds.join(',')})`);
-        }
-        
-        if (branchIds.length > 0) {
-          conditions.push(`branch_id.in.(${branchIds.join(',')})`);
-        }
-        
-        if (conditions.length > 0) {
-          gradeLevelsQuery = gradeLevelsQuery.or(conditions.join(','));
-        }
-      }
-      
-      if (!showInactive) {
-        gradeLevelsQuery = gradeLevelsQuery.eq('status', 'active');
-      }
-      
-      const { data: gradeLevels, error: gradeError } = await gradeLevelsQuery;
-      if (gradeError) throw gradeError;
-      
-      // Fetch class sections
-      let classSections: any[] = [];
-      if (gradeLevels && gradeLevels.length > 0) {
-        const { data: sections, error: sectionError } = await supabase
-          .from('class_sections')
-          .select('*')
-          .in('grade_level_id', gradeLevels.map(g => g.id))
-          .order('class_section_order');
-        
-        if (sectionError) throw sectionError;
-        classSections = sections || [];
-      }
-      
-      return {
-        branches: branches?.map(b => ({
-          ...b,
-          additional: Array.isArray(b.branches_additional) 
-            ? b.branches_additional[0] 
-            : b.branches_additional || {},
-          student_count: b.branches_additional?.[0]?.student_count || 
-                        b.branches_additional?.student_count || 
-                        b.branches_additional?.current_students || 0,
-          teachers_count: b.branches_additional?.[0]?.teachers_count || 
-                         b.branches_additional?.teachers_count || 
-                         b.branches_additional?.active_teachers_count || 0
-        })) || [],
-        gradeLevels: gradeLevels || [],
-        classSections: classSections || []
+      if (companyError) throw companyError;
+
+      const { data: companyAdditional } = await supabase
+        .from('companies_additional')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .maybeSingle();
+
+      const { data: schools, error: schoolsError } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('company_id', userCompanyId)
+        .order('name');
+
+      if (schoolsError) throw schoolsError;
+
+      const schoolsWithDetails = await Promise.all(
+        (schools || []).map(async (school) => {
+          const { data: schoolAdditional } = await supabase
+            .from('schools_additional')
+            .select('*')
+            .eq('school_id', school.id)
+            .maybeSingle();
+
+          const { data: branches } = await supabase
+            .from('branches')
+            .select('*')
+            .eq('school_id', school.id)
+            .order('name');
+
+          const branchesWithDetails = await Promise.all(
+            (branches || []).map(async (branch) => {
+              const { data: branchAdditional } = await supabase
+                .from('branches_additional')
+                .select('*')
+                .eq('branch_id', branch.id)
+                .maybeSingle();
+
+              return { 
+                ...branch, 
+                additional: branchAdditional,
+                student_count: branchAdditional?.student_count || branchAdditional?.current_students || 0,
+                teachers_count: branchAdditional?.teachers_count || branchAdditional?.active_teachers_count || 0
+              };
+            })
+          );
+
+          // Fetch grade levels for this school
+          const { data: gradeLevels } = await supabase
+            .from('grade_levels')
+            .select('*')
+            .eq('school_id', school.id)
+            .eq('status', 'active')
+            .order('grade_order');
+
+          // Fetch class sections for each grade level
+          const gradeLevelsWithSections = await Promise.all(
+            (gradeLevels || []).map(async (grade) => {
+              const { data: classSections } = await supabase
+                .from('class_sections')
+                .select('*')
+                .eq('grade_level_id', grade.id)
+                .eq('status', 'active')
+                .order('class_section_order');
+
+              return {
+                ...grade,
+                class_sections: classSections || []
+              };
+            })
+          );
+          const activeBranches = branchesWithDetails.filter(b => b.status === 'active');
+
+          return { 
+            ...school, 
+            additional: schoolAdditional, 
+            branches: branchesWithDetails,
+            grade_levels: gradeLevelsWithSections,
+            branch_count: activeBranches.length,
+            student_count: schoolAdditional?.student_count || 0,
+            teachers_count: schoolAdditional?.teachers_count || 0
+          };
+        })
+      );
+
+      const fullData: Company = { 
+        ...company, 
+        additional: companyAdditional, 
+        schools: schoolsWithDetails 
       };
+
+      setCompanyData(fullData);
+      return fullData;
     },
     {
-      enabled: !!companyId && filteredSchools.length > 0,
-      staleTime: 60 * 1000,
-      cacheTime: 5 * 60 * 1000
+      enabled: !!userCompanyId && !isAccessControlLoading,
+      staleTime: 2 * 60 * 1000,
+      retry: 2,
+      onError: (error) => {
+        console.error('Error fetching organization data:', error);
+        toast.error('Failed to load organization structure');
+      }
     }
   );
 
-  // Process hierarchy data for tree building
-  const processedSchoolData = useMemo(() => {
-    if (!filteredSchools || !completeHierarchyData) return [];
-    
-    return filteredSchools.map((school: any) => {
-      const schoolBranches = completeHierarchyData.branches.filter(b => b.school_id === school.id);
+  // Get scope filters for data queries
+  const scopeFilters = useMemo(() => {
+    return getScopeFilters();
+  }, [getScopeFilters]);
+
+  // Fetch organization statistics with scope filtering
+  const { 
+    data: organizationStats, 
+    isLoading: isLoadingStats,
+    refetch: refetchStats 
+  } = useQuery(
+    ['organization-stats', userCompanyId, scopeFilters],
+    async () => {
+      if (!userCompanyId) return null;
+
+      // Count schools belonging to this company
+      let schoolsQuery = supabase
+        .from('schools')
+        .select('id', { count: 'exact' })
+        .eq('company_id', userCompanyId)
+        .eq('status', 'active');
+
+      // Count branches belonging to schools in this company
+      const { data: companySchoolIds } = await supabase
+        .from('schools')
+        .select('id')
+        .eq('company_id', userCompanyId);
       
-      const schoolGrades = completeHierarchyData.gradeLevels.filter(g => 
-        g.school_id === school.id && !g.branch_id
-      );
+      const schoolIds = companySchoolIds?.map(s => s.id) || [];
       
-      const schoolGradesWithSections = schoolGrades.map(grade => ({
-        ...grade,
-        class_sections: completeHierarchyData.classSections.filter(s => 
-          s.grade_level_id === grade.id
-        )
-      }));
+      let branchesQuery = supabase
+        .from('branches')
+        .select('id', { count: 'exact' })
+        .eq('status', 'active');
       
-      const branchesWithGrades = schoolBranches.map(branch => {
-        const branchGrades = completeHierarchyData.gradeLevels.filter(g => 
-          g.branch_id === branch.id
-        );
+      if (schoolIds.length > 0) {
+        branchesQuery = branchesQuery.in('school_id', schoolIds);
+      } else {
+        // No schools in company, so no branches
+        branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Force empty result
+      }
+
+      // Apply scope filtering for non-entity/sub-entity admins
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          schoolsQuery = schoolsQuery.in('id', scopeFilters.school_ids);
+          // Filter branches to only those in scope schools
+          const scopeSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (scopeSchoolIds.length > 0) {
+            branchesQuery = branchesQuery.in('school_id', scopeSchoolIds);
+          } else {
+            branchesQuery = branchesQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+          }
+        } else if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          // For branch admins, get schools that contain their branches
+          const { data: branchSchools } = await supabase
+            .from('branches')
+            .select('school_id')
+            .in('id', scopeFilters.branch_ids);
+          
+          const branchSchoolIds = [...new Set(branchSchools?.map(b => b.school_id) || [])];
+          // Only include schools that belong to this company
+          const validSchoolIds = branchSchoolIds.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            schoolsQuery = schoolsQuery.in('id', validSchoolIds);
+          } else {
+            return {
+              company_id: userCompanyId,
+              total_schools: 0,
+              total_branches: 0,
+              total_students: 0,
+              total_teachers: 0,
+              total_users: 0
+            } as OrganizationStats;
+          }
+          branchesQuery = branchesQuery.in('id', scopeFilters.branch_ids);
+        } else {
+          return {
+            company_id: userCompanyId,
+            total_schools: 0,
+            total_branches: 0,
+            total_students: 0,
+            total_teachers: 0,
+            total_users: 0
+          } as OrganizationStats;
+        }
+      }
+
+      const [schoolsResult, branchesResult] = await Promise.all([
+        schoolsQuery,
+        branchesQuery
+      ]);
+
+      // Count teachers belonging to this company
+      let teacherCountQuery = supabase
+        .from('teachers')
+        .select('id', { count: 'exact' })
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true);
+
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        const orConditions: string[] = [];
         
-        const branchGradesWithSections = branchGrades.map(grade => ({
-          ...grade,
-          class_sections: completeHierarchyData.classSections.filter(s => 
-            s.grade_level_id === grade.id
-          )
-        }));
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          // Only include schools that belong to this company
+          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
+          }
+        }
         
-        return {
-          ...branch,
-          grade_levels: branchGradesWithSections,
-          grade_count: branchGradesWithSections.length
-        };
-      });
-      
+        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          // Only include branches that belong to schools in this company
+          const { data: validBranches } = await supabase
+            .from('branches')
+            .select('id')
+            .in('id', scopeFilters.branch_ids)
+            .in('school_id', schoolIds);
+          
+          const validBranchIds = validBranches?.map(b => b.id) || [];
+          if (validBranchIds.length > 0) {
+            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
+          }
+        }
+        
+        if (orConditions.length > 0) {
+          teacherCountQuery = teacherCountQuery.or(orConditions.join(','));
+        } else {
+          teacherCountQuery = teacherCountQuery.limit(0);
+        }
+      }
+
+      // Count students belonging to this company
+      let studentCountQuery = supabase
+        .from('students')
+        .select('id', { count: 'exact' })
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true);
+
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        const orConditions: string[] = [];
+        
+        if (scopeFilters.school_ids && scopeFilters.school_ids.length > 0) {
+          // Only include schools that belong to this company
+          const validSchoolIds = scopeFilters.school_ids.filter(id => schoolIds.includes(id));
+          if (validSchoolIds.length > 0) {
+            orConditions.push(`school_id.in.(${validSchoolIds.join(',')})`);
+          }
+        }
+        
+        if (scopeFilters.branch_ids && scopeFilters.branch_ids.length > 0) {
+          // Only include branches that belong to schools in this company
+          const { data: validBranches } = await supabase
+            .from('branches')
+            .select('id')
+            .in('id', scopeFilters.branch_ids)
+            .in('school_id', schoolIds);
+          
+          const validBranchIds = validBranches?.map(b => b.id) || [];
+          if (validBranchIds.length > 0) {
+            orConditions.push(`branch_id.in.(${validBranchIds.join(',')})`);
+          }
+        }
+        
+        if (orConditions.length > 0) {
+          studentCountQuery = studentCountQuery.or(orConditions.join(','));
+        } else {
+          studentCountQuery = studentCountQuery.limit(0);
+        }
+      }
+
+      // Count entity users belonging to this company
+      let userCountQuery = supabase
+        .from('entity_users')
+        .select('id', { count: 'exact' })
+        .eq('company_id', userCompanyId)
+        .eq('is_active', true);
+
+      if (!isEntityAdmin && !isSubEntityAdmin) {
+        // For school and branch admins, they still see all entity users in the company
+        // as entity users are company-level administrators
+        // No additional filtering needed beyond company_id
+      }
+
+      // Execute all count queries
+      const [teacherCountResult, studentCountResult, userCountResult] = await Promise.all([
+        teacherCountQuery,
+        studentCountQuery,
+        userCountQuery
+      ]);
+
       return {
-        ...school,
-        branches: branchesWithGrades,
-        grade_levels: schoolGradesWithSections,
-        total_grades: schoolGradesWithSections.length + 
-                     branchesWithGrades.reduce((sum, b) => sum + b.grade_levels.length, 0)
+        company_id: userCompanyId,
+        total_schools: schoolsResult.count || 0,
+        total_branches: branchesResult.count || 0,
+        total_students: studentCountResult.count || 0,
+        total_teachers: teacherCountResult.count || 0,
+        total_users: userCountResult.count || 0
+      } as OrganizationStats;
+    },
+    {
+      enabled: !!userCompanyId && !isAccessControlLoading && isAuthenticated,
+      staleTime: 2 * 60 * 1000,
+    }
+  );
+
+  // Memoized stats for performance
+  const memoizedStats = useMemo(() => {
+    if (organizationStats) return organizationStats;
+    
+    if (organizationData?.schools) {
+      return {
+        company_id: userCompanyId || '',
+        total_schools: organizationData.schools.length,
+        total_branches: organizationData.schools.reduce((acc, s) => acc + (s.branch_count || 0), 0),
+        total_students: organizationData.schools.reduce((acc, s) => acc + (s.student_count || 0), 0),
+        total_teachers: organizationData.schools.reduce((acc, s) => acc + (s.teachers_count || 0), 0),
+        total_users: 0
       };
-    });
-  }, [filteredSchools, completeHierarchyData]);
-
-  // Helper to get or create card ref
-  const getCardRef = useCallback((id: string) => {
-    if (!cardRefs.current.has(id)) {
-      cardRefs.current.set(id, React.createRef<HTMLDivElement>());
-    }
-    return cardRefs.current.get(id)!;
-  }, []);
-
-  // Build tree structure from processed data
-  const treeNodes = useMemo(() => {
-    if (!companyData) return new Map();
-    
-    const filteredCompanyData = {
-      ...companyData,
-      schools: processedSchoolData
-    };
-    
-    return buildTreeFromData(
-      filteredCompanyData,
-      expandedNodes,
-      new Map(),
-      new Map(),
-      visibleLevels
-    );
-  }, [companyData, processedSchoolData, expandedNodes, visibleLevels]);
-
-  // Dynamic layout configuration - FIXED: Now defined after treeNodes
-  const layoutConfig: LayoutConfig = useMemo(() => {
-    const visibleLevelCount = visibleLevels.size;
-    const totalNodes = treeNodes.size;
-    const hasDeepHierarchy = visibleLevels.has('sections') || visibleLevels.has('years');
-    
-    const baseGapX = isFullscreen ? 60 : 48;
-    const baseGapY = isFullscreen ? 100 : 80;
-    
-    let dynamicGapX = baseGapX;
-    let dynamicGapY = baseGapY;
-    
-    if (hasDeepHierarchy) {
-      dynamicGapX = baseGapX + 20;
-      dynamicGapY = baseGapY + 30;
-    }
-    
-    if (totalNodes > 20) {
-      dynamicGapX += 15;
-      dynamicGapY += 20;
-    }
-    
-    if (visibleLevels.has('sections')) {
-      dynamicGapX += 10;
-      dynamicGapY += 15;
     }
     
     return {
-      gapX: dynamicGapX,
-      gapY: dynamicGapY,
-      centerParents: true,
-      minCardWidth: 260,
-      maxCardWidth: 300
+      total_schools: 0,
+      total_branches: 0,
+      total_students: 0,
+      total_teachers: 0,
+      total_users: 0
     };
-  }, [visibleLevels, treeNodes.size, isFullscreen]);
+  }, [organizationStats, organizationData, userCompanyId]);
 
-  // Measure node dimensions
-  const nodeDimensions = useNodeMeasurements(
-    cardRefs,
-    1,
-    [expandedNodes, visibleLevels, processedSchoolData.length, showInactive]
-  );
+  // Handle stats refresh
+  const handleRefreshStats = useCallback(async () => {
+    setIsRefreshingStats(true);
+    await Promise.all([
+      refetchStats(),
+      refetchOrgData()
+    ]);
+    setIsRefreshingStats(false);
+    toast.success('Statistics refreshed');
+  }, [refetchStats, refetchOrgData]);
 
-  // Enhanced fitToScreen with better centering
-  const fitToScreen = useCallback(() => {
-    if (!scrollAreaRef.current || !contentRef.current || layoutPositions.size === 0) return;
-    
-    const container = scrollAreaRef.current;
-    const containerRect = container.getBoundingClientRect();
-    
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    
-    layoutPositions.forEach((pos, nodeId) => {
-      const dims = nodeDimensions.get(nodeId) || { width: 260, height: 140 };
-      const left = pos.x - dims.width / 2;
-      const right = pos.x + dims.width / 2;
-      const top = pos.y;
-      const bottom = pos.y + dims.height;
-      
-      minX = Math.min(minX, left);
-      maxX = Math.max(maxX, right);
-      minY = Math.min(minY, top);
-      maxY = Math.max(maxY, bottom);
-    });
-    
-    const contentWidth = maxX - minX;
-    const contentHeight = maxY - minY;
-    
-    const padding = isFullscreen ? 100 : 50;
-    const availableWidth = containerRect.width - padding * 2;
-    const availableHeight = containerRect.height - padding * 2;
-    
-    const scaleX = availableWidth / contentWidth;
-    const scaleY = availableHeight / contentHeight;
-    const baseScale = Math.min(scaleX, scaleY);
-    
-    const maxZoom = isFullscreen ? 1.5 : 1.2;
-    const minZoom = 0.3;
-    const optimalZoom = Math.min(baseScale, maxZoom);
-    
-    const finalZoom = Math.max(minZoom, optimalZoom);
-    
-    const scaledContentWidth = contentWidth * finalZoom;
-    const scaledContentHeight = contentHeight * finalZoom;
-    
-    const centerX = (containerRect.width - scaledContentWidth) / 2;
-    const centerY = (containerRect.height - scaledContentHeight) / 2;
-    
-    const contentCenterX = (minX + maxX) / 2;
-    const contentCenterY = (minY + maxY) / 2;
-    
-    setZoom(finalZoom);
-    setPan({
-      x: centerX - (contentCenterX - contentWidth / 2) * finalZoom,
-      y: centerY - (contentCenterY - contentHeight / 2) * finalZoom
-    });
-  }, [scrollAreaRef, layoutPositions, nodeDimensions, isFullscreen, setZoom, setPan]);
-
-  // Coordinated auto-refit function
-  const triggerAutoRefit = useCallback((reason: string, delay: number = 400) => {
-    if (!hasInitialized) return;
-    
-    if (pendingRefitRef.current) {
-      clearTimeout(pendingRefitRef.current);
-    }
-    
-    pendingRefitRef.current = setTimeout(() => {
-      if (layoutPositions.size > 0) {
-        fitToScreen();
-      }
-      pendingRefitRef.current = null;
-    }, delay);
-  }, [hasInitialized, layoutPositions.size, fitToScreen]);
-
-  // Layout calculation with dynamic spacing and auto-refit
-  useEffect(() => {
-    if (treeNodes.size === 0) return;
-    
-    if (layoutUpdateTimeoutRef.current) {
-      clearTimeout(layoutUpdateTimeoutRef.current);
-    }
-    
-    layoutUpdateTimeoutRef.current = setTimeout(() => {
-      const dimensionsToUse = new Map<string, NodeDimensions>();
-      treeNodes.forEach((node, nodeId) => {
-        const measured = nodeDimensions.get(nodeId);
-        dimensionsToUse.set(nodeId, measured || { width: 260, height: 140 });
-      });
-
-      const layoutEngine = new TreeLayoutEngine(treeNodes, dimensionsToUse, layoutConfig);
-      const result = layoutEngine.layout('company');
-      
-      const baseWidth = result.totalSize.width;
-      const baseHeight = result.totalSize.height;
-      
-      const complexityFactor = Math.min(treeNodes.size / 10, 2);
-      const minCanvasWidth = 1400 + (complexityFactor * 300);
-      const minCanvasHeight = 1000 + (complexityFactor * 200);
-      
-      const extraPadding = visibleLevels.has('sections') ? 300 : 200;
-      
-      const paddedSize = {
-        width: Math.max(baseWidth + extraPadding, minCanvasWidth),
-        height: Math.max(baseHeight + extraPadding, minCanvasHeight)
-      };
-      
-      const centerOffsetX = (paddedSize.width - baseWidth) / 2;
-      const centerOffsetY = (paddedSize.height - baseHeight) / 2;
-      
-      const centeredPositions = new Map<string, NodePosition>();
-      result.positions.forEach((pos, nodeId) => {
-        centeredPositions.set(nodeId, {
-          x: pos.x + centerOffsetX,
-          y: pos.y + centerOffsetY
-        });
-      });
-      
-      setLayoutPositions(centeredPositions);
-      setCanvasSize(paddedSize);
-      
-      if (!hasInitialized) {
-        setTimeout(() => {
-          fitToScreen();
-          setHasInitialized(true);
-        }, 150);
-      }
-    }, 200);
-    
-    return () => {
-      if (layoutUpdateTimeoutRef.current) {
-        clearTimeout(layoutUpdateTimeoutRef.current);
-      }
-    };
-  }, [treeNodes, nodeDimensions, layoutConfig, hasInitialized, fitToScreen, visibleLevels]);
-
-  // Auto-refit when visibility levels change
-  useEffect(() => {
-    if (hasInitialized) {
-      triggerAutoRefit('visibility-levels-changed', 500);
-    }
-  }, [visibleLevels, hasInitialized, triggerAutoRefit]);
-
-  // Auto-refit when layout positions are updated
-  useEffect(() => {
-    if (hasInitialized && layoutPositions.size > 0) {
-      triggerAutoRefit('layout-positions-updated', 200);
-    }
-  }, [layoutPositions, hasInitialized, triggerAutoRefit]);
-
-  // Auto-refit when expanded nodes change
-  useEffect(() => {
-    if (hasInitialized) {
-      triggerAutoRefit('expanded-nodes-changed', 300);
-    }
-  }, [expandedNodes, hasInitialized, triggerAutoRefit]);
-
-  // Cleanup pending refit on unmount
-  useEffect(() => {
-    return () => {
-      if (pendingRefitRef.current) {
-        clearTimeout(pendingRefitRef.current);
-      }
-    };
+  // Prefetch tab data for better UX
+  const prefetchTabData = useCallback((tab: string) => {
+    // Implement prefetching logic if needed
   }, []);
 
-  // Calculate hierarchical data
-  const hierarchicalData = useMemo(() => {
-    if (!processedSchoolData || processedSchoolData.length === 0) {
-      return { totalSchools: 0, totalBranches: 0, totalStudents: 0, totalTeachers: 0, totalUsers: 0 };
-    }
-    
-    const totalSchools = processedSchoolData.length;
-    const totalBranches = processedSchoolData.reduce((sum: number, school: any) => 
-      sum + (school.branches?.length || 0), 0
-    );
-    const totalStudents = processedSchoolData.reduce((sum: number, school: any) => 
-      sum + (school.student_count || school.additional?.student_count || 0), 0
-    );
-    const totalTeachers = processedSchoolData.reduce((sum: number, school: any) => 
-      sum + (school.additional?.teachers_count || 0), 0
-    );
-    const totalUsers = processedSchoolData.reduce((sum: number, school: any) => 
-      sum + (school.additional?.admin_users_count || 0), 0
-    ) + (companyData?.additional?.admin_users_count || 0);
-    
-    return { totalSchools, totalBranches, totalStudents, totalTeachers, totalUsers };
-  }, [processedSchoolData, companyData]);
-
-  // Handle branch editing from diagram
-  const handleBranchEdit = useCallback(async (branch: any) => {
-    try {
-      const { data: additionalData, error } = await supabase
-        .from('branches_additional')
-        .select('*')
-        .eq('branch_id', branch.id)
-        .maybeSingle();
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching branch additional data:', error);
-      }
-      
-      const combinedData = {
-        ...branch,
-        ...(additionalData || branch.additional || {})
-      };
-      
-      setBranchFormData(combinedData);
-      setBranchFormErrors({});
-      setEditingBranch(branch);
-      setBranchFormActiveTab('basic');
-      setShowBranchForm(true);
-    } catch (error) {
-      console.error('Error preparing branch form:', error);
-      toast.error('Failed to load branch details');
-    }
-  }, []);
-
-  // Handle branch form submission
-  const handleBranchFormSubmit = useCallback(async () => {
-    const errors: Record<string, string> = {};
-    
-    if (!branchFormData.name) errors.name = 'Name is required';
-    if (!branchFormData.code) errors.code = 'Code is required';
-    if (!branchFormData.school_id) errors.school_id = 'School is required';
-    if (!branchFormData.status) errors.status = 'Status is required';
-    
-    if (branchFormData.branch_head_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchFormData.branch_head_email)) {
-      errors.branch_head_email = 'Invalid email address';
-    }
-    
-    if (Object.keys(errors).length > 0) {
-      setBranchFormErrors(errors);
-      toast.error('Please fix the errors before submitting');
-      return;
-    }
-    
-    try {
-      const mainData = {
-        name: branchFormData.name,
-        code: branchFormData.code,
-        school_id: branchFormData.school_id,
-        status: branchFormData.status,
-        address: branchFormData.address,
-        notes: branchFormData.notes,
-        logo: branchFormData.logo
-      };
-      
-      const { error } = await supabase
-        .from('branches')
-        .update(mainData)
-        .eq('id', editingBranch.id);
-      
-      if (error) throw error;
-      
-      const additionalData: any = {
-        branch_id: editingBranch.id,
-        student_capacity: branchFormData.student_capacity,
-        current_students: branchFormData.current_students,
-        teachers_count: branchFormData.teachers_count,
-        active_teachers_count: branchFormData.active_teachers_count,
-        branch_head_name: branchFormData.branch_head_name,
-        branch_head_email: branchFormData.branch_head_email,
-        branch_head_phone: branchFormData.branch_head_phone,
-        building_name: branchFormData.building_name,
-        floor_details: branchFormData.floor_details,
-        opening_time: branchFormData.opening_time,
-        closing_time: branchFormData.closing_time,
-        working_days: branchFormData.working_days
-      };
-      
-      const { error: updateError } = await supabase
-        .from('branches_additional')
-        .update(additionalData)
-        .eq('branch_id', editingBranch.id);
-      
-      if (updateError?.code === 'PGRST116') {
-        const { error: insertError } = await supabase
-          .from('branches_additional')
-          .insert([additionalData]);
-        
-        if (insertError && insertError.code !== '23505') {
-          console.error('Additional insert error:', insertError);
-        }
-      }
-      
-      toast.success('Branch updated successfully');
-      setShowBranchForm(false);
-      setEditingBranch(null);
-      setBranchFormData({});
-      setBranchFormErrors({});
-      
-      if (refreshData) {
-        refreshData();
-      }
-    } catch (error) {
-      console.error('Error updating branch:', error);
-      toast.error('Failed to update branch');
-    }
-  }, [branchFormData, editingBranch, refreshData]);
-
-  // Initial loading simulation
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setInitialLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Toggle node expansion
-  const toggleNode = useCallback((nodeId: string, nodeType: string) => {
-    const key = nodeType === 'company' ? 'company' : `${nodeType}-${nodeId}`;
-    
-    setExpandedNodes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  }, []);
-
-  // Toggle level visibility with proper hierarchical rules
-  const toggleLevel = useCallback((level: string) => {
-    setVisibleLevels(prev => {
-      const newSet = new Set(prev);
-      
-      if (level === 'entity' && newSet.has('entity')) {
-        return prev;
-      }
-      
-      if (newSet.has(level)) {
-        newSet.delete(level);
-        
-        if (level === 'schools') {
-          newSet.delete('branches');
-          newSet.delete('years');
-          newSet.delete('sections');
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              newExpanded.delete(`school-${school.id}`);
-            });
-            return newExpanded;
-          });
-        } else if (level === 'branches') {
-          newSet.delete('years');
-          newSet.delete('sections');
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              school.branches?.forEach((branch: any) => {
-                newExpanded.delete(`branch-${branch.id}`);
-              });
-            });
-            return newExpanded;
-          });
-        } else if (level === 'years') {
-          newSet.delete('sections');
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            Array.from(newExpanded).forEach(node => {
-              if (node.startsWith('grade-')) {
-                newExpanded.delete(node);
-              }
-            });
-            return newExpanded;
-          });
-        }
-        
-      } else {
-        newSet.add(level);
-        
-        if (level === 'sections') {
-          if (!newSet.has('years')) newSet.add('years');
-          if (!newSet.has('branches')) newSet.add('branches');
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              const hasGradesWithSections = (school.grade_levels && school.grade_levels.some((g: any) => g.class_sections.length > 0)) ||
-                                           (school.branches && school.branches.some((b: any) => b.grade_levels.some((g: any) => g.class_sections.length > 0)));
-              
-              if (hasGradesWithSections) {
-                newExpanded.add(`school-${school.id}`);
-                school.grade_levels?.forEach((grade: any) => {
-                  if (grade.class_sections && grade.class_sections.length > 0) {
-                    newExpanded.add(`grade-${grade.id}`);
-                  }
-                });
-                school.branches?.forEach((branch: any) => {
-                  if (branch.grade_levels && branch.grade_levels.length > 0) {
-                    newExpanded.add(`branch-${branch.id}`);
-                    branch.grade_levels.forEach((grade: any) => {
-                      if (grade.class_sections && grade.class_sections.length > 0) {
-                        newExpanded.add(`grade-${grade.id}`);
-                      }
-                    });
-                  }
-                });
-              }
-            });
-            return newExpanded;
-          });
-        } else if (level === 'years') {
-          if (!newSet.has('branches')) newSet.add('branches');
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              if ((school.grade_levels && school.grade_levels.length > 0) || 
-                  (school.branches && school.branches.some((b: any) => b.grade_levels.length > 0))) {
-                newExpanded.add(`school-${school.id}`);
-                school.branches?.forEach((branch: any) => {
-                  if (branch.grade_levels && branch.grade_levels.length > 0) {
-                    newExpanded.add(`branch-${branch.id}`);
-                  }
-                });
-              }
-            });
-            return newExpanded;
-          });
-        } else if (level === 'branches') {
-          if (!newSet.has('schools')) newSet.add('schools');
-          
-          setExpandedNodes(prevExpanded => {
-            const newExpanded = new Set(prevExpanded);
-            processedSchoolData.forEach((school: any) => {
-              if (school.branches && school.branches.length > 0) {
-                newExpanded.add(`school-${school.id}`);
-              }
-            });
-            return newExpanded;
-          });
-        }
-      }
-      
-      return newSet;
-    });
-  }, [processedSchoolData]);
-
-  // Toggle fullscreen - Preserve theme
-  const toggleFullscreen = () => {
-    const element = fullscreenContainerRef.current;
-    if (!element) return;
-
-    if (!document.fullscreenElement) {
-      element.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-        setTimeout(() => {
-          fitToScreen();
-        }, 300);
-      }).catch(err => {
-        console.error('Error entering fullscreen:', err);
-        toast.error('Could not enter fullscreen mode');
-      });
-    } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-        setTimeout(() => {
-          fitToScreen();
-        }, 300);
-      }).catch(err => {
-        console.error('Error exiting fullscreen:', err);
-      });
-    }
-  };
-
-  // Listen for fullscreen changes and F11
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-      setTimeout(() => {
-        fitToScreen();
-      }, 100);
-    };
-    
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'F11') {
-        e.preventDefault();
-        toggleFullscreen();
-      }
-    };
-    
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('keydown', handleKeyPress);
-    
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('keydown', handleKeyPress);
-    };
-  }, [fitToScreen]);
-
-  if (!companyData) {
+  // Loading state
+  if (isAccessControlLoading || !userCompanyId) {
     return (
-      <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg">
-        <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-        <p className="text-gray-500 dark:text-gray-400">No organization data available</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Loading Organization
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Checking permissions and loading data...
+          </p>
+        </div>
       </div>
     );
   }
 
-  // Render the enhanced organizational chart
-  const renderChart = () => {
-    if (!companyData) {
-      return (
-        <div className="text-center py-12">
-          <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">Loading organization data...</p>
-        </div>
-      );
-    }
-    
-    if (treeNodes.size === 0) {
-      return (
-        <div className="text-center py-12">
-          <Building2 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No organization structure to display</p>
-          <p className="text-xs text-gray-400 mt-2">Try enabling different levels or check your data</p>
-        </div>
-      );
-    }
-
-    const shouldShowConnections = visibleLevels.has('schools') && expandedNodes.has('company');
-
+  // Not authenticated
+  if (!isAuthenticated) {
     return (
-      <div 
-        ref={contentRef}
-        className="relative pan-area"
-        style={{
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-          minHeight: '400px',
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          transition: 'none',
-          willChange: 'transform'
-        }}
-      >
-        {/* Render all nodes */}
-        {Array.from(treeNodes.entries()).map(([nodeId, node]) => {
-          const position = layoutPositions.get(nodeId);
-          const dimensions = nodeDimensions.get(nodeId) || { width: 260, height: 140 };
-          
-          if (!position) return null;
-
-          if (initialLoading && nodeId !== 'company') return null;
-          
-          const nodeTypeToLevel = {
-            'company': 'entity',
-            'school': 'schools', 
-            'branch': 'branches',
-            'year': 'years',
-            'section': 'sections'
-          };
-          
-          const levelKey = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
-          
-          if (node.type === 'branch') {
-            const parentSchoolId = node.parentId;
-            const isSchoolExpanded = parentSchoolId && expandedNodes.has(parentSchoolId);
-            
-            if (!isSchoolExpanded || !visibleLevels.has('branches')) {
-              return null;
-            }
-          } else if (node.type === 'year') {
-            const parentId = node.parentId;
-            const isParentExpanded = parentId && expandedNodes.has(parentId);
-            
-            if (!isParentExpanded || !visibleLevels.has('years')) {
-              return null;
-            }
-          } else if (node.type === 'section') {
-            const parentGradeId = node.parentId;
-            const isGradeExpanded = parentGradeId && expandedNodes.has(parentGradeId);
-            
-            if (!isGradeExpanded || !visibleLevels.has('sections')) {
-              return null;
-            }
-          } else if (levelKey && !visibleLevels.has(levelKey)) {
-            return null;
-          }
-          
-          const isLoading = loadingNodes.has(nodeId);
-          if (isLoading) {
-            return (
-              <div
-                key={`${nodeId}-skeleton`}
-                style={{
-                  position: 'absolute',
-                  transform: `translate3d(${position.x - dimensions.width / 2}px, ${position.y}px, 0)`,
-                  zIndex: 1
-                }}
-              >
-                <CardSkeleton />
-              </div>
-            );
-          }
-
-          // Get the actual data for this node
-          let item = node.data;
-          let hasChildren = false;
-          let isExpanded = false;
-
-          if (node.type === 'company') {
-            item = companyData;
-            hasChildren = processedSchoolData?.length > 0;
-            isExpanded = expandedNodes.has('company');
-          } else if (node.type === 'school') {
-            const schoolId = node.id.replace('school-', '');
-            const school = processedSchoolData.find((s: any) => s.id === schoolId);
-            item = school;
-            
-            const hasBranches = school?.branches && school.branches.length > 0;
-            const hasGradeLevels = school?.grade_levels && school.grade_levels.length > 0;
-            
-            hasChildren = (hasBranches && visibleLevels.has('branches')) || 
-                         (hasGradeLevels && visibleLevels.has('years'));
-            isExpanded = expandedNodes.has(node.id);
-          } else if (node.type === 'branch') {
-            const branchId = node.id.replace('branch-', '');
-            for (const school of processedSchoolData) {
-              const branch = school.branches?.find((b: any) => b.id === branchId);
-              if (branch) {
-                item = branch;
-                hasChildren = branch.grade_levels && branch.grade_levels.length > 0 && visibleLevels.has('years');
-                isExpanded = expandedNodes.has(node.id);
-                break;
-              }
-            }
-          } else if (node.type === 'year') {
-            item = node.data;
-            hasChildren = item?.class_sections && item.class_sections.length > 0 && visibleLevels.has('sections');
-            isExpanded = expandedNodes.has(node.id);
-          } else if (node.type === 'section') {
-            item = node.data;
-            hasChildren = false;
-          }
-
-          if (!item) return null;
-
-          return (
-            <div
-              key={nodeId}
-              style={{
-                position: 'absolute',
-                transform: `translate3d(${position.x - dimensions.width / 2}px, ${position.y}px, 0)`,
-                zIndex: 2
-              }}
-            >
-              <OrgCard
-                ref={getCardRef(nodeId)}
-                item={item}
-                type={node.type}
-                onItemClick={(clickedItem, clickedType) => {
-                  if (clickedType === 'branch') {
-                    handleBranchEdit(clickedItem);
-                  } else {
-                    onItemClick(clickedItem, clickedType);
-                  }
-                }}
-                onAddClick={onAddClick}
-                hasChildren={hasChildren}
-                isExpanded={isExpanded}
-                onToggleExpand={() => {
-                  if (node.type === 'company') {
-                    setExpandedNodes(prev => {
-                      const newSet = new Set(prev);
-                      if (newSet.has('company')) {
-                        newSet.delete('company');
-                      } else {
-                        newSet.add('company');
-                      }
-                      return newSet;
-                    });
-                  } else {
-                    const id = node.id.replace(`${node.type}-`, '');
-                    toggleNode(id, node.type);
-                  }
-                }}
-                hierarchicalData={node.type === 'company' ? hierarchicalData : undefined}
-              />
-            </div>
-          );
-        })}
-
-        {/* Enhanced SVG Connections */}
-        {shouldShowConnections && (
-          <svg
-            className="absolute pointer-events-none z-0"
-            style={{
-              left: '0px',
-              top: '0px',
-              width: `${canvasSize.width}px`,
-              height: `${canvasSize.height}px`,
-              overflow: 'visible'
-            }}
-          >
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-              >
-                <polygon
-                  points="0 0, 10 3.5, 0 7"
-                  fill="#9CA3AF"
-                  className="dark:fill-gray-500"
-                />
-              </marker>
-              <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#9CA3AF" stopOpacity="0.8"/>
-                <stop offset="100%" stopColor="#9CA3AF" stopOpacity="0.6"/>
-              </linearGradient>
-            </defs>
-            {Array.from(treeNodes.entries())
-              .filter(([nodeId, node]) => {
-                if (!node.parentId) return false;
-                
-                const nodeTypeToLevel = {
-                  'company': 'entity',
-                  'school': 'schools', 
-                  'branch': 'branches',
-                  'year': 'years',
-                  'section': 'sections'
-                };
-                
-                const parentNode = treeNodes.get(node.parentId);
-                if (!parentNode) return false;
-                
-                const childLevel = nodeTypeToLevel[node.type as keyof typeof nodeTypeToLevel];
-                const parentLevel = nodeTypeToLevel[parentNode.type as keyof typeof nodeTypeToLevel];
-                
-                if (node.type === 'branch') {
-                  if (!visibleLevels.has('branches') || !expandedNodes.has(node.parentId)) {
-                    return false;
-                  }
-                } else if (node.type === 'year') {
-                  if (!visibleLevels.has('years') || !expandedNodes.has(node.parentId)) {
-                    return false;
-                  }
-                } else if (node.type === 'section') {
-                  if (!visibleLevels.has('sections') || !expandedNodes.has(node.parentId)) {
-                    return false;
-                  }
-                } else {
-                  if (!visibleLevels.has(childLevel) || !visibleLevels.has(parentLevel)) {
-                    return false;
-                  }
-                }
-                
-                return true;
-              })
-              .map(([nodeId, node]) => {
-                const parentPos = layoutPositions.get(node.parentId!);
-                const childPos = layoutPositions.get(nodeId);
-                const parentDim = nodeDimensions.get(node.parentId!);
-                const childDim = nodeDimensions.get(nodeId);
-
-                const parentDimensions = parentDim || { width: 260, height: 140 };
-                const childDimensions = childDim || { width: 260, height: 140 };
-                
-                if (!parentPos || !childPos) return null;
-
-                const enhancedGapY = layoutConfig.gapY;
-                const path = generateConnectionPath(
-                  { x: parentPos.x, y: parentPos.y },
-                  { x: childPos.x, y: childPos.y },
-                  parentDimensions.height,
-                  childDimensions.height,
-                  enhancedGapY
-                );
-
-                const getStrokeWidth = (nodeType: string) => {
-                  switch (nodeType) {
-                    case 'school': return '2.5';
-                    case 'branch': return '2';
-                    case 'year': return '1.8';
-                    case 'section': return '1.5';
-                    default: return '2';
-                  }
-                };
-
-                return (
-                  <path
-                    key={`${node.parentId}-${nodeId}`}
-                    d={path}
-                    stroke="url(#connectionGradient)"
-                    strokeWidth={getStrokeWidth(node.type)}
-                    fill="none"
-                    markerEnd="url(#arrowhead)"
-                    className="dark:stroke-gray-500 transition-opacity duration-200"
-                    opacity="0.8"
-                  />
-                );
-              })}
-          </svg>
-        )}
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Lock className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            You are not authenticated or do not have access to this module.
+          </p>
+        </div>
       </div>
     );
-  };
+  }
 
-  return (
-    <>
-      {/* Main container with fullscreen ref */}
-      <div 
-        ref={fullscreenContainerRef}
-        className={`
-          ${isFullscreen 
-            ? `fixed inset-0 z-50 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}` 
-            : 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full'}
-        `}
-      >
-        {/* Header */}
-        <div className={`
-          ${isFullscreen 
-            ? (isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900 border-b border-gray-200')
-            : 'bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700'}
-          p-4
-        `}>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
-              <h2 className={`text-lg font-semibold ${isFullscreen && !isDarkMode ? 'text-gray-900' : ''}`}>
-                Organization Structure
-              </h2>
-              
-              <div className="text-xs text-gray-500 dark:text-gray-400">Show/Hide:</div>
-              
-              <LevelTabs visibleLevels={visibleLevels} onToggleLevel={toggleLevel} />
-              
-              <button
-                onClick={() => setShowInactive(!showInactive)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium
-                         bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300
-                         hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                {showInactive ? (
-                  <ToggleRight className="w-4 h-4 text-orange-500" />
-                ) : (
-                  <ToggleLeft className="w-4 h-4" />
-                )}
-                <span>Show Inactive</span>
-              </button>
-            </div>
-
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-3">
-              <ZoomSlider 
-                zoom={zoom} 
-                onZoomChange={setZoom}
-                min={0.25}
-                max={2}
-              />
-              
-              <div className="flex items-center gap-1 border-l pl-3 border-gray-300 dark:border-gray-600">
-                <button
-                  onClick={() => handleZoom(-0.1)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  disabled={zoom <= 0.25}
-                  title="Zoom out (Ctrl + -)"
-                >
-                  <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                <button
-                  onClick={() => handleZoom(0.1)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  disabled={zoom >= 2}
-                  title="Zoom in (Ctrl + +)"
-                >
-                  <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                <button
-                  onClick={fitToScreen}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Fit to screen"
-                >
-                  <Expand className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                <button
-                  onClick={resetView}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Reset view (Ctrl + 0)"
-                >
-                  <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                </button>
-                
-                <KeyboardShortcuts />
-                
-                <button
-                  onClick={toggleFullscreen}
-                  className={`
-                    p-2 rounded-lg transition-colors ml-2
-                    ${isFullscreen 
-                      ? 'bg-red-600 hover:bg-red-700 text-white' 
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
-                  `}
-                  title={isFullscreen ? "Exit fullscreen (F11)" : "Enter fullscreen (F11)"}
-                >
-                  {isFullscreen ? (
-                    <Minimize2 className="w-4 h-4" />
-                  ) : (
-                    <Maximize2 className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+  // No accessible tabs
+  if (accessibleTabs.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            No Access Permissions
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            You don't have permission to access any sections of the organization module.
+            Please contact your administrator.
+          </p>
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 text-left">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Your Role:</h3>
+            <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <div>Admin Level: {adminLevel || getUserContext()?.adminLevel || 'None'}</div>
+              <div>Company: {companyData?.name || 'Not assigned'}</div>
             </div>
           </div>
-          
-          {/* Interactive Help Text */}
-          <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-            <span className="flex items-center gap-1">
-              <MousePointer className="w-3 h-3" />
-              Drag empty space to pan
-            </span>
-            <span className="flex items-center gap-1">
-              <Move className="w-3 h-3" />
-              Ctrl+Scroll to zoom
-            </span>
-            <span className="flex items-center gap-1">
-              Click cards to view details
-            </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Define unified green color for active tabs
+  const activeColor = '#8CC63F';
+  const activeColorDark = '#7AB635';
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Organization Management
+          </h1>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">
+            {companyData?.name || organizationData?.name || 'Loading...'} • {getUserContext()?.adminLevel?.replace('_', ' ') || 'User'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {(isEntityAdmin || isSubEntityAdmin) && (
+            <div className="flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <Crown className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                Full Access
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Schools</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {memoizedStats.total_schools}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+              <School className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
           </div>
         </div>
 
-        {/* Chart Container */}
-        <div 
-          ref={scrollAreaRef}
-          className={`
-            overflow-hidden relative select-none
-            ${isFullscreen 
-              ? 'h-[calc(100vh-73px)]' 
-              : 'h-[calc(100vh-300px)]'} 
-            ${isDarkMode || (isFullscreen && isDarkMode) 
-              ? 'bg-gradient-to-b from-gray-900/50 to-gray-800' 
-              : 'bg-gradient-to-b from-gray-50 to-white'}
-          `}
-          style={{ cursor: cursor === 'grab' ? 'grab' : cursor === 'grabbing' ? 'grabbing' : 'default' }}
-          onMouseEnter={handleMouseEnter}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-        >
-          <div 
-            ref={chartContainerRef}
-            className="absolute inset-0"
-          >
-            {isHierarchyLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
-                <span className="ml-2 text-gray-600 dark:text-gray-400">
-                  Loading organization structure...
-                </span>
-              </div>
-            ) : (
-              renderChart()
-            )}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Branches</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {memoizedStats.total_branches}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Teachers</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {memoizedStats.total_teachers}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Students</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {memoizedStats.total_students}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                {memoizedStats.total_users}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+              <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Branch Edit Form */}
-      <SlideInForm
-        title="Edit Branch"
-        isOpen={showBranchForm}
-        onClose={() => {
-          setShowBranchForm(false);
-          setEditingBranch(null);
-          setBranchFormData({});
-          setBranchFormErrors({});
-        }}
-        onSave={handleBranchFormSubmit}
-      >
-        <BranchFormContent
-          formData={branchFormData}
-          setFormData={setBranchFormData}
-          formErrors={branchFormErrors}
-          setFormErrors={setBranchFormErrors}
-          activeTab={branchFormActiveTab}
-          setActiveTab={setBranchFormActiveTab}
-          schools={schoolsForForm}
-          isEditing={true}
-        />
-      </SlideInForm>
-    </>
+      {/* Enhanced Tab Navigation with Unified Green Color */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-2 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-t-xl">
+          <nav className="flex gap-1.5" aria-label="Tabs">
+            {accessibleTabs.includes('structure') && (
+              <button
+                onClick={() => setActiveTab('structure')}
+                onMouseEnter={() => prefetchTabData('structure')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'structure' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'structure' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'structure' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <Building2 className={`w-4 h-4 transition-colors ${
+                  activeTab === 'structure' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'structure' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Structure
+                </span>
+              </button>
+            )}
+
+            {accessibleTabs.includes('schools') && (
+              <button
+                onClick={() => setActiveTab('schools')}
+                onMouseEnter={() => prefetchTabData('schools')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'schools' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'schools' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'schools' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <School className={`w-4 h-4 transition-colors ${
+                  activeTab === 'schools' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'schools' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Schools
+                </span>
+              </button>
+            )}
+
+            {accessibleTabs.includes('branches') && (
+              <button
+                onClick={() => setActiveTab('branches')}
+                onMouseEnter={() => prefetchTabData('branches')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'branches' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'branches' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'branches' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <MapPin className={`w-4 h-4 transition-colors ${
+                  activeTab === 'branches' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'branches' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Branches
+                </span>
+              </button>
+            )}
+
+            {accessibleTabs.includes('admins') && (
+              <button
+                onClick={() => setActiveTab('admins')}
+                onMouseEnter={() => prefetchTabData('admins')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'admins' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'admins' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'admins' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <Shield className={`w-4 h-4 transition-colors ${
+                  activeTab === 'admins' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'admins' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Admins
+                </span>
+              </button>
+            )}
+
+            {accessibleTabs.includes('teachers') && (
+              <button
+                onClick={() => setActiveTab('teachers')}
+                onMouseEnter={() => prefetchTabData('teachers')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'teachers' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'teachers' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'teachers' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <Users className={`w-4 h-4 transition-colors ${
+                  activeTab === 'teachers' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'teachers' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Teachers
+                </span>
+              </button>
+            )}
+
+            {accessibleTabs.includes('students') && (
+              <button
+                onClick={() => setActiveTab('students')}
+                onMouseEnter={() => prefetchTabData('students')}
+                className={`
+                  group relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                  transition-all duration-300 transform
+                  ${activeTab === 'students' 
+                    ? 'bg-white dark:bg-gray-700 shadow-md scale-105 z-10' 
+                    : 'hover:bg-white/60 dark:hover:bg-gray-700/60 hover:shadow-sm'
+                  }
+                `}
+                style={activeTab === 'students' ? {
+                  background: `linear-gradient(to right, ${activeColor}, ${activeColorDark})`,
+                } : {}}
+              >
+                {activeTab === 'students' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" 
+                    style={{ backgroundColor: activeColor }} />
+                )}
+                <GraduationCap className={`w-4 h-4 transition-colors ${
+                  activeTab === 'students' 
+                    ? 'text-white'
+                    : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300'
+                }`} />
+                <span className={`transition-colors ${
+                  activeTab === 'students' 
+                    ? 'text-white font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                }`}>
+                  Students
+                </span>
+              </button>
+            )}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6 bg-white dark:bg-gray-800 rounded-b-xl">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            }
+          >
+            {activeTab === 'structure' && accessibleTabs.includes('structure') && userCompanyId && organizationData && (
+              <OrganizationStructureTab
+                companyData={organizationData}
+                companyId={userCompanyId}
+                onAddClick={(parent, type) => {
+                  if (type === 'company') {
+                    setActiveTab('schools');
+                  } else if (type === 'school') {
+                    setActiveTab('branches');
+                  }
+                }}
+                onEditClick={(item, type) => {
+                  if (type === 'school') {
+                    setActiveTab('schools');
+                    schoolsTabRef.current?.openEditSchoolModal(item);
+                  } else if (type === 'branch') {
+                    setActiveTab('branches');
+                    branchesTabRef.current?.openEditBranchModal(item);
+                  }
+                }}
+                onItemClick={(item, type) => {
+                  if (type === 'school' && accessibleTabs.includes('schools')) {
+                    setActiveTab('schools');
+                  } else if (type === 'branch' && accessibleTabs.includes('branches')) {
+                    setActiveTab('branches');
+                  }
+                  console.log('Item clicked:', item, type);
+                }}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+
+            {activeTab === 'schools' && accessibleTabs.includes('schools') && userCompanyId && (
+              <SchoolsTab
+                ref={schoolsTabRef}
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+
+            {activeTab === 'branches' && accessibleTabs.includes('branches') && userCompanyId && (
+              <BranchesTab
+                ref={branchesTabRef}
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+
+            {activeTab === 'admins' && accessibleTabs.includes('admins') && userCompanyId && (
+              <AdminsTab
+                companyId={userCompanyId}
+              />
+            )}
+
+            {activeTab === 'teachers' && accessibleTabs.includes('teachers') && userCompanyId && (
+              <TeachersTab
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+
+            {activeTab === 'students' && accessibleTabs.includes('students') && userCompanyId && (
+              <StudentsTab
+                companyId={userCompanyId}
+                refreshData={() => {
+                  queryClient.invalidateQueries(['organization-complete']);
+                  queryClient.invalidateQueries(['organization-stats']);
+                  handleRefreshStats();
+                }}
+              />
+            )}
+          </Suspense>
+        </div>
+      </div>
+
+      {/* Scope Info for Non-Entity Admins */}
+      {!isEntityAdmin && !isSubEntityAdmin && (
+        <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Limited Scope Access
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                You are viewing data within your assigned scope only. 
+                {isSchoolAdmin && ' As a School Administrator, you can manage your assigned schools and their branches.'}
+                {isBranchAdmin && ' As a Branch Administrator, you can manage your assigned branches only.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
