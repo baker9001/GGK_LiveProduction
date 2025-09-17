@@ -1,3 +1,5 @@
+///home/project/src/app/system-admin/learning/materials/page.tsx
+
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus, FileText, Upload, Download, Eye, Trash2, Edit2 } from 'lucide-react';
