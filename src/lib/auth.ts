@@ -185,6 +185,9 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
   
+  // SECURITY: Clear Supabase authentication tokens
+  localStorage.removeItem('supabase.auth.token');
+  
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
