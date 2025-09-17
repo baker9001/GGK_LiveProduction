@@ -75,7 +75,8 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
 
   // Fetch user permissions with enhanced error handling
   const fetchPermissions = useCallback(async () => {
-    if (!user?.id) {
+    if (!user?.id || user.id === 'undefined' || user.id === 'null' || typeof user.id !== 'string' || user.id.trim() === '') {
+      console.warn('[PermissionContext] Invalid user ID detected:', { userId: user?.id, userType: typeof user?.id });
       setPermissions(null);
       setAdminLevel(null);
       setError(null); // No error if no user
@@ -87,7 +88,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     const isTestUser = !user.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     
     if (isTestUser) {
-      console.log('Test user detected, setting mock permissions');
+      console.log('[PermissionContext] Test user detected, setting mock permissions:', { userId: user.id });
       setPermissions(permissionService.getMinimalPermissions());
       setAdminLevel('entity_admin'); // Set appropriate test admin level
       setError(null);

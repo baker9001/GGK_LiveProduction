@@ -72,7 +72,7 @@ export function useAccessControl(): UseAccessControlResult {
   const fetchUserScope = useCallback(async (): Promise<CompleteUserScope | null> => {
     try {
       // CRITICAL FIX: Validate user.id is a valid UUID string
-      if (!user?.id || typeof user.id !== 'string' || user.id === 'undefined') {
+      if (!user?.id || typeof user.id !== 'string' || user.id === 'undefined' || user.id.trim() === '' || user.id === 'null') {
         logAction('Invalid or missing user ID', { userId: user?.id, userObj: user });
         return null;
       }
@@ -80,7 +80,8 @@ export function useAccessControl(): UseAccessControlResult {
       // Additional UUID format validation
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(user.id)) {
-        logAction('User ID is not a valid UUID', { userId: user.id });
+        console.error('[useAccessControl] User ID is not a valid UUID:', { userId: user.id, userType: typeof user.id });
+        logAction('User ID is not a valid UUID', { userId: user.id, userType: typeof user.id });
         return null;
       }
 

@@ -91,6 +91,14 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
+    
+    // Validate session user ID
+    if (!session.user?.id || session.user.id === 'undefined' || session.user.id === 'null') {
+      console.error('[auth] Invalid session user ID:', { userId: session.user?.id });
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      return null;
+    }
   } catch (error) {
     console.error('Error checking Supabase session:', error);
     localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -114,12 +122,37 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
+    
+    // Validate payload user ID
+    if (!payload.id || payload.id === 'undefined' || payload.id === 'null') {
+      console.error('[auth] Invalid token payload user ID:', { userId: payload.id });
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      return null;
+    }
   } catch {
     return null;
   }
   
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-  return storedUser ? JSON.parse(storedUser) : null;
+  if (!storedUser) return null;
+  
+  try {
+    const user = JSON.parse(storedUser);
+    // Validate stored user ID
+    if (!user?.id || user.id === 'undefined' || user.id === 'null' || typeof user.id !== 'string') {
+      console.error('[auth] Invalid stored user ID:', { userId: user?.id, userType: typeof user?.id });
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      return null;
+    }
+    return user;
+  } catch (error) {
+    console.error('[auth] Error parsing stored user:', error);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    return null;
+  }
 }
 
 // Synchronous version for backward compatibility (deprecated)
