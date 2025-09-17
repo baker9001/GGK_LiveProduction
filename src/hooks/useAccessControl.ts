@@ -1,12 +1,8 @@
 /**
  * File: /src/hooks/useAccessControl.ts
  * 
- * FIXED VERSION - Resolves "undefined" user.id error
- * 
- * Changes:
- * 1. Added proper validation for user.id before making Supabase requests
- * 2. Fixed timing issue where effect runs before user is loaded
- * 3. Added guards against 'undefined' string value
+ * COMPLETE CORRECTED VERSION - Full File Replacement
+ * Fixed: Proper fetching from junction tables (entity_user_schools, entity_user_branches)
  * 
  * Dependencies:
  *   - @/lib/supabase
@@ -71,17 +67,8 @@ export function useAccessControl(): UseAccessControlResult {
   // Fetch user scope with proper junction table handling
   const fetchUserScope = useCallback(async (): Promise<CompleteUserScope | null> => {
     try {
-      // CRITICAL FIX: Validate user.id is a valid UUID string
-      if (!user?.id || typeof user.id !== 'string' || user.id === 'undefined' || user.id.trim() === '' || user.id === 'null') {
-        logAction('Invalid or missing user ID', { userId: user?.id, userObj: user });
-        return null;
-      }
-
-      // Additional UUID format validation
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(user.id)) {
-        console.error('[useAccessControl] User ID is not a valid UUID:', { userId: user.id, userType: typeof user.id });
-        logAction('User ID is not a valid UUID', { userId: user.id, userType: typeof user.id });
+      if (!user?.id) {
+        logAction('No user found', null);
         return null;
       }
 
@@ -113,13 +100,8 @@ export function useAccessControl(): UseAccessControlResult {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (entityError) {
-          console.error('[useAccessControl] Error fetching entity user:', entityError);
-          return null;
-        }
-
-        if (!entityUser) {
-          console.warn('[useAccessControl] Entity user not found for user_id:', user.id);
+        if (entityError || !entityUser) {
+          console.error('[useAccessControl] Entity user not found:', entityError);
           return null;
         }
 
@@ -312,31 +294,11 @@ export function useAccessControl(): UseAccessControlResult {
     }
   }, [user]);
 
-  // Effect to fetch user scope when user changes - FIXED TIMING ISSUE
+  // Effect to fetch user scope when user changes
   useEffect(() => {
     const loadUserScope = async () => {
-      // CRITICAL FIX: Don't proceed if user is still loading
-      if (isUserLoading) {
-        setIsLoading(true);
-        return;
-      }
-
-      // If user is loaded but no user exists (logged out)
-      if (!isUserLoading && !user?.id) {
-        setUserScope(null);
+      if (!user?.id || isUserLoading) {
         setIsLoading(false);
-        setHasError(false);
-        setError(null);
-        return;
-      }
-
-      // CRITICAL FIX: Validate user.id before proceeding
-      if (!user?.id || typeof user.id !== 'string' || user.id === 'undefined') {
-        console.warn('[useAccessControl] Invalid user ID detected:', user?.id);
-        setUserScope(null);
-        setIsLoading(false);
-        setHasError(false);
-        setError('Invalid user ID');
         return;
       }
 
