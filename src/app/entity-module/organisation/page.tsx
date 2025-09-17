@@ -36,7 +36,7 @@ import { Button } from '@/components/shared/Button';
 
 // ===== LAZY LOAD TAB COMPONENTS =====
 const OrganizationStructureTab = lazy(() => 
-  import('./tabs/organization-structure/page')
+  import('./tabs/OrganizationStructureTab')
 );
 const SchoolsTab = lazy(() => 
   import('./tabs/schools/page')
