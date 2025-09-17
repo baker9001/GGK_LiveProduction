@@ -84,6 +84,19 @@ interface FormState {
   status: 'active' | 'inactive';
 }
 
+// Extended file type support
+const ACCEPTED_FILE_TYPES = {
+  video: ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv'],
+  audio: ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.flac'],
+  document: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'],
+  image: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'],
+  text: ['.txt', '.json', '.csv', '.md', '.xml', '.html', '.css', '.js'],
+  ebook: ['.pdf', '.epub', '.mobi', '.azw', '.azw3'],
+  assignment: ['.pdf', '.doc', '.docx', '.txt', '.md']
+};
+
+const ALL_ACCEPTED_TYPES = Object.values(ACCEPTED_FILE_TYPES).flat().join(',');
+
 export default function MaterialManagementPage() {
   const { user } = useUser();
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -126,10 +139,8 @@ export default function MaterialManagementPage() {
 
   useEffect(() => {
     if (editingMaterial) {
-      // Fetch unit, topic, and subtopic data for the editing material
       const fetchEditingData = async () => {
         try {
-          // Get the subject_id from the data structure
           const { data: dataStructure, error: dsError } = await supabase
             .from('data_structures')
             .select('subject_id')
@@ -138,14 +149,11 @@ export default function MaterialManagementPage() {
 
           if (dsError) throw dsError;
 
-          // Fetch units for the subject
           await fetchUnitOptions(editingMaterial.data_structure_id);
           
-          // If unit_id exists, fetch topics
           if (editingMaterial.unit_id) {
             await fetchTopicOptions(editingMaterial.unit_id);
             
-            // If topic_id exists, fetch subtopics
             if (editingMaterial.topic_id) {
               await fetchSubtopicOptions(editingMaterial.topic_id);
             }
@@ -166,7 +174,6 @@ export default function MaterialManagementPage() {
         status: editingMaterial.status
       });
 
-      // Fetch related data for editing
       fetchEditingData();
 
     } else {
@@ -186,7 +193,6 @@ export default function MaterialManagementPage() {
     }
   }, [editingMaterial]);
 
-  // Add effect for unit_id changes
   useEffect(() => {
     if (formState.unit_id) {
       fetchTopicOptions(formState.unit_id);
@@ -196,7 +202,6 @@ export default function MaterialManagementPage() {
     }
   }, [formState.unit_id]);
 
-  // Add effect for topic_id changes
   useEffect(() => {
     if (formState.topic_id) {
       fetchSubtopicOptions(formState.topic_id);
@@ -205,6 +210,7 @@ export default function MaterialManagementPage() {
       setFormState(prev => ({ ...prev, subtopic_id: '' }));
     }
   }, [formState.topic_id]);
+
   const fetchMaterials = async () => {
     try {
       let query = supabase
@@ -256,17 +262,25 @@ export default function MaterialManagementPage() {
 
       if (error) throw error;
 
-      const formattedData = data.map(material => ({
-        ...material,
-        data_structure_name: `${material.data_structures?.regions?.name || 'Unknown'} - ${material.data_structures?.programs?.name || 'Unknown'} - ${material.data_structures?.providers?.name || 'Unknown'} - ${material.data_structures?.edu_subjects?.name || 'Unknown'}`,
-        region_name: material.data_structures?.regions?.name || 'Unknown',
-        program_name: material.data_structures?.programs?.name || 'Unknown',
-        provider_name: material.data_structures?.providers?.name || 'Unknown',
-        subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
-        unit_name: material.edu_units?.name || '-',
-        topic_name: material.edu_topics?.name || '-',
-        subtopic_name: material.edu_subtopics?.name || '-'
-      }));
+      const formattedData = data.map(material => {
+        // Generate public URL for each material
+        const { data: urlData } = supabase.storage
+          .from('materials_files')
+          .getPublicUrl(material.file_path);
+        
+        return {
+          ...material,
+          file_url: urlData.publicUrl,
+          data_structure_name: `${material.data_structures?.regions?.name || 'Unknown'} - ${material.data_structures?.programs?.name || 'Unknown'} - ${material.data_structures?.providers?.name || 'Unknown'} - ${material.data_structures?.edu_subjects?.name || 'Unknown'}`,
+          region_name: material.data_structures?.regions?.name || 'Unknown',
+          program_name: material.data_structures?.programs?.name || 'Unknown',
+          provider_name: material.data_structures?.providers?.name || 'Unknown',
+          subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
+          unit_name: material.edu_units?.name || '-',
+          topic_name: material.edu_topics?.name || '-',
+          subtopic_name: material.edu_subtopics?.name || '-'
+        };
+      });
 
       setMaterials(formattedData);
     } catch (error) {
@@ -305,18 +319,15 @@ export default function MaterialManagementPage() {
       setDataStructureOptions(formattedOptions);
     } catch (error) {
       console.error('Error fetching data structure options:', error);
-      // Add more detailed error logging
       if (error instanceof Error) {
         console.error('Error details:', error.message);
       }
-      // Show a more informative error message
       toast.error('Failed to fetch data structure options. Please check your network connection and Supabase configuration.');
     }
   };
 
   const fetchUnitOptions = async (dataStructureId: string) => {
     try {
-      // Get the subject_id from the data structure
       const { data: dataStructure, error: dsError } = await supabase
         .from('data_structures')
         .select('subject_id')
@@ -373,12 +384,12 @@ export default function MaterialManagementPage() {
       setSubtopicOptions([]);
     }
   };
+
   const handleFileUpload = async (file: File): Promise<string> => {
     const originalName = file.name;
     const uniquePrefix = Math.random().toString(36).slice(2);
     const fileName = `AdminMaterials/${uniquePrefix}_${originalName}`;
     
-    // Log file details for debugging - including MIME type
     console.log('Uploading file with details:', {
       name: file.name,
       type: file.type,
@@ -391,7 +402,7 @@ export default function MaterialManagementPage() {
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
-        contentType: file.type // Explicitly set content type to ensure correct MIME type in storage
+        contentType: file.type // Explicitly set content type
       });
 
     if (error) throw error;
@@ -411,10 +422,8 @@ export default function MaterialManagementPage() {
       let mimeType = editingMaterial?.mime_type || '';
       let fileSize = editingMaterial?.size || 0;
 
-      // Handle file upload if a new file is selected - preserve MIME type
       if (uploadedFile) {
-        // Store the file's MIME type and size before upload
-        mimeType = uploadedFile.type;
+        mimeType = uploadedFile.type || getMimeTypeFromExtension(uploadedFile.name);
         fileSize = uploadedFile.size;
         
         console.log('File details before upload:', {
@@ -423,7 +432,6 @@ export default function MaterialManagementPage() {
           size: fileSize
         });
         
-        // Delete old file if editing
         if (editingMaterial?.file_path) {
           await supabase.storage
             .from('materials_files')
@@ -431,7 +439,6 @@ export default function MaterialManagementPage() {
         }
 
         filePath = await handleFileUpload(uploadedFile);
-        // Generate public URL for the file
         const { data } = supabase.storage
           .from('materials_files')
           .getPublicUrl(filePath);
@@ -459,7 +466,6 @@ export default function MaterialManagementPage() {
           .from('materials')
           .update({
             ...materialData,
-            // Don't update created_by when editing
             created_by: undefined
           })
           .eq('id', editingMaterial.id);
@@ -506,7 +512,6 @@ export default function MaterialManagementPage() {
 
   const confirmDelete = async () => {
     try {
-      // Delete files from storage
       const filePaths = materialsToDelete.map(m => m.file_path);
       if (filePaths.length > 0) {
         await supabase.storage
@@ -514,7 +519,6 @@ export default function MaterialManagementPage() {
           .remove(filePaths);
       }
 
-      // Delete records from database
       const { error } = await supabase
         .from('materials')
         .delete()
@@ -599,6 +603,58 @@ export default function MaterialManagementPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getMimeTypeFromExtension = (filename: string): string => {
+    const extension = filename.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes: Record<string, string> = {
+      // Video
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'ogg': 'video/ogg',
+      'mov': 'video/quicktime',
+      'avi': 'video/x-msvideo',
+      'wmv': 'video/x-ms-wmv',
+      'flv': 'video/x-flv',
+      'mkv': 'video/x-matroska',
+      // Audio
+      'mp3': 'audio/mpeg',
+      'wav': 'audio/wav',
+      'm4a': 'audio/mp4',
+      'aac': 'audio/aac',
+      'wma': 'audio/x-ms-wma',
+      'flac': 'audio/flac',
+      // Documents
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      // Images
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+      // Text
+      'txt': 'text/plain',
+      'json': 'application/json',
+      'csv': 'text/csv',
+      'md': 'text/markdown',
+      'xml': 'text/xml',
+      'html': 'text/html',
+      // E-books
+      'epub': 'application/epub+zip',
+      'mobi': 'application/x-mobipocket-ebook',
+      'azw': 'application/vnd.amazon.ebook',
+      'azw3': 'application/vnd.amazon.ebook',
+    };
+    return mimeTypes[extension] || 'application/octet-stream';
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'video': return '🎥';
@@ -606,6 +662,22 @@ export default function MaterialManagementPage() {
       case 'audio': return '🎵';
       case 'assignment': return '📝';
       default: return '📄';
+    }
+  };
+
+  // Helper function to get file type hints based on selection
+  const getFileTypeHints = (type: string) => {
+    switch (type) {
+      case 'video':
+        return 'Supported: MP4, WebM, OGG, MOV, AVI (Max 500MB)';
+      case 'audio':
+        return 'Supported: MP3, WAV, OGG, M4A, AAC (Max 100MB)';
+      case 'ebook':
+        return 'Supported: PDF, EPUB, MOBI, DOC, DOCX (Max 100MB)';
+      case 'assignment':
+        return 'Supported: PDF, DOC, DOCX, TXT, MD, XLS, XLSX (Max 50MB)';
+      default:
+        return 'Supported: Most common file formats (Max 100MB)';
     }
   };
 
@@ -777,7 +849,6 @@ export default function MaterialManagementPage() {
           setFilters({
             search: '',
             data_structure_ids: [],
-            unit_ids: [],
             types: [],
             status: []
           });
@@ -952,6 +1023,7 @@ export default function MaterialManagementPage() {
               disabled={!formState.unit_id}
             />
           </FormField>
+
           <FormField
             id="subtopic_id"
             label="Subtopic (Optional)"
@@ -969,7 +1041,6 @@ export default function MaterialManagementPage() {
               disabled={!formState.topic_id}
             />
           </FormField>
-
 
           <FormField
             id="type"
@@ -1001,17 +1072,24 @@ export default function MaterialManagementPage() {
               <input
                 type="file"
                 id="file"
-                accept=".pdf,.epub,.mp4,.mp3,.doc,.docx"
+                accept={ALL_ACCEPTED_TYPES}
                 onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
                 className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Supported formats: PDF, EPUB, MP4, MP3, DOC, DOCX (Max 100MB)
+                {getFileTypeHints(formState.type)}
               </p>
               {editingMaterial && !uploadedFile && (
                 <p className="text-xs text-green-600 dark:text-green-400">
                   Current file: {editingMaterial.file_path.split('/').pop()}
                 </p>
+              )}
+              {uploadedFile && (
+                <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                  <p>Selected: {uploadedFile.name}</p>
+                  <p>Size: {formatFileSize(uploadedFile.size)}</p>
+                  <p>Type: {uploadedFile.type || 'Unknown'}</p>
+                </div>
               )}
             </div>
           </FormField>
@@ -1036,6 +1114,7 @@ export default function MaterialManagementPage() {
         </form>
       </SlideInForm>
 
+      {/* Enhanced Material Preview */}
       {previewMaterial && (
         <MaterialPreview
           fileType={previewMaterial.type}
