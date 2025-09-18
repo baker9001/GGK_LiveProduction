@@ -2,12 +2,15 @@
  * File: /src/services/userCreationService.ts
  * 
  * ENHANCED VERSION - Full Supabase Auth Integration with Invitation Flow
+ * Updated to use create-entity-users-invite Edge Function
  * 
- * Changes:
- * - Removed password requirement for new users (invitation-based)
- * - Enhanced Edge Function integration with proper fallbacks
- * - Better error handling and session management
- * - Invitation email flow for new admins
+ * Workflow:
+ * 1. Create user in Supabase auth.users via Edge Function (invitation-based)
+ * 2. Create user in custom 'users' table with auth ID
+ * 3. Create corresponding record in entity-specific table
+ *    - entity_users for admins
+ *    - teachers for teachers
+ *    - students for students
  */
 
 import { supabase } from '@/lib/supabase';
@@ -73,15 +76,24 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // ============= HELPER FUNCTIONS =============
 
+/**
+ * Validate email format
+ */
 function validateEmail(email: string): boolean {
   const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
   return emailRegex.test(email.trim().toLowerCase());
 }
 
+/**
+ * Sanitize input strings
+ */
 function sanitizeString(input: string): string {
   return input.trim().replace(/[<>]/g, '');
 }
 
+/**
+ * Get user type array based on role
+ */
 function getUserTypes(userType: UserType): string[] {
   const typeMap: Record<UserType, string[]> = {
     'entity_admin': ['entity', 'admin'],
@@ -94,6 +106,9 @@ function getUserTypes(userType: UserType): string[] {
   return typeMap[userType] || ['user'];
 }
 
+/**
+ * Generate UUID v4
+ */
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -225,9 +240,9 @@ export const userCreationService = {
         ...payload.metadata
       };
 
-      // Try Edge Function first
+      // Try Edge Function first - UPDATED ENDPOINT NAME
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/create-admin-invite`, {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/create-entity-users-invite`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -243,7 +258,8 @@ export const userCreationService = {
             company_name: await this.getCompanyName(payload.company_id),
             phone: payload.phone,
             redirect_to: `${window.location.origin}/auth/callback`,
-            send_invitation: payload.send_invitation !== false
+            send_invitation: payload.send_invitation !== false,
+            created_by: currentUser?.email
           })
         });
 
@@ -257,7 +273,8 @@ export const userCreationService = {
             return result.userId;
           }
         } else {
-          console.warn('Edge Function failed, using fallback');
+          const errorData = await response.json().catch(() => null);
+          console.warn('Edge Function failed:', errorData?.error || 'Unknown error');
         }
       } catch (edgeError) {
         console.warn('Edge Function not available:', edgeError);
@@ -647,10 +664,76 @@ export const userCreationService = {
   },
 
   /**
+   * Verify user via Supabase Auth (for login)
+   */
+  async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
+    try {
+      // Use Supabase Auth for verification
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password: password
+      });
+
+      if (error || !data.user) {
+        return { isValid: false };
+      }
+
+      // Check if user is active in our custom table
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_active')
+        .eq('id', data.user.id)
+        .single();
+
+      if (userData && !userData.is_active) {
+        await supabase.auth.signOut();
+        throw new Error('Account is deactivated');
+      }
+
+      // Update last login in our custom table
+      await supabase
+        .from('users')
+        .update({
+          last_login_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString()
+        })
+        .eq('id', data.user.id);
+
+      return { isValid: true, userId: data.user.id };
+    } catch (error: any) {
+      console.error('Login verification failed:', error);
+      
+      // If Supabase Auth fails, fall back to checking custom table (for legacy users)
+      if (error.message?.includes('Invalid login credentials')) {
+        console.warn('User not in auth.users, may be a legacy user');
+      }
+      
+      return { isValid: false };
+    }
+  },
+
+  /**
+   * Fetch user safely with only existing columns
+   */
+  async getUserById(userId: string): Promise<any | null> {
+    const { data, error } = await supabase
+      .from('users')
+      .select(SAFE_USER_COLUMNS)
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      return null;
+    }
+
+    return data;
+  },
+
+  /**
    * Get default permissions based on admin level
    */
   getDefaultPermissions(adminLevel: string): Record<string, any> {
-    // ... [Keep existing permission mappings] ...
     const permissionMap: Record<string, any> = {
       'entity_admin': {
         users: {
