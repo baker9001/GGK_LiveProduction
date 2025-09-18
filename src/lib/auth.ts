@@ -12,6 +12,9 @@
 
 import { supabase } from './supabase';
 
+// Auth state change listener
+let authStateListener: { data: { subscription: any } } | null = null;
+
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
 export interface User {
@@ -474,15 +477,50 @@ export function setupSessionRefresh(): void {
 
 // Initialize on app start - but with delay
 if (typeof window !== 'undefined') {
+  // Setup Supabase auth state listener
+  const setupAuthStateListener = () => {
+    if (authStateListener) {
+      authStateListener.data.subscription.unsubscribe();
+    }
+    
+    authStateListener = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Supabase auth state change:', event, session?.user?.id);
+      
+      // Handle auth state changes that indicate session is invalid
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || event === 'TOKEN_REFRESHED') {
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          // Token refresh failed
+          console.log('Token refresh failed, clearing auth data');
+          clearAuthenticatedUser();
+          
+          // Only redirect if not on public page
+          if (!isPublicPage()) {
+            window.location.replace('/signin');
+          }
+        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+          console.log('User signed out or deleted, clearing auth data');
+          clearAuthenticatedUser();
+          
+          // Only redirect if not on public page
+          if (!isPublicPage()) {
+            window.location.replace('/signin');
+          }
+        }
+      }
+    });
+  };
+  
   // Wait for app to fully load before starting session management
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     });
   } else {
     // DOM already loaded
     setTimeout(() => {
+      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     }, 1000);
