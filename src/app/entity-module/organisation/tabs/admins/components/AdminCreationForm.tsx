@@ -667,17 +667,15 @@ export function AdminCreationForm({
                     placeholder="Enter new password (optional)"
                     disabled={!canModifyThisAdmin}
                     leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
-                    rightIcon={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    }
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                  </button>
                 </div>
               </FormField>
               
