@@ -143,7 +143,6 @@ export const SAFE_USER_COLUMNS = [
   'raw_user_meta_data',
   'raw_app_meta_data',
   'email_confirmed_at',
-  'requires_password_change',
   'failed_login_attempts',
   'locked_until',
   'user_types'
@@ -337,13 +336,13 @@ export const userCreationService = {
       user_types: userTypes,
       is_active: payload.is_active !== false,
       email_verified: false,
-      requires_password_change: true,
       raw_user_meta_data: {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
         user_type: payload.user_type,
         created_via: 'fallback',
         requires_invitation: true,
+        requires_password_change: true, // Store in metadata instead
         ...payload.metadata
       },
       raw_app_meta_data: {
@@ -535,27 +534,52 @@ export const userCreationService = {
       if (response.ok) {
         console.log('Password updated via Edge Function');
         
-        // Update our custom table
-        await supabase
+        // Get current user metadata
+        const { data: currentUser } = await supabase
+          .from('users')
+          .select('raw_user_meta_data')
+          .eq('id', userId)
+          .single();
+        
+        // Update metadata to reflect password change
+        const { error: updateError } = await supabase
           .from('users')
           .update({
-            requires_password_change: false,
+            raw_user_meta_data: {
+              ...(currentUser?.raw_user_meta_data || {}),
+              requires_password_change: false,
+              password_reset_needed: false,
+              password_updated_at: new Date().toISOString()
+            },
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
-          
+        
+        if (updateError) {
+          console.error('Failed to update metadata:', updateError);
+        }
+        
         return;
       }
     } catch (error) {
       console.warn('Edge Function not available for password update:', error);
     }
 
-    // Fallback: Just update flag in custom table
+    // Fallback: Update metadata in custom table
+    // First get existing metadata
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('raw_user_meta_data')
+      .eq('id', userId)
+      .single();
+    
+    // Update with merged metadata
     const { error } = await supabase
       .from('users')
       .update({
-        requires_password_change: false,
         raw_user_meta_data: {
+          ...(currentUser?.raw_user_meta_data || {}),
+          requires_password_change: false,
           password_reset_needed: false,
           password_updated_at: new Date().toISOString()
         },
