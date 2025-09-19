@@ -6,7 +6,7 @@ import {
   Phone, 
   MapPin, 
   Send,
-  User
+  User,
   MessageSquare,
   Building,
   Globe,
