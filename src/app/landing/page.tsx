@@ -1,3 +1,5 @@
+///home/project/src/app/landing/page.tsx
+
 import React, { useState, useEffect, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
