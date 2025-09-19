@@ -11,7 +11,6 @@ import {
   Award,
   Play,
   CheckCircle
-  Play,
   ExternalLink,
   Clock,
   Star
