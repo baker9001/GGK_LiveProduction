@@ -324,6 +324,42 @@ export default function SignInPage() {
         type: 'signup',
         email: email.trim().toLowerCase()
       });
+      
+      if (error) {
+        console.error('Resend verification error:', error);
+        toast.error('Failed to send verification email.');
+      } else {
+        toast.success('Verification email sent! Please check your inbox.');
+        toast.info('Check your spam folder if you don\'t see it.');
+        setVerificationNeeded(false);
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Resend error:', err);
+      toast.error('Failed to send verification email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleDevLogin = () => {
+    clearAuthenticatedUser();
+    
+    const devUser: User = {
+      id: 'dev-001',
+      email: 'dev@ggk.com',
+      name: 'Developer',
+      role: 'SSA',
+      userType: 'system'
+    };
+    
+    localStorage.setItem('ggk_remember_session', 'true');
+    setAuthenticatedUser(devUser);
+    
+    toast.success('Dev login successful!');
+    navigate('/app/system-admin/dashboard', { replace: true });
+  };
+  
   const getUserSystemRole = (roleName?: string): UserRole => {
     if (!roleName) return 'VIEWER';
     
@@ -598,4 +634,8 @@ export default function SignInPage() {
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
         
