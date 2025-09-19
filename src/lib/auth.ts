@@ -38,15 +38,15 @@ const REMEMBER_SESSION_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PUBLIC_PAGES = [
   '/',
   '/landing',
-  '/landing/subjects',
-  '/landing/resources',
-  '/landing/about',
-  '/landing/contact',
-  '/landing/subjects',
-  '/landing/resources',
-  '/landing/about',
+  '/signin',
   '/forgot-password',
   '/reset-password',
+  '/about',
+  '/contact',
+  '/features',
+  '/pricing',
+  '/subjects',
+  '/resources'
 ];
 
 // SECURITY: Dispatch auth change event

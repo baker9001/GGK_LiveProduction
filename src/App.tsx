@@ -14,10 +14,6 @@ import SignInPage from './app/signin/page';
 import ForgotPasswordPage from './app/forgot-password/page';
 import ResetPasswordPage from './app/reset-password/page';
 import LandingPage from './app/landing/page';
-import SubjectsPage from './app/landing/subjects';
-import ResourcesPage from './app/landing/resources';
-import AboutPage from './app/landing/about';
-import ContactPage from './app/landing/contact';
 import EntityModulePage from './app/entity-module/page';
 import StudentModulePage from './app/student-module/page';
 import TeachersModulePage from './app/teachers-module/page';
@@ -77,10 +73,6 @@ function App() {
             
             <Routes>
               <Route path="/" element={<LandingPage />} />
-              <Route path="/subjects" element={<SubjectsPage />} />
-              <Route path="/resources" element={<ResourcesPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="/contact" element={<ContactPage />} />
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
