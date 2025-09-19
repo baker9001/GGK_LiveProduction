@@ -1,16 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  GraduationCap, 
   BookOpen, 
   Calculator, 
   Atom, 
   Globe, 
   Palette, 
   Music, 
-  Activity,
+  Dumbbell, 
+  Languages,
+  GraduationCap,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  Star
 } from 'lucide-react';
 import { Navigation } from '../../../components/shared/Navigation';
 
@@ -20,172 +22,243 @@ const subjects = [
     name: 'Mathematics',
     icon: Calculator,
     description: 'From basic arithmetic to advanced calculus and statistics',
-    topics: ['Algebra', 'Geometry', 'Calculus', 'Statistics', 'Trigonometry'],
+    levels: ['Primary', 'Secondary', 'Advanced'],
     color: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-700'
+    features: ['Interactive Problem Solving', 'Step-by-Step Solutions', 'Practice Tests']
   },
   {
     id: 'science',
     name: 'Science',
     icon: Atom,
-    description: 'Physics, Chemistry, and Biology with hands-on experiments',
-    topics: ['Physics', 'Chemistry', 'Biology', 'Earth Science', 'Environmental Science'],
+    description: 'Physics, Chemistry, Biology, and Environmental Science',
+    levels: ['Elementary', 'Middle School', 'High School'],
     color: 'from-green-500 to-green-600',
-    bgColor: 'bg-green-50 dark:bg-green-900/20',
-    borderColor: 'border-green-200 dark:border-green-700'
+    features: ['Virtual Labs', '3D Simulations', 'Experiment Guides']
   },
   {
-    id: 'languages',
-    name: 'Languages',
-    icon: Globe,
-    description: 'Master multiple languages with interactive learning',
-    topics: ['English', 'Arabic', 'French', 'Spanish', 'Mandarin'],
+    id: 'english',
+    name: 'English Language',
+    icon: BookOpen,
+    description: 'Reading, Writing, Grammar, and Literature',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
     color: 'from-purple-500 to-purple-600',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
-    borderColor: 'border-purple-200 dark:border-purple-700'
+    features: ['Reading Comprehension', 'Writing Workshops', 'Literature Analysis']
+  },
+  {
+    id: 'social-studies',
+    name: 'Social Studies',
+    icon: Globe,
+    description: 'History, Geography, Civics, and Cultural Studies',
+    levels: ['Elementary', 'Middle School', 'High School'],
+    color: 'from-orange-500 to-orange-600',
+    features: ['Interactive Maps', 'Historical Timelines', 'Cultural Exploration']
   },
   {
     id: 'arts',
     name: 'Arts & Creativity',
     icon: Palette,
-    description: 'Express creativity through visual and performing arts',
-    topics: ['Visual Arts', 'Music', 'Drama', 'Creative Writing', 'Digital Design'],
+    description: 'Visual Arts, Music, Drama, and Creative Expression',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
     color: 'from-pink-500 to-pink-600',
-    bgColor: 'bg-pink-50 dark:bg-pink-900/20',
-    borderColor: 'border-pink-200 dark:border-pink-700'
+    features: ['Digital Art Tools', 'Music Composition', 'Creative Projects']
   },
   {
-    id: 'social-studies',
-    name: 'Social Studies',
-    icon: BookOpen,
-    description: 'Explore history, geography, and social sciences',
-    topics: ['History', 'Geography', 'Civics', 'Economics', 'Cultural Studies'],
-    color: 'from-orange-500 to-orange-600',
-    bgColor: 'bg-orange-50 dark:bg-orange-900/20',
-    borderColor: 'border-orange-200 dark:border-orange-700'
-  },
-  {
-    id: 'physical-education',
-    name: 'Physical Education',
-    icon: Activity,
-    description: 'Promote health and fitness through sports and activities',
-    topics: ['Sports', 'Fitness', 'Health Education', 'Team Building', 'Nutrition'],
-    color: 'from-red-500 to-red-600',
-    bgColor: 'bg-red-50 dark:bg-red-900/20',
-    borderColor: 'border-red-200 dark:border-red-700'
+    id: 'languages',
+    name: 'World Languages',
+    icon: Languages,
+    description: 'Arabic, French, Spanish, and other world languages',
+    levels: ['Beginner', 'Intermediate', 'Advanced'],
+    color: 'from-indigo-500 to-indigo-600',
+    features: ['Interactive Conversations', 'Cultural Context', 'Pronunciation Guides']
   }
 ];
 
 export default function SubjectsPage() {
   return (
-    <div className="min-h-screen relative">
-      {/* Background Image */}
-      <div className="absolute inset-0 z-0">
-        <img
-          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
-          alt="Educational background"
-          className="w-full h-full object-cover select-none pointer-events-none"
-          draggable="false"
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ userSelect: 'none' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Navigation />
+      
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-br from-[#8CC63F] via-[#7AB635] to-[#6DA52F] text-white py-20">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-full mb-6">
+            <BookOpen className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            Comprehensive Subject Coverage
+          </h1>
+          <p className="text-xl md:text-2xl mb-8 text-white/90 max-w-3xl mx-auto">
+            Explore our extensive curriculum designed to inspire learning across all academic disciplines
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              to="/signin"
+              className="inline-flex items-center px-8 py-4 bg-white text-[#8CC63F] rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Start Learning Today
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
+            <button className="inline-flex items-center px-8 py-4 border-2 border-white text-white rounded-lg font-semibold hover:bg-white/10 transition-colors">
+              View Sample Lessons
+            </button>
+          </div>
+        </div>
+      </section>
 
-      {/* Navigation */}
-      <div className="relative z-10">
-        <Navigation />
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 pt-20 pb-16">
+      {/* Subjects Grid */}
+      <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header Section */}
           <div className="text-center mb-16">
-            <div className="inline-flex items-center justify-center mb-6">
-              <GraduationCap className="h-16 w-16 text-[#8CC63F]" />
-            </div>
-            <h1 className="text-5xl font-bold text-white mb-6">
-              Our Subjects
-            </h1>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Comprehensive curriculum covering all essential subjects with interactive learning experiences, 
-              expert instruction, and cutting-edge educational technology.
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Our Academic Subjects
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+              Comprehensive curriculum covering all essential subjects with interactive learning experiences
             </p>
           </div>
 
-          {/* Subjects Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {subjects.map((subject) => {
               const IconComponent = subject.icon;
               return (
                 <div
                   key={subject.id}
-                  className="bg-gray-900/50 backdrop-blur-md rounded-xl border border-gray-700/50 p-6 hover:bg-gray-800/60 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group"
                 >
                   {/* Subject Header */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className={`w-12 h-12 rounded-lg bg-gradient-to-r ${subject.color} flex items-center justify-center`}>
-                      <IconComponent className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-white group-hover:text-[#8CC63F] transition-colors">
-                      {subject.name}
-                    </h3>
-                  </div>
-
-                  {/* Description */}
-                  <p className="text-gray-300 mb-4">
-                    {subject.description}
-                  </p>
-
-                  {/* Topics List */}
-                  <div className="space-y-2 mb-6">
-                    {subject.topics.map((topic, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
-                        <span className="text-sm text-gray-300">{topic}</span>
+                  <div className={`bg-gradient-to-r ${subject.color} p-6 text-white`}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                        <IconComponent className="w-6 h-6" />
                       </div>
-                    ))}
+                      <div>
+                        <h3 className="text-xl font-bold">{subject.name}</h3>
+                        <p className="text-white/80 text-sm">{subject.description}</p>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Learn More Button */}
-                  <button className="w-full bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2 group">
-                    Learn More
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
+                  {/* Subject Content */}
+                  <div className="p-6">
+                    {/* Levels */}
+                    <div className="mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Available Levels
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {subject.levels.map((level) => (
+                          <span
+                            key={level}
+                            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm"
+                          >
+                            {level}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Features */}
+                    <div className="mb-6">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                        Key Features
+                      </h4>
+                      <ul className="space-y-2">
+                        {subject.features.map((feature) => (
+                          <li key={feature} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Action Button */}
+                    <Link
+                      to="/signin"
+                      className="w-full inline-flex items-center justify-center px-4 py-2 bg-[#8CC63F] text-white rounded-lg font-medium hover:bg-[#7AB635] transition-colors group-hover:scale-105 transform duration-200"
+                    >
+                      Explore {subject.name}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      </section>
 
-          {/* Call to Action Section */}
-          <div className="text-center bg-gray-900/50 backdrop-blur-md rounded-xl border border-gray-700/50 p-8">
-            <h2 className="text-3xl font-bold text-white mb-4">
-              Ready to Start Learning?
+      {/* Features Section */}
+      <section className="py-20 bg-white dark:bg-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Why Choose Our Curriculum?
             </h2>
-            <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
-              Join thousands of students who are already excelling with our comprehensive subject offerings. 
-              Get personalized learning paths and expert guidance.
+            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+              Our subjects are designed with modern pedagogy and cutting-edge technology
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                to="/signin"
-                className="bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium py-3 px-8 rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
-              >
-                Get Started
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                to="/contact"
-                className="border border-gray-600 hover:border-[#8CC63F] text-white hover:text-[#8CC63F] font-medium py-3 px-8 rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
-              >
-                Contact Us
-              </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Star className="w-8 h-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                Expert-Designed Content
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Curriculum developed by subject matter experts and experienced educators
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <GraduationCap className="w-8 h-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                Adaptive Learning
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Personalized learning paths that adapt to each student's pace and style
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                Proven Results
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Track record of improved student outcomes and academic achievement
+              </p>
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Ready to Transform Learning?
+          </h2>
+          <p className="text-xl text-white/90 mb-8">
+            Join thousands of students already excelling with our comprehensive curriculum
+          </p>
+          <Link
+            to="/signin"
+            className="inline-flex items-center px-8 py-4 bg-white text-[#8CC63F] rounded-lg font-semibold hover:bg-gray-100 transition-colors text-lg"
+          >
+            Get Started Now
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
