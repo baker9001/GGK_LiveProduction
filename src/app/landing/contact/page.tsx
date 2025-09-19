@@ -109,11 +109,21 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed relative"
+      style={{
+        backgroundImage: 'url("https://images.pexels.com/photos/3766218/pexels-photo-3766218.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop")'
+      }}
+    >
+      {/* Background Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/75 to-gray-900/85" />
+      
+      {/* Content */}
+      <div className="relative z-10">
       <Navigation />
       
       <div className="relative">
-        {/* Background Image */}
+      <section className="bg-gradient-to-r from-[#8CC63F]/90 to-[#7AB635]/90 text-white py-20 backdrop-blur-sm">
         <div className="absolute inset-0 z-0">
           <img
             src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -344,7 +354,7 @@ export default function ContactPage() {
                   <Button
                     onClick={() => navigate('/about')}
                     variant="outline"
-                    className="border-white/30 text-white hover:bg-white/10 px-8 py-3"
+                    className="border-white text-white hover:bg-white/10 px-8 py-3"
                   >
                     Learn About Us
                   </Button>
@@ -353,10 +363,9 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
+      </section>
       </div>
-
-      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
-      </footer>
+      </div>
     </div>
   );
 }
