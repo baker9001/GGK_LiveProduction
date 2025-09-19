@@ -10,7 +10,7 @@ import {
   Users, 
   Award,
   Play,
-  CheckCircle
+  CheckCircle,
   ExternalLink,
   Clock,
   Star
