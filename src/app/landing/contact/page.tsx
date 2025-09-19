@@ -49,22 +49,22 @@ const contactInfo = [
 const departments = [
   {
     name: 'General Inquiries',
-    email: 'info@ggklearning.com',
+    email: 'info@ggknowledge.com',
     description: 'Questions about our platform and services'
   },
   {
     name: 'Technical Support',
-    email: 'support@ggklearning.com',
+    email: 'support@ggknowledge.com',
     description: 'Help with technical issues and platform usage'
   },
   {
     name: 'Sales & Partnerships',
-    email: 'sales@ggklearning.com',
+    email: 'sales@ggknowledge.com',
     description: 'Licensing, partnerships, and business inquiries'
   },
   {
     name: 'Academic Support',
-    email: 'academic@ggklearning.com',
+    email: 'academic@ggknowledge.com',
     description: 'Curriculum questions and educational guidance'
   }
 ];
