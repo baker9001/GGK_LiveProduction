@@ -342,24 +342,6 @@ export default function SignInPage() {
     }
   };
   
-  const handleDevLogin = () => {
-    clearAuthenticatedUser();
-    
-    const devUser: User = {
-      id: 'dev-001',
-      email: 'dev@ggk.com',
-      name: 'Developer',
-      role: 'SSA',
-      userType: 'system'
-    };
-    
-    localStorage.setItem('ggk_remember_session', 'true');
-    setAuthenticatedUser(devUser);
-    
-    toast.success('Dev login successful!');
-    navigate('/app/system-admin/dashboard', { replace: true });
-  };
-  
   const getUserSystemRole = (roleName?: string): UserRole => {
     if (!roleName) return 'VIEWER';
     
@@ -384,6 +366,30 @@ export default function SignInPage() {
         return '/app/student-module/dashboard';
       default:
         return '/app/dashboard';
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    
+    try {
+      // Create a test user for development
+      const testUser: User = {
+        id: 'dev-user-ssa',
+        email: 'dev@ggklearning.com',
+        name: 'Development Admin',
+        role: 'SSA',
+        userType: 'system'
+      };
+      
+      setAuthenticatedUser(testUser);
+      toast.success('Development login successful!');
+      navigate('/app/system-admin/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Dev login error:', err);
+      setError('Development login failed.');
+    } finally {
+      setLoading(false);
     }
   };
   
