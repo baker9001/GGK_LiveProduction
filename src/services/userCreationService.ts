@@ -144,8 +144,7 @@ export const SAFE_USER_COLUMNS = [
   'raw_app_meta_data',
   'email_confirmed_at',
   'failed_login_attempts',
-  'locked_until',
-  'user_types'
+  'locked_until'
 ].join(', ');
 
 // ============= MAIN USER CREATION SERVICE =============
@@ -297,15 +296,15 @@ export const userCreationService = {
     const userData = {
       id: authUserId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0],
-      user_types: userTypes,
+      user_type: userTypes[0], // Just use single user_type, not user_types array
       is_active: payload.is_active !== false,
       email_verified: false, // Will be true after email confirmation
       raw_user_meta_data: metadata,
       raw_app_meta_data: {
         provider: 'email',
         providers: ['email'],
-        user_type: payload.user_type
+        user_type: payload.user_type,
+        user_types: userTypes // Store types array in metadata instead
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -332,17 +331,17 @@ export const userCreationService = {
     const userData = {
       id: userId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0],
-      user_types: userTypes,
+      user_type: userTypes[0], // Just use single user_type
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
         user_type: payload.user_type,
+        user_types: userTypes, // Store types array in metadata
         created_via: 'fallback',
         requires_invitation: true,
-        requires_password_change: true, // Store in metadata instead
+        requires_password_change: true,
         ...payload.metadata
       },
       raw_app_meta_data: {
@@ -427,15 +426,14 @@ export const userCreationService = {
     const teacherData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
-      phone: payload.phone || null,
       teacher_code: payload.teacher_code,
+      phone: payload.phone || null,
       specialization: payload.specialization || [],
       qualification: payload.qualification || null,
       experience_years: payload.experience_years || 0,
       bio: payload.bio || null,
-      hire_date: payload.hire_date || new Date().toISOString(),
+      hire_date: payload.hire_date || new Date().toISOString().split('T')[0], // date format
+      status: 'active', // Using enum value
       is_active: payload.is_active !== false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -468,18 +466,17 @@ export const userCreationService = {
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
-      phone: payload.phone || null,
       student_code: payload.student_code,
       enrollment_number: payload.enrollment_number,
+      phone: payload.phone || null,
       grade_level: payload.grade_level || null,
       section: payload.section || null,
-      admission_date: payload.admission_date || new Date().toISOString(),
+      admission_date: payload.admission_date ? payload.admission_date.split('T')[0] : new Date().toISOString().split('T')[0], // date format
       parent_name: payload.parent_name || null,
       parent_contact: payload.parent_contact || null,
       parent_email: payload.parent_email || null,
       is_active: payload.is_active !== false,
+      status: 'active', // Using enum value
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
