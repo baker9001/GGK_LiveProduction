@@ -29,7 +29,7 @@ const contactInfo = [
   {
     icon: Phone,
     title: 'Call Us',
-    details: ['+965 2XXX XXXX', '+965 9XXX XXXX'],
+    details: ['+965 6767 1317', '+965 9722 2711', '+965 9495 1116'],
     description: 'Speak directly with our team during business hours'
   },
   {
