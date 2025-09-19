@@ -493,6 +493,20 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Global click handler to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Close all dropdowns if clicking outside
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dropdown-menu') && !target.closest('[aria-haspopup="true"]')) {
+        document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   // ===== CLEANUP EFFECT =====
   useEffect(() => {
     return () => {
@@ -1580,42 +1594,111 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         </div>
         
         {/* Dropdown Menu */}
-        <div className="relative group">
+        <div className="relative">
           <button 
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={(e) => {
               e.stopPropagation();
-              // Simple dropdown toggle
-              const dropdown = e.currentTarget.nextElementSibling;
+              const dropdown = e.currentTarget.parentElement?.querySelector('.dropdown-menu');
               if (dropdown) {
+                // Close all other dropdowns
+                document.querySelectorAll('.dropdown-menu').forEach(d => {
+                  if (d !== dropdown) d.classList.add('hidden');
+                });
+                
+                // Toggle this dropdown
                 dropdown.classList.toggle('hidden');
+                
+                // Position adjustment
+                const rect = e.currentTarget.getBoundingClientRect();
+                const dropdownEl = dropdown as HTMLElement;
+                
+                // Check available space
+                const spaceBelow = window.innerHeight - rect.bottom;
+                const spaceRight = window.innerWidth - rect.right;
+                
+                // Adjust position if needed
+                if (spaceBelow < 250) {
+                  dropdownEl.style.bottom = '100%';
+                  dropdownEl.style.top = 'auto';
+                  dropdownEl.style.marginBottom = '0.5rem';
+                } else {
+                  dropdownEl.style.top = '100%';
+                  dropdownEl.style.bottom = 'auto';
+                  dropdownEl.style.marginTop = '0.5rem';
+                }
+                
+                if (spaceRight < 200) {
+                  dropdownEl.style.right = '0';
+                  dropdownEl.style.left = 'auto';
+                } else {
+                  dropdownEl.style.left = '0';
+                  dropdownEl.style.right = 'auto';
+                }
               }
             }}
+            aria-label="Teacher actions menu"
+            aria-haspopup="true"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreVertical className="h-4 w-4 text-gray-500 dark:text-gray-400" />
           </button>
-          <div className="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+          
+          <div 
+            className="dropdown-menu hidden absolute z-50 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 overflow-hidden"
+            style={{ right: '0' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => handleEditTeacher(teacher)}
-              className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                handleEditTeacher(teacher);
+                document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
             >
-              <Edit className="inline-block w-4 h-4 mr-2" />
-              Edit Details
+              <Edit className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-gray-700 dark:text-gray-300">Edit Details</span>
             </button>
+            
             <button
-              onClick={() => handleQuickPasswordReset(teacher)}
-              className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+              onClick={() => {
+                handleQuickPasswordReset(teacher);
+                document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
             >
-              <Key className="inline-block w-4 h-4 mr-2" />
-              Reset Password
+              <Key className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+              <span className="text-gray-700 dark:text-gray-300">Reset Password</span>
             </button>
-            <button
-              onClick={() => toast.info('Send invitation feature coming soon')}
-              className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Send className="inline-block w-4 h-4 mr-2" />
-              Resend Invitation
-            </button>
+            
+            {shouldShowReinvite(teacher.user_data) && (
+              <button
+                onClick={() => {
+                  handleReinviteTeacher(teacher);
+                  document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center gap-3 transition-colors"
+              >
+                <Send className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-amber-700 dark:text-amber-300">Resend Invitation</span>
+              </button>
+            )}
+            
+            {canDeleteTeacher && (
+              <>
+                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                <button
+                  onClick={() => {
+                    setSelectedTeacher(teacher);
+                    setShowDeleteConfirmation(true);
+                    document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                  <span className="text-red-600 dark:text-red-400">Delete Teacher</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1696,7 +1779,51 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
   // ===== RENDER =====
   return (
-    <div className="space-y-6">
+    <>
+      {/* Global styles for dropdown positioning */}
+      <style>{`
+        .dropdown-menu {
+          max-height: 320px;
+          overflow-y: auto;
+        }
+        
+        .dropdown-menu::-webkit-scrollbar {
+          width: 4px;
+        }
+        
+        .dropdown-menu::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .dropdown-menu::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 2px;
+        }
+        
+        .dropdown-menu::-webkit-scrollbar-thumb:hover {
+          background: #555;
+        }
+        
+        /* Ensure dropdowns appear above table overflow */
+        .overflow-x-auto {
+          overflow: visible;
+        }
+        
+        @media (max-width: 768px) {
+          .dropdown-menu {
+            position: fixed !important;
+            width: calc(100% - 2rem) !important;
+            max-width: 320px !important;
+            left: 50% !important;
+            transform: translateX(-50%);
+            bottom: 1rem !important;
+            top: auto !important;
+            right: auto !important;
+          }
+        }
+      `}</style>
+      
+      <div className="space-y-6">
       {/* Enhanced Status Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <EnhancedStatusCard
@@ -2056,60 +2183,116 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       </div>
                     </td>
                     <td className="p-3">
-                      <div className="relative group">
+                      <div className="relative">
                         <button 
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Simple dropdown toggle
-                            const dropdown = e.currentTarget.nextElementSibling;
+                            const dropdown = e.currentTarget.parentElement?.querySelector('.dropdown-menu');
                             if (dropdown) {
+                              // Close all other dropdowns first
+                              document.querySelectorAll('.dropdown-menu').forEach(d => {
+                                if (d !== dropdown) d.classList.add('hidden');
+                              });
+                              
+                              // Toggle this dropdown
                               dropdown.classList.toggle('hidden');
+                              
+                              // Position adjustment to prevent cutoff
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const dropdownEl = dropdown as HTMLElement;
+                              
+                              // Check if dropdown would go off-screen
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const spaceRight = window.innerWidth - rect.right;
+                              
+                              // Adjust position if needed
+                              if (spaceBelow < 200) {
+                                dropdownEl.style.bottom = '100%';
+                                dropdownEl.style.top = 'auto';
+                                dropdownEl.style.marginBottom = '0.5rem';
+                              } else {
+                                dropdownEl.style.top = '100%';
+                                dropdownEl.style.bottom = 'auto';
+                                dropdownEl.style.marginTop = '0.5rem';
+                              }
+                              
+                              if (spaceRight < 200) {
+                                dropdownEl.style.right = '0';
+                                dropdownEl.style.left = 'auto';
+                              }
                             }
                           }}
+                          aria-label="Teacher actions menu"
+                          aria-haspopup="true"
                         >
-                          <MoreHorizontal className="h-4 w-4" />
+                          <MoreHorizontal className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                         </button>
-                        <div className="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                        
+                        {/* Dropdown Menu with better positioning */}
+                        <div 
+                          className="dropdown-menu hidden absolute z-50 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 overflow-hidden"
+                          style={{ right: '0' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {canModifyTeacher && (
                             <>
                               <button
-                                onClick={() => handleEditTeacher(teacher)}
-                                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                onClick={() => {
+                                  handleEditTeacher(teacher);
+                                  // Hide dropdown
+                                  document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
                               >
-                                <Edit className="inline-block w-4 h-4 mr-2" />
-                                Edit Details
+                                <Edit className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                                <span className="text-gray-700 dark:text-gray-300">Edit Details</span>
                               </button>
+                              
                               <button
-                                onClick={() => handleQuickPasswordReset(teacher)}
-                                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                onClick={() => {
+                                  handleQuickPasswordReset(teacher);
+                                  document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
                               >
-                                <Key className="inline-block w-4 h-4 mr-2" />
-                                Reset Password
+                                <Key className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                                <span className="text-gray-700 dark:text-gray-300">Reset Password</span>
                               </button>
+                              
                               {/* Reinvite option for unverified users */}
-                              {teacher.user_data && !teacher.user_data.email_confirmed_at && (
+                              {shouldShowReinvite(teacher.user_data) && (
                                 <button
-                                  onClick={() => handleReinviteTeacher(teacher)}
-                                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-amber-600 dark:text-amber-400"
+                                  onClick={() => {
+                                    handleReinviteTeacher(teacher);
+                                    document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center gap-3 transition-colors"
                                 >
-                                  <Send className="inline-block w-4 h-4 mr-2" />
-                                  Resend Invitation
+                                  <Send className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                  <span className="text-amber-700 dark:text-amber-300">Resend Invitation</span>
                                 </button>
                               )}
                             </>
                           )}
+                          
                           {canDeleteTeacher && (
-                            <button
-                              onClick={() => {
-                                setSelectedTeacher(teacher);
-                                setShowDeleteConfirmation(true);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                              <Trash2 className="inline-block w-4 h-4 mr-2" />
-                              Delete
-                            </button>
+                            <>
+                              {canModifyTeacher && (
+                                <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedTeacher(teacher);
+                                  setShowDeleteConfirmation(true);
+                                  document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.add('hidden'));
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 transition-colors"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                                <span className="text-red-600 dark:text-red-400">Delete Teacher</span>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
