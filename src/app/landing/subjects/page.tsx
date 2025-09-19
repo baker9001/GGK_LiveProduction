@@ -1,264 +1,232 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
+  GraduationCap, 
   BookOpen, 
   Calculator, 
   Atom, 
   Globe, 
   Palette, 
   Music, 
-  Dumbbell, 
-  Languages,
-  GraduationCap,
+  Activity,
   ArrowRight,
-  CheckCircle,
-  Star
+  CheckCircle
 } from 'lucide-react';
+import { Button } from '../../../components/shared/Button';
 import { Navigation } from '../../../components/shared/Navigation';
 
 const subjects = [
   {
-    id: 'mathematics',
-    name: 'Mathematics',
     icon: Calculator,
-    description: 'From basic arithmetic to advanced calculus and statistics',
+    name: 'Mathematics',
+    description: 'Comprehensive math curriculum from basic arithmetic to advanced calculus',
     levels: ['Primary', 'Secondary', 'Advanced'],
-    color: 'from-blue-500 to-blue-600',
-    features: ['Interactive Problem Solving', 'Step-by-Step Solutions', 'Practice Tests']
+    color: 'from-blue-500 to-blue-600'
   },
   {
-    id: 'science',
-    name: 'Science',
     icon: Atom,
-    description: 'Physics, Chemistry, Biology, and Environmental Science',
-    levels: ['Elementary', 'Middle School', 'High School'],
-    color: 'from-green-500 to-green-600',
-    features: ['Virtual Labs', '3D Simulations', 'Experiment Guides']
+    name: 'Science',
+    description: 'Physics, Chemistry, and Biology with hands-on experiments',
+    levels: ['General Science', 'Physics', 'Chemistry', 'Biology'],
+    color: 'from-green-500 to-green-600'
   },
   {
-    id: 'english',
-    name: 'English Language',
-    icon: BookOpen,
-    description: 'Reading, Writing, Grammar, and Literature',
-    levels: ['Beginner', 'Intermediate', 'Advanced'],
-    color: 'from-purple-500 to-purple-600',
-    features: ['Reading Comprehension', 'Writing Workshops', 'Literature Analysis']
-  },
-  {
-    id: 'social-studies',
-    name: 'Social Studies',
     icon: Globe,
-    description: 'History, Geography, Civics, and Cultural Studies',
-    levels: ['Elementary', 'Middle School', 'High School'],
-    color: 'from-orange-500 to-orange-600',
-    features: ['Interactive Maps', 'Historical Timelines', 'Cultural Exploration']
+    name: 'Geography',
+    description: 'World geography, climate studies, and environmental science',
+    levels: ['Physical', 'Human', 'Environmental'],
+    color: 'from-emerald-500 to-emerald-600'
   },
   {
-    id: 'arts',
-    name: 'Arts & Creativity',
+    icon: BookOpen,
+    name: 'Literature',
+    description: 'Language arts, reading comprehension, and creative writing',
+    levels: ['Reading', 'Writing', 'Literature Analysis'],
+    color: 'from-purple-500 to-purple-600'
+  },
+  {
     icon: Palette,
-    description: 'Visual Arts, Music, Drama, and Creative Expression',
-    levels: ['Beginner', 'Intermediate', 'Advanced'],
-    color: 'from-pink-500 to-pink-600',
-    features: ['Digital Art Tools', 'Music Composition', 'Creative Projects']
+    name: 'Arts',
+    description: 'Visual arts, design principles, and creative expression',
+    levels: ['Drawing', 'Painting', 'Digital Art'],
+    color: 'from-pink-500 to-pink-600'
   },
   {
-    id: 'languages',
-    name: 'World Languages',
-    icon: Languages,
-    description: 'Arabic, French, Spanish, and other world languages',
-    levels: ['Beginner', 'Intermediate', 'Advanced'],
-    color: 'from-indigo-500 to-indigo-600',
-    features: ['Interactive Conversations', 'Cultural Context', 'Pronunciation Guides']
+    icon: Music,
+    name: 'Music',
+    description: 'Music theory, instruments, and composition',
+    levels: ['Theory', 'Performance', 'Composition'],
+    color: 'from-indigo-500 to-indigo-600'
+  },
+  {
+    icon: Activity,
+    name: 'Physical Education',
+    description: 'Sports, fitness, and health education programs',
+    levels: ['Fitness', 'Team Sports', 'Individual Sports'],
+    color: 'from-orange-500 to-orange-600'
+  },
+  {
+    icon: Globe,
+    name: 'Social Studies',
+    description: 'History, civics, and cultural studies',
+    levels: ['History', 'Civics', 'Cultural Studies'],
+    color: 'from-teal-500 to-teal-600'
   }
 ];
 
 export default function SubjectsPage() {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
       
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-[#8CC63F] via-[#7AB635] to-[#6DA52F] text-white py-20">
-        <div className="absolute inset-0 bg-black/10"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-full mb-6">
-            <BookOpen className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            Comprehensive Subject Coverage
-          </h1>
-          <p className="text-xl md:text-2xl mb-8 text-white/90 max-w-3xl mx-auto">
-            Explore our extensive curriculum designed to inspire learning across all academic disciplines
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              to="/signin"
-              className="inline-flex items-center px-8 py-4 bg-white text-[#8CC63F] rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-            >
-              Start Learning Today
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Link>
-            <button className="inline-flex items-center px-8 py-4 border-2 border-white text-white rounded-lg font-semibold hover:bg-white/10 transition-colors">
-              View Sample Lessons
-            </button>
-          </div>
+      <div className="relative">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+            alt="Educational background"
+            className="w-full h-full object-cover select-none pointer-events-none"
+            draggable="false"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ userSelect: 'none' }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
-      </section>
 
-      {/* Subjects Grid */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Our Academic Subjects
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-              Comprehensive curriculum covering all essential subjects with interactive learning experiences
-            </p>
-          </div>
+        {/* Content */}
+        <div className="relative z-10 py-16 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center justify-center mb-6">
+                <GraduationCap className="h-16 w-16 text-[#8CC63F]" />
+              </div>
+              <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
+                Our Subjects
+              </h1>
+              <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+                Comprehensive curriculum designed to inspire learning and foster academic excellence across all disciplines
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {subjects.map((subject) => {
-              const IconComponent = subject.icon;
-              return (
-                <div
-                  key={subject.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                >
-                  {/* Subject Header */}
-                  <div className={`bg-gradient-to-r ${subject.color} p-6 text-white`}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                        <IconComponent className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{subject.name}</h3>
-                        <p className="text-white/80 text-sm">{subject.description}</p>
-                      </div>
+            {/* Subjects Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-16">
+              {subjects.map((subject, index) => {
+                const IconComponent = subject.icon;
+                return (
+                  <div
+                    key={index}
+                    className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-6 hover:bg-white/15 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
+                  >
+                    <div className={`w-12 h-12 bg-gradient-to-r ${subject.color} rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                      <IconComponent className="h-6 w-6 text-white" />
                     </div>
-                  </div>
-
-                  {/* Subject Content */}
-                  <div className="p-6">
-                    {/* Levels */}
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                        Available Levels
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {subject.levels.map((level) => (
+                    
+                    <h3 className="text-xl font-semibold text-white mb-3">
+                      {subject.name}
+                    </h3>
+                    
+                    <p className="text-gray-300 text-sm mb-4 leading-relaxed">
+                      {subject.description}
+                    </p>
+                    
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Available Levels:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {subject.levels.map((level, levelIndex) => (
                           <span
-                            key={level}
-                            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm"
+                            key={levelIndex}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#8CC63F]/20 text-[#8CC63F] border border-[#8CC63F]/30"
                           >
                             {level}
                           </span>
                         ))}
                       </div>
                     </div>
-
-                    {/* Features */}
-                    <div className="mb-6">
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                        Key Features
-                      </h4>
-                      <ul className="space-y-2">
-                        {subject.features.map((feature) => (
-                          <li key={feature} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                            <CheckCircle className="w-4 h-4 text-[#8CC63F]" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Action Button */}
-                    <Link
-                      to="/signin"
-                      className="w-full inline-flex items-center justify-center px-4 py-2 bg-[#8CC63F] text-white rounded-lg font-medium hover:bg-[#7AB635] transition-colors group-hover:scale-105 transform duration-200"
-                    >
-                      Explore {subject.name}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Features Section */}
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-8 mb-16">
+              <h2 className="text-3xl font-bold text-white text-center mb-8">
+                Why Choose Our Curriculum?
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="h-8 w-8 text-[#8CC63F]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">
+                    Standards-Aligned
+                  </h3>
+                  <p className="text-gray-300">
+                    All subjects align with international educational standards and best practices
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 bg-white dark:bg-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Why Choose Our Curriculum?
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-              Our subjects are designed with modern pedagogy and cutting-edge technology
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Star className="w-8 h-8 text-[#8CC63F]" />
+                
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <BookOpen className="h-8 w-8 text-[#8CC63F]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">
+                    Interactive Learning
+                  </h3>
+                  <p className="text-gray-300">
+                    Engaging multimedia content and interactive exercises for better understanding
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Activity className="h-8 w-8 text-[#8CC63F]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">
+                    Progress Tracking
+                  </h3>
+                  <p className="text-gray-300">
+                    Comprehensive analytics to monitor student progress and performance
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Expert-Designed Content
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Curriculum developed by subject matter experts and experienced educators
-              </p>
             </div>
 
+            {/* Call to Action */}
             <div className="text-center">
-              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <GraduationCap className="w-8 h-8 text-[#8CC63F]" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Adaptive Learning
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Personalized learning paths that adapt to each student's pace and style
+              <h2 className="text-3xl font-bold text-white mb-6">
+                Ready to Get Started?
+              </h2>
+              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                Join thousands of educators and students who are already experiencing the future of learning
               </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-[#8CC63F]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-8 h-8 text-[#8CC63F]" />
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button
+                  onClick={() => navigate('/signin')}
+                  className="bg-[#8CC63F] hover:bg-[#7AB635] text-white px-8 py-3 text-lg"
+                  rightIcon={<ArrowRight className="h-5 w-5" />}
+                >
+                  Sign In to Explore
+                </Button>
+                
+                <Button
+                  onClick={() => navigate('/contact')}
+                  variant="outline"
+                  className="border-white text-white hover:bg-white/10 px-8 py-3 text-lg"
+                >
+                  Contact Us
+                </Button>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Proven Results
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Track record of improved student outcomes and academic achievement
-              </p>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Ready to Transform Learning?
-          </h2>
-          <p className="text-xl text-white/90 mb-8">
-            Join thousands of students already excelling with our comprehensive curriculum
-          </p>
-          <Link
-            to="/signin"
-            className="inline-flex items-center px-8 py-4 bg-white text-[#8CC63F] rounded-lg font-semibold hover:bg-gray-100 transition-colors text-lg"
-          >
-            Get Started Now
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Link>
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
