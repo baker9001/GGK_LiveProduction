@@ -287,7 +287,7 @@ export default function AboutPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 to="/signin"
-                className="bg-[#8CC63F] text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#7AB635] transition-colors inline-flex items-center justify-center"
+                className="bg-[#8CC63F] text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#7AB635] transition-colors inline-flex items-center"
               >
                 Get Started
                 <ArrowRight className="ml-2 h-5 w-5" />

@@ -8,10 +8,10 @@ import { Button } from './Button';
 
 const NAV_ITEMS = [
   { label: 'Home', path: '/' },
-  { label: 'Subjects', path: '/subjects' },
-  { label: 'Resources', path: '/resources' },
-  { label: 'About', path: '/about' },
-  { label: 'Contact', path: '/contact' },
+  { label: 'Subjects', path: '/landing/subjects' },
+  { label: 'Resources', path: '/landing/resources' },
+  { label: 'About', path: '/landing/about' },
+  { label: 'Contact', path: '/landing/contact' },
 ];
 
 export function Navigation() {
