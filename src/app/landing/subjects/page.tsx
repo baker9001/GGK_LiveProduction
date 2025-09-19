@@ -236,7 +236,7 @@ export default function SubjectsPage() {
       <div className="relative z-10">
       <Navigation />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
         {/* Header Section */}
         <div className="text-center mb-16 backdrop-blur-sm bg-white/10 dark:bg-gray-900/20 rounded-2xl p-8 border border-white/20">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
@@ -466,6 +466,7 @@ export default function SubjectsPage() {
           </div>
         </div>
       </main>
+      </div>
       </div>
     </div>
   );

@@ -344,7 +344,7 @@ export default function ContactPage() {
                   <Button
                     onClick={() => navigate('/about')}
                     variant="outline"
-                    className="border-white text-white hover:bg-white/10 px-8 py-3"
+      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
                   >
                     Learn About Us
                   </Button>
@@ -353,6 +353,7 @@ export default function ContactPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
