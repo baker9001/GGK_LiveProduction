@@ -326,36 +326,17 @@ export default function SignInPage() {
       });
       
       if (error) {
-        setError(error.message);
+        console.error('Resend verification error:', error);
+        toast.error('Failed to send verification email.');
       } else {
         toast.success('Verification email sent! Please check your inbox.');
+        toast.info('Check your spam folder if you don\'t see it.');
+        setVerificationNeeded(false);
         setError(null);
       }
     } catch (err) {
-      setError('Failed to send verification email. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleDevLogin = async () => {
-    setLoading(true);
-    
-    try {
-      // Create a test user for development
-      const testUser: User = {
-        id: 'dev-user-ssa',
-        email: 'dev@ggklearning.com',
-        name: 'Development Admin',
-        role: 'SSA',
-        userType: 'system'
-      };
-      
-      setAuthenticatedUser(testUser);
-      toast.success('Development login successful!');
-      navigate('/app/system-admin/dashboard', { replace: true });
-    } catch (err) {
-      setError('Development login failed');
+      console.error('Resend error:', err);
+      toast.error('Failed to send verification email.');
     } finally {
       setLoading(false);
     }
@@ -385,6 +366,30 @@ export default function SignInPage() {
         return '/app/student-module/dashboard';
       default:
         return '/app/dashboard';
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setLoading(true);
+    
+    try {
+      // Create a test user for development
+      const testUser: User = {
+        id: 'dev-user-ssa',
+        email: 'dev@ggklearning.com',
+        name: 'Development Admin',
+        role: 'SSA',
+        userType: 'system'
+      };
+      
+      setAuthenticatedUser(testUser);
+      toast.success('Development login successful!');
+      navigate('/app/system-admin/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Dev login error:', err);
+      setError('Development login failed.');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -597,42 +602,17 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
-          </div>
-          
-          {/* Dev Login */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Development Access
-                </span>
-              </div>
-            </div>
             
-            <Button
-              onClick={handleDevLogin}
-              variant="outline"
-              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              🔧 Quick Dev Login (SSA)
-            </Button>
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Temporary access for development - bypasses regular authentication
-            </p>
-          </div>
-          
-          {/* Back to Home Button */}
-          <div className="mt-6">
-            <Button
-              onClick={() => navigate('/')}
-              variant="outline"
-              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              Back to Home
-            </Button>
+            {/* Back to Home Button */}
+            <div className="mt-4">
+              <Button
+                onClick={() => navigate('/')}
+                variant="outline"
+                className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+              >
+                Back to Home
+              </Button>
+            </div>
           </div>
         </div>
       </div>
