@@ -1,7 +1,10 @@
-///home/project/src/app/landing/about/page.tsx
+// ======================================
+// ABOUT PAGE - /src/app/landing/about/page.tsx
+// Complete IGCSE/Cambridge/Edexcel focused About page
+// ======================================
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   GraduationCap, 
   Users, 
@@ -14,40 +17,114 @@ import {
   BookOpen,
   Lightbulb,
   Zap,
-  Award
+  Award,
+  Eye,
+  Building,
+  Video,
+  FileText,
+  MessageSquare
 } from 'lucide-react';
 import { Navigation } from '../../../components/shared/Navigation';
 import { Button } from '../../../components/shared/Button';
 
+const milestones = [
+  { year: '2015', event: 'GGK Learning founded in Kuwait', detail: 'Started with IGCSE Mathematics' },
+  { year: '2017', event: 'Cambridge Partnership', detail: 'Official Cambridge resource partner' },
+  { year: '2019', event: 'Edexcel Collaboration', detail: 'Added Pearson Edexcel content' },
+  { year: '2021', event: '10,000+ Students', detail: 'Reached major milestone' },
+  { year: '2023', event: 'AI Integration', detail: 'Launched AI-powered mock exams' },
+  { year: '2024', event: '50,000+ Students', detail: 'Serving 500+ schools globally' }
+];
+
+const teamMembers = [
+  {
+    name: 'Dr. Sarah Johnson',
+    role: 'CEO & Founder',
+    image: 'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=400',
+    bio: 'Former Cambridge examiner with 20+ years in IGCSE education',
+    expertise: ['Curriculum Development', 'Educational Technology', 'IGCSE Standards']
+  },
+  {
+    name: 'Michael Chen',
+    role: 'Chief Technology Officer',
+    image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400',
+    bio: 'EdTech innovator specializing in AI-powered learning systems',
+    expertise: ['AI/ML', 'Platform Architecture', 'Learning Analytics']
+  },
+  {
+    name: 'Dr. Emily Rodriguez',
+    role: 'Head of Curriculum',
+    image: 'https://images.pexels.com/photos/3184338/pexels-photo-3184338.jpeg?auto=compress&cs=tinysrgb&w=400',
+    bio: 'Cambridge & Edexcel curriculum specialist with expertise in exam preparation',
+    expertise: ['IGCSE Curriculum', 'Assessment Design', 'Teacher Training']
+  },
+  {
+    name: 'Ahmed Al-Kuwait',
+    role: 'Regional Director MENA',
+    image: 'https://images.pexels.com/photos/2379005/pexels-photo-2379005.jpeg?auto=compress&cs=tinysrgb&w=400',
+    bio: 'Leading educational transformation across Middle East schools',
+    expertise: ['School Partnerships', 'Regional Education', 'Student Success']
+  }
+];
+
+const achievements = [
+  { number: '50,000+', label: 'Active Students', icon: Users },
+  { number: '500+', label: 'Partner Schools', icon: Building },
+  { number: '95%', label: 'Pass Rate', icon: Award },
+  { number: '15,000+', label: 'Past Papers', icon: FileText },
+  { number: '3,000+', label: 'Video Lessons', icon: Video },
+  { number: '30+', label: 'Subjects Covered', icon: BookOpen }
+];
+
 export default function AboutPage() {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <Navigation />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-[#8CC63F]/90 to-[#7AB635]/90 text-white py-20 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative bg-gradient-to-r from-[#8CC63F]/95 to-[#7AB635]/95 py-20">
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://images.pexels.com/photos/3184296/pexels-photo-3184296.jpeg"
+            alt="GGK Learning Team"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        </div>
+        
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="flex justify-center mb-8">
-              <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center shadow-lg">
-                <GraduationCap className="h-10 w-10 text-white" />
+              <div className="w-24 h-24 bg-white/10 backdrop-blur rounded-full flex items-center justify-center">
+                <GraduationCap className="h-12 w-12 text-white" />
               </div>
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-              About <span className="text-[#8CC63F]">GGK Learning</span>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
+              Transforming IGCSE & A-Level Education
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto mb-8">
-              Empowering educational institutions with comprehensive learning management solutions 
-              that transform how students learn and educators teach.
+            <p className="text-xl text-gray-200 max-w-3xl mx-auto mb-8">
+              GGK Learning is the Middle East's leading platform for Cambridge and Edexcel 
+              exam preparation, empowering students to achieve academic excellence
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-[#8CC63F] hover:bg-[#7AB635]">
+              <Button 
+                size="lg" 
+                className="bg-white text-[#8CC63F] hover:bg-gray-100 font-semibold"
+                onClick={() => navigate('/subjects')}
+              >
                 <BookOpen className="h-5 w-5 mr-2" />
-                Explore Features
+                Explore Our Curriculum
               </Button>
-              <Button variant="outline" size="lg">
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="border-white text-white hover:bg-white/10 font-semibold"
+                onClick={() => navigate('/contact')}
+              >
                 <Users className="h-5 w-5 mr-2" />
-                Meet Our Team
+                Partner With Us
               </Button>
             </div>
           </div>
@@ -57,205 +134,149 @@ export default function AboutPage() {
       {/* Mission & Vision */}
       <section className="py-20 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-lg">
               <div className="w-12 h-12 bg-[#8CC63F]/20 rounded-lg flex items-center justify-center mb-6">
                 <Target className="h-6 w-6 text-[#8CC63F]" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Our Mission</h2>
-              <p className="text-gray-600 dark:text-gray-400 text-lg leading-relaxed">
-                To revolutionize education by providing innovative, accessible, and comprehensive 
-                learning management solutions that empower educators and inspire students to reach 
-                their full potential.
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Our Mission</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                To democratize access to world-class IGCSE and A-Level education through 
+                innovative technology, comprehensive resources, and expert guidance.
               </p>
             </div>
             
             <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-lg">
               <div className="w-12 h-12 bg-[#7AB635]/20 rounded-lg flex items-center justify-center mb-6">
-                <Lightbulb className="h-6 w-6 text-[#7AB635]" />
+                <Eye className="h-6 w-6 text-[#7AB635]" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Our Vision</h2>
-              <p className="text-gray-600 dark:text-gray-400 text-lg leading-relaxed">
-                To be the leading global platform that bridges the gap between traditional education 
-                and modern technology, creating personalized learning experiences for every student 
-                worldwide.
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Our Vision</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                To be the global standard for Cambridge and Edexcel exam preparation, 
+                enabling every student to achieve their full academic potential.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 shadow-lg">
+              <div className="w-12 h-12 bg-[#8CC63F]/20 rounded-lg flex items-center justify-center mb-6">
+                <Heart className="h-6 w-6 text-[#8CC63F]" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Our Values</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                Excellence in education, innovation in technology, integrity in service, 
+                and commitment to student success.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Core Values */}
+      {/* Our Journey Timeline */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Our Core Values
+              Our Journey to Excellence
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              The principles that guide everything we do and shape our commitment to educational excellence.
+              From a small startup to the region's leading IGCSE platform
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: <Heart className="h-8 w-8" />,
-                title: "Student-Centered",
-                description: "Every decision we make prioritizes student success and learning outcomes.",
-                color: "text-red-500"
-              },
-              {
-                icon: <Zap className="h-8 w-8" />,
-                title: "Innovation",
-                description: "We continuously evolve our platform with cutting-edge educational technology.",
-                color: "text-yellow-500"
-              },
-              {
-                icon: <Users className="h-8 w-8" />,
-                title: "Collaboration",
-                description: "We believe in the power of community and collaborative learning environments.",
-                color: "text-blue-500"
-              },
-              {
-                icon: <Award className="h-8 w-8" />,
-                title: "Excellence",
-                description: "We strive for the highest quality in everything we deliver to our users.",
-                color: "text-purple-500"
-              },
-              {
-                icon: <Globe className="h-8 w-8" />,
-                title: "Accessibility",
-                description: "Education should be accessible to everyone, regardless of location or background.",
-                color: "text-green-500"
-              },
-              {
-                icon: <CheckCircle className="h-8 w-8" />,
-                title: "Integrity",
-                description: "We operate with transparency, honesty, and ethical practices in all our interactions.",
-                color: "text-indigo-500"
-              }
-            ].map((value, index) => (
-              <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow">
-                <div className={`${value.color} mb-4`}>
-                  {value.icon}
+          <div className="relative">
+            {/* Timeline line */}
+            <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-[#8CC63F] hidden md:block"></div>
+            
+            {/* Timeline items */}
+            <div className="space-y-12">
+              {milestones.map((milestone, index) => (
+                <div key={index} className={`flex flex-col md:flex-row items-center ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
+                  <div className="flex-1">
+                    <div className={`bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg ${index % 2 === 0 ? 'md:mr-8' : 'md:ml-8'}`}>
+                      <div className="text-[#8CC63F] font-bold text-xl mb-2">{milestone.year}</div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{milestone.event}</h3>
+                      <p className="text-gray-600 dark:text-gray-400 text-sm">{milestone.detail}</p>
+                    </div>
+                  </div>
+                  <div className="w-4 h-4 bg-[#8CC63F] rounded-full border-4 border-white dark:border-gray-900 z-10 my-4 md:my-0"></div>
+                  <div className="flex-1 hidden md:block"></div>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                  {value.title}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {value.description}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Our Story */}
-      <section className="py-20 bg-gray-50 dark:bg-gray-800">
+      {/* Achievements */}
+      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
-                Our Story
-              </h2>
-              <div className="space-y-4 text-gray-600 dark:text-gray-400">
-                <p className="text-lg">
-                  GGK Learning was founded with a simple yet powerful vision: to make quality education 
-                  accessible and engaging for students around the world. What started as a small team 
-                  of passionate educators and technologists has grown into a comprehensive platform 
-                  serving thousands of institutions globally.
-                </p>
-                <p>
-                  Our journey began when we recognized the gap between traditional teaching methods 
-                  and the digital-native generation of students. We set out to create a platform 
-                  that would bridge this gap while maintaining the human connection that makes 
-                  education truly meaningful.
-                </p>
-                <p>
-                  Today, GGK Learning serves educational institutions of all sizes, from small 
-                  community schools to large university systems, providing them with the tools 
-                  they need to deliver exceptional educational experiences.
-                </p>
-              </div>
-            </div>
-            
-            <div className="relative">
-              <div className="bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 text-white">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold mb-2">10K+</div>
-                    <div className="text-sm opacity-90">Students Served</div>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Our Impact in Numbers
+            </h2>
+            <p className="text-xl text-white/90">
+              Measurable success across all metrics
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            {achievements.map((stat, index) => {
+              const IconComponent = stat.icon;
+              return (
+                <div key={index} className="text-center">
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <IconComponent className="w-6 h-6 text-white" />
                   </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold mb-2">500+</div>
-                    <div className="text-sm opacity-90">Institutions</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold mb-2">50+</div>
-                    <div className="text-sm opacity-90">Countries</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold mb-2">99%</div>
-                    <div className="text-sm opacity-90">Satisfaction Rate</div>
-                  </div>
+                  <div className="text-3xl font-bold text-white mb-1">{stat.number}</div>
+                  <div className="text-sm text-white/90">{stat.label}</div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* Team Section */}
-      <section className="py-20">
+      <section className="py-20 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Meet Our Team
+              Leadership Team
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              A diverse group of educators, technologists, and innovators working together 
-              to transform education.
+              Education experts and technology innovators working together
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                name: "Dr. Sarah Johnson",
-                role: "Chief Executive Officer",
-                image: "https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=400",
-                bio: "Former university dean with 20+ years in educational leadership."
-              },
-              {
-                name: "Michael Chen",
-                role: "Chief Technology Officer",
-                image: "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=400",
-                bio: "Tech innovator specializing in educational software and AI."
-              },
-              {
-                name: "Dr. Emily Rodriguez",
-                role: "Head of Curriculum",
-                image: "https://images.pexels.com/photos/3184338/pexels-photo-3184338.jpeg?auto=compress&cs=tinysrgb&w=400",
-                bio: "Curriculum design expert with expertise in personalized learning."
-              }
-            ].map((member, index) => (
-              <div key={index} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg text-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {teamMembers.map((member, index) => (
+              <div key={index} className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-lg">
                 <img
                   src={member.image}
                   alt={member.name}
-                  className="w-24 h-24 rounded-full mx-auto mb-4 object-cover"
+                  className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
                 />
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {member.name}
-                </h3>
-                <p className="text-[#8CC63F] font-medium mb-3">
-                  {member.role}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  {member.bio}
-                </p>
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                    {member.name}
+                  </h3>
+                  <p className="text-[#8CC63F] font-medium mb-3">
+                    {member.role}
+                  </p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                    {member.bio}
+                  </p>
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {member.expertise.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -263,86 +284,35 @@ export default function AboutPage() {
       </section>
 
       {/* Call to Action */}
-      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
+      <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Ready to Transform Your Educational Institution?
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-6">
+            Join the GGK Learning Community
           </h2>
-          <p className="text-xl text-white/90 mb-8">
-            Join thousands of educators who are already using GGK Learning to create 
-            exceptional educational experiences.
+          <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+            Experience the future of IGCSE and A-Level education today
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button 
               size="lg" 
-              className="bg-white text-[#8CC63F] hover:bg-gray-100"
-              onClick={() => window.location.href = '/contact'}
+              className="bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold"
+              onClick={() => navigate('/signin')}
             >
-              Get Started Today
+              Start Free Trial
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
             <Button 
               variant="outline" 
               size="lg"
-              className="border-white text-white hover:bg-white/10"
-              onClick={() => window.location.href = '/signin'}
+              className="border-gray-900 dark:border-white text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 font-semibold"
+              onClick={() => navigate('/contact')}
             >
-              Sign In to Your Account
+              Contact Our Team
+              <MessageSquare className="h-5 w-5 ml-2" />
             </Button>
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-black text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center mb-4">
-                <GraduationCap className="h-8 w-8 text-[#8CC63F] mr-2" />
-                <span className="text-2xl font-bold">GGK Learning</span>
-              </div>
-              <p className="text-gray-400 mb-4">
-                Transforming education through innovative technology and personalized learning experiences.
-              </p>
-              <div className="flex space-x-4">
-                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Globe className="h-5 w-5" />
-                </a>
-                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Users className="h-5 w-5" />
-                </a>
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-              <ul className="space-y-2">
-                <li><Link to="/" className="text-gray-400 hover:text-white transition-colors">Home</Link></li>
-                <li><Link to="/subjects" className="text-gray-400 hover:text-white transition-colors">Subjects</Link></li>
-                <li><Link to="/resources" className="text-gray-400 hover:text-white transition-colors">Resources</Link></li>
-                <li><Link to="/contact" className="text-gray-400 hover:text-white transition-colors">Contact</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Support</h3>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Documentation</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Community</a></li>
-                <li><Link to="/contact" className="text-gray-400 hover:text-white transition-colors">Contact Support</Link></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center">
-            <p className="text-gray-400">
-              © 2025 GGK Learning. All rights reserved. Built with passion for education.
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
