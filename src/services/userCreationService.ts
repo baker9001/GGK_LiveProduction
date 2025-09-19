@@ -293,6 +293,18 @@ export const userCreationService = {
   async createUserInCustomTable(authUserId: string, payload: CreateUserPayload, metadata: any): Promise<void> {
     const userTypes = getUserTypes(payload.user_type);
     
+    // First check if user already exists (Edge Function might have created it)
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', authUserId)
+      .single();
+    
+    if (existingUser) {
+      console.log('User already exists in custom table, skipping creation');
+      return;
+    }
+    
     const userData = {
       id: authUserId,
       email: payload.email.toLowerCase(),
@@ -316,6 +328,7 @@ export const userCreationService = {
 
     if (error && error.code !== '23505') { // Ignore duplicate key errors
       console.error('Failed to create user in custom table:', error);
+      throw error;
     }
   },
 
