@@ -326,34 +326,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         let query = supabase
           .from('teachers')
           .select(`
-            id,
-            user_id,
-            teacher_code,
-            specialization,
-            qualification,
-            experience_years,
-            bio,
-            phone,
-            company_id,
-            school_id,
-            branch_id,
-            department_id,
-            hire_date,
-            created_at,
-            updated_at,
-            users!teachers_user_id_fkey (
-              id,
-              email,
-              is_active,
-              raw_user_meta_data,
-              last_login_at
-            ),
-            schools (
+            *,
+            schools:school_id (
               id,
               name,
               status
             ),
-            branches (
+            branches:branch_id (
               id,
               name,
               status
@@ -390,6 +369,24 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           return [];
         }
 
+        // Now fetch users data separately
+        const userIds = teachersData.map(t => t.user_id).filter(Boolean);
+        
+        let usersData: any[] = [];
+        if (userIds.length > 0) {
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, email, is_active, raw_user_meta_data, last_login_at')
+            .in('id', userIds);
+          
+          if (!usersError && users) {
+            usersData = users;
+          }
+        }
+
+        // Create a map for quick user lookup
+        const usersMap = new Map(usersData.map(u => [u.id, u]));
+
         // Fetch teacher relationships
         const enrichedTeachers = await Promise.all(
           teachersData.map(async (teacher) => {
@@ -409,36 +406,40 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   .eq('teacher_id', teacher.id)
               ]);
 
+              // Get user data from map
+              const userData = usersMap.get(teacher.user_id);
+
               return {
                 ...teacher,
-                name: teacher.users?.raw_user_meta_data?.name || 
-                      teacher.users?.email?.split('@')[0] || 
+                name: userData?.raw_user_meta_data?.name || 
+                      userData?.email?.split('@')[0] || 
                       'Unknown Teacher',
-                email: teacher.users?.email || '',
-                is_active: teacher.users?.is_active ?? false,
+                email: userData?.email || '',
+                is_active: userData?.is_active ?? false,
                 school_name: teacher.schools?.name || 'No School Assigned',
                 branch_name: teacher.branches?.name || 'No Branch Assigned',
                 departments: deptData.data?.map(d => d.departments).filter(Boolean) || [],
                 grade_levels: gradeData.data?.map(g => g.grade_levels).filter(Boolean) || [],
                 sections: sectionData.data?.map(s => s.class_sections).filter(Boolean) || [],
-                user_data: teacher.users
+                user_data: userData
               };
             } catch (err) {
               console.error('Error enriching teacher data:', err);
+              const userData = usersMap.get(teacher.user_id);
               return {
                 ...teacher,
-                name: teacher.users?.raw_user_meta_data?.name || 
-                      teacher.users?.email?.split('@')[0] || 
+                name: userData?.raw_user_meta_data?.name || 
+                      userData?.email?.split('@')[0] || 
                       'Unknown Teacher',
-                email: teacher.users?.email || '',
-                phone: teacher.phone || teacher.users?.raw_user_meta_data?.phone || '',
-                is_active: teacher.users?.is_active ?? false,
+                email: userData?.email || '',
+                phone: teacher.phone || userData?.raw_user_meta_data?.phone || '',
+                is_active: userData?.is_active ?? false,
                 school_name: teacher.schools?.name || 'No School Assigned',
                 branch_name: teacher.branches?.name || 'No Branch Assigned',
                 departments: [],
                 grade_levels: [],
                 sections: [],
-                user_data: teacher.users
+                user_data: userData
               };
             }
           })
