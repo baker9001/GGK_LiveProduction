@@ -1779,51 +1779,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
   // ===== RENDER =====
   return (
-    <>
-      {/* Global styles for dropdown positioning */}
-      <style>{`
-        .dropdown-menu {
-          max-height: 320px;
-          overflow-y: auto;
-        }
-        
-        .dropdown-menu::-webkit-scrollbar {
-          width: 4px;
-        }
-        
-        .dropdown-menu::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .dropdown-menu::-webkit-scrollbar-thumb {
-          background: #888;
-          border-radius: 2px;
-        }
-        
-        .dropdown-menu::-webkit-scrollbar-thumb:hover {
-          background: #555;
-        }
-        
-        /* Ensure dropdowns appear above table overflow */
-        .overflow-x-auto {
-          overflow: visible;
-        }
-        
-        @media (max-width: 768px) {
-          .dropdown-menu {
-            position: fixed !important;
-            width: calc(100% - 2rem) !important;
-            max-width: 320px !important;
-            left: 50% !important;
-            transform: translateX(-50%);
-            bottom: 1rem !important;
-            top: auto !important;
-            right: auto !important;
-          }
-        }
-      `}</style>
-      
-      <div className="space-y-6">
+    <div className="space-y-6">
       {/* Enhanced Status Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <EnhancedStatusCard
