@@ -56,6 +56,7 @@ interface TeacherData {
   is_active?: boolean;
   created_at: string;
   updated_at: string;
+  last_login_at?: string; // Now properly synced from auth.users
   school_name?: string;
   branch_name?: string;
   departments?: { id: string; name: string }[];
@@ -65,7 +66,10 @@ interface TeacherData {
     email: string;
     is_active: boolean;
     raw_user_meta_data?: any;
-    last_login_at?: string;
+    updated_at?: string;
+    last_sign_in_at?: string;
+    email_confirmed_at?: string; // Email verification timestamp
+    created_at?: string; // To check how long they've been unverified
   };
 }
 
@@ -343,6 +347,68 @@ const generateSecurePassword = (): string => {
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
+// Helper function to format last login time
+const formatLastLogin = (date?: string | null): string => {
+  if (!date) return 'Never';
+  
+  const lastLogin = new Date(date);
+  const now = new Date();
+  const diffInMs = now.getTime() - lastLogin.getTime();
+  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes !== 1 ? 's' : ''} ago`;
+  if (diffInHours < 24) return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`;
+  if (diffInDays === 0) return 'Today';
+  if (diffInDays === 1) return 'Yesterday';
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} week${Math.floor(diffInDays / 7) !== 1 ? 's' : ''} ago`;
+  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} month${Math.floor(diffInDays / 30) !== 1 ? 's' : ''} ago`;
+  
+  return lastLogin.toLocaleDateString();
+};
+
+// Check if reinvite should be shown (unverified for >24 hours)
+const shouldShowReinvite = (userData?: any): boolean => {
+  if (!userData || userData.email_confirmed_at) return false;
+  
+  const createdAt = userData.created_at || userData.raw_user_meta_data?.created_at;
+  if (!createdAt) return true; // Show if we can't determine creation time
+  
+  const hoursSinceCreation = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60);
+  return hoursSinceCreation > 24; // Show reinvite if unverified for >24 hours
+};
+
+// Get verification status details
+const getVerificationStatus = (userData?: any): {
+  isVerified: boolean;
+  status: 'verified' | 'pending' | 'expired';
+  message: string;
+} => {
+  if (!userData) {
+    return { isVerified: false, status: 'pending', message: 'User data not available' };
+  }
+  
+  if (userData.email_confirmed_at || userData.email_verified) {
+    return { isVerified: true, status: 'verified', message: 'Email verified' };
+  }
+  
+  const createdAt = userData.created_at || userData.raw_user_meta_data?.created_at;
+  if (!createdAt) {
+    return { isVerified: false, status: 'pending', message: 'Verification pending' };
+  }
+  
+  const daysSinceCreation = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  
+  if (daysSinceCreation > 7) {
+    return { isVerified: false, status: 'expired', message: `Unverified for ${Math.floor(daysSinceCreation)} days` };
+  }
+  
+  return { isVerified: false, status: 'pending', message: 'Verification pending' };
+};
+
 // ===== MAIN COMPONENT =====
 export default function TeachersTab({ companyId, refreshData }: TeachersTabProps) {
   const queryClient = useQueryClient();
@@ -517,7 +583,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         if (userIds.length > 0) {
           const { data: users, error: usersError } = await supabase
             .from('users')
-            .select('id, email, is_active, raw_user_meta_data, last_login_at')
+            .select('id, email, is_active, raw_user_meta_data, updated_at, last_sign_in_at, email_confirmed_at, email_verified, created_at')
             .in('id', userIds);
           
           if (!usersError && users) {
@@ -565,7 +631,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 grade_levels: gradeData.data?.map(g => g.grade_levels).filter(Boolean) || [],
                 sections: sectionData.data?.map(s => s.class_sections).filter(Boolean) || [],
                 user_data: userData,
-                avatar_url: userData?.raw_user_meta_data?.avatar_url
+                avatar_url: userData?.raw_user_meta_data?.avatar_url,
+                last_login_at: userData?.last_sign_in_at || userData?.raw_user_meta_data?.last_login_at
               };
             } catch (err) {
               console.error('Error enriching teacher data:', err);
@@ -583,7 +650,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 departments: [],
                 grade_levels: [],
                 sections: [],
-                user_data: userData
+                user_data: userData,
+                last_login_at: userData?.last_sign_in_at || userData?.raw_user_meta_data?.last_login_at
               };
             }
           })
@@ -1196,6 +1264,67 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     toast.info(`Password reset mode activated for ${teacher.name}`);
   };
 
+  // Handler for resending invitation to unverified teachers
+  const handleReinviteTeacher = async (teacher: TeacherData) => {
+    try {
+      // Get current session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      // Call the Edge Function to resend invitation
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resend-teacher-invite`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+          },
+          body: JSON.stringify({
+            user_id: teacher.user_id,
+            email: teacher.email,
+            name: teacher.name,
+            redirect_to: `${window.location.origin}/auth/callback`
+          })
+        }
+      );
+
+      if (response.ok) {
+        toast.success(`Invitation resent to ${teacher.email}`);
+        
+        // Update local data to reflect the action
+        await refetchTeachers();
+      } else {
+        // Fallback: Use Supabase Auth Admin API if available
+        const { error } = await supabase.auth.admin.sendInviteLink({
+          email: teacher.email,
+          data: {
+            name: teacher.name,
+            teacher_id: teacher.id,
+            reinvite: true,
+            reinvited_at: new Date().toISOString()
+          }
+        });
+        
+        if (error) throw error;
+        
+        toast.success(`Invitation resent to ${teacher.email}`);
+        await refetchTeachers();
+      }
+    } catch (error) {
+      console.error('Failed to resend invitation:', error);
+      // Show a helpful message based on the verification status
+      const verificationStatus = getVerificationStatus(teacher.user_data);
+      
+      if (verificationStatus.status === 'expired') {
+        toast.error(`Failed to resend invitation. ${verificationStatus.message}. Please create a new teacher account.`);
+      } else {
+        toast.error('Failed to resend invitation. Please try again or contact support.');
+      }
+    }
+  };
+
   const handleSubmitForm = async () => {
     if (!validateForm()) return;
     
@@ -1393,11 +1522,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const summaryStats = useMemo(() => {
     const active = teachers.filter(t => t.is_active).length;
     const total = teachers.length;
+    const unverified = teachers.filter(t => 
+      t.user_data && !t.user_data.email_confirmed_at && !t.user_data.email_verified
+    ).length;
+    const expiredVerification = teachers.filter(t => {
+      if (!t.user_data || t.user_data.email_confirmed_at) return false;
+      const createdAt = t.user_data.created_at || t.created_at;
+      if (!createdAt) return false;
+      const daysSinceCreation = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      return daysSinceCreation > 7;
+    }).length;
     
     return {
       total,
       active,
       inactive: total - active,
+      unverified,
+      expiredVerification,
       withSpecialization: teachers.filter(t => 
         t.specialization && t.specialization.length > 0
       ).length,
@@ -1508,11 +1649,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           ))}
         </div>
         
-        <StatusBadge
-          status={teacher.is_active ? 'active' : 'inactive'}
-          variant={teacher.is_active ? 'success' : 'default'}
-          size="sm"
-        />
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge
+            status={teacher.is_active ? 'active' : 'inactive'}
+            variant={teacher.is_active ? 'success' : 'default'}
+            size="sm"
+          />
+          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+            <Clock className="w-3 h-3 mr-1" />
+            {formatLastLogin(teacher.last_login_at)}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1551,7 +1698,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   return (
     <div className="space-y-6">
       {/* Enhanced Status Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <EnhancedStatusCard
           title="Total Teachers"
           value={summaryStats.total}
@@ -1579,6 +1726,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             summaryStats.total > 0 
               ? `${Math.round(summaryStats.inactive / summaryStats.total * 100)}%`
               : '0%'
+          }
+        />
+        <EnhancedStatusCard
+          title="Unverified"
+          value={summaryStats.unverified}
+          icon={AlertTriangle}
+          color="bg-gradient-to-br from-amber-500 to-amber-600"
+          percentage={
+            summaryStats.expiredVerification > 0
+              ? `${summaryStats.expiredVerification} expired`
+              : undefined
           }
         />
         <EnhancedStatusCard
@@ -1878,10 +2036,24 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       </div>
                     </td>
                     <td className="p-3">
-                      <StatusBadge
-                        status={teacher.is_active ? 'active' : 'inactive'}
-                        variant={teacher.is_active ? 'success' : 'warning'}
-                      />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge
+                          status={teacher.is_active ? 'active' : 'inactive'}
+                          variant={teacher.is_active ? 'success' : 'warning'}
+                        />
+                        {/* Email Verification Status */}
+                        {teacher.user_data && !teacher.user_data.email_confirmed_at && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Unverified
+                          </span>
+                        )}
+                        {/* Last Login Indicator */}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <Clock className="inline w-3 h-3 mr-1" />
+                          {formatLastLogin(teacher.last_login_at)}
+                        </div>
+                      </div>
                     </td>
                     <td className="p-3">
                       <div className="relative group">
@@ -1915,6 +2087,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                                 <Key className="inline-block w-4 h-4 mr-2" />
                                 Reset Password
                               </button>
+                              {/* Reinvite option for unverified users */}
+                              {teacher.user_data && !teacher.user_data.email_confirmed_at && (
+                                <button
+                                  onClick={() => handleReinviteTeacher(teacher)}
+                                  className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-amber-600 dark:text-amber-400"
+                                >
+                                  <Send className="inline-block w-4 h-4 mr-2" />
+                                  Resend Invitation
+                                </button>
+                              )}
                             </>
                           )}
                           {canDeleteTeacher && (
