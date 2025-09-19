@@ -4,7 +4,6 @@ import {
   GraduationCap, 
   Users, 
   Target, 
-  Award, 
   Globe, 
   Heart,
   ArrowRight,
@@ -12,7 +11,8 @@ import {
   Star,
   BookOpen,
   Lightbulb,
-  Zap
+  Zap,
+  Award
 } from 'lucide-react';
 import { Navigation } from '../../../components/shared/Navigation';
 import { Button } from '../../../components/shared/Button';
@@ -23,7 +23,7 @@ export default function AboutPage() {
       <Navigation />
       
       {/* Hero Section */}
-      <section className="relative py-20 bg-gradient-to-br from-[#8CC63F]/10 via-white to-[#7AB635]/5 dark:from-[#8CC63F]/20 dark:via-gray-900 dark:to-[#7AB635]/10">
+      <section className="bg-gradient-to-r from-[#8CC63F]/90 to-[#7AB635]/90 text-white py-20 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="flex justify-center mb-8">
@@ -292,7 +292,7 @@ export default function AboutPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
+      <footer className="bg-gray-900 dark:bg-black text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div className="col-span-1 md:col-span-2">
@@ -341,7 +341,6 @@ export default function AboutPage() {
           </div>
         </div>
       </footer>
-      </div>
     </div>
   );
 }
