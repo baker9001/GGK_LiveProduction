@@ -11,6 +11,7 @@ import {
   Building,
   Globe,
   ArrowRight,
+  Clock,
   CheckCircle
 } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
