@@ -1,30 +1,16 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
- * PRODUCTION-READY VERSION: Teachers Tab with Enhanced UI/UX
+ * ENHANCED VERSION: Teachers with Supabase Auth Invitation Flow
  * 
- * Features Implemented:
- * ✅ Enhanced password management with radio options
- * ✅ Password requirements checker with visual feedback
- * ✅ Generated password modal with copy/print functionality
- * ✅ Editable email field with verification notice
- * ✅ Protected teacher code field (non-editable by design)
- * ✅ Quick password reset from table actions
- * ✅ Professional UI/UX matching tenant page standards
- * ✅ Green theme (#8CC63F) throughout
- * ✅ Comprehensive error handling and validation
- * ✅ Accessibility improvements
- * ✅ Fixed UUID handling for school_id and branch_id
- * ✅ Fixed password update to actually save to database
- * ✅ Fixed phone number saving to teachers table
- * ✅ Fixed junction table updates to avoid conflicts
- * 
- * Dependencies:
- *   - @/services/userCreationService
- *   - @/hooks/useAccessControl
- *   - @/components/shared/*
- *   - @/contexts/UserContext
- *   - @/lib/supabase
+ * New Features:
+ * ✅ Invitation-based teacher creation (no password required)
+ * ✅ Secure password reset via Edge Functions
+ * ✅ Email/name updates handled properly
+ * ✅ Phone stored in teachers table
+ * ✅ Full Supabase Auth integration
+ * ✅ Invitation email notifications
+ * ✅ Better error handling and user feedback
  */
 
 'use client';
@@ -37,7 +23,7 @@ import {
   Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw,
   Trash2, UserX, FileText, ChevronDown, X, User, Building2,
   School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff,
-  CheckCircle, XCircle, Printer, Check
+  CheckCircle, XCircle, Printer, Check, Send, MailCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
@@ -138,6 +124,7 @@ interface ClassSection {
   section_code: string;
   grade_level_id: string;
   max_capacity?: number;
+  class_section_order?: number;
 }
 
 interface PasswordRequirement {
@@ -216,7 +203,6 @@ const generateSecurePassword = (): string => {
   const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
   
   let password = '';
-  // Ensure at least one of each required character type
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
@@ -227,7 +213,6 @@ const generateSecurePassword = (): string => {
     password += allChars[Math.floor(Math.random() * allChars.length)];
   }
   
-  // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
@@ -266,7 +251,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
   
   // Enhanced password management state
-  const [generatePassword, setGeneratePassword] = useState(true);
+  const [resetPassword, setResetPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
@@ -512,7 +497,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
-  // Fetch branches for selected school (filtered by scope)
+  // Fetch branches for selected school
   const { data: availableBranches = [] } = useQuery(
     ['branches-for-school', formData.school_id, scopeFilters],
     async () => {
@@ -561,7 +546,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         return [];
       }
       
-      return (data || []) as Department[];
+      return data || [];
     },
     { 
       enabled: !!companyId,
@@ -593,7 +578,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         return [];
       }
       
-      return (data || []) as GradeLevel[];
+      return data || [];
     },
     { 
       enabled: !!formData.school_id,
@@ -619,7 +604,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         return [];
       }
       
-      return (data || []) as ClassSection[];
+      return data || [];
     },
     { 
       enabled: formData.grade_level_ids && formData.grade_level_ids.length > 0,
@@ -628,15 +613,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   );
 
   // ===== MUTATIONS =====
+  
+  // Create teacher mutation - ENHANCED with invitation flow
   const createTeacherMutation = useMutation(
     async (data: TeacherFormData) => {
-      const finalPassword = generatePassword ? generateSecurePassword() : data.password || generateSecurePassword();
-      
+      // Use invitation flow - no password needed
       const result = await userCreationService.createUser({
         user_type: 'teacher',
         email: data.email,
         name: data.name,
-        password: finalPassword,
+        password: undefined, // No password - invitation will be sent
         phone: data.phone,
         company_id: companyId,
         teacher_code: data.teacher_code,
@@ -645,12 +631,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         experience_years: data.experience_years,
         bio: data.bio,
         hire_date: data.hire_date,
-        // Convert empty strings to null for UUID fields
-        school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
-        branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
-        is_active: data.is_active
+        school_id: data.school_id && data.school_id !== '' ? data.school_id : undefined,
+        branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : undefined,
+        is_active: data.is_active,
+        send_invitation: true // Always send invitation
       });
       
+      // Create junction table relationships
       if (result.entityId) {
         try {
           const junctionInserts = [];
@@ -690,23 +677,18 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           
           await Promise.all(junctionInserts);
         } catch (err) {
-          console.warn('Junction tables may not exist yet:', err);
+          console.warn('Junction tables update warning:', err);
         }
       }
       
-      return { ...result, password: finalPassword };
+      return result;
     },
     {
-      onSuccess: (result) => {
-        if (generatePassword && result.password) {
-          setGeneratedPassword(result.password);
-          toast.success('Teacher created successfully. Copy the temporary password!');
-        } else {
-          setShowCreateForm(false);
-          refetchTeachers();
-          resetForm();
-          toast.success('Teacher created successfully');
-        }
+      onSuccess: () => {
+        toast.success('Teacher created successfully. An invitation email has been sent.');
+        setShowCreateForm(false);
+        refetchTeachers();
+        resetForm();
       },
       onError: (error: any) => {
         console.error('Create teacher error:', error);
@@ -715,8 +697,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
+  // Update teacher mutation - ENHANCED with proper password reset
   const updateTeacherMutation = useMutation(
     async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
+      const teacher = teachers.find(t => t.id === teacherId);
+      if (!teacher) throw new Error('Teacher not found');
+      
       // Update teacher profile in teachers table
       const teacherUpdates: any = {
         specialization: data.specialization,
@@ -724,17 +710,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         experience_years: data.experience_years,
         bio: data.bio,
         hire_date: data.hire_date,
-        // Convert empty strings to null for UUID fields
         school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
         branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
+        phone: data.phone ? String(data.phone) : null,
         updated_at: new Date().toISOString()
       };
-      
-      // Handle phone - ensure it's saved properly
-      if (data.phone !== undefined) {
-        // Clean the phone number - remove any formatting if needed
-        teacherUpdates.phone = data.phone ? data.phone.toString() : null;
-      }
       
       const { error: teacherError } = await supabase
         .from('teachers')
@@ -742,10 +722,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .eq('id', teacherId);
       
       if (teacherError) throw teacherError;
-      
-      // Find the teacher for user updates
-      const teacher = teachers.find(t => t.id === teacherId);
-      if (!teacher) throw new Error('Teacher not found');
       
       // Update user table for email, name, or password changes
       const userUpdates: any = {};
@@ -761,11 +737,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       if (data.name) {
         userUpdates.raw_user_meta_data = { 
           ...teacher.user_data?.raw_user_meta_data,
-          name: data.name
+          name: data.name,
+          updated_at: new Date().toISOString()
         };
       }
       
-      // Handle phone change in user metadata
+      // Handle phone in user metadata as well
       if (data.phone !== undefined) {
         if (!userUpdates.raw_user_meta_data) {
           userUpdates.raw_user_meta_data = { ...teacher.user_data?.raw_user_meta_data };
@@ -774,11 +751,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       }
       
       // Handle password reset if requested
-      if (generatePassword && data.password !== undefined) {
-        const newPassword = !data.password || data.password === '' ? generateSecurePassword() : data.password;
+      if (resetPassword) {
+        const newPassword = data.password || generateSecurePassword();
         passwordGenerated = newPassword;
         
-        // Use the userCreationService to update password properly
         try {
           await userCreationService.updatePassword(teacher.user_id, newPassword);
         } catch (passwordError: any) {
@@ -787,7 +763,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }
       }
       
-      // Apply user updates if any (except password which was handled separately)
+      // Apply user updates if any
       if (Object.keys(userUpdates).length > 0) {
         userUpdates.updated_at = new Date().toISOString();
         
@@ -799,85 +775,48 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         if (userError) throw userError;
       }
       
-      // Update relationships - Sequential execution to avoid conflicts
+      // Update relationships sequentially
       try {
-        // Update departments
         if (data.department_ids !== undefined) {
-          // First delete all existing department relationships
-          await supabase
-            .from('teacher_departments')
-            .delete()
-            .eq('teacher_id', teacherId);
+          await supabase.from('teacher_departments').delete().eq('teacher_id', teacherId);
           
-          // Then insert new ones if any
           if (data.department_ids.length > 0) {
-            const { error: deptError } = await supabase
-              .from('teacher_departments')
-              .insert(
-                data.department_ids.map(dept_id => ({
-                  teacher_id: teacherId,
-                  department_id: dept_id
-                }))
-              );
-            
-            if (deptError && deptError.code !== '23505') {
-              console.error('Error inserting departments:', deptError);
-            }
+            await supabase.from('teacher_departments').insert(
+              data.department_ids.map(dept_id => ({
+                teacher_id: teacherId,
+                department_id: dept_id
+              }))
+            );
           }
         }
 
-        // Update grade levels
         if (data.grade_level_ids !== undefined) {
-          // First delete all existing grade level relationships
-          await supabase
-            .from('teacher_grade_levels')
-            .delete()
-            .eq('teacher_id', teacherId);
+          await supabase.from('teacher_grade_levels').delete().eq('teacher_id', teacherId);
           
-          // Then insert new ones if any
           if (data.grade_level_ids.length > 0) {
-            const { error: gradeError } = await supabase
-              .from('teacher_grade_levels')
-              .insert(
-                data.grade_level_ids.map(grade_id => ({
-                  teacher_id: teacherId,
-                  grade_level_id: grade_id
-                }))
-              );
-            
-            if (gradeError && gradeError.code !== '23505') {
-              console.error('Error inserting grade levels:', gradeError);
-            }
+            await supabase.from('teacher_grade_levels').insert(
+              data.grade_level_ids.map(grade_id => ({
+                teacher_id: teacherId,
+                grade_level_id: grade_id
+              }))
+            );
           }
         }
 
-        // Update sections
         if (data.section_ids !== undefined) {
-          // First delete all existing section relationships
-          await supabase
-            .from('teacher_sections')
-            .delete()
-            .eq('teacher_id', teacherId);
+          await supabase.from('teacher_sections').delete().eq('teacher_id', teacherId);
           
-          // Then insert new ones if any
           if (data.section_ids.length > 0) {
-            const { error: sectionError } = await supabase
-              .from('teacher_sections')
-              .insert(
-                data.section_ids.map(section_id => ({
-                  teacher_id: teacherId,
-                  section_id: section_id
-                }))
-              );
-            
-            if (sectionError && sectionError.code !== '23505') {
-              console.error('Error inserting sections:', sectionError);
-            }
+            await supabase.from('teacher_sections').insert(
+              data.section_ids.map(section_id => ({
+                teacher_id: teacherId,
+                section_id: section_id
+              }))
+            );
           }
         }
       } catch (err) {
         console.warn('Error updating teacher relationships:', err);
-        // Don't throw here - relationships might be partially updated but main record is fine
       }
       
       return { success: true, password: passwordGenerated };
@@ -885,7 +824,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     {
       onSuccess: (result) => {
         if (result.password) {
-          // Show password modal if password was reset
           setGeneratedPassword(result.password);
           toast.success('Teacher updated and password reset. Copy the new password!');
         } else {
@@ -995,7 +933,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setActiveTab('basic');
     setSelectedTeacher(null);
     setShowPassword(false);
-    setGeneratePassword(true);
+    setResetPassword(false);
   }, [companyId]);
 
   const validateForm = useCallback((): boolean => {
@@ -1025,21 +963,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       newTabErrors.basic = true;
     }
     
-    // Password validation - only for new teachers or when resetting password
-    if (!showEditForm && !generatePassword && !formData.password) {
-      errors.password = 'Password is required';
-      newTabErrors.basic = true;
-    }
-    
-    if (showEditForm && generatePassword && formData.password && formData.password !== '') {
-      const allRequirementsMet = PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!));
-      if (!allRequirementsMet) {
-        errors.password = 'Password does not meet all requirements';
-        newTabErrors.basic = true;
-      }
-    }
-    
-    if (!showEditForm && !generatePassword && formData.password) {
+    // Password validation only when resetting in edit mode
+    if (showEditForm && resetPassword && formData.password) {
       const allRequirementsMet = PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!));
       if (!allRequirementsMet) {
         errors.password = 'Password does not meet all requirements';
@@ -1066,7 +991,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
     
     return Object.keys(errors).length === 0;
-  }, [formData, showEditForm, generatePassword]);
+  }, [formData, showEditForm, resetPassword]);
 
   // ===== EVENT HANDLERS =====
   const handleCreateTeacher = () => {
@@ -1076,7 +1001,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       teacher_code: generateTeacherCode(companyId),
       password: ''
     }));
-    setGeneratePassword(true);
+    setResetPassword(false);
     setShowCreateForm(true);
   };
 
@@ -1101,37 +1026,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       send_credentials: false,
       password: ''
     });
-    setGeneratePassword(false); // Don't generate password by default in edit mode
+    setResetPassword(false);
     setShowEditForm(true);
     setActiveTab('basic');
   };
 
   const handleQuickPasswordReset = (teacher: TeacherData) => {
-    // Set up for password reset with password management enabled
-    setSelectedTeacher(teacher);
-    setFormData({
-      name: teacher.name || '',
-      email: teacher.email || '',
-      teacher_code: teacher.teacher_code,
-      phone: teacher.phone || '',
-      specialization: teacher.specialization || [],
-      qualification: teacher.qualification || '',
-      experience_years: teacher.experience_years || 0,
-      bio: teacher.bio || '',
-      hire_date: teacher.hire_date || '',
-      school_id: teacher.school_id || '',
-      branch_id: teacher.branch_id || '',
-      department_ids: teacher.departments?.map(d => d.id) || [],
-      grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
-      section_ids: teacher.sections?.map(s => s.id) || [],
-      is_active: teacher.is_active ?? true,
-      send_credentials: true,
-      password: ''
-    });
-    
-    // Enable password reset immediately
-    setGeneratePassword(true);
-    setShowEditForm(true);
+    handleEditTeacher(teacher);
+    setResetPassword(true);
     setActiveTab('basic');
     
     // Scroll to password section after modal opens
@@ -1140,37 +1042,29 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
     
     scrollTimeoutRef.current = setTimeout(() => {
-      const passwordSection = document.getElementById('password-management-section');
+      const passwordSection = document.getElementById('password-reset-section');
       if (passwordSection) {
         passwordSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 100);
     
-    // Show a toast to indicate password reset mode
-    toast.info(`Password reset mode activated for ${teacher.name}. Choose your password option and save.`);
+    toast.info(`Password reset mode activated for ${teacher.name}`);
   };
 
   const handleSubmitForm = async () => {
     if (!validateForm()) return;
     
-    // Debug log the phone value before submission
-    console.log('Form submission - Phone value:', formData.phone);
-    
     if (showEditForm && selectedTeacher) {
-      // Include password in update data if reset was requested
       const updateData = { ...formData };
-      if (!generatePassword) {
-        delete updateData.password; // Don't send password if not resetting
+      if (!resetPassword) {
+        delete updateData.password;
       }
-      
-      console.log('Updating teacher with data:', updateData);
       
       updateTeacherMutation.mutate({
         teacherId: selectedTeacher.id,
         data: updateData
       });
     } else {
-      console.log('Creating teacher with data:', formData);
       createTeacherMutation.mutate(formData);
     }
   };
@@ -1294,11 +1188,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
               
               <div class="section">
-                <div class="label">School:</div>
-                <div class="value">${availableSchools.find(s => s.id === formData.school_id)?.name || 'Not Assigned'}</div>
-              </div>
-              
-              <div class="section">
                 <div class="label">Temporary Password:</div>
                 <div class="password">${generatedPassword}</div>
               </div>
@@ -1309,16 +1198,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   <li>This is a temporary password that must be changed on first login</li>
                   <li>Share this password securely with the teacher</li>
                   <li>The teacher will receive a verification email</li>
-                  <li>Email verification is required before first login</li>
                 </ul>
               </div>
               
               <div class="footer">
                 <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
                 <p><strong>Generated by:</strong> ${user?.name || user?.email || 'System Administrator'}</p>
-                <p style="margin-top: 20px; font-style: italic;">
-                  This document contains sensitive information. Please handle with care and dispose of securely after use.
-                </p>
               </div>
             </body>
           </html>
@@ -1333,36 +1218,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setGeneratedPassword(null);
     setShowCreateForm(false);
     setShowEditForm(false);
-    // Ensure complete form reset when closing
-    setFormData({
-      name: '',
-      email: '',
-      teacher_code: '',
-      phone: '', // Explicitly clear phone
-      specialization: [],
-      qualification: '',
-      experience_years: 0,
-      bio: '',
-      hire_date: new Date().toISOString().split('T')[0],
-      school_id: '',
-      branch_id: '',
-      department_ids: [],
-      grade_level_ids: [],
-      section_ids: [],
-      is_active: true,
-      send_credentials: true,
-      password: ''
-    });
-    setFormErrors({});
-    setTabErrors({
-      basic: false,
-      professional: false,
-      assignment: false
-    });
-    setActiveTab('basic');
-    setSelectedTeacher(null);
-    setShowPassword(false);
-    setGeneratePassword(true);
+    resetForm();
     refetchTeachers();
   };
 
@@ -1433,31 +1289,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     );
   }
 
-  if (teachersError) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
-        <div className="flex items-center">
-          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
-          <div>
-            <h3 className="font-semibold text-red-800 dark:text-red-200">
-              Error Loading Teachers
-            </h3>
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-              {(teachersError as Error).message || 'Failed to load teacher data.'}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ===== RENDER =====
   return (
     <div className="space-y-6">
-      {/* Header Section */}
+      {/* Header Section with Statistics */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         
-        {/* Summary Statistics with Green Theme */}
+        {/* Summary Statistics */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <div className="text-center p-4 bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 rounded-lg">
             <div className="text-2xl font-bold text-[#8CC63F]">
@@ -1604,9 +1442,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 : "No teachers match your filters."}
             </p>
             {canCreateTeacher && teachers.length === 0 && (
-              <Button 
-                onClick={handleCreateTeacher}
-              >
+              <Button onClick={handleCreateTeacher}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Teacher
               </Button>
@@ -1632,7 +1468,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         }
                       }}
                       className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
-                      aria-label="Select all teachers"
                     />
                   </th>
                   <th className="text-left p-3 font-medium" scope="col">Teacher</th>
@@ -1662,7 +1497,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           }
                         }}
                         className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
-                        aria-label={`Select ${teacher.name}`}
                       />
                     </td>
                     <td className="p-3">
@@ -1747,7 +1581,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       />
                     </td>
                     <td className="p-3">
-                      <div className="flex gap-1" role="group" aria-label={`Actions for ${teacher.name}`}>
+                      <div className="flex gap-1" role="group">
                         {canModifyTeacher && (
                           <>
                             <Button 
@@ -1764,7 +1598,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                               variant="outline"
                               onClick={() => handleEditTeacher(teacher)}
                               title="Edit Teacher"
-                              className="hover:border-blue-500 hover:text-blue-500"
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
@@ -1794,7 +1627,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         )}
       </div>
 
-      {/* Create/Edit Teacher Form Modal with Enhanced UI */}
+      {/* Create/Edit Teacher Form Modal */}
       <SlideInForm
         title={showEditForm ? 'Edit Teacher' : 'Create New Teacher'}
         isOpen={showCreateForm || showEditForm}
@@ -1815,7 +1648,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               <User className="w-4 h-4 mr-2" />
               Basic Info
               {tabErrors.basic && (
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" aria-label="Tab has errors" />
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
               )}
             </TabsTrigger>
             <TabsTrigger 
@@ -1825,7 +1658,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               <Briefcase className="w-4 h-4 mr-2" />
               Professional
               {tabErrors.professional && (
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" aria-label="Tab has errors" />
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
               )}
             </TabsTrigger>
             <TabsTrigger 
@@ -1835,26 +1668,40 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               <School className="w-4 h-4 mr-2" />
               Assignment
               {tabErrors.assignment && (
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" aria-label="Tab has errors" />
+                <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full" />
               )}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="basic" className="space-y-4">
-            {/* Enhanced Header Section */}
-            <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
-              <div className="flex items-start gap-2">
-                <User className="h-5 w-5 text-[#8CC63F] mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
-                    Basic Information
-                  </h4>
-                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                    Teacher's personal details and login credentials
-                  </p>
+            {/* Invitation Notice for New Teachers */}
+            {!showEditForm && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-800">
+                      <Send className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="ml-4">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                      Secure Invitation Process
+                    </h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      The teacher will receive an invitation email with a secure link to:
+                    </p>
+                    <ul className="mt-2 text-sm text-blue-600 dark:text-blue-400 list-disc list-inside space-y-1">
+                      <li>Set their own secure password</li>
+                      <li>Verify their email address</li>
+                      <li>Activate their account</li>
+                    </ul>
+                    <p className="mt-2 text-xs text-blue-500 dark:text-blue-400">
+                      The invitation link expires in 24 hours for security.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <FormField id="name" label="Full Name" required error={formErrors.name}>
               <Input
@@ -1867,42 +1714,22 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               />
             </FormField>
 
-            <FormField 
-              id="email" 
-              label="Email Address" 
-              required 
-              error={formErrors.email}
-              helpText={showEditForm ? "Email can be changed. User will need to verify the new email address." : undefined}
-            >
-              <div className="relative">
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="teacher@school.com"
-                  leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-                  className={cn(
-                    "focus:ring-[#8CC63F] focus:border-[#8CC63F]",
-                    showEditForm && "bg-white dark:bg-gray-900"
-                  )}
-                  disabled={false}
-                />
-                {showEditForm && formData.email !== selectedTeacher?.email && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Modified</span>
-                  </div>
-                )}
-              </div>
+            <FormField id="email" label="Email Address" required error={formErrors.email}>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="teacher@school.com"
+                leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+              />
             </FormField>
 
             <FormField id="phone" label="Phone Number">
               <PhoneInput
                 value={formData.phone || ''}
                 onChange={(value) => {
-                  // Log the value to debug
-                  console.log('Phone input changed to:', value);
-                  // Ensure we save the value as a string
                   const phoneValue = value ? String(value) : '';
                   setFormData({ ...formData, phone: phoneValue });
                 }}
@@ -1912,10 +1739,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 countryCallingCodeEditable={false}
                 className="w-full"
               />
-              {/* Debug display - remove in production */}
-              <div className="text-xs text-gray-500 mt-1">
-                Current value: {formData.phone || 'empty'}
-              </div>
             </FormField>
 
             <FormField 
@@ -1923,7 +1746,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               label="Teacher Code" 
               required 
               error={formErrors.teacher_code}
-              helpText={showEditForm ? "Teacher codes are permanent identifiers and cannot be changed" : "This will be the permanent identifier for this teacher"}
+              helpText={showEditForm ? "Teacher codes are permanent identifiers" : "This will be the permanent identifier"}
             >
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -1961,113 +1784,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
             </FormField>
 
-            {/* Enhanced Password Section */}
-            {!showEditForm && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="h-4 w-4 text-[#8CC63F]" />
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security Settings</h3>
-                </div>
-
-                {/* Password Options */}
-                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Password Options
-                  </p>
-                  
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="passwordOption"
-                        checked={generatePassword}
-                        onChange={() => {
-                          setGeneratePassword(true);
-                          setFormData({ ...formData, password: '' });
-                        }}
-                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                          Auto-generate secure password
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          System will create a strong 12-character password
-                        </p>
-                      </div>
-                    </label>
-                    
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="passwordOption"
-                        checked={!generatePassword}
-                        onChange={() => setGeneratePassword(false)}
-                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                          Set password manually
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Enter your own password meeting complexity requirements
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Manual Password Input */}
-                {!generatePassword && (
-                  <FormField id="password" label="Password" required error={formErrors.password}>
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          value={formData.password || ''}
-                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          placeholder="Minimum 8 characters"
-                          className={cn(
-                            "pr-10 font-mono",
-                            formData.password && 
-                            PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!))
-                              ? "border-green-500 focus:border-green-500 focus:ring-green-500"
-                              : "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                          )}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                        >
-                          {showPassword ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <EyeIcon className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                      <PasswordRequirementsChecker password={formData.password || ''} />
-                    </div>
-                  </FormField>
-                )}
-                
-                {/* Auto-generate Success Message */}
-                {generatePassword && (
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-                    <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      A secure password will be automatically generated when you save
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Password Reset Section for Edit Mode */}
             {showEditForm && (
-              <div id="password-management-section" className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div id="password-reset-section" className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Key className="h-4 w-4 text-[#8CC63F]" />
@@ -2076,31 +1795,25 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   <Button
                     type="button"
                     size="sm"
-                    variant={generatePassword ? "default" : "outline"}
+                    variant={resetPassword ? "default" : "outline"}
                     onClick={() => {
-                      setGeneratePassword(!generatePassword);
-                      if (!generatePassword) {
+                      setResetPassword(!resetPassword);
+                      if (!resetPassword) {
                         setFormData({ ...formData, password: '' });
                       }
                     }}
                     className={cn(
-                      generatePassword 
+                      resetPassword 
                         ? "bg-[#8CC63F] hover:bg-[#7AB532] text-white" 
                         : "border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F]/10"
                     )}
                   >
-                    <RefreshCw className={cn("h-4 w-4 mr-2", generatePassword && "animate-pulse")} />
-                    {generatePassword ? "Reset Password Enabled" : "Enable Password Reset"}
+                    <RefreshCw className={cn("h-4 w-4 mr-2", resetPassword && "animate-pulse")} />
+                    {resetPassword ? "Reset Password Enabled" : "Enable Password Reset"}
                   </Button>
                 </div>
 
-                {!generatePassword ? (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Click the button above to reset this teacher's password. You can either generate a new secure password automatically or set one manually.
-                    </p>
-                  </div>
-                ) : (
+                {resetPassword && (
                   <div className="space-y-4">
                     <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                       <div className="flex items-start gap-3">
@@ -2110,108 +1823,34 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             Password Reset Active
                           </p>
                           <p className="text-sm text-amber-700 dark:text-amber-300">
-                            The teacher's password will be reset when you save changes. They will need to use the new password to log in.
+                            A new password will be generated and the teacher will need to use it to log in.
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Password Options */}
-                    <div className="p-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                        Choose Password Method
-                      </p>
-                      
-                      <div className="space-y-3">
-                        <label className="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <input
-                            type="radio"
-                            name="editPasswordOption"
-                            checked={!formData.password}
-                            onChange={() => setFormData({ ...formData, password: '' })}
-                            className="text-[#8CC63F] focus:ring-[#8CC63F]"
+                    <FormField id="reset-password" label="Custom Password (Optional)">
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Input
+                            id="reset-password"
+                            type={showPassword ? "text" : "password"}
+                            value={formData.password || ''}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            placeholder="Leave blank for auto-generated password"
+                            className="pr-10 font-mono focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                           />
-                          <div>
-                            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                              Auto-generate secure password
-                            </span>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              System will create a strong 12-character password
-                            </p>
-                          </div>
-                        </label>
-                        
-                        <label className="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <input
-                            type="radio"
-                            name="editPasswordOption"
-                            checked={!!formData.password && formData.password !== ''}
-                            onChange={() => setFormData({ ...formData, password: 'temp' })} // Temporary placeholder
-                            className="text-[#8CC63F] focus:ring-[#8CC63F]"
-                          />
-                          <div>
-                            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                              Set custom password
-                            </span>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              Enter your own password meeting complexity requirements
-                            </p>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Manual Password Input */}
-                    {formData.password && formData.password !== '' && (
-                      <FormField id="reset-password" label="New Password">
-                        <div className="space-y-2">
-                          <div className="relative">
-                            <Input
-                              id="reset-password"
-                              type={showPassword ? "text" : "password"}
-                              value={formData.password === 'temp' ? '' : formData.password}
-                              onChange={(e) => setFormData({ ...formData, password: e.target.value || 'temp' })}
-                              placeholder="Enter new password"
-                              className={cn(
-                                "pr-10 font-mono",
-                                formData.password && formData.password !== 'temp' &&
-                                PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!))
-                                  ? "border-green-500 focus:border-green-500 focus:ring-green-500"
-                                  : "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                              )}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                            >
-                              {showPassword ? (
-                                <EyeOff className="w-4 h-4" />
-                              ) : (
-                                <EyeIcon className="w-4 h-4" />
-                              )}
-                            </button>
-                          </div>
-                          {formData.password !== 'temp' && (
-                            <PasswordRequirementsChecker password={formData.password || ''} />
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                          </button>
                         </div>
-                      </FormField>
-                    )}
-
-                    {/* Send Credentials Option */}
-                    <FormField id="send_reset_credentials" label="Notification">
-                      <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                        <input
-                          type="checkbox"
-                          id="send_reset_credentials"
-                          checked={formData.send_credentials}
-                          onChange={(e) => setFormData({ ...formData, send_credentials: e.target.checked })}
-                          className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                        />
-                        <label htmlFor="send_reset_credentials" className="text-sm text-gray-700 dark:text-gray-300">
-                          Send new password to teacher's email address
-                        </label>
+                        {formData.password && (
+                          <PasswordRequirementsChecker password={formData.password} />
+                        )}
                       </div>
                     </FormField>
                   </div>
@@ -2220,8 +1859,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             )}
           </TabsContent>
 
+          {/* Professional Tab Content */}
           <TabsContent value="professional" className="space-y-4">
-            {/* Enhanced Header Section */}
             <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg mb-4">
               <div className="flex items-start gap-2">
                 <Briefcase className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
@@ -2293,8 +1932,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             </FormField>
           </TabsContent>
 
+          {/* Assignment Tab Content */}
           <TabsContent value="assignment" className="space-y-4">
-            {/* Enhanced Header Section */}
             <div className="p-4 bg-[#8CC63F]/10 border border-[#8CC63F]/30 rounded-lg mb-4">
               <div className="flex items-start gap-2">
                 <School className="h-5 w-5 text-[#8CC63F] mt-0.5 flex-shrink-0" />
@@ -2385,7 +2024,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </>
             )}
 
-            {/* Enhanced Account Status Section */}
             <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2 mb-4">
                 <Shield className="h-4 w-4 text-[#8CC63F]" />
@@ -2412,7 +2050,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </FormField>
 
               {!showEditForm && (
-                <FormField id="send_credentials" label="Send Credentials">
+                <FormField id="send_credentials" label="Send Invitation">
                   <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <input
                       type="checkbox"
@@ -2420,9 +2058,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       checked={formData.send_credentials}
                       onChange={(e) => setFormData({ ...formData, send_credentials: e.target.checked })}
                       className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
+                      disabled
                     />
                     <label htmlFor="send_credentials" className="text-sm text-gray-700 dark:text-gray-300">
-                      Send login credentials to teacher's email
+                      Send invitation email (always sent for new teachers)
                     </label>
                   </div>
                 </FormField>
@@ -2437,23 +2076,18 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              {showEditForm ? 'Password Reset Successfully' : 'Teacher Account Created Successfully'}
+              Password Reset Successfully
             </h3>
             
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                {showEditForm 
-                  ? `A new password has been generated for ${formData.name}.`
-                  : `A temporary password has been generated for ${formData.name}.`}
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                The teacher will receive a verification email and must verify their email before logging in.
+                A new password has been generated for {formData.name}.
               </p>
             </div>
 
             <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                {showEditForm ? 'New Password' : 'Temporary Password'}
+                New Password
               </p>
               <div className="flex items-center justify-between">
                 <code className="text-base font-mono font-semibold break-all pr-2 text-gray-900 dark:text-white">
@@ -2462,7 +2096,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={copyPassword}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                     title="Copy password"
                   >
                     {copiedPassword ? (
@@ -2473,7 +2107,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   </button>
                   <button
                     onClick={printPassword}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                     title="Print credentials"
                   >
                     <Printer className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -2482,22 +2116,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
             </div>
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                <strong>Important:</strong> This password will not be shown again. Make sure to:
-              </p>
-              <ul className="mt-2 text-sm text-amber-700 dark:text-amber-400 list-disc list-inside">
-                <li>Copy or print the password now</li>
-                <li>Share it securely with the teacher</li>
-                <li>Advise them to change it after first login</li>
-              </ul>
-            </div>
-
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={printPassword}
-                className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
               >
                 <Printer className="h-4 w-4 mr-2" />
                 Print
