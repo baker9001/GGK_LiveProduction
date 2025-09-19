@@ -326,17 +326,36 @@ export default function SignInPage() {
       });
       
       if (error) {
-        console.error('Resend verification error:', error);
-        toast.error('Failed to send verification email.');
+        setError(error.message);
       } else {
         toast.success('Verification email sent! Please check your inbox.');
-        toast.info('Check your spam folder if you don\'t see it.');
-        setVerificationNeeded(false);
         setError(null);
       }
     } catch (err) {
-      console.error('Resend error:', err);
-      toast.error('Failed to send verification email.');
+      setError('Failed to send verification email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleDevLogin = async () => {
+    setLoading(true);
+    
+    try {
+      // Create a test user for development
+      const testUser: User = {
+        id: 'dev-user-ssa',
+        email: 'dev@ggklearning.com',
+        name: 'Development Admin',
+        role: 'SSA',
+        userType: 'system'
+      };
+      
+      setAuthenticatedUser(testUser);
+      toast.success('Development login successful!');
+      navigate('/app/system-admin/dashboard', { replace: true });
+    } catch (err) {
+      setError('Development login failed');
     } finally {
       setLoading(false);
     }
@@ -366,30 +385,6 @@ export default function SignInPage() {
         return '/app/student-module/dashboard';
       default:
         return '/app/dashboard';
-    }
-  };
-
-  const handleDevLogin = async () => {
-    setLoading(true);
-    
-    try {
-      // Create a test user for development
-      const testUser: User = {
-        id: 'dev-user-ssa',
-        email: 'dev@ggklearning.com',
-        name: 'Development Admin',
-        role: 'SSA',
-        userType: 'system'
-      };
-      
-      setAuthenticatedUser(testUser);
-      toast.success('Development login successful!');
-      navigate('/app/system-admin/dashboard', { replace: true });
-    } catch (err) {
-      console.error('Dev login error:', err);
-      setError('Development login failed.');
-    } finally {
-      setLoading(false);
     }
   };
   
