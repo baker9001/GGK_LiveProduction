@@ -243,7 +243,7 @@ export default function ResourcesPage() {
                 <Button
                   onClick={() => navigate('/about')}
                   variant="outline"
-      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
+                  className="border-white/30 text-white hover:bg-white/10"
                   rightIcon={<ExternalLink className="h-5 w-5" />}
                 >
                   Learn More
@@ -253,7 +253,9 @@ export default function ResourcesPage() {
           </div>
         </div>
       </div>
-      </div>
+
+      <footer className="bg-gray-900/95 text-white py-12 backdrop-blur-sm">
+      </footer>
     </div>
   );
 }
