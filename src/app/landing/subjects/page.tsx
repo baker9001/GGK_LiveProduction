@@ -1,232 +1,461 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigation } from '../../../components/shared/Navigation';
 import { 
-  GraduationCap, 
+  Atom, 
+  FlaskConical, 
+  Microscope, 
+  Globe, 
   BookOpen, 
   Calculator, 
-  Atom, 
-  Globe, 
-  Palette, 
-  Music, 
-  Activity,
-  ArrowRight,
-  CheckCircle
+  Computer, 
+  Languages, 
+  Palette,
+  Music,
+  Trophy,
+  Users,
+  Building,
+  TrendingUp,
+  MapPin,
+  Clock,
+  Award,
+  CheckCircle,
+  Star
 } from 'lucide-react';
-import { Button } from '../../../components/shared/Button';
-import { Navigation } from '../../../components/shared/Navigation';
 
-const subjects = [
+const subjectCategories = [
   {
-    icon: Calculator,
-    name: 'Mathematics',
-    description: 'Comprehensive math curriculum from basic arithmetic to advanced calculus',
-    levels: ['Primary', 'Secondary', 'Advanced'],
-    color: 'from-blue-500 to-blue-600'
+    title: "Sciences",
+    description: "Comprehensive scientific education with practical laboratory work",
+    icon: <Atom className="h-8 w-8" />,
+    color: "from-blue-500 to-cyan-500",
+    subjects: [
+      {
+        name: "Physics",
+        code: "0625",
+        description: "Explore the fundamental principles of matter, energy, and their interactions. Covers mechanics, waves, electricity, magnetism, and atomic physics.",
+        keyTopics: ["Mechanics", "Thermal Physics", "Waves", "Electricity & Magnetism", "Atomic Physics"],
+        icon: <Atom className="h-5 w-5" />
+      },
+      {
+        name: "Chemistry",
+        code: "0620",
+        description: "Study the composition, structure, and properties of matter. Includes organic chemistry, inorganic chemistry, and physical chemistry.",
+        keyTopics: ["Atomic Structure", "Chemical Bonding", "Organic Chemistry", "Acids & Bases", "Metals"],
+        icon: <FlaskConical className="h-5 w-5" />
+      },
+      {
+        name: "Biology",
+        code: "0610",
+        description: "Investigate living organisms and life processes. Covers cell biology, genetics, ecology, and human physiology.",
+        keyTopics: ["Cell Biology", "Human Physiology", "Plants", "Ecology", "Genetics & Evolution"],
+        icon: <Microscope className="h-5 w-5" />
+      },
+      {
+        name: "Co-ordinated Sciences (Double Award)",
+        code: "0654",
+        description: "Integrated approach to Physics, Chemistry, and Biology for students seeking broad scientific knowledge.",
+        keyTopics: ["Integrated Sciences", "Practical Skills", "Scientific Method", "Environmental Science"],
+        icon: <Star className="h-5 w-5" />
+      }
+    ]
   },
   {
-    icon: Atom,
-    name: 'Science',
-    description: 'Physics, Chemistry, and Biology with hands-on experiments',
-    levels: ['General Science', 'Physics', 'Chemistry', 'Biology'],
-    color: 'from-green-500 to-green-600'
+    title: "Mathematics & Computing",
+    description: "Develop analytical thinking and problem-solving skills",
+    icon: <Calculator className="h-8 w-8" />,
+    color: "from-green-500 to-emerald-500",
+    subjects: [
+      {
+        name: "Mathematics",
+        code: "0580",
+        description: "Core mathematical concepts including number, algebra, geometry, and statistics. Essential foundation for further studies.",
+        keyTopics: ["Number", "Algebra", "Geometry", "Mensuration", "Trigonometry", "Statistics", "Probability"],
+        icon: <Calculator className="h-5 w-5" />
+      },
+      {
+        name: "Additional Mathematics",
+        code: "0606",
+        description: "Advanced mathematical concepts for students planning to pursue mathematics, sciences, or engineering at A-Level.",
+        keyTopics: ["Functions", "Quadratic Functions", "Equations", "Inequalities", "Indices & Surds", "Factors", "Simultaneous Equations"],
+        icon: <TrendingUp className="h-5 w-5" />
+      },
+      {
+        name: "Computer Science",
+        code: "0478",
+        description: "Programming, computational thinking, and understanding of computer systems and networks.",
+        keyTopics: ["Programming", "Algorithms", "Data Representation", "Hardware & Software", "Networks"],
+        icon: <Computer className="h-5 w-5" />
+      }
+    ]
   },
   {
-    icon: Globe,
-    name: 'Geography',
-    description: 'World geography, climate studies, and environmental science',
-    levels: ['Physical', 'Human', 'Environmental'],
-    color: 'from-emerald-500 to-emerald-600'
+    title: "Languages",
+    description: "Develop communication skills in multiple languages",
+    icon: <Languages className="h-8 w-8" />,
+    color: "from-purple-500 to-pink-500",
+    subjects: [
+      {
+        name: "English First Language",
+        code: "0500",
+        description: "Develop advanced reading, writing, speaking, and listening skills in English for native or near-native speakers.",
+        keyTopics: ["Reading Comprehension", "Creative Writing", "Summary Writing", "Language Analysis", "Speaking & Listening"],
+        icon: <BookOpen className="h-5 w-5" />
+      },
+      {
+        name: "English as a Second Language",
+        code: "0510/0511",
+        description: "Build English language proficiency for non-native speakers across all four language skills.",
+        keyTopics: ["Listening Skills", "Reading Skills", "Writing Skills", "Speaking Skills", "Grammar & Vocabulary"],
+        icon: <Languages className="h-5 w-5" />
+      },
+      {
+        name: "Arabic First Language",
+        code: "0508",
+        description: "Comprehensive Arabic language study including literature, composition, and linguistic analysis.",
+        keyTopics: ["Arabic Literature", "Composition", "Grammar", "Poetry Analysis", "Modern Arabic"],
+        icon: <BookOpen className="h-5 w-5" />
+      },
+      {
+        name: "French Foreign Language",
+        code: "0520",
+        description: "Develop practical communication skills in French for everyday situations and academic contexts.",
+        keyTopics: ["Conversation", "Reading Comprehension", "Written Expression", "Grammar", "Cultural Studies"],
+        icon: <Globe className="h-5 w-5" />
+      }
+    ]
   },
   {
-    icon: BookOpen,
-    name: 'Literature',
-    description: 'Language arts, reading comprehension, and creative writing',
-    levels: ['Reading', 'Writing', 'Literature Analysis'],
-    color: 'from-purple-500 to-purple-600'
+    title: "Humanities & Social Sciences",
+    description: "Understand human society, culture, and historical development",
+    icon: <Globe className="h-8 w-8" />,
+    color: "from-orange-500 to-red-500",
+    subjects: [
+      {
+        name: "History",
+        code: "0470",
+        description: "Study significant historical events, developments, and their impact on the modern world.",
+        keyTopics: ["19th Century History", "20th Century History", "International Relations", "Social & Economic History"],
+        icon: <Clock className="h-5 w-5" />
+      },
+      {
+        name: "Geography",
+        code: "0460",
+        description: "Explore physical and human geography, environmental issues, and geographical skills.",
+        keyTopics: ["Physical Geography", "Human Geography", "Environmental Management", "Geographical Skills"],
+        icon: <MapPin className="h-5 w-5" />
+      },
+      {
+        name: "Economics",
+        code: "0455",
+        description: "Understand economic principles, market systems, and global economic issues.",
+        keyTopics: ["Basic Economic Problem", "Allocation of Resources", "Microeconomic Decision Makers", "Government & Macroeconomy"],
+        icon: <TrendingUp className="h-5 w-5" />
+      },
+      {
+        name: "Business Studies",
+        code: "0450",
+        description: "Learn about business operations, entrepreneurship, and commercial decision-making.",
+        keyTopics: ["Business Activity", "People in Business", "Marketing", "Operations Management", "Financial Information"],
+        icon: <Building className="h-5 w-5" />
+      },
+      {
+        name: "Sociology",
+        code: "0495",
+        description: "Examine social structures, institutions, and processes that shape human behavior and society.",
+        keyTopics: ["Family", "Education", "Crime & Deviance", "Media", "Social Stratification"],
+        icon: <Users className="h-5 w-5" />
+      }
+    ]
   },
   {
-    icon: Palette,
-    name: 'Arts',
-    description: 'Visual arts, design principles, and creative expression',
-    levels: ['Drawing', 'Painting', 'Digital Art'],
-    color: 'from-pink-500 to-pink-600'
+    title: "Creative & Practical Arts",
+    description: "Express creativity and develop practical skills",
+    icon: <Palette className="h-8 w-8" />,
+    color: "from-pink-500 to-rose-500",
+    subjects: [
+      {
+        name: "Art & Design",
+        code: "0400",
+        description: "Develop artistic skills, creativity, and visual communication through various media and techniques.",
+        keyTopics: ["Drawing", "Painting", "Printmaking", "3D Design", "Photography", "Digital Art"],
+        icon: <Palette className="h-5 w-5" />
+      },
+      {
+        name: "Music",
+        code: "0410",
+        description: "Study music theory, composition, and performance across various musical styles and traditions.",
+        keyTopics: ["Music Theory", "Composition", "Performance", "Listening & Analysis", "World Music"],
+        icon: <Music className="h-5 w-5" />
+      },
+      {
+        name: "Physical Education",
+        code: "0413",
+        description: "Develop physical skills, understanding of sports science, and knowledge of health and fitness.",
+        keyTopics: ["Practical Performance", "Exercise Physiology", "Skill Acquisition", "Sports Psychology", "Health & Fitness"],
+        icon: <Trophy className="h-5 w-5" />
+      }
+    ]
+  }
+];
+
+const features = [
+  {
+    icon: <Award className="h-6 w-6" />,
+    title: "Cambridge Certified",
+    description: "All our IGCSE courses are aligned with Cambridge International curriculum standards"
   },
   {
-    icon: Music,
-    name: 'Music',
-    description: 'Music theory, instruments, and composition',
-    levels: ['Theory', 'Performance', 'Composition'],
-    color: 'from-indigo-500 to-indigo-600'
+    icon: <Users className="h-6 w-6" />,
+    title: "Expert Teachers",
+    description: "Qualified educators with extensive IGCSE teaching experience and subject expertise"
   },
   {
-    icon: Activity,
-    name: 'Physical Education',
-    description: 'Sports, fitness, and health education programs',
-    levels: ['Fitness', 'Team Sports', 'Individual Sports'],
-    color: 'from-orange-500 to-orange-600'
+    icon: <BookOpen className="h-6 w-6" />,
+    title: "Comprehensive Resources",
+    description: "Access to textbooks, past papers, practical equipment, and digital learning materials"
   },
   {
-    icon: Globe,
-    name: 'Social Studies',
-    description: 'History, civics, and cultural studies',
-    levels: ['History', 'Civics', 'Cultural Studies'],
-    color: 'from-teal-500 to-teal-600'
+    icon: <CheckCircle className="h-6 w-6" />,
+    title: "Proven Results",
+    description: "Consistent high achievement rates in IGCSE examinations with excellent university placement"
   }
 ];
 
 export default function SubjectsPage() {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
       
-      <div className="relative">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
-            alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none"
-            draggable="false"
-            onContextMenu={(e) => e.preventDefault()}
-            style={{ userSelect: 'none' }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Header Section */}
+        <div className="text-center mb-16">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            IGCSE Subjects We Offer
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
+            Our comprehensive IGCSE curriculum is designed to provide students with a broad, balanced education 
+            that develops critical thinking, creativity, and practical skills. All subjects follow the Cambridge 
+            International IGCSE syllabus, ensuring global recognition and excellent preparation for A-Levels.
+          </p>
         </div>
 
-        {/* Content */}
-        <div className="relative z-10 py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center justify-center mb-6">
-                <GraduationCap className="h-16 w-16 text-[#8CC63F]" />
+        {/* Key Features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          {features.map((feature, index) => (
+            <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="w-12 h-12 bg-[#8CC63F]/10 rounded-lg flex items-center justify-center mb-4">
+                <div className="text-[#8CC63F]">
+                  {feature.icon}
+                </div>
               </div>
-              <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-                Our Subjects
-              </h1>
-              <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-                Comprehensive curriculum designed to inspire learning and foster academic excellence across all disciplines
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                {feature.description}
               </p>
             </div>
+          ))}
+        </div>
 
-            {/* Subjects Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-16">
-              {subjects.map((subject, index) => {
-                const IconComponent = subject.icon;
-                return (
-                  <div
-                    key={index}
-                    className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-6 hover:bg-white/15 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
-                  >
-                    <div className={`w-12 h-12 bg-gradient-to-r ${subject.color} rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                      <IconComponent className="h-6 w-6 text-white" />
-                    </div>
-                    
-                    <h3 className="text-xl font-semibold text-white mb-3">
-                      {subject.name}
-                    </h3>
-                    
-                    <p className="text-gray-300 text-sm mb-4 leading-relaxed">
-                      {subject.description}
-                    </p>
-                    
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Available Levels:
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {subject.levels.map((level, levelIndex) => (
-                          <span
-                            key={levelIndex}
-                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#8CC63F]/20 text-[#8CC63F] border border-[#8CC63F]/30"
-                          >
-                            {level}
-                          </span>
-                        ))}
+        {/* Subject Categories */}
+        <div className="space-y-12">
+          {subjectCategories.map((category, categoryIndex) => (
+            <div key={categoryIndex} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              {/* Category Header */}
+              <div className={`bg-gradient-to-r ${category.color} p-6 text-white`}>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white/20 rounded-lg flex items-center justify-center">
+                    {category.icon}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">{category.title}</h2>
+                    <p className="text-white/90">{category.description}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Subjects Grid */}
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {category.subjects.map((subject, subjectIndex) => (
+                    <div key={subjectIndex} className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-[#8CC63F]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="text-[#8CC63F]">
+                            {subject.icon}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {subject.name}
+                            </h3>
+                            <span className="px-2 py-1 bg-[#8CC63F]/10 text-[#8CC63F] text-xs font-medium rounded-full">
+                              {subject.code}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 leading-relaxed">
+                            {subject.description}
+                          </p>
+                          
+                          {/* Key Topics */}
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                              Key Topics:
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {subject.keyTopics.map((topic, topicIndex) => (
+                                <span 
+                                  key={topicIndex}
+                                  className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-md"
+                                >
+                                  {topic}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Features Section */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-8 mb-16">
-              <h2 className="text-3xl font-bold text-white text-center mb-8">
-                Why Choose Our Curriculum?
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="h-8 w-8 text-[#8CC63F]" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">
-                    Standards-Aligned
-                  </h3>
-                  <p className="text-gray-300">
-                    All subjects align with international educational standards and best practices
-                  </p>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <BookOpen className="h-8 w-8 text-[#8CC63F]" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">
-                    Interactive Learning
-                  </h3>
-                  <p className="text-gray-300">
-                    Engaging multimedia content and interactive exercises for better understanding
-                  </p>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Activity className="h-8 w-8 text-[#8CC63F]" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-3">
-                    Progress Tracking
-                  </h3>
-                  <p className="text-gray-300">
-                    Comprehensive analytics to monitor student progress and performance
-                  </p>
+                  ))}
                 </div>
               </div>
             </div>
+          ))}
+        </div>
 
-            {/* Call to Action */}
+        {/* Assessment Information */}
+        <div className="mt-16 bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB635]/10 dark:from-[#8CC63F]/20 dark:to-[#7AB635]/20 rounded-xl p-8 border border-[#8CC63F]/30 dark:border-[#8CC63F]/40">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              IGCSE Assessment & Certification
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+              Cambridge IGCSE qualifications are recognized by universities and employers worldwide. 
+              Our assessment approach ensures students are well-prepared for examinations and future academic success.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
-              <h2 className="text-3xl font-bold text-white mb-6">
-                Ready to Get Started?
-              </h2>
-              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                Join thousands of educators and students who are already experiencing the future of learning
+              <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="h-8 w-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Continuous Assessment
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                Regular coursework, practical assessments, and mock examinations to track progress
               </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  onClick={() => navigate('/signin')}
-                  className="bg-[#8CC63F] hover:bg-[#7AB635] text-white px-8 py-3 text-lg"
-                  rightIcon={<ArrowRight className="h-5 w-5" />}
-                >
-                  Sign In to Explore
-                </Button>
-                
-                <Button
-                  onClick={() => navigate('/contact')}
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10 px-8 py-3 text-lg"
-                >
-                  Contact Us
-                </Button>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Award className="h-8 w-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                External Examinations
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                Cambridge International examinations held in May/June and October/November sessions
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trophy className="h-8 w-8 text-[#8CC63F]" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Global Recognition
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                Internationally recognized qualifications accepted by top universities worldwide
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Subject Selection Guidance */}
+        <div className="mt-16 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
+            Subject Selection Guidance
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Core Subjects (Recommended for All Students)
+              </h3>
+              <ul className="space-y-2">
+                <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
+                  English First Language or English as a Second Language
+                </li>
+                <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
+                  Mathematics
+                </li>
+                <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
+                  At least one Science subject
+                </li>
+                <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
+                  One Humanities subject
+                </li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Typical Subject Combinations
+              </h3>
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Science Track</h4>
+                  <p className="text-blue-700 dark:text-blue-300 text-xs">
+                    Mathematics, Physics, Chemistry, Biology, English
+                  </p>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <h4 className="font-medium text-green-900 dark:text-green-100 text-sm">Business Track</h4>
+                  <p className="text-green-700 dark:text-green-300 text-xs">
+                    Mathematics, Economics, Business Studies, English, Geography
+                  </p>
+                </div>
+                <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <h4 className="font-medium text-purple-900 dark:text-purple-100 text-sm">Humanities Track</h4>
+                  <p className="text-purple-700 dark:text-purple-300 text-xs">
+                    English, History, Geography, Sociology, Foreign Language
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Call to Action */}
+        <div className="mt-16 text-center">
+          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-xl p-8 text-white">
+            <h2 className="text-2xl font-bold mb-4">
+              Ready to Begin Your IGCSE Journey?
+            </h2>
+            <p className="text-white/90 mb-6 max-w-2xl mx-auto">
+              Our academic advisors are here to help you choose the right combination of subjects 
+              based on your interests, strengths, and future career aspirations.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button className="bg-white text-[#8CC63F] px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                Schedule Consultation
+              </button>
+              <button className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors">
+                Download Prospectus
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
