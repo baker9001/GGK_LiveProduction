@@ -7,7 +7,6 @@ import {
   MapPin, 
   Send,
   User
-  Send, 
   MessageSquare,
   Building,
   Globe,
