@@ -23,7 +23,7 @@ const contactInfo = [
   {
     icon: Mail,
     title: 'Email Us',
-    details: ['info@ggklearning.com', 'support@ggklearning.com'],
+    details: ['info@ggknowledge.com', 'support@ggknowledge.com'],
     description: 'Get in touch via email for general inquiries or support'
   },
   {
