@@ -1,13 +1,8 @@
 /**
- * GGK Learning Platform - Enhanced Landing Pages Bundle
- * Complete landing page system with all tabs updated for IGCSE/Edexcel/Cambridge marketing
- * Version: 2.0
- * Features: SEO optimized, unified UI/UX, comprehensive educational content
+ * GGK Learning Platform - Enhanced Landing Page with Fixed Images
+ * Includes fallback images and better error handling
  */
 
-// ======================================
-// FILE 1: MAIN LANDING PAGE - /src/app/landing/page.tsx
-// ======================================
 import React, { useState, useEffect, memo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -18,46 +13,48 @@ import {
 import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
 
-// Image Cache Manager (kept as is)
+// Fallback image for subjects
+const FALLBACK_IMAGE = "https://images.pexels.com/photos/256395/pexels-photo-256395.jpeg?auto=compress&cs=tinysrgb&w=600";
+
+// Alternative image sources (using Pexels for reliability)
+const IMAGE_SOURCES = {
+  mathematics: "https://images.pexels.com/photos/3729557/pexels-photo-3729557.jpeg?auto=compress&cs=tinysrgb&w=600",
+  physics: "https://images.pexels.com/photos/256381/pexels-photo-256381.jpeg?auto=compress&cs=tinysrgb&w=600",
+  chemistry: "https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg?auto=compress&cs=tinysrgb&w=600",
+  biology: "https://images.pexels.com/photos/2280568/pexels-photo-2280568.jpeg?auto=compress&cs=tinysrgb&w=600",
+  english: "https://images.pexels.com/photos/256455/pexels-photo-256455.jpeg?auto=compress&cs=tinysrgb&w=600",
+  computerScience: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=600",
+  economics: "https://images.pexels.com/photos/210574/pexels-photo-210574.jpeg?auto=compress&cs=tinysrgb&w=600",
+  business: "https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=600",
+  history: "https://images.pexels.com/photos/256431/pexels-photo-256431.jpeg?auto=compress&cs=tinysrgb&w=600",
+  geography: "https://images.pexels.com/photos/269633/pexels-photo-269633.jpeg?auto=compress&cs=tinysrgb&w=600",
+  french: "https://images.pexels.com/photos/256417/pexels-photo-256417.jpeg?auto=compress&cs=tinysrgb&w=600",
+  spanish: "https://images.pexels.com/photos/256408/pexels-photo-256408.jpeg?auto=compress&cs=tinysrgb&w=600",
+  arabic: "https://images.pexels.com/photos/256450/pexels-photo-256450.jpeg?auto=compress&cs=tinysrgb&w=600",
+  environmental: "https://images.pexels.com/photos/886521/pexels-photo-886521.jpeg?auto=compress&cs=tinysrgb&w=600"
+};
+
+// Simplified Image Cache Manager
 class ImageCacheManager {
   private cache: Map<string, string> = new Map();
-  private loading: Set<string> = new Set();
-
+  
   async preloadImage(src: string): Promise<string> {
     if (this.cache.has(src)) {
       return this.cache.get(src)!;
     }
 
-    if (this.loading.has(src)) {
-      return new Promise((resolve) => {
-        const checkInterval = setInterval(() => {
-          if (this.cache.has(src)) {
-            clearInterval(checkInterval);
-            resolve(this.cache.get(src)!);
-          }
-        }, 50);
-      });
-    }
-
-    this.loading.add(src);
-
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         this.cache.set(src, src);
-        this.loading.delete(src);
         resolve(src);
       };
       img.onerror = () => {
-        this.loading.delete(src);
-        reject(new Error(`Failed to load image: ${src}`));
+        // Return fallback on error
+        resolve(FALLBACK_IMAGE);
       };
       img.src = src;
     });
-  }
-
-  async preloadImages(srcs: string[]): Promise<void> {
-    await Promise.allSettled(srcs.map(src => this.preloadImage(src)));
   }
 
   isCached(src: string): boolean {
@@ -67,171 +64,139 @@ class ImageCacheManager {
 
 const imageCache = new ImageCacheManager();
 
-const PLACEHOLDER_SHIMMER = `data:image/svg+xml;base64,${btoa(`
-  <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="g">
-        <stop stop-color="#e5e7eb" offset="20%" />
-        <stop stop-color="#f3f4f6" offset="50%" />
-        <stop stop-color="#e5e7eb" offset="70%" />
-      </linearGradient>
-    </defs>
-    <rect width="400" height="300" fill="#f3f4f6" />
-    <rect id="r" width="400" height="300" fill="url(#g)">
-      <animate attributeName="x" from="-400" to="400" dur="1s" repeatCount="indefinite" />
-    </rect>
-  </svg>
-`)}`;
-
-// Updated Subjects Data with IGCSE/Cambridge/Edexcel focus
+// Updated Subjects Data with reliable image sources
 const ALL_SUBJECTS = [
   // Core IGCSE Subjects (Priority)
   { 
     title: "IGCSE Mathematics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.mathematics,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Complete Cambridge & Edexcel IGCSE syllabus 0580/0606/4MA1",
     badges: ["Past Papers", "Video Solutions", "Mock Exams"],
     priority: true
   },
   { 
     title: "IGCSE Physics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Physics.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL1BoeXNpY3MucG5nIiwiaWF0IjoxNzU3MTg4MzUyLCJleHAiOjE3ODg3MjQzNTJ9.U37lIVOO3XcNBRuz7Z47uaQ1TbCTUXFZrAVc_wXos1U",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.physics,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0625 & Edexcel 4PH1 complete coverage",
     badges: ["Lab Simulations", "Animated Concepts", "Past Papers"],
     priority: true
   },
   { 
     title: "IGCSE Chemistry", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Chemistry.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NoZW1pc3RyeS5qcGciLCJpYXQiOjE3NTcxODUzMDYsImV4cCI6MTc4ODcyMTMwNn0.aCmBCHzWW-7GgBOxXu50qoOqv8_JRyW36cKU3r9xtoo",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.chemistry,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Master Cambridge 0620 & Edexcel 4CH1 syllabi",
     badges: ["Virtual Labs", "3D Molecules", "Exam Practice"],
     priority: true
   },
   { 
     title: "IGCSE Biology", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Biology.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Jpb2xvZ3kuanBnIiwiaWF0IjoxNzU3MTg1MjgzLCJleHAiOjE3ODg3MjEyODN9.YtCjrJOWsEGmJPFwwwzrRLDgAVynGIqqW1sgX0vepx0",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.biology,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0610 & Edexcel 4BI1 comprehensive resources",
     badges: ["Interactive Diagrams", "Video Lessons", "Topic Tests"],
     priority: true
   },
   { 
     title: "IGCSE English Language", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20(2).jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0VuZ2xpc2ggKDIpLmpwZyIsImlhdCI6MTc1NzE4NTM4MywiZXhwIjoxNzg4NzIxMzgzfQ.4_mdpJQeOjQpd4cNvb_3Hmth_mhgM2nZIUL22l3VRs8",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.english,
+    fallbackImage: FALLBACK_IMAGE,
     description: "First & Second Language 0500/0510 exam preparation",
     badges: ["Writing Guides", "Speaking Practice", "Model Answers"],
     priority: true
   },
   { 
     title: "IGCSE Computer Science", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Computer%20Science.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0NvbXB1dGVyIFNjaWVuY2UucG5nIiwiaWF0IjoxNzU3MTg3OTI2LCJleHAiOjE3ODg3MjM5MjZ9.aOKRnQoiyeDCBNrcFt0jijMem6t144i7ECb3BwjRwS0",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.computerScience,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0478 & Edexcel programming & theory",
     badges: ["Coding Practice", "Algorithm Visualizations", "Projects"],
     priority: true
   },
   { 
     title: "IGCSE Economics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Economics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL0Vjb25vbWljcy5qcGciLCJpYXQiOjE3NTcxODUzNjAsImV4cCI6MTc4ODcyMTM2MH0.lBtveJ3q_0feZAwNaTvC-C1hPea5nhoKGDl30JSYfcQ",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.economics,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0455 micro & macro economics mastery",
     badges: ["Case Studies", "Data Response", "Essay Writing"],
     priority: true
   },
   { 
     title: "IGCSE Business Studies", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Business%20Studies.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0J1c2luZXNzIFN0dWRpZXMuanBnIiwiaWF0IjoxNzU3MTg1MjkxLCJleHAiOjE3ODg3MjEyOTF9.Yq_LYb0s9NORcdQqIR1z_0K7O6FfAJbub8O4YKOIAzQ",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.business,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0450 & Edexcel business concepts",
     badges: ["Real Cases", "Financial Analysis", "Marketing Plans"],
     priority: true
   },
   { 
     title: "IGCSE History", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/History.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0hpc3RvcnkuanBnIiwiaWF0IjoxNzU3MTg1NTUwLCJleHAiOjE3ODg3MjE1NTB9.4rtaz4CoPJM2QPqKGz5Lg3kvBnDWsGHNDCfyz_nFVTc",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.history,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0470 20th century world history",
     badges: ["Source Analysis", "Essay Templates", "Timeline Tools"],
     priority: true
   },
   { 
     title: "IGCSE Geography", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Geography.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0dlb2dyYXBoeS5qcGciLCJpYXQiOjE3NTcxODU1MzcsImV4cCI6MTc4ODcyMTUzN30.nvxNl104LZzhXX0pcgWjQfq-YFsIEVLdUYICy_hlsJE",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.geography,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0460 physical & human geography",
     badges: ["Map Skills", "Case Studies", "Fieldwork Guides"],
     priority: true
   },
   { 
     title: "IGCSE French", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/French.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0ZyZW5jaC5qcGciLCJpYXQiOjE3NTcxODU1MjMsImV4cCI6MTc4ODcyMTUyM30.8qvxK-a4yjwIJ-rpleC62rFIKSKya1FeuYoJTwG4HXw",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.french,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0520 French language mastery",
     badges: ["Audio Practice", "Grammar Drills", "Speaking Tests"],
     priority: true
   },
   { 
     title: "IGCSE Spanish", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Spanish%20language.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL1NwYW5pc2ggbGFuZ3VhZ2UuanBnIiwiaWF0IjoxNzU3MTg1NjM0LCJleHAiOjE3ODg3MjE2MzR9.9ikJE82R8-EsPZUyqEHnhNdfbk4VR5LU0dPIAjCnaLE",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.spanish,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0530 Spanish comprehensive course",
     badges: ["Interactive Lessons", "Vocabulary Games", "Exam Prep"],
     priority: true
   },
   { 
     title: "IGCSE Arabic", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Arabic.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0FyYWJpYy5qcGciLCJpYXQiOjE3NTcxODUyNTcsImV4cCI6MTc4ODcyMTI1N30.pkixwXYfE5rWZ_YHhogdnlqXJx7a7IDtqSrVjDts2tI",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.arabic,
+    fallbackImage: FALLBACK_IMAGE,
     description: "First & Foreign Language Arabic 0508/0544",
     badges: ["Native Speakers", "Grammar Mastery", "Writing Skills"],
     priority: true
   },
   { 
     title: "IGCSE Additional Mathematics", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Mathematics.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL01hdGhlbWF0aWNzLmpwZyIsImlhdCI6MTc1NzE4NzQ2NywiZXhwIjoxNzg4NzIzNDY3fQ.RUumSbec_LHMbhPkRwDwv-5pzVihAuOBm35okYzKrVU",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.mathematics,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0606 advanced mathematics preparation",
     badges: ["Calculus", "Vectors", "A-Level Bridge"],
     priority: true
   },
-  // Additional subjects (Non-priority)
   { 
     title: "IGCSE Environmental Management", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Environmental%20Management.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0Vudmlyb25tZW50YWwgTWFuYWdlbWVudC5qcGciLCJpYXQiOjE3NTcxODU0NzIsImV4cCI6MTc4ODcyMTQ3Mn0.O9Kcqs-qnZqGEWbg1l1c3uWmbMkPdoHLQXpPqExy9l4",
-    placeholder: PLACEHOLDER_SHIMMER,
+    image: IMAGE_SOURCES.environmental,
+    fallbackImage: FALLBACK_IMAGE,
     description: "Cambridge 0680 sustainability & environmental science",
-    badges: ["Case Studies", "Field Work", "Project Ideas"]
-  },
-  { 
-    title: "IGCSE English Literature", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/English%20(2).jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0VuZ2xpc2ggKDIpLmpwZyIsImlhdCI6MTc1NzE4NTM4MywiZXhwIjoxNzg4NzIxMzgzfQ.4_mdpJQeOjQpd4cNvb_3Hmth_mhgM2nZIUL22l3VRs8",
-    placeholder: PLACEHOLDER_SHIMMER,
-    description: "Cambridge 0475 poetry, prose & drama analysis",
-    badges: ["Text Analysis", "Essay Writing", "Context Guides"]
-  },
-  { 
-    title: "IGCSE Agriculture", 
-    image: "https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/Agriculture.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwtOiJzaWduaW5nL0FncmljdWx0dXJlLmpwZyIsImlhdCI6MTc1NzE4NTI0OCwiZXhwIjoxNzg4NzIxMjQ4fQ.orw7nqPp0Mlx-uXoqRVI9fpGL9GrsutVK74Ow9mtpcg",
-    placeholder: PLACEHOLDER_SHIMMER,
-    description: "Cambridge 0600 agricultural science & farming",
-    badges: ["Practical Skills", "Crop Science", "Animal Husbandry"]
-  },
-  // ... continue with remaining subjects
+    badges: ["Case Studies", "Field Work", "Project Ideas"],
+    priority: true
+  }
 ];
 
 const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority);
-const ADDITIONAL_SUBJECTS = ALL_SUBJECTS.filter(s => !s.priority);
 
 // Enhanced Testimonials
 const testimonials = [
   {
     name: "Sarah Johnson",
     role: "IGCSE Graduate - 9A*s",
-    image: "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg",
+    image: "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400",
     content: "GGK Learning's past papers database and video solutions were instrumental in achieving straight A*s in my IGCSE exams. The Cambridge and Edexcel materials were perfectly aligned!",
     rating: 5,
     subject: "Cambridge IGCSE",
@@ -240,7 +205,7 @@ const testimonials = [
   {
     name: "Ahmed Al-Rashid",
     role: "A-Level Student",
-    image: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg",
+    image: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=400",
     content: "The animated chemistry videos and virtual lab simulations made complex topics crystal clear. Moving from IGCSE to A-Level was seamless with GGK's comprehensive resources.",
     rating: 5,
     subject: "Chemistry & Physics",
@@ -249,7 +214,7 @@ const testimonials = [
   {
     name: "Emma Thompson",
     role: "IGCSE Teacher - 10 Years",
-    image: "https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg",
+    image: "https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg?auto=compress&cs=tinysrgb&w=400",
     content: "As an educator, I recommend GGK to all my students. The exam board-specific content, mock tests, and progress tracking have consistently improved my students' performance by 30%+.",
     rating: 5,
     subject: "Mathematics Teacher",
@@ -257,107 +222,54 @@ const testimonials = [
   }
 ];
 
-// Enhanced Subject Card with badges
+// Simplified Subject Card with better error handling
 const SubjectCard = memo(({ 
   title, 
   image, 
-  placeholder,
+  fallbackImage,
   description,
   badges,
   priority = false 
 }: { 
   title: string; 
   image: string; 
-  placeholder?: string;
+  fallbackImage: string;
   description: string;
   badges?: string[];
   priority?: boolean;
 }) => {
-  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
-  const [currentSrc, setCurrentSrc] = useState(placeholder || PLACEHOLDER_SHIMMER);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [imgSrc, setImgSrc] = useState(image);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadImage = async () => {
-      try {
-        if (imageCache.isCached(image)) {
-          setCurrentSrc(image);
-          setImageStatus('loaded');
-          return;
-        }
+  const handleImageError = () => {
+    setImgSrc(fallbackImage);
+  };
 
-        if (priority) {
-          await imageCache.preloadImage(image);
-          setCurrentSrc(image);
-          setImageStatus('loaded');
-          return;
-        }
-
-        observerRef.current = new IntersectionObserver(
-          async ([entry]) => {
-            if (entry.isIntersecting) {
-              try {
-                await imageCache.preloadImage(image);
-                setCurrentSrc(image);
-                setImageStatus('loaded');
-              } catch (error) {
-                setImageStatus('error');
-              }
-              observerRef.current?.disconnect();
-            }
-          },
-          { 
-            rootMargin: '100px',
-            threshold: 0.01 
-          }
-        );
-
-        const element = document.getElementById(`subject-${title.replace(/\s+/g, '-')}`);
-        if (element) {
-          observerRef.current.observe(element);
-        }
-      } catch (error) {
-        console.error('Error loading image:', error);
-        setImageStatus('error');
-      }
-    };
-
-    loadImage();
-
-    return () => {
-      observerRef.current?.disconnect();
-    };
-  }, [image, title, priority, placeholder]);
+  const handleImageLoad = () => {
+    setIsLoading(false);
+  };
 
   return (
-    <div 
-      id={`subject-${title.replace(/\s+/g, '-')}`}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group"
-    >
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group">
       <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
-        {imageStatus === 'error' ? (
-          <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600">
-            <span className="text-gray-500 dark:text-gray-400">Failed to load image</span>
-          </div>
-        ) : (
-          <>
-            <img
-              src={currentSrc}
-              alt={title}
-              className={`w-full h-full object-cover transform group-hover:scale-105 transition-all duration-300 ${
-                imageStatus === 'loaded' ? 'opacity-100' : 'opacity-90'
-              }`}
-              loading="lazy"
-              decoding="async"
-            />
-            {/* Badge overlay */}
-            <div className="absolute top-2 right-2">
-              <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
-                IGCSE
-              </span>
-            </div>
-          </>
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
+        <img
+          src={imgSrc}
+          alt={title}
+          className={`w-full h-full object-cover transform group-hover:scale-105 transition-all duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          loading="lazy"
+        />
+        <div className="absolute top-2 right-2">
+          <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
+            IGCSE
+          </span>
+        </div>
       </div>
       <div className="p-6">
         <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
@@ -403,39 +315,18 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [showAllSubjects, setShowAllSubjects] = useState(false);
 
-  useEffect(() => {
-    const preloadCriticalImages = async () => {
-      const criticalImages = [
-        "https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg",
-        ...PRIORITY_SUBJECTS.slice(0, 6).map(s => s.image)
-      ];
-      await imageCache.preloadImages(criticalImages);
-    };
-    preloadCriticalImages();
-  }, []);
-
-  const handleViewMore = () => {
-    setShowAllSubjects(true);
-    setTimeout(() => {
-      const additionalImages = ADDITIONAL_SUBJECTS.slice(0, 6).map(s => s.image);
-      imageCache.preloadImages(additionalImages);
-    }, 100);
-  };
-
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
-      {/* SEO Meta Tags would go in the actual head */}
       <Navigation />
 
       {/* Hero Section */}
       <div className="relative h-screen">
         <div className="absolute inset-0 overflow-hidden">
           <img
-            src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg"
+            src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
             alt="IGCSE Cambridge Edexcel Students Learning"
             className="w-full h-full object-cover"
             loading="eager"
-            fetchPriority="high"
           />
           <div className="absolute inset-0 bg-black bg-opacity-60" />
         </div>
@@ -578,42 +469,6 @@ export default function LandingPage() {
               />
             ))}
           </div>
-
-          {!showAllSubjects ? (
-            <div className="text-center mt-12">
-              <Button
-                size="lg"
-                onClick={handleViewMore}
-                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-white rounded-full px-8 font-semibold"
-                rightIcon={<ChevronDown className="ml-2 h-5 w-5" />}
-              >
-                View All IGCSE Subjects
-              </Button>
-            </div>
-          ) : (
-            <div className="mt-12">
-              <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {ADDITIONAL_SUBJECTS.map((subject) => (
-                  <SubjectCard 
-                    key={subject.title} 
-                    {...subject} 
-                    priority={false}
-                  />
-                ))}
-              </div>
-              <div className="text-center mt-8">
-                <Button
-                  size="md"
-                  variant="ghost"
-                  onClick={() => setShowAllSubjects(false)}
-                  className="text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]"
-                  rightIcon={<ChevronUp className="ml-2 h-4 w-4" />}
-                >
-                  Show Less
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
