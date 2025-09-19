@@ -223,22 +223,32 @@ const features = [
 
 export default function SubjectsPage() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed relative"
+      style={{
+        backgroundImage: 'url("https://images.pexels.com/photos/5212329/pexels-photo-5212329.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop")'
+      }}
+    >
+      {/* Background Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/75 to-gray-900/85" />
+      
+      {/* Content */}
+      <div className="relative z-10">
       <Navigation />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header Section */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+        <div className="text-center mb-16 backdrop-blur-sm bg-white/10 dark:bg-gray-900/20 rounded-2xl p-8 border border-white/20">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
             IGCSE Subjects We Offer
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
+          <p className="text-xl text-gray-100 max-w-3xl mx-auto leading-relaxed">
             Our comprehensive IGCSE curriculum is designed to provide students with a broad, balanced education 
             that develops critical thinking, creativity, and practical skills. All subjects follow the Cambridge 
             International IGCSE syllabus, ensuring global recognition and excellent preparation for A-Levels.
           </p>
         </div>
-
+          <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm text-gray-200">
         {/* Key Features */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {features.map((feature, index) => (
@@ -270,7 +280,7 @@ export default function SubjectsPage() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold mb-2">{category.title}</h2>
-                    <p className="text-white/90">{category.description}</p>
+          <section className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
                   </div>
                 </div>
               </div>
@@ -344,7 +354,7 @@ export default function SubjectsPage() {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 Continuous Assessment
-              </h3>
+          <section className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
               <p className="text-gray-600 dark:text-gray-400 text-sm">
                 Regular coursework, practical assessments, and mock examinations to track progress
               </p>
@@ -393,52 +403,52 @@ export default function SubjectsPage() {
                   English First Language or English as a Second Language
                 </li>
                 <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                  <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
+        <section className="mt-16 bg-gradient-to-r from-[#8CC63F]/20 to-[#7AB635]/20 backdrop-blur-md rounded-2xl p-8 border border-[#8CC63F]/40">
                   Mathematics
-                </li>
-                <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+            <h2 className="text-2xl font-bold text-white mb-4">
+          <section className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
                   <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
-                  At least one Science subject
+            <p className="text-gray-100">
                 </li>
                 <li className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
                   One Humanities subject
                 </li>
               </ul>
-            </div>
+              <div className="w-16 h-16 bg-blue-100/90 dark:bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
             
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Typical Subject Combinations
+              <h3 className="text-lg font-semibold text-white mb-2">Science Track</h3>
+              <p className="text-gray-100 text-sm">
               </h3>
               <div className="space-y-3">
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <h4 className="font-medium text-blue-900 dark:text-blue-100 text-sm">Science Track</h4>
                   <p className="text-blue-700 dark:text-blue-300 text-xs">
-                    Mathematics, Physics, Chemistry, Biology, English
+              <div className="w-16 h-16 bg-green-100/90 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
                   </p>
                 </div>
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <h4 className="font-medium text-green-900 dark:text-green-100 text-sm">Business Track</h4>
+              <h3 className="text-lg font-semibold text-white mb-2">Business Track</h3>
+              <p className="text-gray-100 text-sm">
                   <p className="text-green-700 dark:text-green-300 text-xs">
                     Mathematics, Economics, Business Studies, English, Geography
                   </p>
                 </div>
                 <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <h4 className="font-medium text-purple-900 dark:text-purple-100 text-sm">Humanities Track</h4>
-                  <p className="text-purple-700 dark:text-purple-300 text-xs">
+              <div className="w-16 h-16 bg-purple-100/90 dark:bg-purple-900/50 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+          <section className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
                     English, History, Geography, Sociology, Foreign Language
-                  </p>
-                </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Humanities Track</h3>
+              <p className="text-gray-100 text-sm">
               </div>
             </div>
           </div>
         </div>
 
         {/* Call to Action */}
-        <div className="mt-16 text-center">
-          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-xl p-8 text-white">
-            <h2 className="text-2xl font-bold mb-4">
+          <section className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
+        <section className="mt-16 text-center bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/20">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
               Ready to Begin Your IGCSE Journey?
             </h2>
             <p className="text-white/90 mb-6 max-w-2xl mx-auto">
@@ -456,6 +466,7 @@ export default function SubjectsPage() {
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }
