@@ -169,7 +169,7 @@ export default function ContactPage() {
                     </p>
                     
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
-                      {metho.contact}
+                      {method.contact}
                     </div>
                     
                     <button className="text-[#8CC63F] font-medium text-sm hover:text-[#7AB635] transition-colors flex items-center">
