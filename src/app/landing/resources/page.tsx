@@ -9,7 +9,8 @@ import {
   BookOpen, 
   Users, 
   Award,
-  ArrowRight,
+  Play,
+  CheckCircle
   Play,
   ExternalLink,
   Clock,
