@@ -1,269 +1,458 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { 
-  GraduationCap, 
   FileText, 
   Video, 
   Headphones, 
   Download, 
   BookOpen, 
-  Users, 
-  Award,
-  Play,
-  CheckCircle,
-  ArrowRight,
-  ExternalLink,
+  Laptop,
+  Users,
   Clock,
-  Star
+  ArrowRight,
+  Play,
+  Eye,
+  Star,
+  Calendar,
+  Search,
+  Filter
 } from 'lucide-react';
-import { Button } from '../../../components/shared/Button';
 import { Navigation } from '../../../components/shared/Navigation';
 
-const resourceCategories = [
+const RESOURCE_CATEGORIES = [
   {
+    id: 'study-materials',
+    name: 'Study Materials',
     icon: FileText,
-    title: 'Study Materials',
-    description: 'Comprehensive textbooks, worksheets, and practice exercises',
-    items: ['Digital Textbooks', 'Practice Worksheets', 'Study Guides', 'Reference Materials'],
-    color: 'from-blue-500 to-blue-600'
+    description: 'Comprehensive study guides, worksheets, and reference materials',
+    count: '2,500+',
+    color: 'from-blue-500 to-blue-600',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    borderColor: 'border-blue-200 dark:border-blue-700',
+    textColor: 'text-blue-700 dark:text-blue-300',
+    items: [
+      'Study Guides',
+      'Practice Worksheets',
+      'Reference Charts',
+      'Formula Sheets',
+      'Revision Notes'
+    ]
   },
   {
+    id: 'video-lessons',
+    name: 'Video Lessons',
     icon: Video,
-    title: 'Video Lessons',
     description: 'Interactive video content with expert instructors',
-    items: ['Recorded Lectures', 'Interactive Tutorials', 'Animated Explanations', 'Virtual Labs'],
-    color: 'from-purple-500 to-purple-600'
+    count: '1,200+',
+    color: 'from-red-500 to-red-600',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    borderColor: 'border-red-200 dark:border-red-700',
+    textColor: 'text-red-700 dark:text-red-300',
+    items: [
+      'Concept Explanations',
+      'Step-by-step Tutorials',
+      'Problem Solving',
+      'Lab Demonstrations',
+      'Expert Interviews'
+    ]
   },
   {
+    id: 'audio-content',
+    name: 'Audio Content',
     icon: Headphones,
-    title: 'Audio Content',
     description: 'Podcasts, audiobooks, and language learning materials',
-    items: ['Educational Podcasts', 'Audio Books', 'Language Lessons', 'Music Theory'],
-    color: 'from-green-500 to-green-600'
+    count: '800+',
+    color: 'from-green-500 to-green-600',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    borderColor: 'border-green-200 dark:border-green-700',
+    textColor: 'text-green-700 dark:text-green-300',
+    items: [
+      'Educational Podcasts',
+      'Language Lessons',
+      'Story Narrations',
+      'Music Theory',
+      'Pronunciation Guides'
+    ]
   },
   {
-    icon: Award,
-    title: 'Assessment Tools',
-    description: 'Quizzes, tests, and evaluation resources',
-    items: ['Practice Tests', 'Quiz Banks', 'Assessment Rubrics', 'Progress Reports'],
-    color: 'from-orange-500 to-orange-600'
+    id: 'interactive-tools',
+    name: 'Interactive Tools',
+    icon: Laptop,
+    description: 'Simulations, calculators, and interactive learning tools',
+    count: '500+',
+    color: 'from-purple-500 to-purple-600',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    borderColor: 'border-purple-200 dark:border-purple-700',
+    textColor: 'text-purple-700 dark:text-purple-300',
+    items: [
+      'Virtual Labs',
+      'Math Calculators',
+      'Language Games',
+      'Science Simulations',
+      'Quiz Builders'
+    ]
+  },
+  {
+    id: 'assessments',
+    name: 'Assessments',
+    icon: BookOpen,
+    description: 'Tests, quizzes, and evaluation materials',
+    count: '3,000+',
+    color: 'from-orange-500 to-orange-600',
+    bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+    borderColor: 'border-orange-200 dark:border-orange-700',
+    textColor: 'text-orange-700 dark:text-orange-300',
+    items: [
+      'Practice Tests',
+      'Quick Quizzes',
+      'Past Papers',
+      'Mock Exams',
+      'Progress Assessments'
+    ]
+  },
+  {
+    id: 'teacher-resources',
+    name: 'Teacher Resources',
+    icon: Users,
+    description: 'Lesson plans, teaching guides, and classroom materials',
+    count: '1,500+',
+    color: 'from-indigo-500 to-indigo-600',
+    bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+    borderColor: 'border-indigo-200 dark:border-indigo-700',
+    textColor: 'text-indigo-700 dark:text-indigo-300',
+    items: [
+      'Lesson Plans',
+      'Teaching Guides',
+      'Classroom Activities',
+      'Assessment Rubrics',
+      'Parent Resources'
+    ]
   }
 ];
 
-const featuredResources = [
+const FEATURED_RESOURCES = [
   {
-    title: 'Mathematics Mastery Course',
-    type: 'Video Series',
-    duration: '12 hours',
+    title: 'Advanced Mathematics Problem Sets',
+    type: 'Study Material',
+    subject: 'Mathematics',
     rating: 4.9,
-    description: 'Complete mathematics course covering algebra, geometry, and calculus'
+    downloads: '12.5K',
+    duration: '2-3 hours',
+    level: 'Advanced',
+    thumbnail: 'https://images.pexels.com/photos/6256/mathematics-blackboard-education-classroom.jpg?auto=compress&cs=tinysrgb&w=400'
   },
   {
-    title: 'Science Laboratory Simulations',
-    type: 'Interactive',
-    duration: '8 modules',
+    title: 'Chemistry Lab Experiments',
+    type: 'Video Series',
+    subject: 'Science',
     rating: 4.8,
-    description: 'Virtual lab experiments for physics, chemistry, and biology'
+    downloads: '8.2K',
+    duration: '45 min',
+    level: 'Intermediate',
+    thumbnail: 'https://images.pexels.com/photos/2280549/pexels-photo-2280549.jpeg?auto=compress&cs=tinysrgb&w=400'
   },
   {
-    title: 'English Literature Collection',
-    type: 'Digital Library',
-    duration: '200+ books',
+    title: 'English Literature Analysis',
+    type: 'Audio Guide',
+    subject: 'English',
     rating: 4.7,
-    description: 'Classic and contemporary literature with study guides'
+    downloads: '6.8K',
+    duration: '1.5 hours',
+    level: 'Advanced',
+    thumbnail: 'https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=400'
+  },
+  {
+    title: 'World History Timeline',
+    type: 'Interactive Tool',
+    subject: 'Social Studies',
+    rating: 4.9,
+    downloads: '15.3K',
+    duration: 'Self-paced',
+    level: 'All Levels',
+    thumbnail: 'https://images.pexels.com/photos/1370295/pexels-photo-1370295.jpeg?auto=compress&cs=tinysrgb&w=400'
   }
 ];
 
 export default function ResourcesPage() {
-  const navigate = useNavigate();
-
   return (
-    <div 
-      className="min-h-screen bg-cover bg-center bg-fixed relative"
-      style={{
-        backgroundImage: 'url("https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&fit=crop")'
-      }}
-    >
-      {/* Background Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/85 via-gray-900/75 to-gray-900/85" />
-      
-      {/* Content */}
-      <div className="relative z-10">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navigation />
       
-      <div className="relative">
-      <section className="bg-gradient-to-r from-[#8CC63F]/90 to-[#7AB635]/90 text-white py-20 backdrop-blur-sm">
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTdjLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
-            alt="Educational background"
-            className="w-full h-full object-cover select-none pointer-events-none"
-            draggable="false"
-            onContextMenu={(e) => e.preventDefault()}
-            style={{ userSelect: 'none' }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F] to-[#7AB635] rounded-full flex items-center justify-center">
+              <Download className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Learning Resources
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+            Access thousands of educational materials, tools, and resources to enhance your learning experience
+          </p>
         </div>
 
-        {/* Content */}
-        <div className="relative z-10 py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center justify-center mb-6">
-                <BookOpen className="h-16 w-16 text-[#8CC63F]" />
-              </div>
-              <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-                Learning Resources
-              </h1>
-              <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-                Access a vast library of educational materials, interactive content, and assessment tools designed to enhance your learning experience
-              </p>
+        {/* Search and Filter Bar */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-12">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search resources by title, subject, or type..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
             </div>
-
-            {/* Resource Categories */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-              {resourceCategories.map((category, index) => {
-                const IconComponent = category.icon;
-                return (
-                  <div
-                    key={index}
-                    className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-8 hover:bg-white/15 transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
-                  >
-                    <div className={`w-16 h-16 bg-gradient-to-r ${category.color} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                      <IconComponent className="h-8 w-8 text-white" />
-                    </div>
-                    
-                    <h3 className="text-2xl font-semibold text-white mb-4">
-                      {category.title}
-                    </h3>
-                    
-                    <p className="text-gray-300 mb-6 leading-relaxed">
-                      {category.description}
-                    </p>
-                    
-                    <div className="space-y-2">
-                      {category.items.map((item, itemIndex) => (
-                        <div key={itemIndex} className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-[#8CC63F]" />
-                          <span className="text-gray-300 text-sm">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Featured Resources */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-8 mb-16">
-              <h2 className="text-3xl font-bold text-white text-center mb-8">
-                Featured Resources
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {featuredResources.map((resource, index) => (
-                  <div
-                    key={index}
-                    className="bg-white/5 rounded-lg border border-white/10 p-6 hover:bg-white/10 transition-all duration-300"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-medium text-[#8CC63F] bg-[#8CC63F]/20 px-2 py-1 rounded-full">
-                        {resource.type}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                        <span className="text-sm text-gray-300">{resource.rating}</span>
-                      </div>
-                    </div>
-                    
-                    <h4 className="text-lg font-semibold text-white mb-2">
-                      {resource.title}
-                    </h4>
-                    
-                    <p className="text-gray-300 text-sm mb-4">
-                      {resource.description}
-                    </p>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-gray-400">
-                        <Clock className="h-4 w-4" />
-                        <span className="text-sm">{resource.duration}</span>
-                      </div>
-                      
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white"
-                        rightIcon={<Play className="h-4 w-4" />}
-                      >
-                        Preview
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Resource Access Information */}
-            <div className="bg-gradient-to-r from-[#8CC63F]/20 to-[#7AB635]/20 backdrop-blur-md rounded-2xl border border-[#8CC63F]/30 p-8 mb-16">
-              <div className="text-center">
-                <h2 className="text-3xl font-bold text-white mb-4">
-                  Access All Resources
-                </h2>
-                <p className="text-xl text-gray-300 mb-6">
-                  Get unlimited access to our complete library of educational resources
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#8CC63F] mb-2">10,000+</div>
-                    <div className="text-gray-300">Study Materials</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#8CC63F] mb-2">500+</div>
-                    <div className="text-gray-300">Video Lessons</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#8CC63F] mb-2">24/7</div>
-                    <div className="text-gray-300">Access</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Call to Action */}
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-white mb-6">
-                Start Learning Today
-              </h2>
-              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                Join our platform and unlock access to premium educational resources
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  onClick={() => navigate('/signin')}
-                  className="bg-[#8CC63F] hover:bg-[#7AB635] text-white px-8 py-3 text-lg"
-                  rightIcon={<ArrowRight className="h-5 w-5" />}
-                >
-                  Access Resources
-                </Button>
-                
-                <Button
-                  onClick={() => navigate('/about')}
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10 px-8 py-3 text-lg"
-                  rightIcon={<ExternalLink className="h-5 w-5" />}
-                >
-                  Learn More
-                </Button>
-              </div>
+            <div className="flex gap-2">
+              <select className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option>All Subjects</option>
+                <option>Mathematics</option>
+                <option>Science</option>
+                <option>English</option>
+                <option>Social Studies</option>
+              </select>
+              <select className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option>All Types</option>
+                <option>Study Materials</option>
+                <option>Videos</option>
+                <option>Audio</option>
+                <option>Interactive</option>
+              </select>
             </div>
           </div>
         </div>
-      </section>
-      </div>
+
+        {/* Resource Categories */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+          {RESOURCE_CATEGORIES.map((category) => {
+            const IconComponent = category.icon;
+            return (
+              <div
+                key={category.id}
+                className={`${category.bgColor} ${category.borderColor} border rounded-xl p-6 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group cursor-pointer`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`w-12 h-12 bg-gradient-to-br ${category.color} rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300`}>
+                    <IconComponent className="w-6 h-6 text-white" />
+                  </div>
+                  <span className={`text-sm font-bold ${category.textColor}`}>
+                    {category.count}
+                  </span>
+                </div>
+                
+                <h3 className={`text-lg font-semibold ${category.textColor} mb-2`}>
+                  {category.name}
+                </h3>
+                
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {category.description}
+                </p>
+                
+                <div className="space-y-1">
+                  {category.items.map((item) => (
+                    <div key={item} className="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                      <div className="w-1 h-1 bg-gray-400 rounded-full mr-2"></div>
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Featured Resources */}
+        <div className="mb-16">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Featured Resources
+            </h2>
+            <Link
+              to="/signin"
+              className="text-[#8CC63F] hover:text-[#7AB635] font-medium flex items-center"
+            >
+              View All Resources
+              <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {FEATURED_RESOURCES.map((resource, index) => (
+              <div
+                key={index}
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group cursor-pointer"
+              >
+                <div className="relative">
+                  <img
+                    src={resource.thumbnail}
+                    alt={resource.title}
+                    className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      {resource.type === 'Video Series' ? (
+                        <Play className="w-12 h-12 text-white" />
+                      ) : (
+                        <Eye className="w-12 h-12 text-white" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="absolute top-3 left-3">
+                    <span className="px-2 py-1 bg-[#8CC63F] text-white text-xs font-medium rounded-full">
+                      {resource.type}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {resource.subject}
+                    </span>
+                    <div className="flex items-center text-xs text-yellow-600 dark:text-yellow-400">
+                      <Star className="w-3 h-3 mr-1 fill-current" />
+                      {resource.rating}
+                    </div>
+                  </div>
+                  
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                    {resource.title}
+                  </h3>
+                  
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    <div className="flex items-center">
+                      <Download className="w-3 h-3 mr-1" />
+                      {resource.downloads}
+                    </div>
+                    <div className="flex items-center">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {resource.duration}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
+                      {resource.level}
+                    </span>
+                    <button className="text-[#8CC63F] hover:text-[#7AB635] text-sm font-medium">
+                      Access Resource
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Resource Stats */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 mb-16">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Resource Library Statistics
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Our comprehensive collection continues to grow every day
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#8CC63F] mb-2">8,500+</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Total Resources</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#8CC63F] mb-2">50+</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Subject Areas</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#8CC63F] mb-2">25K+</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Monthly Downloads</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#8CC63F] mb-2">4.8</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Average Rating</div>
+            </div>
+          </div>
+        </div>
+
+        {/* How to Access */}
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-2xl p-8 mb-16">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              How to Access Resources
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Simple steps to get started with our learning materials
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">1</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Sign Up
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Create your account to access our complete resource library
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">2</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Browse & Search
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Find resources by subject, type, or use our advanced search
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-[#8CC63F] rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">3</span>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Download & Learn
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Access materials instantly and start your learning journey
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Call to Action */}
+        <div className="text-center">
+          <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 text-white">
+            <h2 className="text-3xl font-bold mb-4">
+              Ready to Explore Our Resources?
+            </h2>
+            <p className="text-xl mb-6 opacity-90">
+              Join our learning community and access thousands of educational materials
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                to="/signin"
+                className="inline-flex items-center px-8 py-3 bg-white text-[#8CC63F] font-semibold rounded-lg hover:bg-gray-100 transition-colors duration-200"
+              >
+                Access Resources
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Link>
+              <Link
+                to="/contact"
+                className="inline-flex items-center px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-[#8CC63F] transition-colors duration-200"
+              >
+                Contact Us
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
