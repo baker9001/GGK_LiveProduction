@@ -587,32 +587,6 @@ export default function SignInPage() {
                 </span>
               </div>
             </div>
-            
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <Link
-                to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Contact Support
-              </Link>
-              <Link
-                to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Request Access
-              </Link>
-            </div>
-            
-            {/* Back to Home Button */}
-            <div className="mt-4">
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-                className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-              >
-                Back to Home
-              </Button>
-            </div>
           </div>
         </div>
       </div>
