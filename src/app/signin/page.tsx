@@ -392,7 +392,6 @@ export default function SignInPage() {
       setLoading(false);
     }
   };
-  
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Background Image */}
@@ -576,61 +575,36 @@ export default function SignInPage() {
           </form>
           
           {/* Additional Links */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Need help?
-                </span>
-              </div>
+        {/* Additional Links */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700" />
             </div>
-            
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <Link
-                to="/contact-support"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Contact Support
-              </Link>
-              <Link
-                to="/request-access"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
-              >
-                Request Access
-              </Link>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-900/50 text-gray-400">
+                Need help?
+              </span>
             </div>
           </div>
           
-          {/* Dev Login */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Development Access
-                </span>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleDevLogin}
-              variant="outline"
-              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <Link
+              to="/contact-support"
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
             >
-              🔧 Quick Dev Login (SSA)
-            </Button>
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Temporary access for development - bypasses regular authentication
-            </p>
+              Contact Support
+            </Link>
+            <Link
+              to="/request-access"
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+            >
+              Request Access
+            </Link>
           </div>
           
           {/* Back to Home Button */}
-          <div className="mt-6">
+          <div className="mt-4">
             <Button
               onClick={() => navigate('/')}
               variant="outline"
