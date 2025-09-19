@@ -1,24 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  BookOpen, 
-  Video, 
-  FileText, 
-  Download, 
-  Search, 
-  Filter,
-  Play,
-  Clock,
-  Star,
-  Users,
-  ArrowRight,
-  Headphones,
-  Image,
-  PresentationChart,
-  Calculator,
-  FlaskConical,
-  Globe
-} from 'lucide-react';
+import { BookOpen, Video, FileText, Download, Search, Filter, Play, Clock, Star, Users, ArrowRight, Headphones, Image, Presentation as PresentationChart, Calculator, FlaskConical, Globe } from 'lucide-react';
 import { Navigation } from '../../components/shared/Navigation';
 
 const resourceCategories = [
