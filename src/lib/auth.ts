@@ -1,7 +1,7 @@
 /**
  * File: /src/lib/auth.ts
  * Dependencies: 
- *   - supabase client for session management
+ *   - None (Supabase auth removed)
  * 
  * SECURITY FIXES:
  *   - Added auth change events
@@ -9,11 +9,6 @@
  *   - Prevent redirect loops
  *   - Complete session cleanup
  */
-
-import { supabase } from './supabase';
-
-// Auth state change listener
-let authStateListener: { data: { subscription: any } } | null = null;
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
@@ -84,31 +79,7 @@ export function setAuthenticatedUser(user: User): void {
 }
 
 // Get authenticated user
-export async function getAuthenticatedUser(): Promise<User | null> {
-  // Check Supabase session first
-  try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session) {
-      // Clear local storage if Supabase session is invalid
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    
-    // Validate session user ID
-    if (!session.user?.id || session.user.id === 'undefined' || session.user.id === 'null') {
-      console.error('[auth] Invalid session user ID:', { userId: session.user?.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error checking Supabase session:', error);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    return null;
-  }
-
+export function getAuthenticatedUser(): User | null {
   // First check if token is valid
   const token = getAuthToken();
   if (!token) {
@@ -125,41 +96,10 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
-    
-    // Validate payload user ID
-    if (!payload.id || payload.id === 'undefined' || payload.id === 'null') {
-      console.error('[auth] Invalid token payload user ID:', { userId: payload.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
   } catch {
     return null;
   }
   
-  const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (!storedUser) return null;
-  
-  try {
-    const user = JSON.parse(storedUser);
-    // Validate stored user ID
-    if (!user?.id || user.id === 'undefined' || user.id === 'null' || typeof user.id !== 'string') {
-      console.error('[auth] Invalid stored user ID:', { userId: user?.id, userType: typeof user?.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    return user;
-  } catch (error) {
-    console.error('[auth] Error parsing stored user:', error);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    return null;
-  }
-}
-
-// Synchronous version for backward compatibility (deprecated)
-export function getAuthenticatedUserSync(): User | null {
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
@@ -221,9 +161,6 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
   
-  // SECURITY: Clear Supabase authentication tokens
-  localStorage.removeItem('supabase.auth.token');
-  
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
   localStorage.removeItem('last_user_id');
@@ -253,14 +190,13 @@ export function markUserLogout(): void {
 }
 
 // Check if authenticated
-export async function isAuthenticated(): Promise<boolean> {
-  const user = await getAuthenticatedUser();
-  return !!user;
+export function isAuthenticated(): boolean {
+  return !!getAuthenticatedUser();
 }
 
 // Async version for compatibility
 export async function isAuthenticatedAsync(): Promise<boolean> {
-  return await isAuthenticated();
+  return isAuthenticated();
 }
 
 // Get user role
@@ -360,16 +296,16 @@ export function getCurrentUser(): User | null {
   if (testUser) {
     return JSON.parse(testUser);
   }
-  return getAuthenticatedUserSync();
+  return getAuthenticatedUser();
 }
 
 export function getRealAdminUser(): User | null {
-  return getAuthenticatedUserSync();
+  return getAuthenticatedUser();
 }
 
 // Simplified session refresh (no Supabase)
 export async function refreshSession(): Promise<boolean> {
-  const user = await getAuthenticatedUser();
+  const user = getAuthenticatedUser();
   if (user) {
     // Regenerate token with same remember me setting
     const token = getAuthToken();
@@ -419,7 +355,7 @@ export function startSessionMonitoring(): void {
   setTimeout(() => {
     isMonitoringActive = true;
     
-    sessionCheckInterval = setInterval(async () => {
+    sessionCheckInterval = setInterval(() => {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
       
@@ -431,7 +367,7 @@ export function startSessionMonitoring(): void {
         return;
       }
       
-      const user = await getAuthenticatedUser();
+      const user = getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
         console.log('Session expired. Redirecting to login.');
@@ -469,7 +405,7 @@ export function stopSessionMonitoring(): void {
 export function setupSessionRefresh(): void {
   setInterval(async () => {
     // Only refresh if authenticated and not on public page
-    if (await isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
+    if (isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
       await refreshSession();
     }
   }, 30 * 60 * 1000); // 30 minutes
@@ -477,50 +413,15 @@ export function setupSessionRefresh(): void {
 
 // Initialize on app start - but with delay
 if (typeof window !== 'undefined') {
-  // Setup Supabase auth state listener
-  const setupAuthStateListener = () => {
-    if (authStateListener) {
-      authStateListener.data.subscription.unsubscribe();
-    }
-    
-    authStateListener = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Supabase auth state change:', event, session?.user?.id);
-      
-      // Handle auth state changes that indicate session is invalid
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || event === 'TOKEN_REFRESHED') {
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          // Token refresh failed
-          console.log('Token refresh failed, clearing auth data');
-          clearAuthenticatedUser();
-          
-          // Only redirect if not on public page
-          if (!isPublicPage()) {
-            window.location.replace('/signin');
-          }
-        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-          console.log('User signed out or deleted, clearing auth data');
-          clearAuthenticatedUser();
-          
-          // Only redirect if not on public page
-          if (!isPublicPage()) {
-            window.location.replace('/signin');
-          }
-        }
-      }
-    });
-  };
-  
   // Wait for app to fully load before starting session management
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     });
   } else {
     // DOM already loaded
     setTimeout(() => {
-      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     }, 1000);
