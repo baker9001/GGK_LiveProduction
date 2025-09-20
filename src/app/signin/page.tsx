@@ -21,7 +21,8 @@ import {
   Lock,
   Eye,
   EyeOff,
-  MailWarning
+  MailWarning,
+  ArrowLeft
 } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
@@ -410,6 +411,17 @@ export default function SignInPage() {
       
       {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Back Button */}
+        <div className="mb-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors duration-200 group"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            <span className="text-sm font-medium">Back to Home</span>
+          </Link>
+        </div>
+        
         {/* Logo */}
         <div className="text-center">
           <div className="inline-flex items-center justify-center">
