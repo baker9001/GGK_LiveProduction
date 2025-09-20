@@ -1,6 +1,7 @@
 learning/
-license-management/
 profile/
 settings/
-teachers-module/
 student-module/
+landing/
+forgot-password/
+rest-passwrod/
