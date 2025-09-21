@@ -1,11 +1,21 @@
 /**
  * File: /home/project/src/app/system-admin/tenants/tabs/BranchesTab.tsx
  * 
- * FIXED: Resolved database field mapping errors
- * - Properly separates main branch fields from additional fields
- * - Excludes non-database fields (company_name, school_name, region_name) from DB operations
- * - Fixed code field to use empty string instead of null (code column is NOT NULL in DB)
- * - Maintains all original functionality including logo handling
+ * FINAL VERSION - Complete System Admin Branch Management
+ * 
+ * Features:
+ * - System admins must select Company → School → Branch details
+ * - Properly handles database field mapping
+ * - Includes logo management with storage cleanup
+ * - Manages branches_additional table data
+ * - Prevents duplicate form fields with BranchFormContent
+ * 
+ * Fixed Issues:
+ * - Added Company dropdown for system admin flow
+ * - School dropdown only appears after company selection
+ * - Proper validation for all required fields
+ * - Clear user guidance messages
+ * - Prevents field duplication with BranchFormContent
  */
 
 import React, { useState, useEffect } from 'react';
@@ -126,7 +136,7 @@ export default function BranchesTab() {
     status: []
   });
 
-  // ===== CORRECTED LOGO HELPER FUNCTIONS =====
+  // ===== LOGO HELPER FUNCTIONS =====
   
   // Get logo URL - handles both old and new path formats
   const getLogoUrl = (path: string | null) => {
@@ -318,12 +328,17 @@ export default function BranchesTab() {
       if (schoolData) {
         // Set the form state with the retrieved company_id
         setFormState({
-          ...editingBranch, // Copy basic fields
+          name: editingBranch.name || '',
+          code: editingBranch.code || '',
+          school_id: editingBranch.school_id,
           company_id: schoolData.company_id, // Ensure company_id is set
-          ...additionalData, // Copy additional fields
-          // Override specific fields if needed, or ensure correct types
+          status: editingBranch.status,
+          address: editingBranch.address || '',
+          notes: editingBranch.notes || '',
+          // Additional fields from branches_additional
           student_capacity: additionalData?.student_capacity || undefined,
           current_students: additionalData?.current_students || undefined,
+          student_count: additionalData?.student_count || undefined,
           teachers_count: additionalData?.teachers_count || undefined,
           active_teachers_count: additionalData?.active_teachers_count || undefined,
           opening_time: additionalData?.opening_time || '',
@@ -343,6 +358,7 @@ export default function BranchesTab() {
       }
     } catch (error) {
       console.error('Error populating form for edit:', error);
+      toast.error('Failed to load branch data for editing');
     }
   };
 
@@ -353,9 +369,12 @@ export default function BranchesTab() {
       company_id: '',
       school_id: '',
       status: 'active',
+      address: '',
+      notes: '',
       // Additional fields reset
       student_capacity: undefined,
       current_students: undefined,
+      student_count: undefined,
       teachers_count: undefined,
       active_teachers_count: undefined,
       branch_head_name: '',
@@ -366,9 +385,11 @@ export default function BranchesTab() {
       opening_time: '',
       closing_time: '',
       working_days: [],
-      branch_id: ''
+      branch_id: '',
+      logo: ''
     });
     setSchools([]);
+    setActiveTab('basic'); // Reset to basic tab
   };
 
   const fetchCompanies = async () => {
@@ -422,7 +443,6 @@ export default function BranchesTab() {
     }
   };
 
-  // CORRECTED handleDelete function with logo deletion
   const handleDelete = async (branches: Branch[]) => {
     if (!confirm(`Are you sure you want to delete ${branches.length} branch(es)?`)) {
       return;
@@ -431,16 +451,19 @@ export default function BranchesTab() {
     try {
       // Delete logos from storage first
       for (const branch of branches) {
-        await deleteLogoFromStorage(branch.logo);
+        if (branch.logo) {
+          await deleteLogoFromStorage(branch.logo);
+        }
       }
 
-      // Then delete branches from database
+      // Then delete branches from database (cascade will handle branches_additional)
       const { error } = await supabase
         .from('branches')
         .delete()
         .in('id', branches.map(b => b.id));
 
       if (error) throw error;
+      
       await fetchBranches();
       toast.success('Branch(es) deleted successfully');
     } catch (error) {
@@ -453,8 +476,9 @@ export default function BranchesTab() {
     setFormState(prev => ({ 
       ...prev, 
       company_id: companyId,
-      school_id: ''
+      school_id: '' // Reset school when company changes
     }));
+    
     if (companyId) {
       fetchSchools([companyId]);
     } else {
@@ -466,59 +490,70 @@ export default function BranchesTab() {
     setFormState(prev => ({ ...prev, school_id: schoolId }));
   };
 
-  // FIXED handleSubmit function - properly excludes non-database fields
   const handleSubmit = async () => {
+    // Clear previous errors
     setFormErrors({});
 
+    // Validate required fields
     const errors: Record<string, string> = {};
+    
     if (!formState.name.trim()) {
-      errors.name = 'Name is required';
+      errors.name = 'Branch name is required';
     }
+    
+    if (!formState.company_id) {
+      errors.company_id = 'Company is required';
+    }
+    
     if (!formState.school_id) {
       errors.school_id = 'School is required';
     }
 
+    // If there are validation errors, set them and return
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      // Main branch data - only fields that exist in branches table
+      // Prepare main branch data - only fields that exist in branches table
       const mainBranchData = {
         name: formState.name.trim(),
-        code: formState.code?.trim() || '',  // Use empty string instead of null (code is NOT NULL in DB)
+        code: formState.code?.trim() || '', // Use empty string instead of null (code is NOT NULL in DB)
         school_id: formState.school_id,
         status: formState.status,
         logo: formState.logo || null,
-        address: formState.address || null,
-        notes: formState.notes || null,
+        address: formState.address?.trim() || null,
+        notes: formState.notes?.trim() || null,
       };
 
-      // Additional data - only fields that exist in branches_additional table
+      // Prepare additional data - only fields that exist in branches_additional table
       const additionalData: any = {
         student_capacity: formState.student_capacity || null,
         current_students: formState.current_students || null,
         student_count: formState.student_count || null,
         teachers_count: formState.teachers_count || null,
         active_teachers_count: formState.active_teachers_count || null,
-        branch_head_name: formState.branch_head_name || null,
-        branch_head_email: formState.branch_head_email || null,
-        branch_head_phone: formState.branch_head_phone || null,
-        building_name: formState.building_name || null,
-        floor_details: formState.floor_details || null,
+        branch_head_name: formState.branch_head_name?.trim() || null,
+        branch_head_email: formState.branch_head_email?.trim() || null,
+        branch_head_phone: formState.branch_head_phone?.trim() || null,
+        building_name: formState.building_name?.trim() || null,
+        floor_details: formState.floor_details?.trim() || null,
         opening_time: formState.opening_time || null,
         closing_time: formState.closing_time || null,
-        working_days: formState.working_days || null
+        working_days: formState.working_days?.length > 0 ? formState.working_days : null
       };
 
-      let branchId;
+      let branchId: string;
+      
       if (editingBranch) {
         // Update existing branch
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('branches')
           .update(mainBranchData)
           .eq('id', editingBranch.id);
+          
         if (error) throw error;
         branchId = editingBranch.id;
       } else {
@@ -528,6 +563,7 @@ export default function BranchesTab() {
           .insert([mainBranchData])
           .select('id')
           .single();
+          
         if (error) throw error;
         branchId = data.id;
       }
@@ -535,7 +571,7 @@ export default function BranchesTab() {
       // Add branch_id to additional data
       additionalData.branch_id = branchId;
 
-      // Remove any null/undefined values from additionalData to avoid issues
+      // Remove any undefined values from additionalData
       Object.keys(additionalData).forEach(key => {
         if (additionalData[key] === undefined) {
           delete additionalData[key];
@@ -550,19 +586,24 @@ export default function BranchesTab() {
       if (additionalError) {
         console.error('Error saving additional branch data:', additionalError);
         // Don't throw here - the main branch was saved successfully
-        // Just notify the user about the additional data issue
         toast.warning('Branch saved but some additional data could not be saved.');
+      } else {
+        toast.success(`Branch ${editingBranch ? 'updated' : 'created'} successfully`);
       }
 
+      // Refresh the branches list
       await fetchBranches();
+      
+      // Close the form and reset state
       setIsFormOpen(false);
       setEditingBranch(null);
       resetFormState();
-      toast.success(`Branch ${editingBranch ? 'updated' : 'created'} successfully`);
+      setFormErrors({});
+      
     } catch (error) {
       console.error('Error saving branch:', error);
       setFormErrors({
-        form: 'Failed to save branch. Please try again.'
+        form: 'Failed to save branch. Please check your input and try again.'
       });
       toast.error('Failed to save branch');
     }
@@ -652,7 +693,7 @@ export default function BranchesTab() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900">Branches</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Branches</h2>
         <Button
           onClick={() => {
             setEditingBranch(null);
@@ -699,7 +740,7 @@ export default function BranchesTab() {
             onChange={(values) => setFilters({ 
               ...filters, 
               company_ids: values,
-              school_ids: []
+              school_ids: [] // Reset school filter when company changes
             })}
           />
 
@@ -755,24 +796,111 @@ export default function BranchesTab() {
         loading={false}
       >
         <div className="space-y-4">
+          {/* Form-level error message */}
           {formErrors.form && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-md">
               {formErrors.form}
             </div>
           )}
 
-          <BranchFormContent
-            formData={formState}
-            setFormData={setFormState}
-            formErrors={formErrors}
-            setFormErrors={setFormErrors}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            schools={schools}
-            companies={companies}
-            isEditing={!!editingBranch}
-            onCompanyChange={handleCompanyChange}
-          />
+          {/* System Admin specific fields: Company and School selection */}
+          {/* These fields are NOT in BranchFormContent as that's for school admins */}
+          
+          {/* Company Selection */}
+          <FormField
+            id="company_id"
+            label="Company"
+            required
+            error={formErrors.company_id}
+          >
+            <select
+              id="company_id"
+              value={formState.company_id}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              disabled={!!editingBranch} // Disable company change when editing
+            >
+              <option value="">Select a company</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name} ({company.region_name})
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          {/* School Selection - only show when company is selected */}
+          {formState.company_id && (
+            <FormField
+              id="school_id"
+              label="School"
+              required
+              error={formErrors.school_id}
+            >
+              <select
+                id="school_id"
+                value={formState.school_id}
+                onChange={(e) => handleSchoolChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                disabled={!!editingBranch} // Disable school change when editing
+              >
+                <option value="">Select a school</option>
+                {schools.length > 0 ? (
+                  schools.map((school) => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>No active schools found for selected company</option>
+                )}
+              </select>
+            </FormField>
+          )}
+
+          {/* Show BranchFormContent only after both company and school are selected */}
+          {formState.company_id && formState.school_id ? (
+            <BranchFormContent
+              formData={formState}
+              setFormData={setFormState}
+              formErrors={formErrors}
+              setFormErrors={setFormErrors}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              // Pass empty arrays to prevent BranchFormContent from showing duplicate dropdowns
+              schools={[]}
+              companies={[]}
+              isEditing={!!editingBranch}
+              // Pass no-op function since we handle company change above
+              onCompanyChange={() => {}}
+              // This prop tells BranchFormContent to skip school/company fields
+              hideSchoolSelection={true}
+            />
+          ) : (
+            <div className="space-y-4">
+              {/* Guidance messages when company/school not selected */}
+              {!formState.company_id && (
+                <div className="p-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <p className="font-medium mb-1">Step 1: Select Company</p>
+                  <p>Please select a company to see available schools for branch creation.</p>
+                </div>
+              )}
+
+              {formState.company_id && !formState.school_id && schools.length === 0 && (
+                <div className="p-4 text-sm text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                  <p className="font-medium mb-1">No Schools Available</p>
+                  <p>The selected company has no active schools. Please create a school first before adding branches.</p>
+                </div>
+              )}
+
+              {formState.company_id && !formState.school_id && schools.length > 0 && (
+                <div className="p-4 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                  <p className="font-medium mb-1">Step 2: Select School</p>
+                  <p>Please select a school to continue with branch creation.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </SlideInForm>
     </div>
