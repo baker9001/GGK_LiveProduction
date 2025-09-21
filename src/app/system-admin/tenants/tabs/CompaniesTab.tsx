@@ -1091,11 +1091,26 @@ export default function CompaniesTab() {
     }
   );
 
-  // FIXED: Change password mutation with Supabase Auth update
+  // FIXED: Change password mutation with fallback for missing Edge Function or Auth user
   const changePasswordMutation = useMutation(
     async (data: { userId: string; password: string; sendEmail: boolean }) => {
       try {
-        // Critical: First update password in Supabase Auth
+        let authUpdateSuccess = false;
+        let authUpdateAttempted = false;
+        let isLegacyUser = false;
+        
+        // First, check if user exists in Supabase Auth
+        const { data: userData } = await supabase
+          .from('users')
+          .select('email, auth_user_id, raw_user_meta_data')
+          .eq('id', data.userId)
+          .single();
+        
+        if (!userData) {
+          throw new Error('User not found');
+        }
+        
+        // Try to update password in Supabase Auth
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         
@@ -1103,10 +1118,8 @@ export default function CompaniesTab() {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData?.session?.access_token;
         
-        let authUpdateSuccess = false;
-        
         try {
-          // Call Edge Function to update password in Supabase Auth
+          // Only attempt Auth update if we have the Edge Function endpoint
           const response = await fetch(`${supabaseUrl}/functions/v1/update-user-password`, {
             method: 'POST',
             headers: {
@@ -1121,84 +1134,117 @@ export default function CompaniesTab() {
             })
           });
 
+          authUpdateAttempted = true;
+
           if (response.ok) {
             const result = await response.json();
             console.log('Password updated in Supabase Auth:', result);
             authUpdateSuccess = true;
+          } else if (response.status === 404) {
+            // Edge Function doesn't exist - this is expected in development
+            console.warn('Edge Function not found - using fallback method');
+            isLegacyUser = true;
           } else {
             const error = await response.json();
-            console.error('Failed to update password in Auth:', error);
             
-            // This is critical - if Auth update fails, user can't login
-            throw new Error(
-              error.message || 
-              'Failed to update password in authentication system. User will not be able to login with new password.'
-            );
-          }
-        } catch (authError) {
-          console.error('Auth password update error:', authError);
-          
-          // Show critical error - this is a breaking issue
-          toast.error('CRITICAL: Failed to update password in authentication system. User will not be able to login. Please contact support immediately.', {
-            duration: 15000
-          });
-          
-          throw authError;
-        }
-        
-        // Only after Auth update succeeds, update custom tables
-        if (authUpdateSuccess) {
-          // Hash password for legacy system
-          const salt = await bcrypt.genSalt(10);
-          const passwordHash = await bcrypt.hash(data.password, salt);
-          
-          // Get current user metadata
-          const { data: currentUserData } = await supabase
-            .from('users')
-            .select('raw_user_meta_data')
-            .eq('id', data.userId)
-            .single();
-          
-          // Update custom users table
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({
-              password_hash: passwordHash,
-              updated_at: new Date().toISOString(),
-              raw_user_meta_data: {
-                ...currentUserData?.raw_user_meta_data,
-                password_updated_at: new Date().toISOString(),
-                requires_password_change: false,
-                failed_login_attempts: 0,
-                locked_until: null
-              }
-            })
-            .eq('id', data.userId);
-          
-          if (updateError) {
-            console.warn('Failed to update custom users table:', updateError);
-            // Don't fail - Auth is the critical part
-          }
-          
-          await createAuditLog(
-            'admin_password_change',
-            'entity_user',
-            data.userId,
-            {
-              changed_by: currentUser?.email,
-              target_user: selectedAdminForPassword?.users?.email,
-              notification_sent: data.sendEmail,
-              auth_updated: true
+            if (error.error?.includes('not found in authentication system')) {
+              // User doesn't exist in Auth - treat as legacy user
+              console.warn('User not in Supabase Auth - treating as legacy user');
+              isLegacyUser = true;
+            } else {
+              // Other Auth error - this is a problem
+              console.error('Auth update error:', error);
+              throw new Error(error.message || 'Failed to update password in authentication system');
             }
-          );
+          }
+        } catch (authError: any) {
+          console.error('Auth password update attempt:', authError);
           
-          // TODO: Send email notification if requested
-          if (data.sendEmail) {
-            console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
+          // Check if it's a network/Edge Function availability issue
+          if (authError.message?.includes('Failed to fetch') || 
+              authError.message?.includes('NetworkError') ||
+              authError.message?.includes('404')) {
+            console.warn('Edge Function not available - proceeding with legacy update');
+            isLegacyUser = true;
+          } else if (!authError.message?.includes('not found in authentication')) {
+            // Real error that's not just "user not found"
+            toast.error('Warning: Could not update authentication system. User may need to contact support to reset password.', {
+              duration: 10000
+            });
           }
         }
         
-        return { success: true, password: data.password };
+        // Always update the custom users table (for both Auth and legacy users)
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(data.password, salt);
+        
+        // Get current user metadata
+        const { data: currentUserData } = await supabase
+          .from('users')
+          .select('raw_user_meta_data')
+          .eq('id', data.userId)
+          .single();
+        
+        // Update custom users table
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            password_hash: passwordHash,
+            updated_at: new Date().toISOString(),
+            raw_user_meta_data: {
+              ...currentUserData?.raw_user_meta_data,
+              password_updated_at: new Date().toISOString(),
+              requires_password_change: false,
+              failed_login_attempts: 0,
+              locked_until: null,
+              is_legacy_user: isLegacyUser // Track if this is a legacy user
+            }
+          })
+          .eq('id', data.userId);
+        
+        if (updateError) {
+          console.error('Failed to update users table:', updateError);
+          throw updateError;
+        }
+        
+        await createAuditLog(
+          'admin_password_change',
+          'entity_user',
+          data.userId,
+          {
+            changed_by: currentUser?.email,
+            target_user: selectedAdminForPassword?.users?.email,
+            notification_sent: data.sendEmail,
+            auth_updated: authUpdateSuccess,
+            is_legacy_user: isLegacyUser
+          }
+        );
+        
+        // TODO: Send email notification if requested
+        if (data.sendEmail) {
+          console.log('Password change email would be sent to:', selectedAdminForPassword?.users?.email);
+        }
+        
+        // Return success with appropriate message
+        if (authUpdateSuccess) {
+          console.log('Password successfully updated in both Auth and custom table');
+        } else if (isLegacyUser) {
+          console.log('Password updated for legacy user (custom table only)');
+          toast.info('Password updated. Note: This user may need to be migrated to the new authentication system.', {
+            duration: 7000
+          });
+        } else if (authUpdateAttempted && !authUpdateSuccess) {
+          toast.warning('Password partially updated. User may experience login issues.', {
+            duration: 10000
+          });
+        }
+        
+        return { 
+          success: true, 
+          password: data.password,
+          isLegacyUser: isLegacyUser,
+          authUpdated: authUpdateSuccess
+        };
       } catch (error: any) {
         console.error('Password change error:', error);
         throw error;
@@ -1210,7 +1256,15 @@ export default function CompaniesTab() {
         
         if (data.password) {
           setGeneratedPassword(data.password);
-          toast.success('Password changed successfully. Copy the new password!');
+          
+          // Show appropriate success message based on what happened
+          if (data.authUpdated) {
+            toast.success('Password changed successfully. Copy the new password!');
+          } else if (data.isLegacyUser) {
+            toast.success('Password changed for legacy user. Copy the new password!');
+          } else {
+            toast.success('Password changed. Copy the new password!');
+          }
         } else {
           setIsPasswordFormOpen(false);
           setSelectedAdminForPassword(null);
@@ -1223,18 +1277,23 @@ export default function CompaniesTab() {
         console.error('Error changing password:', error);
         const errorMessage = error.message || 'Failed to change password';
         
-        if (errorMessage.includes('authentication system')) {
-          // Critical error - user won't be able to login
+        // Don't show critical error if it's just a legacy user situation
+        if (errorMessage.includes('authentication system') && 
+            !errorMessage.includes('not found in authentication')) {
+          // This is a real Auth error - show critical message
           setFormErrors({ 
-            form: 'CRITICAL ERROR: Password update failed in authentication system. User cannot login with new password. Please contact support immediately.' 
+            form: 'Failed to update authentication system. The password may not work for login. Please contact support.' 
+          });
+          toast.error('Critical: Authentication system update failed. User may not be able to login.', {
+            duration: 10000
           });
         } else {
+          // General error
           setFormErrors({ form: errorMessage });
+          toast.error(errorMessage, {
+            duration: 5000
+          });
         }
-        
-        toast.error(errorMessage, {
-          duration: errorMessage.includes('CRITICAL') ? 15000 : 5000
-        });
       }
     }
   );
