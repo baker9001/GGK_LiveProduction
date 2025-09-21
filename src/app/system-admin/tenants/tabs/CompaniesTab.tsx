@@ -688,12 +688,18 @@ export default function CompaniesTab() {
               console.log('User updated in Supabase Auth');
             } else {
               const error = await response.json();
-              console.error('Edge Function update failed:', error.message);
+              console.warn('Edge Function update failed:', error.message);
               
-              // Show warning but continue with custom table update
-              toast.warning('Email update in authentication system failed. User may need to re-verify their email.', {
-                duration: 7000
-              });
+              // Check if it's a "user not found" error from Auth
+              if (error.message?.includes('not found') || error.error?.includes('not found')) {
+                console.warn('User not in Supabase Auth - continuing with local update only');
+                // Continue to update custom tables even if not in Auth
+              } else {
+                // For other errors, show warning but continue
+                toast.warning('Email update in authentication system failed. Changes saved locally.', {
+                  duration: 7000
+                });
+              }
             }
           } catch (edgeFunctionError) {
             console.error('Edge Function not available for update:', edgeFunctionError);
@@ -1099,15 +1105,17 @@ export default function CompaniesTab() {
         let authUpdateAttempted = false;
         let isLegacyUser = false;
         
-        // First, check if user exists in Supabase Auth
-        const { data: userData } = await supabase
+        // First, check if user exists in custom users table
+        // Note: auth_user_id column may not exist, so we don't select it
+        const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('email, auth_user_id, raw_user_meta_data')
+          .select('id, email, raw_user_meta_data')
           .eq('id', data.userId)
           .single();
         
-        if (!userData) {
-          throw new Error('User not found');
+        if (userError || !userData) {
+          console.error('User lookup error:', userError);
+          throw new Error('User not found in database');
         }
         
         // Try to update password in Supabase Auth
