@@ -18,6 +18,7 @@
  * ✅ Fixed password update to actually save to database
  * ✅ Fixed phone number saving to teachers table
  * ✅ Fixed junction table updates to avoid conflicts
+ * ✅ Fixed column name: last_login_at -> last_sign_in_at
  * 
  * Dependencies:
  *   - @/services/userCreationService
@@ -85,7 +86,7 @@ interface TeacherData {
     email: string;
     is_active: boolean;
     raw_user_meta_data?: any;
-    last_login_at?: string;
+    last_sign_in_at?: string; // FIXED: Changed from last_login_at to last_sign_in_at
   };
 }
 
@@ -330,6 +331,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== DATA FETCHING =====
   
   // Fetch teachers with relationships
+  // FIXED: Changed last_login_at to last_sign_in_at in the query
   const { data: teachers = [], isLoading: isLoadingTeachers, error: teachersError, refetch: refetchTeachers } = useQuery(
     ['teachers', companyId, scopeFilters],
     async () => {
@@ -361,7 +363,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               email,
               is_active,
               raw_user_meta_data,
-              last_login_at
+              last_sign_in_at
             ),
             schools (
               id,
