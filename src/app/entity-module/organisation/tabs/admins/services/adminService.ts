@@ -221,10 +221,6 @@ export const adminService = {
         throw new Error('Email, name, and company ID are required');
       }
 
-      if (!payload.password || payload.password.length < 8) {
-        throw new Error('Password is required and must be at least 8 characters long');
-      }
-
       // Check actor permissions
       const { data: actorAdmin } = await supabase
         .from('entity_users')
