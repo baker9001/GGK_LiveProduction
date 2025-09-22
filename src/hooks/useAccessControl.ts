@@ -190,7 +190,7 @@ export function useAccessControl(): UseAccessControlResult {
             const schoolIds = [...new Set(
               branchAssignments
                 .filter(b => b.branches?.schools?.status === 'active')
-                .map(b => b.branches?.school_id)
+                .map(b => b.branches?.schools?.id)
                 .filter(Boolean)
             )];
 
