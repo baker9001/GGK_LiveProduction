@@ -129,13 +129,13 @@ export async function checkSupabaseConnection(): Promise<boolean> {
   try {
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     if (error && error.code !== 'PGRST116') {
-      console.error('Supabase connection check failed:', error);
+      console.warn('Supabase connection check failed:', error);
       return false;
     }
     console.log('✅ Supabase connection successful');
     return true;
   } catch (error) {
-    console.error('❌ Supabase connection error:', error);
+    console.warn('❌ Supabase connection error:', error);
     return false;
   }
 }
