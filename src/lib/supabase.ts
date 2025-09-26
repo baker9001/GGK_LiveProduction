@@ -98,7 +98,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           signal: options.signal || controller.signal,
           // Add CORS mode for WebContainer
           mode: 'cors',
-          credentials: 'include',
+          credentials: 'omit',
         });
         
         clearTimeout(timeoutId);
