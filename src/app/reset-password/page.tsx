@@ -1,5 +1,5 @@
 // /home/project/src/app/reset-password/page.tsx
-// Enhanced version with better error handling for Supabase password updates
+// Complete fixed version that properly captures Supabase redirect tokens
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
@@ -38,29 +38,10 @@ function calculatePasswordStrength(password: string): PasswordStrength {
   return { score, feedback };
 }
 
-// Helper function to parse hash fragments
-function parseHashParams(hash: string): URLSearchParams {
-  const cleanHash = hash.startsWith('#') ? hash.substring(1) : hash;
-  return new URLSearchParams(cleanHash);
-}
-
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  
-  // Parse tokens from either hash fragments or query params
-  const hashParams = parseHashParams(window.location.hash);
-  
-  // Try to get params from hash first (Supabase default), then fall back to query params
-  const access_token = hashParams.get('access_token') || searchParams.get('access_token');
-  const refresh_token = hashParams.get('refresh_token') || searchParams.get('refresh_token');
-  const type = hashParams.get('type') || searchParams.get('type');
-  const error_code = hashParams.get('error_code') || searchParams.get('error_code');
-  const error_description = hashParams.get('error_description') || searchParams.get('error_description');
-  
-  // Legacy token support
-  const legacyToken = searchParams.get('token');
   
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -74,6 +55,10 @@ export default function ResetPasswordPage() {
   const [sessionReady, setSessionReady] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
   
+  // Token storage
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  
   // State for first-login password change
   const [isFirstLoginChange, setIsFirstLoginChange] = useState(false);
   const [userIdToProcess, setUserIdToProcess] = useState<string | null>(null);
@@ -81,108 +66,123 @@ export default function ResetPasswordPage() {
   
   // Legacy token data
   const [legacyTokenData, setLegacyTokenData] = useState<any>(null);
+  const legacyToken = searchParams.get('token');
   
   const passwordStrength = calculatePasswordStrength(password);
 
+  // CRITICAL: This effect MUST run first to capture tokens immediately
   useEffect(() => {
-    const initializeReset = async () => {
-      console.log('Initializing password reset...');
-      console.log('Full URL:', window.location.href);
-      console.log('Hash params:', window.location.hash);
-      console.log('Query params:', window.location.search);
-      console.log('Parsed access_token:', access_token ? 'present' : 'missing');
-      console.log('Parsed type:', type);
-      
-      // Check for Supabase error parameters
-      if (error_code || error_description) {
-        console.error('Supabase error:', error_code, error_description);
-        setError(error_description || 'Invalid or expired reset link');
-        setTokenValid(false);
-        setCheckingToken(false);
-        return;
-      }
+    const captureTokens = async () => {
+      console.log('[ResetPassword] Initializing...');
+      console.log('[ResetPassword] Full URL:', window.location.href);
+      console.log('[ResetPassword] Hash:', window.location.hash);
+      console.log('[ResetPassword] Search:', window.location.search);
 
-      // Handle Supabase Auth reset flow
-      if (access_token && type === 'recovery') {
-        try {
-          console.log('Setting Supabase session with recovery token...');
+      // PRIORITY 1: Check for hash fragments (Supabase sends tokens here)
+      const hash = window.location.hash;
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const access = hashParams.get('access_token');
+        const refresh = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+        const errorCode = hashParams.get('error_code');
+        const errorDesc = hashParams.get('error_description');
+
+        console.log('[ResetPassword] Hash params found:', {
+          hasAccess: !!access,
+          hasRefresh: !!refresh,
+          type,
+          error: errorCode
+        });
+
+        // Check for errors
+        if (errorCode || errorDesc) {
+          console.error('[ResetPassword] Error in hash:', errorCode, errorDesc);
+          setError(errorDesc || 'Invalid or expired reset link');
+          setTokenValid(false);
+          setCheckingToken(false);
+          return;
+        }
+
+        // Handle recovery tokens
+        if (access && type === 'recovery') {
+          console.log('[ResetPassword] Recovery tokens found in hash');
+          setAccessToken(access);
+          setRefreshToken(refresh || '');
           
-          // IMPORTANT: Set the session with the recovery token
-          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-            access_token,
-            refresh_token: refresh_token || ''
-          });
+          try {
+            // Set Supabase session
+            console.log('[ResetPassword] Setting Supabase session...');
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: access,
+              refresh_token: refresh || ''
+            });
 
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            
-            // Try alternative approach: exchange tokens for session
-            console.log('Trying alternative session establishment...');
-            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(access_token);
-            
-            if (exchangeError) {
-              console.error('Exchange error:', exchangeError);
-              setError('Failed to verify reset link. The link may have expired. Please request a new one.');
-              setTokenValid(false);
-              setCheckingToken(false);
-              return;
-            }
-            
-            if (exchangeData?.user) {
-              console.log('Session established via exchange for user:', exchangeData.user.id);
-              setTokenValid(true);
-              setSessionReady(true);
-              setUserIdToProcess(exchangeData.user.id);
-              setUserEmail(exchangeData.user.email || '');
-              window.history.replaceState(null, '', window.location.pathname);
-            }
-          } else if (sessionData?.user) {
-            console.log('Session established successfully for user:', sessionData.user.id);
-            setTokenValid(true);
-            setSessionReady(true);
-            setUserIdToProcess(sessionData.user.id);
-            setUserEmail(sessionData.user.email || '');
-            
-            // Clear the hash from the URL for cleaner appearance
-            window.history.replaceState(null, '', window.location.pathname);
-          } else {
-            // Get the current user from the session
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            
-            if (userError || !user) {
-              console.error('User error:', userError);
-              setError('Session is valid but user not found. Please try requesting a new reset link.');
-              setTokenValid(false);
-            } else {
-              console.log('User found in session:', user.id);
-              setTokenValid(true);
-              setSessionReady(true);
+            if (sessionError) {
+              console.error('[ResetPassword] Session error:', sessionError);
+              
+              // Try to get user anyway
+              const { data: { user }, error: userError } = await supabase.auth.getUser(access);
+              
+              if (userError || !user) {
+                setError('Failed to verify reset link. The link may have expired.');
+                setTokenValid(false);
+                setCheckingToken(false);
+                return;
+              }
+              
+              // User exists but session failed - still proceed
+              console.log('[ResetPassword] User found despite session error:', user.id);
               setUserIdToProcess(user.id);
               setUserEmail(user.email || '');
-              window.history.replaceState(null, '', window.location.pathname);
+              setTokenValid(true);
+              setSessionReady(true);
+            } else if (sessionData?.user) {
+              console.log('[ResetPassword] Session established for:', sessionData.user.id);
+              setUserIdToProcess(sessionData.user.id);
+              setUserEmail(sessionData.user.email || '');
+              setTokenValid(true);
+              setSessionReady(true);
+            } else {
+              // Try to get user from session
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                console.log('[ResetPassword] User found in session:', user.id);
+                setUserIdToProcess(user.id);
+                setUserEmail(user.email || '');
+                setTokenValid(true);
+                setSessionReady(true);
+              } else {
+                setError('Unable to verify user session. Please request a new reset link.');
+                setTokenValid(false);
+              }
             }
+
+            // Clear hash from URL
+            window.history.replaceState(null, '', window.location.pathname);
+            
+          } catch (err) {
+            console.error('[ResetPassword] Error processing tokens:', err);
+            setError('Failed to process reset link. Please try again.');
+            setTokenValid(false);
+          } finally {
+            setCheckingToken(false);
           }
-        } catch (err) {
-          console.error('Error setting session:', err);
-          setError('Failed to process reset link. Please try again or request a new one.');
-          setTokenValid(false);
-        } finally {
-          setCheckingToken(false);
+          return;
         }
-        return;
       }
 
-      // Handle legacy token-based reset
+      // PRIORITY 2: Check for legacy token in query params
       if (legacyToken) {
-        console.log('Processing legacy token...');
+        console.log('[ResetPassword] Legacy token found');
         await checkLegacyResetToken();
         return;
       }
 
-      // Check if this is a first-login password change
+      // PRIORITY 3: Check if this is a first-login password change
       const currentUser = getCurrentUser();
       if (currentUser && location.pathname === '/app/settings/change-password') {
-        console.log('First login password change detected');
+        console.log('[ResetPassword] First login password change');
         setIsFirstLoginChange(true);
         setUserIdToProcess(currentUser.id);
         setUserTypeToProcess(currentUser.userType || 'user');
@@ -191,13 +191,15 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      console.log('No valid reset token found');
+      // No tokens found
+      console.log('[ResetPassword] No tokens found');
       setError('No reset token provided. Please use the link from your email.');
+      setTokenValid(false);
       setCheckingToken(false);
     };
 
-    initializeReset();
-  }, [access_token, refresh_token, type, legacyToken, location.pathname, error_code, error_description]);
+    captureTokens();
+  }, []); // Run only once on mount
 
   const checkLegacyResetToken = async () => {
     try {
@@ -249,64 +251,54 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      // Use Supabase Auth if we have a valid session
-      if (sessionReady) {
-        console.log('Updating password via Supabase Auth...');
+      // Use Supabase Auth if we have tokens
+      if (accessToken) {
+        console.log('[ResetPassword] Updating password via Supabase Auth...');
         
-        // First, ensure we have a valid session
-        const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
-        
-        if (sessionCheckError || !session) {
-          console.error('No valid session found:', sessionCheckError);
+        // Ensure session is active
+        if (!sessionReady && accessToken) {
+          console.log('[ResetPassword] Re-establishing session...');
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          });
           
-          // Try to re-establish session if we still have tokens
-          if (access_token) {
-            const { error: reSessionError } = await supabase.auth.setSession({
-              access_token,
-              refresh_token: refresh_token || ''
-            });
-            
-            if (reSessionError) {
-              throw new Error('Session expired. Please request a new password reset link.');
-            }
-          } else {
-            throw new Error('Session expired. Please request a new password reset link.');
+          if (sessionError) {
+            console.error('[ResetPassword] Session re-establishment failed:', sessionError);
+            // Continue anyway - the update might still work
           }
         }
         
-        // Now update the password
+        // Update password
         const { data, error: updateError } = await supabase.auth.updateUser({
           password: password
         });
 
         if (updateError) {
-          console.error('Password update error:', updateError);
+          console.error('[ResetPassword] Password update error:', updateError);
           
-          // Handle specific Supabase errors
-          if (updateError.message.includes('storage')) {
-            throw new Error('Password storage error. This might be a temporary issue. Please try again in a moment or contact support.');
-          } else if (updateError.message.includes('expired')) {
-            throw new Error('Your reset link has expired. Please request a new one.');
+          // Handle specific errors
+          if (updateError.message.includes('not authenticated')) {
+            throw new Error('Session expired. Please request a new password reset link.');
           } else if (updateError.message.includes('same password')) {
             throw new Error('New password must be different from your current password.');
           } else {
-            throw new Error(updateError.message || 'Failed to update password. Please try again.');
+            throw new Error(updateError.message || 'Failed to update password.');
           }
         }
 
         if (!data?.user) {
-          throw new Error('Password update failed. Please try again or contact support.');
+          throw new Error('Password update failed. Please try again.');
         }
 
-        console.log('Password updated successfully via Supabase Auth');
+        console.log('[ResetPassword] Password updated successfully');
 
-        // Also update the password hash in your custom tables for consistency
+        // Also update password hash in custom tables
         try {
           const salt = await bcrypt.genSalt(10);
           const hashedPassword = await bcrypt.hash(password, salt);
 
-          // Update users table
-          const { error: userTableError } = await supabase
+          await supabase
             .from('users')
             .update({
               password_hash: hashedPassword,
@@ -314,28 +306,23 @@ export default function ResetPasswordPage() {
               requires_password_change: false,
               updated_at: new Date().toISOString()
             })
-            .eq('id', userIdToProcess)
-            .or(`email.eq.${userEmail}`); // Fallback to email if ID doesn't match
+            .eq('id', userIdToProcess || data.user.id)
+            .or(`email.eq.${userEmail || data.user.email}`);
 
-          if (userTableError) {
-            console.warn('Failed to update users table (non-critical):', userTableError);
-            // Don't throw - the main password update in Supabase Auth succeeded
-          }
         } catch (hashError) {
-          console.warn('Failed to update password hash in custom table (non-critical):', hashError);
+          console.warn('[ResetPassword] Failed to update custom table (non-critical):', hashError);
         }
 
-        // Sign out after password reset (Supabase best practice)
+        // Sign out after password reset
         await supabase.auth.signOut();
         
-      } else {
-        // Fallback: Update password directly in database (legacy approach)
-        console.log('Updating password via legacy method...');
+      } else if (legacyTokenData) {
+        // Legacy password update
+        console.log('[ResetPassword] Updating password via legacy method...');
         
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Update users table
         const { error: userUpdateError } = await supabase
           .from('users')
           .update({
@@ -350,8 +337,8 @@ export default function ResetPasswordPage() {
           throw new Error(`Failed to update password: ${userUpdateError.message}`);
         }
 
-        // Mark legacy token as used
-        if (legacyTokenData && legacyTokenData.id) {
+        // Mark token as used
+        if (legacyTokenData.id) {
           await supabase
             .from('password_reset_tokens')
             .update({ 
@@ -360,28 +347,24 @@ export default function ResetPasswordPage() {
             })
             .eq('id', legacyTokenData.id);
         }
+      } else {
+        throw new Error('No valid session found. Please request a new reset link.');
       }
       
-      console.log('Password updated successfully');
       toast.success('Password reset successful!');
       setSuccess(true);
       
     } catch (err) {
-      console.error('Password update error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reset password. Please try again.');
+      console.error('[ResetPassword] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to reset password.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRequestNewLink = () => {
-    navigate('/forgot-password');
-  };
-
   if (checkingToken) {
     return (
       <div className="min-h-screen relative flex items-center justify-center">
-        {/* Background Image */}
         <div className="absolute inset-0 z-0">
           <img
             src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -405,7 +388,6 @@ export default function ResetPasswordPage() {
   if (!tokenValid) {
     return (
       <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        {/* Background Image */}
         <div className="absolute inset-0 z-0">
           <img
             src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -418,9 +400,7 @@ export default function ResetPasswordPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
         
-        {/* Content */}
         <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
-          {/* Logo */}
           <div className="text-center">
             <div className="inline-flex items-center justify-center">
               <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
@@ -441,7 +421,7 @@ export default function ResetPasswordPage() {
                 Invalid or Expired Reset Link
               </h2>
               <p className="mt-2 text-sm text-gray-300">
-                {error || 'This password reset link is invalid or has expired.'}
+                {error || 'Failed to verify reset link. The link may have expired. Please request a new one.'}
               </p>
               
               <div className="mt-6 space-y-3">
@@ -470,6 +450,10 @@ export default function ResetPasswordPage() {
             </div>
           </div>
         </div>
+        
+        <p className="mt-8 text-center text-sm text-gray-400 relative z-10">
+          Protected by industry-standard encryption
+        </p>
       </div>
     );
   }
@@ -477,7 +461,6 @@ export default function ResetPasswordPage() {
   if (success) {
     return (
       <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        {/* Background Image */}
         <div className="absolute inset-0 z-0">
           <img
             src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -490,9 +473,7 @@ export default function ResetPasswordPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
         </div>
         
-        {/* Content */}
         <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
-          {/* Logo */}
           <div className="text-center">
             <div className="inline-flex items-center justify-center">
               <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
@@ -528,7 +509,6 @@ export default function ResetPasswordPage() {
           </div>
         </div>
         
-        {/* Bottom text */}
         <p className="mt-8 text-center text-sm text-gray-400 relative z-10">
           Protected by industry-standard encryption
         </p>
@@ -538,7 +518,6 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image - Same as signin page */}
       <div className="absolute inset-0 z-0">
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -551,9 +530,7 @@ export default function ResetPasswordPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
       </div>
       
-      {/* Content */}
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
-        {/* Logo */}
         <div className="text-center">
           <div className="inline-flex items-center justify-center">
             <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
@@ -571,9 +548,7 @@ export default function ResetPasswordPage() {
           </p>
         </div>
 
-        {/* Form Container - Matching signin page style */}
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
-          {/* Error Message */}
           {error && (
             <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg border border-red-500/20">
               <div className="flex items-start">
@@ -582,7 +557,7 @@ export default function ResetPasswordPage() {
                   <span className="text-sm">{error}</span>
                   {error.includes('expired') && (
                     <button
-                      onClick={handleRequestNewLink}
+                      onClick={() => navigate('/forgot-password')}
                       className="mt-2 text-xs text-red-300 hover:text-white underline block"
                     >
                       Request a new reset link
@@ -594,7 +569,6 @@ export default function ResetPasswordPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* New Password Field */}
             <FormField
               id="password"
               label="New Password"
@@ -630,7 +604,6 @@ export default function ResetPasswordPage() {
                 </button>
               </div>
               
-              {/* Password Strength Indicator */}
               {password && (
                 <div className="mt-2">
                   <div className="flex gap-1 mb-1">
@@ -658,7 +631,6 @@ export default function ResetPasswordPage() {
               )}
             </FormField>
 
-            {/* Confirm Password Field */}
             <FormField
               id="confirmPassword"
               label="Confirm New Password"
@@ -701,7 +673,6 @@ export default function ResetPasswordPage() {
               )}
             </FormField>
 
-            {/* Submit Button */}
             <Button
               type="submit"
               className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
@@ -718,7 +689,6 @@ export default function ResetPasswordPage() {
             </Button>
           </form>
 
-          {/* Divider and Back to Sign In */}
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -750,7 +720,6 @@ export default function ResetPasswordPage() {
           </div>
         </div>
         
-        {/* Bottom text */}
         <p className="mt-8 text-center text-sm text-gray-400">
           Protected by industry-standard encryption
         </p>
