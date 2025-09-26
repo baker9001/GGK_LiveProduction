@@ -1,7 +1,6 @@
 // Edge Function: update-user-password
 // Path: supabase/functions/update-user-password/index.ts
-// 
-// CORRECT VERSION - This is what should be deployed
+// COMPLETE VERSION - No truncation
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
@@ -60,9 +59,23 @@ serve(async (req) => {
     }
 
     // Initialize admin client with service role key
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      console.error('Missing environment variables')
+      return new Response(
+        JSON.stringify({ 
+          error: 'Configuration error',
+          message: 'Server configuration error. Please contact support.' 
+        }),
+        { status: 500, headers: corsHeaders }
+      )
+    }
+    
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      supabaseServiceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -72,12 +85,24 @@ serve(async (req) => {
     )
 
     // First verify the user exists
+    console.log('Verifying user exists:', body.user_id)
     const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(
       body.user_id
     )
     
-    if (getUserError || !userData.user) {
-      console.error('User not found:', getUserError)
+    if (getUserError) {
+      console.error('Error fetching user:', getUserError)
+      return new Response(
+        JSON.stringify({ 
+          error: 'User not found',
+          message: `Could not find user: ${getUserError.message}` 
+        }),
+        { status: 404, headers: corsHeaders }
+      )
+    }
+    
+    if (!userData.user) {
+      console.error('User data is null')
       return new Response(
         JSON.stringify({ 
           error: 'User not found',
@@ -86,6 +111,8 @@ serve(async (req) => {
         { status: 404, headers: corsHeaders }
       )
     }
+
+    console.log('User found, updating password for:', userData.user.email)
 
     // Update password in Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -125,6 +152,17 @@ serve(async (req) => {
         )
       }
       
+      if (authError.message?.includes('same password')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Same password',
+            message: 'New password cannot be the same as the current password' 
+          }),
+          { status: 400, headers: corsHeaders }
+        )
+      }
+      
+      // Generic auth error
       return new Response(
         JSON.stringify({ 
           error: 'Password update failed',
@@ -134,7 +172,9 @@ serve(async (req) => {
       )
     }
 
-    if (!authData.user) {
+    // Check if we got user data back
+    if (!authData || !authData.user) {
+      console.error('No user data returned after update')
       return new Response(
         JSON.stringify({ 
           error: 'Update failed',
@@ -160,6 +200,16 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error in update-user-password:', error)
+    
+    // Log the full error for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
