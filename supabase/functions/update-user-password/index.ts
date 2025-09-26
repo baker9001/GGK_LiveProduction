@@ -125,10 +125,27 @@ serve(async (req) => {
         )
       }
       
+      // Check if new password is same as old password
+      if (authError.message?.includes('same') || authError.message?.includes('identical')) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Same password',
+            message: 'New password must be different from the current password' 
+          }),
+          { status: 400, headers: corsHeaders }
+        )
+      }
+      
+      // Handle generic "Error updating user" message with more descriptive fallback
+      let errorMessage = authError.message || 'Failed to update password in authentication system'
+      if (errorMessage === 'Error updating user' || errorMessage.includes('Error updating user')) {
+        errorMessage = 'Unable to update password. Please ensure the password meets all security requirements and try again.'
+      }
+      
       return new Response(
         JSON.stringify({ 
           error: 'Password update failed',
-          message: authError.message || 'Failed to update password in authentication system'
+          message: errorMessage
         }),
         { status: 400, headers: corsHeaders }
       )
