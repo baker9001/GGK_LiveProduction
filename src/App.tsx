@@ -1,5 +1,5 @@
 // /home/project/src/App.tsx
-// FINAL FIX - Properly preserves hash fragments during redirect
+// CORRECTED VERSION - Routes properly aligned with Supabase redirect URLs
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
@@ -38,8 +38,8 @@ function RootRedirect() {
     // Check if this is a password reset (has recovery tokens in hash)
     if (hash && hash.includes('type=recovery')) {
       console.log('[RootRedirect] Password reset detected, redirecting with hash preserved');
-      // Use window.location to preserve the hash fragments
-      window.location.replace(`/reset-password${hash}`);
+      // CORRECTED: Use /auth/reset-password to match Supabase configuration
+      window.location.replace(`/auth/reset-password${hash}`);
     } else if (hash && hash.includes('access_token')) {
       // Could be other auth types
       const hashParams = new URLSearchParams(hash.substring(1));
@@ -51,7 +51,8 @@ function RootRedirect() {
       } else {
         // Unknown auth type, try reset-password anyway
         console.log('[RootRedirect] Auth tokens detected, trying reset-password');
-        window.location.replace(`/reset-password${hash}`);
+        // CORRECTED: Use /auth/reset-password
+        window.location.replace(`/auth/reset-password${hash}`);
       }
     } else {
       // No special tokens, go to landing
@@ -85,9 +86,11 @@ function HashHandler() {
       
       if (hash && hash.includes('type=recovery')) {
         // Password reset tokens detected
-        if (!window.location.pathname.includes('reset-password')) {
+        // CORRECTED: Check for /auth/reset-password instead of /reset-password
+        if (!window.location.pathname.includes('/auth/reset-password')) {
           console.log('[HashHandler] Redirecting to reset-password with hash');
-          window.location.replace(`/reset-password${hash}`);
+          // CORRECTED: Use /auth/reset-password
+          window.location.replace(`/auth/reset-password${hash}`);
         }
       }
     };
@@ -130,6 +133,11 @@ function AuthCallback() {
             replace: true,
             state: { message: 'Invitation accepted! Please sign in.' }
           });
+          break;
+        case 'recovery':
+          // CORRECTED: Handle recovery type properly
+          console.log('[AuthCallback] Recovery type detected, redirecting to reset-password');
+          window.location.replace(`/auth/reset-password${hash}`);
           break;
         default:
           navigate('/signin', { replace: true });
@@ -225,7 +233,13 @@ function App() {
               {/* Auth pages */}
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              
+              {/* CORRECTED: Password reset route now matches Supabase redirect URL */}
+              <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+              
+              {/* Legacy reset-password route for backward compatibility */}
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              
               <Route path="/form-validation" element={<FormValidationPage />} />
               
               {/* Password Change Route - Protected */}
