@@ -58,6 +58,8 @@ import { PhoneInput } from '../../../../../components/shared/PhoneInput';
 import { ToggleSwitch } from '../../../../../components/shared/ToggleSwitch';
 import { userCreationService } from '../../../../../services/userCreationService';
 import { cn } from '../../../../../lib/utils';
+import { QuickPasswordResetButton } from '../../../../../components/shared/QuickPasswordResetButton';
+import { PasswordResetManager } from '../../../../../components/shared/PasswordResetManager';
 
 // ===== INTERFACES =====
 interface TeacherData {
@@ -269,7 +271,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
   
   // Enhanced password management state
-  const [generatePassword, setGeneratePassword] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
@@ -1237,48 +1238,48 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setActiveTab('basic');
   };
 
-  const handleQuickPasswordReset = (teacher: TeacherData) => {
-    // Set up for password reset with password management enabled
-    setSelectedTeacher(teacher);
-    setFormData({
-      name: teacher.name || '',
-      email: teacher.email || '',
-      teacher_code: teacher.teacher_code,
-      phone: teacher.phone || '',
-      specialization: teacher.specialization || [],
-      qualification: teacher.qualification || '',
-      experience_years: teacher.experience_years || 0,
-      bio: teacher.bio || '',
-      hire_date: teacher.hire_date || '',
-      school_id: teacher.school_id || '',
-      branch_id: teacher.branch_id || '',
-      department_ids: teacher.departments?.map(d => d.id) || [],
-      grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
-      section_ids: teacher.sections?.map(s => s.id) || [],
-      is_active: teacher.is_active ?? true,
-      send_credentials: true,
-      password: ''
-    });
-    
-    // Enable password reset immediately
-    setGeneratePassword(true);
-    setShowEditForm(true);
-    setActiveTab('basic');
-    
-    // Scroll to password section after modal opens
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+  const handleQuickPasswordReset = async (teacherId: string) => {
+    // Find the teacher
+    const teacher = teachers.find(t => t.id === teacherId);
+    if (!teacher) {
+      throw new Error('Teacher not found');
     }
-    
-    scrollTimeoutRef.current = setTimeout(() => {
-      const passwordSection = document.getElementById('password-management-section');
-      if (passwordSection) {
-        passwordSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    try {
+      // Use userCreationService to trigger password reset
+      const result = await userCreationService.updatePassword(teacher.user_id, '');
+      // This will trigger a password reset email
+      
+      // Log the action
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: user?.id,
+          action: 'password_reset_requested',
+          entity_type: 'teacher',
+          entity_id: teacherId,
+          details: {
+            teacher_name: teacher.name,
+            teacher_email: teacher.email,
+            reset_method: 'admin_quick_reset'
+          },
+          created_at: new Date().toISOString()
+        });
+        
+      return result;
+    } catch (error: any) {
+      // Check if it's a password reset email scenario (expected)
+      if (error.isPasswordReset && error.userEmail) {
+        // Success - email was sent
+        return { success: true, emailSent: true };
+      } else if (error.message === 'PASSWORD_RESET_EMAIL_SENT') {
+        // Alternative success format
+        return { success: true, emailSent: true };
       }
-    }, 100);
-    
-    // Show a toast to indicate password reset mode
-    toast.info(`Password reset mode activated for ${teacher.name}. A password reset email will be sent.`);
+      
+      // Real error
+      throw error;
+    }
   };
 
   const handleSubmitForm = async () => {
@@ -1853,15 +1854,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       <div className="flex gap-1" role="group" aria-label={`Actions for ${teacher.name}`}>
                         {canModifyTeacher && (
                           <>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleQuickPasswordReset(teacher)}
-                              title="Reset Password"
-                              className="hover:border-[#8CC63F] hover:text-[#8CC63F] hover:bg-[#8CC63F]/10"
-                            >
-                              <Key className="w-4 h-4" />
-                            </Button>
+                            <QuickPasswordResetButton
+                              teacherId={teacher.id}
+                              teacherName={teacher.name || 'Teacher'}
+                              teacherEmail={teacher.email || ''}
+                              onReset={handleQuickPasswordReset}
+                              disabled={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
+                            />
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -2164,55 +2163,39 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             {/* Password Reset Section for Edit Mode */}
             {showEditForm && (
               <div id="password-management-section" className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Key className="h-4 w-4 text-[#8CC63F]" />
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Password Management</h3>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={generatePassword ? "default" : "outline"}
-                    onClick={() => {
-                      setGeneratePassword(!generatePassword);
-                      if (!generatePassword) {
-                        setFormData({ ...formData, password: '' });
-                      }
-                    }}
-                    className={cn(
-                      generatePassword 
-                        ? "bg-[#8CC63F] hover:bg-[#7AB532] text-white" 
-                        : "border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F]/10"
-                    )}
-                  >
-                    <RefreshCw className={cn("h-4 w-4 mr-2", generatePassword && "animate-pulse")} />
-                    {generatePassword ? "Reset Password Enabled" : "Enable Password Reset"}
-                  </Button>
-                </div>
-
-                {!generatePassword ? (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Click the button above to reset this teacher's password. A password reset email will be sent to their email address.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
-                            Password Reset Active
-                          </p>
-                          <p className="text-sm text-amber-700 dark:text-amber-300">
-                            When you save, a password reset email will be sent to the teacher's email address. They will be able to set their own new password.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <PasswordResetManager
+                  teacherName={formData.name}
+                  teacherEmail={formData.email}
+                  onResetPassword={async (sendEmail) => {
+                    if (!selectedTeacher) throw new Error('No teacher selected');
+                    
+                    // Trigger password reset
+                    const result = await userCreationService.updatePassword(
+                      selectedTeacher.user_id, 
+                      ''
+                    );
+                    
+                    // Log the action
+                    await supabase
+                      .from('audit_logs')
+                      .insert({
+                        user_id: user?.id,
+                        action: 'password_reset_requested',
+                        entity_type: 'teacher',
+                        entity_id: selectedTeacher.id,
+                        details: {
+                          teacher_name: formData.name,
+                          teacher_email: formData.email,
+                          reset_method: 'edit_form',
+                          send_email: sendEmail
+                        },
+                        created_at: new Date().toISOString()
+                      });
+                    
+                    return result;
+                  }}
+                  isLoading={updateTeacherMutation.isLoading}
+                />
               </div>
             )}
           </TabsContent>
