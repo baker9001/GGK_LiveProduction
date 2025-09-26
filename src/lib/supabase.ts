@@ -136,8 +136,7 @@ export async function checkSupabaseConnection(): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('❌ Supabase connection error:', error);
-    // Re-throw the error to allow proper error handling upstream
-    throw error;
+    return false;
   }
 }
 
