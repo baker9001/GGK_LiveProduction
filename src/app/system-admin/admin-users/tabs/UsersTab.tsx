@@ -489,6 +489,7 @@ export default function UsersTab() {
             is_active,
             email_verified,
             last_login_at,
+            last_sign_in_at,
             raw_user_meta_data
           )
         `)
@@ -526,7 +527,7 @@ export default function UsersTab() {
         updated_at: user.updated_at,
         email_verified: user.users?.email_verified || false,
         requires_password_change: user.users?.raw_user_meta_data?.requires_password_change || false,
-        last_login_at: user.users?.last_login_at,
+        last_login_at: user.users?.last_sign_in_at || user.users?.last_login_at,
         phone: user.users?.raw_user_meta_data?.phone,
         position: user.users?.raw_user_meta_data?.position,
         department: user.users?.raw_user_meta_data?.department,
@@ -1031,11 +1032,23 @@ export default function UsersTab() {
       accessorKey: 'last_login_at',
       enableSorting: true,
       cell: (row: AdminUser) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          {row.last_login_at 
-            ? new Date(row.last_login_at).toLocaleDateString() 
-            : 'Never'}
-        </span>
+        <div className="text-sm">
+          {row.last_login_at ? (
+            <div>
+              <div className="text-gray-900 dark:text-white">
+                {new Date(row.last_login_at).toLocaleDateString()}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {new Date(row.last_login_at).toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </div>
+            </div>
+          ) : (
+            <span className="text-gray-500 dark:text-gray-400 italic">Never</span>
+          )}
+        </div>
       ),
     },
     {

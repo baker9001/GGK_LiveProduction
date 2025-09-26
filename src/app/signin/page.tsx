@@ -251,6 +251,8 @@ export default function SignInPage() {
       await supabase
         .from('users')
         .update({
+          last_login_at: new Date().toISOString(),
+          last_sign_in_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
