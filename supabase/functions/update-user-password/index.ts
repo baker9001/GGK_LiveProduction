@@ -1,6 +1,7 @@
 // Edge Function: update-user-password
-// Updates user password in Supabase Auth
 // Path: supabase/functions/update-user-password/index.ts
+// 
+// CORRECT VERSION - This is what should be deployed
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
@@ -43,11 +44,10 @@ serve(async (req) => {
       )
     }
 
-    // Validate password complexity (optional but recommended)
+    // Validate password complexity
     const hasUpperCase = /[A-Z]/.test(body.new_password)
     const hasLowerCase = /[a-z]/.test(body.new_password)
     const hasNumber = /[0-9]/.test(body.new_password)
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(body.new_password)
     
     if (!hasUpperCase || !hasLowerCase || !hasNumber) {
       return new Response(
@@ -125,27 +125,10 @@ serve(async (req) => {
         )
       }
       
-      // Check if new password is same as old password
-      if (authError.message?.includes('same') || authError.message?.includes('identical')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Same password',
-            message: 'New password must be different from the current password' 
-          }),
-          { status: 400, headers: corsHeaders }
-        )
-      }
-      
-      // Handle generic "Error updating user" message with more descriptive fallback
-      let errorMessage = authError.message || 'Failed to update password in authentication system'
-      if (errorMessage === 'Error updating user' || errorMessage.includes('Error updating user')) {
-        errorMessage = 'Unable to update password. Please ensure the password meets all security requirements and try again.'
-      }
-      
       return new Response(
         JSON.stringify({ 
           error: 'Password update failed',
-          message: errorMessage
+          message: authError.message || 'Failed to update password in authentication system'
         }),
         { status: 400, headers: corsHeaders }
       )
