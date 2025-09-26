@@ -661,7 +661,7 @@ export const userCreationService = {
   },
 
   /**
-   * ENHANCED UPDATE PASSWORD - With explicit error messages and debugging
+   * ENHANCED UPDATE PASSWORD - With password reset email as primary method
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
     console.log('🔐 updatePassword called with userId:', userId);
@@ -695,146 +695,98 @@ export const userCreationService = {
       throw error;
     }
     
-    const accessToken = sessionData?.session?.access_token;
+    const currentUserId = sessionData?.session?.user?.id;
     
-    if (!accessToken) {
+    if (!currentUserId) {
       const error = new Error('Your session has expired. Please log in again to continue.');
-      console.error('❌ No access token:', error.message);
+      console.error('❌ No current user:', error.message);
       throw error;
     }
 
-    console.log('✅ Session validated');
-
     // Check if we're updating our own password or someone else's
-    const currentUserId = sessionData.session.user.id;
     const isUpdatingSelf = currentUserId === userId;
     console.log('🔍 Is self-update:', isUpdatingSelf);
 
-    // Verify environment variables
-    console.log('🔍 Environment check:');
-    console.log('  SUPABASE_URL:', SUPABASE_URL ? 'Set' : 'NOT SET');
-    console.log('  SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'Set' : 'NOT SET');
-
-    if (!SUPABASE_URL || SUPABASE_URL === 'undefined' || SUPABASE_URL === '') {
-      const error = new Error('Configuration error: VITE_SUPABASE_URL is not set. Check your .env file.');
-      console.error('❌ Config error:', error.message);
-      throw error;
-    }
-
-    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === 'undefined' || SUPABASE_ANON_KEY === '') {
-      const error = new Error('Configuration error: VITE_SUPABASE_ANON_KEY is not set. Check your .env file.');
-      console.error('❌ Config error:', error.message);
-      throw error;
-    }
-
-    // Try Edge Function first
-    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/update-user-password`;
-    console.log('🔍 Edge Function URL:', edgeFunctionUrl);
-
-    try {
-      console.log('📡 Calling Edge Function...');
+    if (isUpdatingSelf) {
+      // User is updating their own password - we can do this directly
+      console.log('🔄 Self-update via Supabase Auth...');
       
-      // Make the request with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          new_password: newPassword
-        }),
-        signal: controller.signal
-      }).finally(() => clearTimeout(timeoutId));
-
-      console.log('📡 Response status:', response.status);
-
-      // Get response as text first
-      const responseText = await response.text();
-      console.log('📡 Response text (first 200 chars):', responseText.substring(0, 200));
-      
-      // Check if we got HTML (404 page)
-      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-        console.warn('⚠️ Edge Function not found (HTML response), using fallback...');
-        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-      }
-
-      // Parse JSON response
-      let responseData;
       try {
-        responseData = JSON.parse(responseText);
-        console.log('📡 Parsed response:', responseData);
-      } catch (parseError) {
-        console.warn('⚠️ Invalid JSON response, using fallback...');
-        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-      }
-
-      // Handle error responses
-      if (!response.ok) {
-        const errorMessage = responseData?.message || responseData?.error || 'Password update failed';
-        console.error('❌ Edge Function error:', errorMessage);
-        console.error('Full error response:', responseData);
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword
+        });
         
-        // Specific error handling
-        if (response.status === 404) {
-          if (errorMessage.includes('User not found') || errorMessage.includes('authentication system')) {
-            throw new Error('User account not found in authentication system. This user may only exist in the database without a login account. Consider recreating the user.');
-          }
-          // Edge Function endpoint not found
-          console.warn('⚠️ Edge Function endpoint not found, using fallback...');
-          return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-        } else if (response.status === 403) {
-          throw new Error('You do not have permission to update this user\'s password. Only admins can reset other users\' passwords.');
-        } else if (response.status === 401) {
-          throw new Error('Your session has expired. Please log in again to continue.');
-        } else if (response.status === 400) {
-          // Parse specific error from Edge Function
-          if (errorMessage.includes('8 characters')) {
-            throw new Error('Password must be at least 8 characters long');
-          }
-          throw new Error(errorMessage);
-        } else {
-          throw new Error(`Password update failed: ${errorMessage}`);
+        if (error) {
+          console.error('❌ Self-update failed:', error.message);
+          throw new Error(`Password update failed: ${error.message}`);
         }
+        
+        // Update metadata
+        await this.updatePasswordMetadata(userId);
+        
+        console.log('✅ Password updated successfully (self-update)');
+        return;
+      } catch (error: any) {
+        throw new Error(`Failed to update password: ${error.message}`);
       }
-
-      // Check success flag
-      if (!responseData.success) {
-        const errorMessage = responseData.message || responseData.error || 'Password update failed';
-        console.error('❌ Update not successful:', errorMessage);
-        throw new Error(errorMessage);
+    } else {
+      // Admin trying to update another user's password
+      // Use password reset email approach
+      console.log('🔄 Admin update - sending password reset email...');
+      
+      try {
+        // Get the user's email
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('id', userId)
+          .single();
+        
+        if (userError || !userData) {
+          throw new Error('Could not find user email for password reset');
+        }
+        
+        console.log('📧 Sending reset email to:', userData.email);
+        
+        // Send password reset email
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          userData.email,
+          {
+            redirectTo: `${window.location.origin}/auth/reset-password`
+          }
+        );
+        
+        if (resetError) {
+          throw new Error(`Failed to send password reset email: ${resetError.message}`);
+        }
+        
+        // Update metadata to indicate password reset was sent
+        await supabase
+          .from('users')
+          .update({
+            raw_user_meta_data: {
+              password_reset_sent: new Date().toISOString(),
+              password_reset_pending: true,
+              temporary_password_note: `Admin requested reset on ${new Date().toLocaleDateString()}`
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+        
+        console.log('✅ Password reset email sent successfully');
+        
+        // Throw a special error that the UI can handle differently
+        const resetSentError = new Error('PASSWORD_RESET_EMAIL_SENT');
+        (resetSentError as any).isPasswordReset = true;
+        (resetSentError as any).userEmail = userData.email;
+        throw resetSentError;
+        
+      } catch (error: any) {
+        if (error.message === 'PASSWORD_RESET_EMAIL_SENT') {
+          throw error; // Re-throw our special error
+        }
+        throw new Error(`Password reset failed: ${error.message}`);
       }
-
-      // Success! Update metadata
-      await this.updatePasswordMetadata(userId);
-      
-      console.log('✅ Password updated successfully via Edge Function');
-
-    } catch (error: any) {
-      console.error('❌ Edge Function call failed:', error.message);
-      
-      // Handle specific error cases
-      if (error.name === 'AbortError') {
-        throw new Error('Password update timed out. Please check your internet connection and try again.');
-      }
-      
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        console.warn('⚠️ Network error, using fallback...');
-        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-      }
-      
-      if (error.message?.includes('not found') || error.message?.includes('404')) {
-        console.warn('⚠️ Edge Function not available, using fallback...');
-        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-      }
-      
-      // Re-throw the error with clear message
-      throw error;
     }
   },
 

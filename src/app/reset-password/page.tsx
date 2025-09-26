@@ -1,5 +1,5 @@
-// /home/project/src/app/reset-password/page.tsx
-// Complete fixed version that properly captures Supabase redirect tokens
+// /src/app/reset-password/page.tsx
+// Fixed version - removes password_hash field that doesn't exist in users table
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
@@ -7,7 +7,6 @@ import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, Ar
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
-import bcrypt from 'bcryptjs/dist/bcrypt.min';
 import { getCurrentUser } from '../../lib/auth';
 import { toast } from '../../components/shared/Toast';
 
@@ -269,7 +268,7 @@ export default function ResetPasswordPage() {
           }
         }
         
-        // Update password
+        // Update password in Supabase Auth
         const { data, error: updateError } = await supabase.auth.updateUser({
           password: password
         });
@@ -293,24 +292,32 @@ export default function ResetPasswordPage() {
 
         console.log('[ResetPassword] Password updated successfully');
 
-        // Also update password hash in custom tables
+        // Update metadata in custom users table (without password_hash)
         try {
-          const salt = await bcrypt.genSalt(10);
-          const hashedPassword = await bcrypt.hash(password, salt);
+          // Get current metadata
+          const { data: currentUser } = await supabase
+            .from('users')
+            .select('raw_user_meta_data')
+            .eq('id', userIdToProcess || data.user.id)
+            .single();
+
+          const updatedMetadata = {
+            ...(currentUser?.raw_user_meta_data || {}),
+            password_updated_at: new Date().toISOString(),
+            requires_password_change: false,
+            password_reset_completed: true
+          };
 
           await supabase
             .from('users')
             .update({
-              password_hash: hashedPassword,
-              password_updated_at: new Date().toISOString(),
-              requires_password_change: false,
+              raw_user_meta_data: updatedMetadata,
               updated_at: new Date().toISOString()
             })
-            .eq('id', userIdToProcess || data.user.id)
-            .or(`email.eq.${userEmail || data.user.email}`);
+            .eq('id', userIdToProcess || data.user.id);
 
-        } catch (hashError) {
-          console.warn('[ResetPassword] Failed to update custom table (non-critical):', hashError);
+        } catch (metadataError) {
+          console.warn('[ResetPassword] Failed to update metadata (non-critical):', metadataError);
         }
 
         // Sign out after password reset
@@ -320,21 +327,30 @@ export default function ResetPasswordPage() {
         // Legacy password update
         console.log('[ResetPassword] Updating password via legacy method...');
         
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // For legacy method, we can't update auth.users, only metadata
+        const { data: currentUser } = await supabase
+          .from('users')
+          .select('raw_user_meta_data')
+          .eq('id', userIdToProcess)
+          .single();
+
+        const updatedMetadata = {
+          ...(currentUser?.raw_user_meta_data || {}),
+          password_updated_at: new Date().toISOString(),
+          requires_password_change: false,
+          legacy_password_reset: true
+        };
 
         const { error: userUpdateError } = await supabase
           .from('users')
           .update({
-            password_hash: hashedPassword,
-            password_updated_at: new Date().toISOString(),
-            requires_password_change: false,
+            raw_user_meta_data: updatedMetadata,
             updated_at: new Date().toISOString()
           })
           .eq('id', userIdToProcess);
 
         if (userUpdateError) {
-          throw new Error(`Failed to update password: ${userUpdateError.message}`);
+          throw new Error(`Failed to update user: ${userUpdateError.message}`);
         }
 
         // Mark token as used
