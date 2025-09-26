@@ -1,27 +1,31 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * FINAL CORRECTED VERSION - Fixed user_types column issue
+ * FINAL COMPREHENSIVE VERSION
+ * Combines invitation-first approach with full Edge Function support
  * 
- * Changes made:
- * ✅ REMOVED user_types column references (database only has user_type singular)
- * ✅ Enhanced updatePassword with explicit error messages
- * ✅ Added detailed console logging for debugging
- * ✅ Improved error propagation
- * ✅ Better fallback handling
+ * Features:
+ * ✅ Primary method: createUserWithInvitation (secure, no passwords)
+ * ✅ Edge Function integration with fallback mechanisms
+ * ✅ Support for all user types (admins, teachers, students, parents, staff)
+ * ✅ Comprehensive error handling and validation
+ * ✅ Password reset via email (no direct password updates for other users)
+ * ✅ Email update with verification
+ * ✅ Scope assignments for admin users
+ * ✅ Permission management
+ * ✅ Audit trail support
  */
 
-import { supabase } from '@/lib/supabase';
-import bcrypt from 'bcryptjs';
+import { supabase } from '../lib/supabase';
 
 // ============= TYPE DEFINITIONS =============
 
-export type UserType = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin' | 'teacher' | 'student';
+export type UserType = 'entity_admin' | 'sub_entity_admin' | 'school_admin' | 'branch_admin' | 'teacher' | 'student' | 'parent' | 'staff';
 
 export interface BaseUserPayload {
   email: string;
   name: string;
-  password?: string;
+  password?: string; // Optional, only for legacy support
   phone?: string;
   company_id: string;
   is_active?: boolean;
@@ -65,7 +69,34 @@ export interface StudentUserPayload extends BaseUserPayload {
   branch_id?: string;
 }
 
-type CreateUserPayload = AdminUserPayload | TeacherUserPayload | StudentUserPayload;
+export interface ParentUserPayload extends BaseUserPayload {
+  user_type: 'parent';
+  parent_code: string;
+  occupation?: string;
+  address?: string;
+  relationship_type?: string;
+  secondary_phone?: string;
+}
+
+export interface StaffUserPayload extends BaseUserPayload {
+  user_type: 'staff';
+  staff_code: string;
+  department?: string;
+  designation?: string;
+  hire_date?: string;
+  school_id?: string;
+  branch_id?: string;
+}
+
+type CreateUserPayload = AdminUserPayload | TeacherUserPayload | StudentUserPayload | ParentUserPayload | StaffUserPayload;
+
+export interface UserCreationResult {
+  userId: string;
+  entityId?: string;
+  email: string;
+  invitationSent?: boolean;
+  temporaryPassword?: string; // Only returned for legacy method
+}
 
 // ============= CONFIGURATION =============
 
@@ -90,7 +121,9 @@ function getUserTypes(userType: UserType): string[] {
     'school_admin': ['entity', 'admin'],
     'branch_admin': ['entity', 'admin'],
     'teacher': ['teacher', 'staff'],
-    'student': ['student']
+    'student': ['student'],
+    'parent': ['parent'],
+    'staff': ['staff']
   };
   return typeMap[userType] || ['user'];
 }
@@ -115,7 +148,26 @@ function generateUUID(): string {
   ].join('-');
 }
 
-// FIXED: Removed user_types from SAFE_USER_COLUMNS as it doesn't exist in the database
+function generateSecurePassword(): string {
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+  
+  let password = '';
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  const allChars = uppercase + lowercase + numbers + special;
+  for (let i = password.length; i < 12; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
 export const SAFE_USER_COLUMNS = [
   'id',
   'email',
@@ -137,9 +189,10 @@ export const SAFE_USER_COLUMNS = [
 
 export const userCreationService = {
   /**
-   * Create a new user
+   * PRIMARY METHOD: Create user with email invitation
+   * Recommended for all new users - they set their own password
    */
-  async createUser(payload: CreateUserPayload): Promise<{ userId: string; entityId: string }> {
+  async createUserWithInvitation(payload: CreateUserPayload): Promise<UserCreationResult> {
     try {
       // Input validation
       if (!validateEmail(payload.email)) {
@@ -150,15 +203,14 @@ export const userCreationService = {
         throw new Error('Name must be at least 2 characters long');
       }
 
-      // Check if email already exists in public users table
-      const { data: existingUser, error: checkError } = await supabase
+      // Check if email already exists
+      const { data: existingUser } = await supabase
         .from('users')
         .select('id, email, user_type')
         .eq('email', payload.email.toLowerCase())
         .maybeSingle();
 
       if (existingUser) {
-        // Check if this user already has a teacher/student/admin record
         let hasEntityRecord = false;
         let entityTable = '';
         
@@ -180,6 +232,24 @@ export const userCreationService = {
               .maybeSingle();
             hasEntityRecord = !!studentExists;
             entityTable = 'students';
+            break;
+          case 'parent':
+            const { data: parentExists } = await supabase
+              .from('parents')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .maybeSingle();
+            hasEntityRecord = !!parentExists;
+            entityTable = 'parents';
+            break;
+          case 'staff':
+            const { data: staffExists } = await supabase
+              .from('staff')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .maybeSingle();
+            hasEntityRecord = !!staffExists;
+            entityTable = 'staff';
             break;
           case 'entity_admin':
           case 'sub_entity_admin':
@@ -209,7 +279,7 @@ export const userCreationService = {
       let entityId: string | null = null;
 
       try {
-        // Create user in Supabase Auth
+        // Create user with invitation
         userId = await this.createUserInSupabaseAuthWithInvite(payload);
 
         // Create entity-specific record
@@ -226,11 +296,22 @@ export const userCreationService = {
           case 'student':
             entityId = await this.createStudentUser(userId, payload as StudentUserPayload);
             break;
+          case 'parent':
+            entityId = await this.createParentUser(userId, payload as ParentUserPayload);
+            break;
+          case 'staff':
+            entityId = await this.createStaffUser(userId, payload as StaffUserPayload);
+            break;
           default:
             throw new Error('Invalid user type');
         }
 
-        return { userId, entityId };
+        return { 
+          userId, 
+          entityId: entityId || undefined,
+          email: payload.email,
+          invitationSent: true
+        };
       } catch (error) {
         if (userId) {
           await this.rollbackUserCreation(userId);
@@ -241,6 +322,27 @@ export const userCreationService = {
       console.error('User creation failed:', error);
       throw error instanceof Error ? error : new Error('Failed to create user');
     }
+  },
+
+  /**
+   * LEGACY METHOD: Create user with auto-generated password
+   * Only use when invitation emails cannot be sent
+   */
+  async createUser(payload: CreateUserPayload): Promise<UserCreationResult> {
+    // Set password if not provided
+    if (!payload.password) {
+      payload.password = generateSecurePassword();
+    }
+    
+    // Use the same flow but with password
+    const result = await this.createUserWithInvitation(payload);
+    
+    // Return with temporary password
+    return {
+      ...result,
+      temporaryPassword: payload.password,
+      invitationSent: false
+    };
   },
 
   /**
@@ -260,15 +362,67 @@ export const userCreationService = {
         user_type: payload.user_type,
         created_by: currentUser?.email,
         created_at: new Date().toISOString(),
+        phone: payload.phone,
         ...payload.metadata
       };
 
-      // Determine which Edge Function to use based on user type
+      // Determine which Edge Function to use
       const isAdminUser = ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(payload.user_type);
       const isTeacherOrStudent = ['teacher', 'student'].includes(payload.user_type);
+      const isParentOrStaff = ['parent', 'staff'].includes(payload.user_type);
 
-      if (isTeacherOrStudent) {
-        // Use the teacher/student Edge Function
+      if (isAdminUser) {
+        // Use admin Edge Function
+        console.log('Creating admin user with Edge Function');
+        
+        try {
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-entity-users-invite`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+              'apikey': SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+              email: payload.email.toLowerCase(),
+              name: sanitizeString(payload.name),
+              user_metadata: userMetadata,
+              admin_level: (payload as AdminUserPayload).admin_level,
+              company_id: payload.company_id,
+              company_name: await this.getCompanyName(payload.company_id),
+              phone: payload.phone,
+              password: payload.password, // Include if provided
+              redirect_to: `${window.location.origin}/auth/callback`,
+              send_invitation: payload.send_invitation !== false && !payload.password,
+              created_by: currentUser?.email
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            
+            if (result.userId) {
+              await this.createUserInCustomTable(result.userId, payload, userMetadata);
+              console.log('Admin user created:', result.userId);
+              return result.userId;
+            }
+          } else {
+            const errorData = await response.json().catch(() => null);
+            console.warn('Admin Edge Function failed:', errorData?.error);
+            
+            if (response.status === 404) {
+              console.warn('Admin Edge Function not deployed, using fallback...');
+              return await this.createUserInUsersTableDirect(payload);
+            }
+            
+            throw new Error(errorData?.error || 'Failed to create admin user');
+          }
+        } catch (edgeError) {
+          console.warn('Admin Edge Function not available:', edgeError);
+          return await this.createUserInUsersTableDirect(payload);
+        }
+      } else if (isTeacherOrStudent) {
+        // Use teacher/student Edge Function
         console.log(`Creating ${payload.user_type} with Edge Function`);
         
         try {
@@ -281,15 +435,13 @@ export const userCreationService = {
             phone: payload.phone,
             user_metadata: userMetadata,
             redirect_to: `${window.location.origin}/auth/callback`,
-            send_invitation: payload.send_invitation !== false,
+            send_invitation: payload.send_invitation !== false && !payload.password,
             created_by: currentUser?.email
           };
 
           // Add password if provided
           if (payload.password) {
             requestBody.password = payload.password;
-          } else {
-            // Request temporary password to be returned (for display)
             requestBody.return_password = true;
           }
 
@@ -328,45 +480,25 @@ export const userCreationService = {
             const result = await response.json();
             
             if (result.userId) {
-              // Create record in users table
               await this.createUserInCustomTable(result.userId, payload, userMetadata);
               
-              // Store temporary password if returned (for display to admin)
               if (result.temporaryPassword) {
                 (payload as any).generatedPassword = result.temporaryPassword;
               }
               
-              console.log(`${payload.user_type} created via Edge Function:`, result.userId);
+              console.log(`${payload.user_type} created:`, result.userId);
               return result.userId;
             }
           } else {
             const errorData = await response.json().catch(() => null);
             console.warn('Teacher/Student Edge Function failed:', errorData);
             
-            // Handle specific error cases
             if (response.status === 409) {
-              // User already exists - provide detailed error message
-              if (errorData?.details) {
-                const details = errorData.details;
-                
-                if (details.hasEntityRecord) {
-                  throw new Error(errorData.error);
-                } else if (details.hasPublicRecord && details.existingUserType) {
-                  throw new Error(errorData.error);
-                } else if (details.hasAuthAccount && !details.hasPublicRecord) {
-                  throw new Error(
-                    'This email is registered but incomplete. Please contact support to complete the account setup.'
-                  );
-                }
-              }
-              
               throw new Error(errorData?.error || 'This email is already registered');
             }
             
-            // If Edge Function not found (404), fall back to direct creation
             if (response.status === 404) {
               console.warn('Teacher/Student Edge Function not deployed, using fallback...');
-              console.warn('Deploy with: supabase functions deploy create-teacher-student-user --no-verify-jwt');
               return await this.createUserInUsersTableDirect(payload);
             }
             
@@ -375,69 +507,18 @@ export const userCreationService = {
         } catch (edgeError: any) {
           console.error('Teacher/Student Edge Function error:', edgeError);
           
-          // Fall back to direct creation if Edge Function not available
           if (edgeError.message?.includes('fetch')) {
-            console.warn('Network error accessing Edge Function, using fallback...');
+            console.warn('Network error, using fallback...');
             return await this.createUserInUsersTableDirect(payload);
           }
           
           throw edgeError;
         }
-      } else if (isAdminUser) {
-        // Use the admin Edge Function for admin users
-        console.log('Creating admin user with Edge Function');
-        
-        try {
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-entity-users-invite`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': accessToken ? `Bearer ${accessToken}` : '',
-              'apikey': SUPABASE_ANON_KEY
-            },
-            body: JSON.stringify({
-              email: payload.email.toLowerCase(),
-              name: sanitizeString(payload.name),
-              user_metadata: userMetadata,
-              admin_level: (payload as AdminUserPayload).admin_level,
-              company_id: payload.company_id,
-              company_name: await this.getCompanyName(payload.company_id),
-              phone: payload.phone,
-              redirect_to: `${window.location.origin}/auth/callback`,
-              send_invitation: payload.send_invitation !== false,
-              created_by: currentUser?.email
-            })
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            
-            if (result.userId) {
-              await this.createUserInCustomTable(result.userId, payload, userMetadata);
-              console.log('Admin user created via Edge Function with invitation:', result.userId);
-              return result.userId;
-            }
-          } else {
-            const errorData = await response.json().catch(() => null);
-            console.warn('Admin Edge Function failed:', errorData?.error || 'Unknown error');
-            
-            // If Edge Function not found (404), fall back
-            if (response.status === 404) {
-              console.warn('Admin Edge Function not deployed, using fallback...');
-              return await this.createUserInUsersTableDirect(payload);
-            }
-            
-            throw new Error(errorData?.error || 'Failed to create admin user');
-          }
-        } catch (edgeError) {
-          console.warn('Admin Edge Function not available:', edgeError);
-          return await this.createUserInUsersTableDirect(payload);
-        }
+      } else {
+        // Parent/Staff - use direct creation or adapt Edge Function
+        console.log(`Creating ${payload.user_type} with fallback method`);
+        return await this.createUserInUsersTableDirect(payload);
       }
-
-      // Fallback: Create directly in users table (no auth.users record)
-      console.warn('User type not handled by Edge Functions, using fallback');
-      return await this.createUserInUsersTableDirect(payload);
       
     } catch (error: any) {
       console.error('Failed to create user:', error);
@@ -447,7 +528,6 @@ export const userCreationService = {
 
   /**
    * Create user in custom users table
-   * FIXED: Removed user_types field as it doesn't exist in the database
    */
   async createUserInCustomTable(authUserId: string, payload: CreateUserPayload, metadata: any): Promise<void> {
     const userTypes = getUserTypes(payload.user_type);
@@ -456,7 +536,6 @@ export const userCreationService = {
       id: authUserId,
       email: payload.email.toLowerCase(),
       user_type: userTypes[0], // Only use user_type (singular)
-      // REMOVED: user_types field doesn't exist in database
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: metadata,
@@ -479,8 +558,7 @@ export const userCreationService = {
   },
 
   /**
-   * Fallback: Create user directly
-   * FIXED: Removed user_types field as it doesn't exist in the database
+   * Fallback: Create user directly in users table
    */
   async createUserInUsersTableDirect(payload: CreateUserPayload): Promise<string> {
     console.warn('Using direct creation fallback (invitation pending)');
@@ -491,14 +569,14 @@ export const userCreationService = {
     const userData = {
       id: userId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0], // Only use user_type (singular)
-      // REMOVED: user_types field doesn't exist in database
+      user_type: userTypes[0],
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
         user_type: payload.user_type,
+        phone: payload.phone,
         created_via: 'fallback',
         requires_invitation: true,
         requires_password_change: true,
@@ -526,7 +604,7 @@ export const userCreationService = {
   },
 
   /**
-   * Create admin user
+   * Create admin user entity
    */
   async createAdminUser(userId: string, payload: AdminUserPayload): Promise<string> {
     const defaultPermissions = this.getDefaultPermissions(payload.admin_level);
@@ -535,8 +613,6 @@ export const userCreationService = {
       ...(payload.permissions || {})
     };
 
-    // Note: email and name might be stored in users table, not entity_users
-    // Including them here in case entity_users has these columns
     const adminData = {
       user_id: userId,
       company_id: payload.company_id,
@@ -551,7 +627,7 @@ export const userCreationService = {
       assigned_schools: payload.assigned_schools || [],
       assigned_branches: payload.assigned_branches || [],
       metadata: {
-        created_via: 'enhanced_user_creation_service',
+        created_via: 'user_creation_service',
         created_at: new Date().toISOString(),
         ...payload.metadata
       },
@@ -581,10 +657,9 @@ export const userCreationService = {
   },
 
   /**
-   * Create teacher user
+   * Create teacher entity
    */
   async createTeacherUser(userId: string, payload: TeacherUserPayload): Promise<string> {
-    // Note: email and name are stored in the users table, not teachers table
     const teacherData: any = {
       user_id: userId,
       company_id: payload.company_id,
@@ -594,7 +669,7 @@ export const userCreationService = {
       qualification: payload.qualification || null,
       experience_years: payload.experience_years || 0,
       bio: payload.bio || null,
-      hire_date: payload.hire_date || new Date().toISOString(),
+      hire_date: payload.hire_date || new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -620,10 +695,9 @@ export const userCreationService = {
   },
 
   /**
-   * Create student user
+   * Create student entity
    */
   async createStudentUser(userId: string, payload: StudentUserPayload): Promise<string> {
-    // Note: email and name are stored in the users table, not students table
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
@@ -632,7 +706,7 @@ export const userCreationService = {
       enrollment_number: payload.enrollment_number,
       grade_level: payload.grade_level || null,
       section: payload.section || null,
-      admission_date: payload.admission_date || new Date().toISOString(),
+      admission_date: payload.admission_date || new Date().toISOString().split('T')[0],
       parent_name: payload.parent_name || null,
       parent_contact: payload.parent_contact || null,
       parent_email: payload.parent_email || null,
@@ -661,225 +735,308 @@ export const userCreationService = {
   },
 
   /**
-   * ENHANCED UPDATE PASSWORD - With password reset email as primary method
+   * Create parent entity
+   */
+  async createParentUser(userId: string, payload: ParentUserPayload): Promise<string> {
+    const parentData = {
+      user_id: userId,
+      company_id: payload.company_id,
+      parent_code: payload.parent_code,
+      phone: payload.phone || null,
+      secondary_phone: payload.secondary_phone || null,
+      occupation: payload.occupation || null,
+      address: payload.address || null,
+      relationship_type: payload.relationship_type || 'parent',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('parents')
+      .insert([parentData])
+      .select('id')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create parent profile: ${error.message}`);
+    }
+
+    return data.id;
+  },
+
+  /**
+   * Create staff entity
+   */
+  async createStaffUser(userId: string, payload: StaffUserPayload): Promise<string> {
+    const staffData: any = {
+      user_id: userId,
+      company_id: payload.company_id,
+      staff_code: payload.staff_code,
+      phone: payload.phone || null,
+      department: payload.department || null,
+      designation: payload.designation || null,
+      hire_date: payload.hire_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (payload.school_id) {
+      staffData.school_id = payload.school_id;
+    }
+    if (payload.branch_id) {
+      staffData.branch_id = payload.branch_id;
+    }
+
+    const { data, error } = await supabase
+      .from('staff')
+      .insert([staffData])
+      .select('id')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create staff profile: ${error.message}`);
+    }
+
+    return data.id;
+  },
+
+  /**
+   * Update user password or send reset email
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
     console.log('🔐 updatePassword called with userId:', userId);
     
-    // Input validation
-    if (!newPassword || newPassword.length < 8) {
-      const error = new Error('Password must be at least 8 characters long');
-      console.error('❌ Validation error:', error.message);
-      throw error;
+    // If no password provided, send reset email
+    if (!newPassword || newPassword === '') {
+      return await this.sendPasswordResetEmail(userId);
     }
 
-    // Password complexity check
+    // Validate password
+    if (newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters long');
+    }
+
     const hasUpperCase = /[A-Z]/.test(newPassword);
     const hasLowerCase = /[a-z]/.test(newPassword);
     const hasNumber = /[0-9]/.test(newPassword);
     
     if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-      const error = new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
-      console.error('❌ Complexity error:', error.message);
-      throw error;
+      throw new Error('Password must contain uppercase, lowercase, and number');
     }
-
-    console.log('✅ Password validation passed');
 
     // Get current session
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      const error = new Error(`Authentication error: ${sessionError.message}`);
-      console.error('❌ Session error:', error.message);
-      throw error;
-    }
-    
+    const { data: sessionData } = await supabase.auth.getSession();
     const currentUserId = sessionData?.session?.user?.id;
     
     if (!currentUserId) {
-      const error = new Error('Your session has expired. Please log in again to continue.');
-      console.error('❌ No current user:', error.message);
+      throw new Error('Your session has expired. Please log in again.');
+    }
+
+    // Check if updating own password
+    const isUpdatingSelf = currentUserId === userId;
+
+    if (isUpdatingSelf) {
+      // Self-update via Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) {
+        throw new Error(`Password update failed: ${error.message}`);
+      }
+      
+      await this.updatePasswordMetadata(userId);
+      console.log('✅ Password updated successfully');
+      
+    } else {
+      // Admin updating another user - send reset email instead
+      await this.sendPasswordResetEmail(userId);
+    }
+  },
+
+  /**
+   * Send password reset email
+   */
+  async sendPasswordResetEmail(userId: string): Promise<void> {
+    try {
+      // Get user email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single();
+      
+      if (userError || !userData) {
+        throw new Error('User not found');
+      }
+      
+      console.log('📧 Sending reset email to:', userData.email);
+      
+      // Send password reset email
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        userData.email,
+        {
+          redirectTo: `${window.location.origin}/auth/reset-password`
+        }
+      );
+      
+      if (resetError) {
+        throw new Error(`Failed to send password reset email: ${resetError.message}`);
+      }
+      
+      // Update metadata
+      await supabase
+        .from('users')
+        .update({
+          raw_user_meta_data: {
+            password_reset_sent: new Date().toISOString(),
+            password_reset_pending: true
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      console.log('✅ Password reset email sent successfully');
+      
+      // Throw special error for UI handling
+      const resetSentError: any = new Error('PASSWORD_RESET_EMAIL_SENT');
+      resetSentError.isPasswordReset = true;
+      resetSentError.userEmail = userData.email;
+      throw resetSentError;
+      
+    } catch (error: any) {
       throw error;
     }
-
-    // Check if we're updating our own password or someone else's
-    const isUpdatingSelf = currentUserId === userId;
-    console.log('🔍 Is self-update:', isUpdatingSelf);
-
-    if (isUpdatingSelf) {
-      // User is updating their own password - we can do this directly
-      console.log('🔄 Self-update via Supabase Auth...');
-      
-      try {
-        const { error } = await supabase.auth.updateUser({
-          password: newPassword
-        });
-        
-        if (error) {
-          console.error('❌ Self-update failed:', error.message);
-          throw new Error(`Password update failed: ${error.message}`);
-        }
-        
-        // Update metadata
-        await this.updatePasswordMetadata(userId);
-        
-        console.log('✅ Password updated successfully (self-update)');
-        return;
-      } catch (error: any) {
-        throw new Error(`Failed to update password: ${error.message}`);
-      }
-    } else {
-      // Admin trying to update another user's password
-      // Use password reset email approach
-      console.log('🔄 Admin update - sending password reset email...');
-      
-      try {
-        // Get the user's email
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', userId)
-          .single();
-        
-        if (userError || !userData) {
-          throw new Error('Could not find user email for password reset');
-        }
-        
-        console.log('📧 Sending reset email to:', userData.email);
-        
-        // Send password reset email
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-          userData.email,
-          {
-            redirectTo: `${window.location.origin}/auth/reset-password`
-          }
-        );
-        
-        if (resetError) {
-          throw new Error(`Failed to send password reset email: ${resetError.message}`);
-        }
-        
-        // Update metadata to indicate password reset was sent
-        await supabase
-          .from('users')
-          .update({
-            raw_user_meta_data: {
-              password_reset_sent: new Date().toISOString(),
-              password_reset_pending: true,
-              temporary_password_note: `Admin requested reset on ${new Date().toLocaleDateString()}`
-            },
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-        
-        console.log('✅ Password reset email sent successfully');
-        
-        // Throw a special error that the UI can handle differently
-        const resetSentError = new Error('PASSWORD_RESET_EMAIL_SENT');
-        (resetSentError as any).isPasswordReset = true;
-        (resetSentError as any).userEmail = userData.email;
-        throw resetSentError;
-        
-      } catch (error: any) {
-        if (error.message === 'PASSWORD_RESET_EMAIL_SENT') {
-          throw error; // Re-throw our special error
-        }
-        throw new Error(`Password reset failed: ${error.message}`);
-      }
-    }
   },
 
   /**
-   * Fallback method for password update when Edge Function is not available
+   * Update user email
    */
-  async updatePasswordFallback(userId: string, newPassword: string, isUpdatingSelf: boolean): Promise<void> {
-    console.log('🔄 Using fallback password update method...');
-    
-    if (isUpdatingSelf) {
-      // User is updating their own password - we can do this directly
-      try {
-        console.log('🔄 Self-update via Supabase Auth...');
+  async updateEmail(userId: string, newEmail: string): Promise<void> {
+    if (!newEmail || !validateEmail(newEmail)) {
+      throw new Error('Invalid email format');
+    }
+
+    const normalizedEmail = newEmail.toLowerCase();
+
+    // Check if email already exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .neq('id', userId)
+      .maybeSingle();
+
+    if (existingUser) {
+      throw new Error('This email is already in use');
+    }
+
+    // Get current session
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+
+    if (!accessToken) {
+      throw new Error('Authentication required. Please log in and try again.');
+    }
+
+    try {
+      // Try Edge Function first
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/update-user-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          new_email: normalizedEmail
+        })
+      });
+
+      if (response.ok) {
+        const responseData = await response.json();
         
-        const { error } = await supabase.auth.updateUser({
-          password: newPassword
-        });
-        
-        if (error) {
-          console.error('❌ Self-update failed:', error.message);
-          throw new Error(`Password update failed: ${error.message}`);
-        }
-        
-        // Update metadata
-        await this.updatePasswordMetadata(userId);
-        
-        console.log('✅ Password updated successfully (self-update fallback)');
-        return;
-      } catch (error: any) {
-        throw new Error(`Failed to update password: ${error.message}`);
-      }
-    } else {
-      // Admin trying to update another user's password
-      // Without Edge Function, we can only send a reset email
-      console.log('🔄 Admin update - sending password reset email...');
-      
-      try {
-        // Get the user's email
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', userId)
-          .single();
-        
-        if (userError || !userData) {
-          throw new Error('Could not find user email for password reset');
-        }
-        
-        console.log('📧 Sending reset email to:', userData.email);
-        
-        // Send password reset email
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-          userData.email,
-          {
-            redirectTo: `${window.location.origin}/auth/reset-password`
-          }
-        );
-        
-        if (resetError) {
-          throw new Error(`Failed to send password reset email: ${resetError.message}`);
-        }
-        
-        // Update metadata to indicate password reset was sent
+        // Update custom table
         await supabase
           .from('users')
           .update({
-            raw_user_meta_data: {
-              password_reset_sent: new Date().toISOString(),
-              password_reset_pending: true
-            },
+            email: normalizedEmail,
+            email_verified: false,
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
+
+        console.log('Email updated successfully');
+      } else if (response.status === 404) {
+        // Edge Function not found - update only in custom table
+        console.warn('Email Edge Function not found, updating display only');
         
-        console.log('✅ Password reset email sent successfully');
-        
-        // This is not an error, but we throw it to inform the UI
-        throw new Error(
-          'Direct password update not available. A password reset email has been sent to the user. ' +
-          'To enable direct password updates, deploy the Edge Function with: ' +
-          'supabase functions deploy update-user-password --no-verify-jwt'
-        );
-      } catch (error: any) {
-        if (error.message.includes('Direct password update not available')) {
-          throw error;
+        const { error } = await supabase
+          .from('users')
+          .update({
+            email: normalizedEmail,
+            email_verified: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (error) {
+          throw new Error('Failed to update email');
         }
-        throw new Error(`Fallback password update failed: ${error.message}`);
+
+        throw new Error(
+          'Email updated for display only. User must still login with original email. ' +
+          'Deploy update-user-email Edge Function for full functionality.'
+        );
+      } else {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Email update failed');
       }
+    } catch (error: any) {
+      if (error.message?.includes('Failed to fetch')) {
+        throw new Error('Network error: Unable to connect to email update service');
+      }
+      throw error;
     }
   },
 
   /**
-   * Update password metadata in users table
+   * Resend invitation email
+   */
+  async resendInvitation(userId: string): Promise<void> {
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('email, raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userData?.email) {
+        throw new Error('User not found');
+      }
+
+      // Use Supabase admin API to resend invitation
+      const { error: inviteError } = await supabase.auth.resetPasswordForEmail(
+        userData.email,
+        {
+          redirectTo: `${window.location.origin}/auth/accept-invite`
+        }
+      );
+
+      if (inviteError) {
+        throw new Error(inviteError.message || 'Failed to resend invitation');
+      }
+
+      console.log('Invitation resent to:', userData.email);
+    } catch (error: any) {
+      console.error('Error resending invitation:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update password metadata
    */
   async updatePasswordMetadata(userId: string): Promise<void> {
     try {
@@ -913,124 +1070,7 @@ export const userCreationService = {
   },
 
   /**
-   * Update user email with proper error handling
-   */
-  async updateEmail(userId: string, newEmail: string): Promise<void> {
-    if (!newEmail || !validateEmail(newEmail)) {
-      throw new Error('Invalid email format');
-    }
-
-    const normalizedEmail = newEmail.toLowerCase();
-
-    // Check if email already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .neq('id', userId)
-      .maybeSingle();
-
-    if (existingUser) {
-      throw new Error('This email is already in use');
-    }
-
-    // Get current session
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-
-    if (!accessToken) {
-      throw new Error('Authentication required. Please log in and try again.');
-    }
-
-    try {
-      // Verify environment variables
-      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        throw new Error('Configuration error: Missing environment variables');
-      }
-
-      // Call Edge Function
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/update-user-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          new_email: normalizedEmail
-        })
-      });
-
-      // Parse response
-      const responseText = await response.text();
-      
-      // Check for HTML (404)
-      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-        // Edge Function not found - update only in custom table
-        console.warn('Email Edge Function not found, updating display only');
-        
-        const { error } = await supabase
-          .from('users')
-          .update({
-            email: normalizedEmail,
-            email_verified: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-
-        if (error) {
-          throw new Error('Failed to update email');
-        }
-
-        throw new Error(
-          'Email updated for display only. User must still login with original email. ' +
-          'Deploy update-user-email Edge Function for full functionality.'
-        );
-      }
-
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error('Invalid response from email update service');
-      }
-
-      // Handle errors
-      if (!response.ok) {
-        const errorMessage = responseData?.message || responseData?.error || 'Email update failed';
-        
-        if (response.status === 409) {
-          throw new Error('This email address is already registered to another account');
-        } else if (response.status === 400) {
-          throw new Error(errorMessage);
-        } else {
-          throw new Error(errorMessage);
-        }
-      }
-
-      // Update custom table
-      await supabase
-        .from('users')
-        .update({
-          email: normalizedEmail,
-          email_verified: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      console.log('Email updated successfully');
-
-    } catch (error: any) {
-      if (error.message?.includes('Failed to fetch')) {
-        throw new Error('Network error: Unable to connect to email update service');
-      }
-      throw error;
-    }
-  },
-
-  /**
-   * Create scope assignments
+   * Create scope assignments for admin users
    */
   async createScopeAssignments(
     userId: string, 
@@ -1070,6 +1110,65 @@ export const userCreationService = {
     }
   },
 
+  /**
+   * Deactivate user
+   */
+  async deactivateUser(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_active: false,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) {
+      throw new Error(`Failed to deactivate user: ${error.message}`);
+    }
+  },
+
+  /**
+   * Activate user
+   */
+  async activateUser(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_active: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) {
+      throw new Error(`Failed to activate user: ${error.message}`);
+    }
+  },
+
+  /**
+   * Delete user
+   */
+  async deleteUser(userId: string): Promise<void> {
+    try {
+      // Try to delete from Supabase Auth
+      await supabase.auth.admin.deleteUser(userId);
+    } catch (error) {
+      console.warn('Could not delete from auth, may be direct user');
+    }
+
+    // Delete from users table (cascades to entity tables)
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (error) {
+      throw new Error(`Failed to delete user: ${error.message}`);
+    }
+  },
+
+  /**
+   * Helper methods
+   */
   async getCurrentUser(): Promise<any> {
     const { data: { user } } = await supabase.auth.getUser();
     return user;
@@ -1094,66 +1193,6 @@ export const userCreationService = {
     }
   },
 
-  async deactivateUser(userId: string, actorId: string): Promise<void> {
-    if (userId === actorId) {
-      throw new Error('You cannot deactivate your own account');
-    }
-
-    const { error } = await supabase
-      .from('users')
-      .update({
-        is_active: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw new Error(`Failed to deactivate user: ${error.message}`);
-    }
-  },
-
-  async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.toLowerCase(),
-        password: password
-      });
-
-      if (error || !data.user) {
-        return { isValid: false };
-      }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('is_active')
-        .eq('id', data.user.id)
-        .single();
-
-      if (userData && !userData.is_active) {
-        await supabase.auth.signOut();
-        throw new Error('Account is deactivated');
-      }
-
-      await supabase
-        .from('users')
-        .update({
-          last_login_at: new Date().toISOString(),
-          last_sign_in_at: new Date().toISOString()
-        })
-        .eq('id', data.user.id);
-
-      return { isValid: true, userId: data.user.id };
-    } catch (error: any) {
-      console.error('Login verification failed:', error);
-      
-      if (error.message?.includes('Invalid login credentials')) {
-        console.warn('User not in auth.users, may be a legacy user');
-      }
-      
-      return { isValid: false };
-    }
-  },
-
   async getUserById(userId: string): Promise<any | null> {
     const { data, error } = await supabase
       .from('users')
@@ -1167,6 +1206,36 @@ export const userCreationService = {
     }
 
     return data;
+  },
+
+  async checkEmailExists(email: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      return !!data && !error;
+    } catch {
+      return false;
+    }
+  },
+
+  async getUserByEmail(email: string): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error getting user by email:', error);
+      return null;
+    }
   },
 
   getDefaultPermissions(adminLevel: string): Record<string, any> {
