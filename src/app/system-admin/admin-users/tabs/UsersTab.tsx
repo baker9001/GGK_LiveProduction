@@ -7,28 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { 
-  Plus, 
-  Key, 
-  Eye, 
-  EyeOff, 
-  Edit2, 
-  Trash2, 
-  Mail, 
-  Copy, 
-  Check, 
-  CheckCircle,
-  XCircle,
-  FlaskConical, 
-  Loader2,
-  RefreshCw,
-  Shield,
-  User,
-  AlertCircle,
-  Send,
-  Phone,
-  Building
-} from 'lucide-react';
+import { Plus, Key, Eye, EyeOff, CreditCard as Edit2, Trash2, Mail, Copy, Check, CheckCircle, XCircle, FlaskConical, Loader2, RefreshCw, Shield, User, AlertCircle, Send, Phone, Building } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
 import { FilterCard } from '../../../../components/shared/FilterCard';
