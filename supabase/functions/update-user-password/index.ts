@@ -136,7 +136,8 @@ serve(async (req) => {
     const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       body.user_id,
       {
-        password: body.new_password
+        password: body.new_password,
+        email_confirm: targetUser.email_confirmed_at ? true : false
       }
     )
 
