@@ -1,5 +1,5 @@
 // /home/project/src/app/forgot-password/page.tsx
-// Updated with consistent UI/UX and background image matching signin page
+// Fixed version with correct redirect URL for Supabase
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -52,16 +52,16 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      // Use Supabase Auth to send password reset email
-      // CRITICAL: Ensure redirect URL is properly set
-      const resetRedirectUrl = `${window.location.origin}/reset-password`;
+      // CRITICAL FIX: Use the EXACT redirect URL that's configured in Supabase
+      // This MUST match one of your allowed redirect URLs exactly
+      const resetRedirectUrl = 'https://ggknowledge.com/reset-password';
       
       console.log('Sending reset email with redirect URL:', resetRedirectUrl);
       
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.toLowerCase(),
         {
-          redirectTo: resetRedirectUrl
+          redirectTo: resetRedirectUrl  // This must match exactly what's in Supabase redirect URLs
         }
       );
 
@@ -128,7 +128,7 @@ export default function ForgotPasswordPage() {
 
     // TODO: Send email manually with your email service
     // For now, log the reset URL
-    console.log('Legacy reset URL:', `${window.location.origin}/reset-password?token=${token}`);
+    console.log('Legacy reset URL:', `https://ggknowledge.com/reset-password?token=${token}`);
     console.log('Send this to:', userEmail);
   };
 
