@@ -1,9 +1,9 @@
 // /home/project/src/app/reset-password/page.tsx
-// Updated to handle Supabase Auth hash fragments and query params
+// Updated with consistent UI/UX matching signin page
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
+import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
@@ -321,10 +321,23 @@ export default function ResetPasswordPage() {
 
   if (checkingToken) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen relative flex items-center justify-center">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+            alt="Educational background"
+            className="w-full h-full object-cover select-none pointer-events-none"
+            draggable="false"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ userSelect: 'none' }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        </div>
+        
+        <div className="text-center relative z-10">
           <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F] mx-auto" />
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Verifying reset link...</p>
+          <p className="mt-2 text-sm text-gray-300">Verifying reset link...</p>
         </div>
       </div>
     );
@@ -347,22 +360,25 @@ export default function ResetPasswordPage() {
         </div>
         
         {/* Content */}
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="flex items-center">
-              <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
-              <span className="ml-2 text-3xl font-bold text-gray-900 dark:text-white">GGK</span>
+        <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
+          {/* Logo */}
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center">
+              <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
+              <span className="ml-3 text-4xl font-bold text-white">
+                GGK Learning
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
           <div className="bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
             <div className="text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
-                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100/20 backdrop-blur">
+                <AlertCircle className="h-6 w-6 text-red-400" />
               </div>
-              <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="mt-4 text-lg font-semibold text-white">
                 Invalid Reset Link
               </h2>
               <p className="mt-2 text-sm text-gray-300">
@@ -409,22 +425,25 @@ export default function ResetPasswordPage() {
         </div>
         
         {/* Content */}
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="flex items-center">
-              <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
-              <span className="ml-2 text-3xl font-bold text-gray-900 dark:text-white">GGK</span>
+        <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
+          {/* Logo */}
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center">
+              <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
+              <span className="ml-3 text-4xl font-bold text-white">
+                GGK Learning
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
           <div className="bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
             <div className="text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100/20 backdrop-blur">
+                <CheckCircle className="h-6 w-6 text-green-400" />
               </div>
-              <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="mt-4 text-lg font-semibold text-white">
                 Password Reset Successful
               </h2>
               <p className="mt-2 text-sm text-gray-300">
@@ -442,13 +461,18 @@ export default function ResetPasswordPage() {
             </div>
           </div>
         </div>
+        
+        {/* Bottom text */}
+        <p className="mt-8 text-center text-sm text-gray-400 relative z-10">
+          Protected by industry-standard encryption
+        </p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {/* Background Image */}
+      {/* Background Image - Same as signin page */}
       <div className="absolute inset-0 z-0">
         <img
           src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
@@ -462,33 +486,37 @@ export default function ResetPasswordPage() {
       </div>
       
       {/* Content */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="flex items-center">
-            <GraduationCap className="h-12 w-12 text-[#8CC63F]" />
-            <span className="ml-2 text-3xl font-bold text-gray-900 dark:text-white">GGK</span>
+      <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Logo */}
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center">
+            <GraduationCap className="h-14 w-14 text-[#8CC63F]" />
+            <span className="ml-3 text-4xl font-bold text-white">
+              GGK Learning
+            </span>
           </div>
+          <h2 className="mt-6 text-3xl font-extrabold text-white">
+            {isFirstLoginChange ? 'Change your password' : 'Reset your password'}
+          </h2>
+          <p className="mt-2 text-sm text-gray-300">
+            {isFirstLoginChange 
+              ? 'Please set a new password for your account' 
+              : 'Enter your new password below'}
+          </p>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-          {isFirstLoginChange ? 'Change your password' : 'Reset your password'}
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-300">
-          {isFirstLoginChange 
-            ? 'Please set a new password for your account' 
-            : 'Enter your new password below'}
-        </p>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="relative z-10 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+        {/* Form Container - Matching signin page style */}
+        <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+          {/* Error Message */}
           {error && (
-            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-md flex items-start border border-red-500/20">
+            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
               <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* New Password Field */}
             <FormField
               id="password"
               label="New Password"
@@ -514,15 +542,17 @@ export default function ResetPasswordPage() {
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                   )}
                 </button>
               </div>
               
+              {/* Password Strength Indicator */}
               {password && (
                 <div className="mt-2">
                   <div className="flex gap-1 mb-1">
@@ -536,13 +566,13 @@ export default function ResetPasswordPage() {
                               : passwordStrength.score <= 3
                               ? 'bg-yellow-500'
                               : 'bg-green-500'
-                            : 'bg-gray-300 dark:bg-gray-600'
+                            : 'bg-gray-600'
                         }`}
                       />
                     ))}
                   </div>
                   {passwordStrength.feedback.length > 0 && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                    <p className="text-xs text-gray-400">
                       Add: {passwordStrength.feedback.join(', ')}
                     </p>
                   )}
@@ -550,6 +580,7 @@ export default function ResetPasswordPage() {
               )}
             </FormField>
 
+            {/* Confirm Password Field */}
             <FormField
               id="confirmPassword"
               label="Confirm New Password"
@@ -575,22 +606,24 @@ export default function ResetPasswordPage() {
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex={-1}
                 >
                   {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
+                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
+                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-300" />
                   )}
                 </button>
               </div>
               
               {confirmPassword && password !== confirmPassword && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                <p className="mt-1 text-xs text-red-400">
                   Passwords do not match
                 </p>
               )}
             </FormField>
 
+            {/* Submit Button */}
             <Button
               type="submit"
               className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
@@ -607,21 +640,43 @@ export default function ResetPasswordPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <a
-              href="/signin"
-              className="text-sm font-medium text-[#8CC63F] hover:text-[#7AB635]"
-            >
-              Back to Sign In
-            </a>
+          {/* Divider and Back to Sign In */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-900/50 text-gray-400">
+                  Need help?
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => navigate('/signin')}
+                variant="outline"
+                className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Sign In
+              </Button>
+              <Link
+                to="/contact-support"
+                className="w-full inline-flex justify-center items-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+              >
+                Contact Support
+              </Link>
+            </div>
           </div>
         </div>
+        
+        {/* Bottom text */}
+        <p className="mt-8 text-center text-sm text-gray-400">
+          Protected by industry-standard encryption
+        </p>
       </div>
-      
-      {/* Bottom text */}
-      <p className="mt-8 text-center text-sm text-gray-400">
-        Protected by industry-standard encryption
-      </p>
     </div>
   );
 }
