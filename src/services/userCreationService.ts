@@ -778,21 +778,28 @@ export const userCreationService = {
       if (!response.ok) {
         const errorMessage = responseData?.message || responseData?.error || 'Password update failed';
         console.error('❌ Edge Function error:', errorMessage);
+        console.error('Full error response:', responseData);
         
         // Specific error handling
         if (response.status === 404) {
-          if (errorMessage.includes('User not found')) {
-            throw new Error('User account not found. This user may not have a valid authentication account.');
+          if (errorMessage.includes('User not found') || errorMessage.includes('authentication system')) {
+            throw new Error('User account not found in authentication system. This user may only exist in the database without a login account. Consider recreating the user.');
           }
           // Edge Function endpoint not found
           console.warn('⚠️ Edge Function endpoint not found, using fallback...');
           return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
-        } else if (response.status === 400) {
-          throw new Error(errorMessage);
+        } else if (response.status === 403) {
+          throw new Error('You do not have permission to update this user\'s password. Only admins can reset other users\' passwords.');
         } else if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
-        } else {
+          throw new Error('Your session has expired. Please log in again to continue.');
+        } else if (response.status === 400) {
+          // Parse specific error from Edge Function
+          if (errorMessage.includes('8 characters')) {
+            throw new Error('Password must be at least 8 characters long');
+          }
           throw new Error(errorMessage);
+        } else {
+          throw new Error(`Password update failed: ${errorMessage}`);
         }
       }
 
