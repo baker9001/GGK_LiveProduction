@@ -1,5 +1,5 @@
 // /home/project/src/App.tsx
-// Enhanced version with robust password reset redirect handling
+// FINAL FIX - Properly preserves hash fragments during redirect
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
@@ -24,96 +24,108 @@ import StudentModulePage from './app/student-module/page';
 import TeachersModulePage from './app/teachers-module/page';
 import FormValidationPage from './pages/FormValidationPage';
 
-// Enhanced Root redirect component that properly handles Supabase password reset tokens
+// CRITICAL FIX: Use window.location.replace instead of navigate to preserve hash
 function RootRedirect() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [processed, setProcessed] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (processed) return;
-
-    // Check for hash fragments (Supabase sends tokens as hash fragments)
+    // Get the current hash
     const hash = window.location.hash;
     
-    console.log('RootRedirect - Current URL:', window.location.href);
-    console.log('RootRedirect - Hash:', hash);
-    console.log('RootRedirect - Search:', window.location.search);
+    console.log('[RootRedirect] Current URL:', window.location.href);
+    console.log('[RootRedirect] Hash:', hash);
     
-    // Check if this is a password reset callback
-    // Supabase sends: #access_token=xxx&type=recovery&...
-    if (hash) {
-      // Parse the hash to check for recovery tokens
+    // Check if this is a password reset (has recovery tokens in hash)
+    if (hash && hash.includes('type=recovery')) {
+      console.log('[RootRedirect] Password reset detected, redirecting with hash preserved');
+      // Use window.location to preserve the hash fragments
+      window.location.replace(`/reset-password${hash}`);
+    } else if (hash && hash.includes('access_token')) {
+      // Could be other auth types
       const hashParams = new URLSearchParams(hash.substring(1));
-      const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
       
-      console.log('RootRedirect - Parsed type:', type);
-      console.log('RootRedirect - Has access token:', !!accessToken);
-      
-      // If this is a recovery/password reset, redirect to reset-password with the hash
-      if (type === 'recovery' && accessToken) {
-        console.log('Password reset tokens detected, redirecting to /reset-password');
-        setProcessed(true);
-        // Navigate to reset-password and preserve the hash
-        navigate(`/reset-password${hash}`, { replace: true });
-        return;
+      if (type === 'signup' || type === 'invite') {
+        console.log(`[RootRedirect] ${type} confirmation detected`);
+        window.location.replace(`/auth/callback${hash}`);
+      } else {
+        // Unknown auth type, try reset-password anyway
+        console.log('[RootRedirect] Auth tokens detected, trying reset-password');
+        window.location.replace(`/reset-password${hash}`);
       }
-      
-      // Also check for other auth types (signup confirmation, etc.)
-      if (type === 'signup' || type === 'invite' || type === 'magiclink' || type === 'email_change') {
-        console.log(`Auth type "${type}" detected, processing...`);
-        setProcessed(true);
-        // Handle other auth callbacks if needed
-        navigate(`/auth/callback${hash}`, { replace: true });
-        return;
-      }
+    } else {
+      // No special tokens, go to landing
+      console.log('[RootRedirect] No auth tokens, redirecting to landing');
+      window.location.replace('/landing');
     }
     
-    // If no special tokens, redirect to landing
-    console.log('No special tokens found, redirecting to landing');
-    setProcessed(true);
-    navigate('/landing', { replace: true });
-  }, [navigate, processed, location]);
+    setChecking(false);
+  }, []);
 
-  // Show a brief loading state
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <div className="text-center">
-        <div className="animate-pulse">
-          <div className="h-8 w-8 mx-auto mb-4 bg-[#8CC63F] rounded-full animate-ping"></div>
-          <div className="text-white">Loading...</div>
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="h-8 w-8 mx-auto mb-4 bg-[#8CC63F] rounded-full animate-pulse"></div>
+          <div className="text-white">Redirecting...</div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
 
-// Auth callback handler component
+// Alternative: Direct hash handler component
+function HashHandler() {
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      console.log('[HashHandler] Hash changed:', hash);
+      
+      if (hash && hash.includes('type=recovery')) {
+        // Password reset tokens detected
+        if (!window.location.pathname.includes('reset-password')) {
+          console.log('[HashHandler] Redirecting to reset-password with hash');
+          window.location.replace(`/reset-password${hash}`);
+        }
+      }
+    };
+
+    // Check on mount
+    handleHashChange();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  return null;
+}
+
+// Auth callback handler
 function AuthCallback() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
-    // Handle various auth callbacks here
     const hash = window.location.hash;
     if (hash) {
       const hashParams = new URLSearchParams(hash.substring(1));
       const type = hashParams.get('type');
       
-      console.log('AuthCallback - Processing type:', type);
+      console.log('[AuthCallback] Processing type:', type);
       
-      // Redirect based on the type
       switch (type) {
         case 'signup':
-          // Email confirmed, redirect to signin
           navigate('/signin', { 
             replace: true,
             state: { message: 'Email confirmed! You can now sign in.' }
           });
           break;
         case 'invite':
-          // User accepted invite
           navigate('/signin', { 
             replace: true,
             state: { message: 'Invitation accepted! Please sign in.' }
@@ -125,7 +137,7 @@ function AuthCallback() {
     } else {
       navigate('/signin', { replace: true });
     }
-  }, [navigate, location]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -150,10 +162,8 @@ function ModuleRoute({
   const currentUser = getCurrentUser();
   const testMode = isInTestMode();
   
-  // In test mode, check if user can access this module
   if (testMode && currentUser) {
     if (!allowedRoles.includes(currentUser.role)) {
-      // Redirect to user's default module
       const redirectMap: Record<string, string> = {
         'ENTITY_ADMIN': '/app/entity-module/dashboard',
         'STUDENT': '/app/student-module/dashboard',
@@ -171,7 +181,7 @@ function ModuleRoute({
 }
 
 function App() {
-  // Add class to body when in test mode for visual styling
+  // Add class to body when in test mode
   React.useEffect(() => {
     if (isInTestMode()) {
       document.body.classList.add('test-mode-active');
@@ -180,29 +190,32 @@ function App() {
     }
   }, []);
 
-  // Log initial load for debugging
+  // Log current URL on mount for debugging
   React.useEffect(() => {
-    console.log('App initialized. Current URL:', window.location.href);
-    console.log('Hash:', window.location.hash);
+    console.log('[App] Initialized with URL:', window.location.href);
+    console.log('[App] Hash:', window.location.hash);
+    console.log('[App] Pathname:', window.location.pathname);
   }, []);
 
   return (
     <ReactQueryProvider>
       <BrowserRouter>
+        {/* Global hash handler */}
+        <HashHandler />
+        
         <UserProvider>
           <PermissionProvider>
             <Toast />
-            {/* Test Mode Bar - Shows only when in test mode */}
             <TestModeBar />
             
             <Routes>
-              {/* Root route with enhanced hash fragment handling */}
+              {/* Root route with proper hash handling */}
               <Route path="/" element={<RootRedirect />} />
               
               {/* Auth callback route */}
               <Route path="/auth/callback" element={<AuthCallback />} />
               
-              {/* Landing and public pages */}
+              {/* Public pages */}
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/subjects" element={<SubjectsPage />} />
               <Route path="/resources" element={<ResourcesPage />} />
@@ -225,7 +238,7 @@ function App() {
                 }
               />
               
-              {/* Entity Module - Only ENTITY_ADMIN and SSA */}
+              {/* Entity Module */}
               <Route
                 path="/app/entity-module/*"
                 element={
@@ -245,7 +258,7 @@ function App() {
                 }
               />
               
-              {/* Student Module - Only STUDENT and SSA */}
+              {/* Student Module */}
               <Route
                 path="/app/student-module/*"
                 element={
@@ -265,7 +278,7 @@ function App() {
                 }
               />
               
-              {/* Teachers Module - Only TEACHER and SSA */}
+              {/* Teachers Module */}
               <Route
                 path="/app/teachers-module/*"
                 element={
@@ -285,7 +298,7 @@ function App() {
                 }
               />
               
-              {/* System Admin Module - SSA, SUPPORT, VIEWER */}
+              {/* System Admin Module */}
               <Route
                 path="/app/system-admin/*"
                 element={
@@ -305,7 +318,7 @@ function App() {
                 }
               />
               
-              {/* Dashboard redirect based on role */}
+              {/* Dashboard redirect */}
               <Route
                 path="/app/dashboard"
                 element={
@@ -329,7 +342,7 @@ function App() {
                 }
               />
               
-              {/* Catch all - redirect to landing */}
+              {/* Catch all */}
               <Route path="*" element={<Navigate to="/landing" replace />} />
             </Routes>
           </PermissionProvider>
