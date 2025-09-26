@@ -341,7 +341,27 @@ export const userCreationService = {
             }
           } else {
             const errorData = await response.json().catch(() => null);
-            console.warn('Teacher/Student Edge Function failed:', errorData?.error || 'Unknown error');
+            console.warn('Teacher/Student Edge Function failed:', errorData);
+            
+            // Handle specific error cases
+            if (response.status === 409) {
+              // User already exists - provide detailed error message
+              if (errorData?.details) {
+                const details = errorData.details;
+                
+                if (details.hasEntityRecord) {
+                  throw new Error(errorData.error);
+                } else if (details.hasPublicRecord && details.existingUserType) {
+                  throw new Error(errorData.error);
+                } else if (details.hasAuthAccount && !details.hasPublicRecord) {
+                  throw new Error(
+                    'This email is registered but incomplete. Please contact support to complete the account setup.'
+                  );
+                }
+              }
+              
+              throw new Error(errorData?.error || 'This email is already registered');
+            }
             
             // If Edge Function not found (404), fall back to direct creation
             if (response.status === 404) {
