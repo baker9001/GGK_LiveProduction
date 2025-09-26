@@ -53,34 +53,96 @@ serve(async (req) => {
     )
 
     // Check if user already exists in auth.users
-    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers({
+    const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers({
       filter: {
         email: body.email.toLowerCase()
       }
     })
 
-    if (existingUser?.users && existingUser.users.length > 0) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'A user with this email already exists in the authentication system' 
-        }),
-        { status: 400, headers: corsHeaders }
-      )
-    }
-
     // Check if user exists in public.users table
     const { data: existingPublicUser } = await supabaseAdmin
       .from('users')
-      .select('id')
+      .select('id, email, user_type')
       .eq('email', body.email.toLowerCase())
       .single()
+    
+    // Check if user has existing teacher/student record
+    let existingEntityRecord = null
+    if (body.user_type === 'teacher') {
+      const { data } = await supabaseAdmin
+        .from('teachers')
+        .select('id, teacher_code')
+        .eq('email', body.email.toLowerCase())
+        .single()
+      existingEntityRecord = data
+    } else if (body.user_type === 'student') {
+      const { data } = await supabaseAdmin
+        .from('students')
+        .select('id, student_code')
+        .eq('email', body.email.toLowerCase())
+        .single()
+      existingEntityRecord = data
+    }
+
+    // Determine the error message based on what exists
+    if (existingAuthUsers?.users && existingAuthUsers.users.length > 0) {
+      const authUser = existingAuthUsers.users[0]
+      
+      if (existingEntityRecord) {
+        return new Response(
+          JSON.stringify({ 
+            error: `A ${body.user_type} with this email already exists (${body.user_type === 'teacher' ? 'Teacher Code' : 'Student Code'}: ${existingEntityRecord[body.user_type === 'teacher' ? 'teacher_code' : 'student_code']})`,
+            details: {
+              hasAuthAccount: true,
+              hasPublicRecord: !!existingPublicUser,
+              hasEntityRecord: true,
+              existingUserType: existingPublicUser?.user_type
+            }
+          }),
+          { status: 409, headers: corsHeaders }
+        )
+      }
+      
+      if (existingPublicUser) {
+        return new Response(
+          JSON.stringify({ 
+            error: `This email is already registered as a ${existingPublicUser.user_type}. Each user can only have one role.`,
+            details: {
+              hasAuthAccount: true,
+              hasPublicRecord: true,
+              hasEntityRecord: false,
+              existingUserType: existingPublicUser.user_type
+            }
+          }),
+          { status: 409, headers: corsHeaders }
+        )
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'This email is already registered in the authentication system',
+          details: {
+            hasAuthAccount: true,
+            hasPublicRecord: false,
+            hasEntityRecord: false
+          }
+        }),
+        { status: 409, headers: corsHeaders }
+      )
+    }
 
     if (existingPublicUser) {
       return new Response(
         JSON.stringify({ 
-          error: 'A user with this email already exists' 
+          error: `A user with this email exists in the database but not in authentication. This may be a legacy or corrupted account. Please contact support.`,
+          details: {
+            hasAuthAccount: false,
+            hasPublicRecord: true,
+            hasEntityRecord: !!existingEntityRecord,
+            existingUserType: existingPublicUser.user_type
+          }
         }),
-        { status: 400, headers: corsHeaders }
+        { status: 409, headers: corsHeaders }
       )
     }
 
