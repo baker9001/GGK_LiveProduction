@@ -1,16 +1,16 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * ENHANCED VERSION - Full Supabase Auth Integration with Invitation Flow
- * Updated to use create-entity-users-invite Edge Function
+ * COMPLETE VERSION - Full Supabase Auth Integration with Email Update Support
+ * 
+ * This version includes the critical updateEmail method for proper auth.users sync
  * 
  * Workflow:
  * 1. Create user in Supabase auth.users via Edge Function (invitation-based)
  * 2. Create user in custom 'users' table with auth ID
  * 3. Create corresponding record in entity-specific table
- *    - entity_users for admins
- *    - teachers for teachers
- *    - students for students
+ * 4. Support for email updates in auth.users
+ * 5. Support for password updates in auth.users
  */
 
 import { supabase } from '@/lib/supabase';
@@ -561,34 +561,123 @@ export const userCreationService = {
         
         return;
       }
-    } catch (error) {
-      console.warn('Edge Function not available for password update:', error);
+
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update password in auth system');
+
+    } catch (error: any) {
+      console.error('Password update error:', error);
+      
+      // If Edge Function fails, we have a problem
+      if (error.message?.includes('Edge Function') || error.message?.includes('fetch')) {
+        throw new Error('Password update service is unavailable. Please contact support or try again later.');
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * NEW METHOD: Update user email in both auth.users and custom users table
+   * CRITICAL: This method is required for proper email synchronization
+   */
+  async updateEmail(userId: string, newEmail: string): Promise<void> {
+    if (!newEmail || !validateEmail(newEmail)) {
+      throw new Error('Invalid email format');
     }
 
-    // Fallback: Update metadata in custom table
-    // First get existing metadata
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('raw_user_meta_data')
-      .eq('id', userId)
-      .single();
-    
-    // Update with merged metadata
-    const { error } = await supabase
-      .from('users')
-      .update({
-        raw_user_meta_data: {
-          ...(currentUser?.raw_user_meta_data || {}),
-          requires_password_change: false,
-          password_reset_needed: false,
-          password_updated_at: new Date().toISOString()
-        },
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    const normalizedEmail = newEmail.toLowerCase();
 
-    if (error) {
-      throw new Error(`Failed to update password: ${error.message}`);
+    // Check if email already exists
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .neq('id', userId)
+      .maybeSingle();
+
+    if (existingUser) {
+      throw new Error('This email is already in use');
+    }
+
+    // Get current session for authorization
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+
+    try {
+      // Call Edge Function to update email in auth.users
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/update-user-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          new_email: normalizedEmail
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update email in auth system');
+      }
+
+      // If auth.users update succeeded, update custom users table
+      const { error: customError } = await supabase
+        .from('users')
+        .update({
+          email: normalizedEmail,
+          email_verified: false, // Require re-verification
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (customError) {
+        console.error('Failed to sync email in custom table:', customError);
+        // Don't throw here - auth.users is updated which is critical
+      }
+
+      console.log('Email updated successfully in both auth.users and custom table');
+
+    } catch (error: any) {
+      console.error('Email update failed:', error);
+      
+      // Fallback: At least update custom table with warning
+      if (error.message?.includes('Edge Function') || error.message?.includes('fetch')) {
+        console.warn('Edge Function not available - email only updated in custom table');
+        console.warn('User will still need to login with OLD email!');
+        
+        // Get current metadata
+        const { data: currentUser } = await supabase
+          .from('users')
+          .select('raw_user_meta_data')
+          .eq('id', userId)
+          .single();
+        
+        const { error: fallbackError } = await supabase
+          .from('users')
+          .update({
+            email: normalizedEmail,
+            email_verified: false,
+            raw_user_meta_data: {
+              ...(currentUser?.raw_user_meta_data || {}),
+              email_sync_required: true,
+              email_mismatch_warning: `Auth email differs. User must login with original email.`
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (fallbackError) {
+          throw new Error('Failed to update email');
+        }
+
+        throw new Error('Email updated in display only. Teacher must still login with original email. Contact admin for full email change.');
+      }
+      
+      throw error;
     }
   },
 
