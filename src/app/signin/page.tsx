@@ -1,15 +1,5 @@
-/**
- * File: /src/app/signin/page-corrected.tsx
- * 
- * CORRECTED VERSION - Proper Supabase Auth Integration
- * =====================================================
- * 
- * Fixes:
- * 1. Email verification uses Supabase Auth's email_confirmed_at
- * 2. Removed dependency on custom users table for verification
- * 3. Better error handling for auth failures
- * 4. Clearer separation between auth and metadata
- */
+// /home/project/src/app/signin/page.tsx
+// Production version - Dev Access section removed for security
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
@@ -151,8 +141,6 @@ export default function SignInPage() {
       }
       
       console.log('[Auth] Login successful for:', authData.user.email);
-      
-      // Fetch user data from our database using auth_user_id for better reliability
       
       // Get user metadata from custom tables
       let userId = authData.user.id;
@@ -340,24 +328,6 @@ export default function SignInPage() {
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleDevLogin = () => {
-    clearAuthenticatedUser();
-    
-    const devUser: User = {
-      id: 'dev-001',
-      email: 'dev@ggk.com',
-      name: 'Developer',
-      role: 'SSA',
-      userType: 'system'
-    };
-    
-    localStorage.setItem('ggk_remember_session', 'true');
-    setAuthenticatedUser(devUser);
-    
-    toast.success('Dev login successful!');
-    navigate('/app/system-admin/dashboard', { replace: true });
   };
   
   const getUserSystemRole = (roleName?: string): UserRole => {
@@ -596,31 +566,6 @@ export default function SignInPage() {
                 Request Access
               </Link>
             </div>
-          </div>
-          
-          {/* Dev Login */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900/50 text-gray-400">
-                  Development Access
-                </span>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleDevLogin}
-              variant="outline"
-              className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
-            >
-              🔧 Quick Dev Login (SSA)
-            </Button>
-            <p className="mt-2 text-xs text-center text-gray-500">
-              Temporary access for development - bypasses regular authentication
-            </p>
           </div>
           
           {/* Back to Home Button */}
