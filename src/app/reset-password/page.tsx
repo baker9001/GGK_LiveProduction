@@ -332,7 +332,21 @@ export default function ResetPasswordPage() {
 
   if (!tokenValid) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+            alt="Educational background"
+            className="w-full h-full object-cover select-none pointer-events-none"
+            draggable="false"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ userSelect: 'none' }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        </div>
+        
+        {/* Content */}
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="flex justify-center">
             <div className="flex items-center">
@@ -343,7 +357,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-md dark:shadow-gray-900/20 sm:rounded-lg sm:px-10 border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
             <div className="text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
                 <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -351,14 +365,14 @@ export default function ResetPasswordPage() {
               <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
                 Invalid Reset Link
               </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              <p className="mt-2 text-sm text-gray-300">
                 {error || 'This password reset link is invalid or has expired.'}
               </p>
               
               <div className="mt-6 space-y-3">
                 <Button
                   onClick={() => navigate('/forgot-password')}
-                  className="w-full justify-center"
+                  className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
                 >
                   Request New Link
                 </Button>
@@ -366,7 +380,7 @@ export default function ResetPasswordPage() {
                 <Button
                   onClick={() => navigate('/signin')}
                   variant="outline"
-                  className="w-full justify-center"
+                  className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
                 >
                   Back to Sign In
                 </Button>
@@ -380,7 +394,21 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+            alt="Educational background"
+            className="w-full h-full object-cover select-none pointer-events-none"
+            draggable="false"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ userSelect: 'none' }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+        </div>
+        
+        {/* Content */}
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="flex justify-center">
             <div className="flex items-center">
@@ -391,7 +419,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-md dark:shadow-gray-900/20 sm:rounded-lg sm:px-10 border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
             <div className="text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -399,14 +427,14 @@ export default function ResetPasswordPage() {
               <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
                 Password Reset Successful
               </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              <p className="mt-2 text-sm text-gray-300">
                 Your password has been successfully reset. You can now sign in with your new password.
               </p>
               
               <div className="mt-6">
                 <Button
                   onClick={() => navigate('/signin')}
-                  className="w-full justify-center"
+                  className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
                 >
                   Go to Sign In
                 </Button>
@@ -419,7 +447,21 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen relative flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Background Image */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src="https://dodvqvkiuuuxymboldkw.supabase.co/storage/v1/object/sign/signing/shutterstock_2475380851.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9kZWMxYmI3Ni1lOTljLTQ5ODEtOWU4Zi0zYjA3ZjZlZmUxZWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJzaWduaW5nL3NodXR0ZXJzdG9ja18yNDc1MzgwODUxLmpwZyIsImlhdCI6MTc1NjA2MDQ1OSwiZXhwIjo0ODc4MTI0NDU5fQ.vmQTU-G_jb0V6yz8TGg2-WP-mqnxYD-5A8VIzatHizI"
+          alt="Educational background"
+          className="w-full h-full object-cover select-none pointer-events-none"
+          draggable="false"
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ userSelect: 'none' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900/90 via-gray-900/80 to-gray-900/90" />
+      </div>
+      
+      {/* Content */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="flex items-center">
@@ -427,10 +469,10 @@ export default function ResetPasswordPage() {
             <span className="ml-2 text-3xl font-bold text-gray-900 dark:text-white">GGK</span>
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
           {isFirstLoginChange ? 'Change your password' : 'Reset your password'}
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-center text-sm text-gray-300">
           {isFirstLoginChange 
             ? 'Please set a new password for your account' 
             : 'Enter your new password below'}
@@ -438,9 +480,9 @@ export default function ResetPasswordPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-gray-800 py-8 px-4 shadow-md dark:shadow-gray-900/20 sm:rounded-lg sm:px-10 border border-gray-200 dark:border-gray-700">
+        <div className="relative z-10 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
           {error && (
-            <div className="mb-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-4 rounded-md flex items-start border border-red-200 dark:border-red-800">
+            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-md flex items-start border border-red-500/20">
               <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
               <span className="text-sm">{error}</span>
             </div>
@@ -451,6 +493,7 @@ export default function ResetPasswordPage() {
               id="password"
               label="New Password"
               required
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -462,7 +505,7 @@ export default function ResetPasswordPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
+                  className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Enter new password"
                   disabled={loading}
                   autoComplete="new-password"
@@ -511,6 +554,7 @@ export default function ResetPasswordPage() {
               id="confirmPassword"
               label="Confirm New Password"
               required
+              labelClassName="text-gray-200"
             >
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -522,7 +566,7 @@ export default function ResetPasswordPage() {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="pl-10 pr-10"
+                  className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                   placeholder="Confirm new password"
                   disabled={loading}
                   autoComplete="new-password"
@@ -549,7 +593,7 @@ export default function ResetPasswordPage() {
 
             <Button
               type="submit"
-              className="w-full justify-center"
+              className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
               disabled={loading || !password || !confirmPassword || passwordStrength.score < 3}
             >
               {loading ? (
@@ -566,13 +610,18 @@ export default function ResetPasswordPage() {
           <div className="mt-6 text-center">
             <a
               href="/signin"
-              className="text-sm font-medium text-[#8CC63F] hover:text-[#5da82f]"
+              className="text-sm font-medium text-[#8CC63F] hover:text-[#7AB635]"
             >
               Back to Sign In
             </a>
           </div>
         </div>
       </div>
+      
+      {/* Bottom text */}
+      <p className="mt-8 text-center text-sm text-gray-400">
+        Protected by industry-standard encryption
+      </p>
     </div>
   );
 }
