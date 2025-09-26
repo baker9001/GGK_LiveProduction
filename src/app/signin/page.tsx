@@ -119,7 +119,25 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message?.toLowerCase().includes('invalid login credentials')) {
-          setError('Invalid email or password. Please check your credentials.');
+          // Check if user exists but hasn't set password yet
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id, is_active, password_hash, raw_user_meta_data')
+            .eq('email', normalizedEmail)
+            .maybeSingle();
+          
+          if (existingUser && existingUser.is_active) {
+            const requiresPasswordChange = existingUser.raw_user_meta_data?.requires_password_change;
+            const hasNoPassword = !existingUser.password_hash;
+            
+            if (requiresPasswordChange || hasNoPassword) {
+              setError('Your account requires a password to be set. Please use the "Forgot password?" link below to set your password and complete your account setup.');
+            } else {
+              setError('Invalid email or password. Please check your credentials.');
+            }
+          } else {
+            setError('Invalid email or password. Please check your credentials.');
+          }
         } else if (authError.message?.toLowerCase().includes('too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else if (authError.message?.toLowerCase().includes('unexpected_failure')) {
