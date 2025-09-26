@@ -1,5 +1,5 @@
 // /src/app/reset-password/page.tsx
-// Fixed version - removes password_hash field that doesn't exist in users table
+// CORRECTED VERSION - Preserves tokens until password reset is complete
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
@@ -157,8 +157,9 @@ export default function ResetPasswordPage() {
               }
             }
 
-            // Clear hash from URL
-            window.history.replaceState(null, '', window.location.pathname);
+            // IMPORTANT: DO NOT clear hash here - we need it for the password update
+            // Only clear it after successful password reset
+            console.log('[ResetPassword] Preserving hash for password update');
             
           } catch (err) {
             console.error('[ResetPassword] Error processing tokens:', err);
@@ -251,10 +252,12 @@ export default function ResetPasswordPage() {
 
     try {
       // Use Supabase Auth if we have tokens
-      if (accessToken) {
+      if (accessToken || sessionReady) {
         console.log('[ResetPassword] Updating password via Supabase Auth...');
+        console.log('[ResetPassword] Session ready:', sessionReady);
+        console.log('[ResetPassword] Access token available:', !!accessToken);
         
-        // Ensure session is active
+        // If we don't have a session ready, try to re-establish it
         if (!sessionReady && accessToken) {
           console.log('[ResetPassword] Re-establishing session...');
           const { error: sessionError } = await supabase.auth.setSession({
@@ -264,7 +267,9 @@ export default function ResetPasswordPage() {
           
           if (sessionError) {
             console.error('[ResetPassword] Session re-establishment failed:', sessionError);
-            // Continue anyway - the update might still work
+            // Try to continue anyway
+          } else {
+            console.log('[ResetPassword] Session re-established successfully');
           }
         }
         
@@ -277,9 +282,9 @@ export default function ResetPasswordPage() {
           console.error('[ResetPassword] Password update error:', updateError);
           
           // Handle specific errors
-          if (updateError.message.includes('not authenticated')) {
+          if (updateError.message?.includes('not authenticated')) {
             throw new Error('Session expired. Please request a new password reset link.');
-          } else if (updateError.message.includes('same password')) {
+          } else if (updateError.message?.includes('same password')) {
             throw new Error('New password must be different from your current password.');
           } else {
             throw new Error(updateError.message || 'Failed to update password.');
@@ -319,6 +324,10 @@ export default function ResetPasswordPage() {
         } catch (metadataError) {
           console.warn('[ResetPassword] Failed to update metadata (non-critical):', metadataError);
         }
+
+        // NOW it's safe to clear the URL after successful password update
+        console.log('[ResetPassword] Clearing URL hash after successful update');
+        window.history.replaceState(null, '', window.location.pathname);
 
         // Sign out after password reset
         await supabase.auth.signOut();
@@ -363,6 +372,9 @@ export default function ResetPasswordPage() {
             })
             .eq('id', legacyTokenData.id);
         }
+        
+        // Clear URL for legacy tokens too
+        window.history.replaceState(null, '', window.location.pathname);
       } else {
         throw new Error('No valid session found. Please request a new reset link.');
       }
