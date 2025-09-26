@@ -508,8 +508,25 @@ export const userCreationService = {
    * Update user password via Edge Function
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
-    if (!newPassword || newPassword.length < 8) {
+    if (!newPassword) {
+      throw new Error('Password is required');
+    }
+
+    // Comprehensive password validation
+    if (newPassword.length < 8) {
       throw new Error('Password must be at least 8 characters long');
+    }
+
+    if (!/[A-Z]/.test(newPassword)) {
+      throw new Error('Password must contain at least one uppercase letter');
+    }
+
+    if (!/[a-z]/.test(newPassword)) {
+      throw new Error('Password must contain at least one lowercase letter');
+    }
+
+    if (!/[0-9]/.test(newPassword)) {
+      throw new Error('Password must contain at least one number');
     }
 
     // Get current session
