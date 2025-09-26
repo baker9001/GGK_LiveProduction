@@ -1,9 +1,10 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * FINAL CORRECTED VERSION WITH ENHANCED ERROR HANDLING
+ * FINAL CORRECTED VERSION - Fixed user_types column issue
  * 
  * Changes made:
+ * ✅ REMOVED user_types column references (database only has user_type singular)
  * ✅ Enhanced updatePassword with explicit error messages
  * ✅ Added detailed console logging for debugging
  * ✅ Improved error propagation
@@ -114,6 +115,7 @@ function generateUUID(): string {
   ].join('-');
 }
 
+// FIXED: Removed user_types from SAFE_USER_COLUMNS as it doesn't exist in the database
 export const SAFE_USER_COLUMNS = [
   'id',
   'email',
@@ -128,8 +130,7 @@ export const SAFE_USER_COLUMNS = [
   'raw_app_meta_data',
   'email_confirmed_at',
   'failed_login_attempts',
-  'locked_until',
-  'user_types'
+  'locked_until'
 ].join(', ');
 
 // ============= MAIN USER CREATION SERVICE =============
@@ -268,6 +269,7 @@ export const userCreationService = {
 
   /**
    * Create user in custom users table
+   * FIXED: Removed user_types field as it doesn't exist in the database
    */
   async createUserInCustomTable(authUserId: string, payload: CreateUserPayload, metadata: any): Promise<void> {
     const userTypes = getUserTypes(payload.user_type);
@@ -275,8 +277,8 @@ export const userCreationService = {
     const userData = {
       id: authUserId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0],
-      user_types: userTypes,
+      user_type: userTypes[0], // Only use user_type (singular)
+      // REMOVED: user_types field doesn't exist in database
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: metadata,
@@ -300,6 +302,7 @@ export const userCreationService = {
 
   /**
    * Fallback: Create user directly
+   * FIXED: Removed user_types field as it doesn't exist in the database
    */
   async createUserInUsersTableDirect(payload: CreateUserPayload): Promise<string> {
     console.warn('Using direct creation fallback (invitation pending)');
@@ -310,8 +313,8 @@ export const userCreationService = {
     const userData = {
       id: userId,
       email: payload.email.toLowerCase(),
-      user_type: userTypes[0],
-      user_types: userTypes,
+      user_type: userTypes[0], // Only use user_type (singular)
+      // REMOVED: user_types field doesn't exist in database
       is_active: payload.is_active !== false,
       email_verified: false,
       raw_user_meta_data: {
