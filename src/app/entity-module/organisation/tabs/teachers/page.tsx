@@ -1,29 +1,25 @@
 /**
  * File: /src/app/entity-module/organisation/tabs/teachers/page.tsx
  * 
- * COMPLETE CORRECTED VERSION: Teachers Tab with Email/Password Auth.users Sync
+ * COMPLETE VERSION: Teachers Tab with Invitation Email Flow
  * 
  * Features Implemented:
- * ✅ Enhanced password management with radio options
- * ✅ Password requirements checker with visual feedback
- * ✅ Generated password modal with copy/print functionality
+ * ✅ Teacher creation with invitation email (no password generation)
+ * ✅ Teachers set their own passwords via invitation link
+ * ✅ Password reset with rate limiting (5-minute cooldown)
  * ✅ Editable email field with verification notice
  * ✅ Protected teacher code field (non-editable by design)
- * ✅ Quick password reset from table actions
  * ✅ Professional UI/UX matching tenant page standards
  * ✅ Green theme (#8CC63F) throughout
  * ✅ Comprehensive error handling and validation
  * ✅ Accessibility improvements
  * ✅ Fixed UUID handling for school_id and branch_id
- * ✅ Fixed password update to actually save to database via auth.users
  * ✅ Fixed phone number saving to teachers table
  * ✅ Fixed junction table updates to avoid conflicts
- * ✅ Fixed column name: last_login_at -> last_sign_in_at
- * ✅ CRITICAL FIX: Email updates now sync with auth.users
- * ✅ CRITICAL FIX: Password reset now sends email for admin updates
+ * ✅ Email updates sync with auth.users
  * 
  * Dependencies:
- *   - @/services/userCreationService (with updateEmail method)
+ *   - @/services/userCreationService
  *   - @/hooks/useAccessControl
  *   - @/components/shared/*
  *   - @/contexts/UserContext
@@ -40,7 +36,7 @@ import {
   Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw,
   Trash2, UserX, FileText, ChevronDown, X, User, Building2,
   School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff,
-  CheckCircle, XCircle, Printer, Check
+  CheckCircle, XCircle, Send
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
@@ -100,7 +96,6 @@ interface TeacherFormData {
   email: string;
   phone?: string;
   teacher_code: string;
-  password?: string;
   
   // Professional Information
   specialization?: string[];
@@ -118,7 +113,7 @@ interface TeacherFormData {
   
   // Settings
   is_active?: boolean;
-  send_credentials?: boolean;
+  send_invitation?: boolean;
 }
 
 interface Department {
@@ -145,25 +140,12 @@ interface ClassSection {
   max_capacity?: number;
 }
 
-interface PasswordRequirement {
-  label: string;
-  test: (password: string) => boolean;
-}
-
 export interface TeachersTabProps {
   companyId: string;
   refreshData?: () => void;
 }
 
 // ===== CONSTANTS =====
-const PASSWORD_REQUIREMENTS: PasswordRequirement[] = [
-  { label: 'At least 8 characters', test: (p) => p.length >= 8 },
-  { label: 'Contains uppercase letter (A-Z)', test: (p) => /[A-Z]/.test(p) },
-  { label: 'Contains lowercase letter (a-z)', test: (p) => /[a-z]/.test(p) },
-  { label: 'Contains number (0-9)', test: (p) => /[0-9]/.test(p) },
-  { label: 'Contains special character (!@#$%^&*)', test: (p) => /[!@#$%^&*]/.test(p) }
-];
-
 const SPECIALIZATION_OPTIONS = [
   'Mathematics', 'Physics', 'Chemistry', 'Biology', 
   'English', 'History', 'Geography', 'Computer Science',
@@ -177,63 +159,12 @@ const QUALIFICATION_OPTIONS = [
   'Master\'s Degree', 'Master of Education', 'PhD', 'Professional Certificate'
 ];
 
-// ===== HELPER COMPONENTS =====
-const PasswordRequirementsChecker: React.FC<{ password: string }> = React.memo(({ password }) => {
-  return (
-    <div className="mt-2 space-y-1" role="list" aria-label="Password requirements">
-      {PASSWORD_REQUIREMENTS.map((req, index) => {
-        const isMet = password ? req.test(password) : false;
-        return (
-          <div 
-            key={index} 
-            role="listitem"
-            className={`flex items-center gap-2 text-xs transition-all ${
-              isMet ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            {isMet ? (
-              <CheckCircle className="h-3 w-3" aria-hidden="true" />
-            ) : (
-              <XCircle className="h-3 w-3" aria-hidden="true" />
-            )}
-            <span>{req.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-});
-
-PasswordRequirementsChecker.displayName = 'PasswordRequirementsChecker';
-
 // ===== HELPER FUNCTIONS =====
 const generateTeacherCode = (companyId: string): string => {
   const prefix = 'TCH';
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `${prefix}-${timestamp}-${random}`;
-};
-
-const generateSecurePassword = (): string => {
-  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lowercase = 'abcdefghjkmnpqrstuvwxyz';
-  const numbers = '23456789';
-  const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-  
-  let password = '';
-  // Ensure at least one of each required character type
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += special[Math.floor(Math.random() * special.length)];
-  
-  const allChars = uppercase + lowercase + numbers + special;
-  for (let i = password.length; i < 12; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
-  }
-  
-  // Shuffle the password
-  return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
 // ===== MAIN COMPONENT =====
@@ -266,14 +197,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showBulkActionConfirmation, setShowBulkActionConfirmation] = useState(false);
+  const [showInvitationSuccess, setShowInvitationSuccess] = useState(false);
   
   const [selectedTeacher, setSelectedTeacher] = useState<TeacherData | null>(null);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
-  
-  // Enhanced password management state
-  const [showPassword, setShowPassword] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
-  const [copiedPassword, setCopiedPassword] = useState(false);
+  const [invitedTeacherEmail, setInvitedTeacherEmail] = useState<string>('');
   
   // Tab management
   const [activeTab, setActiveTab] = useState<'basic' | 'professional' | 'assignment'>('basic');
@@ -299,8 +227,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     grade_level_ids: [],
     section_ids: [],
     is_active: true,
-    send_credentials: true,
-    password: ''
+    send_invitation: true
   });
   
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -632,16 +559,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   );
 
   // ===== MUTATIONS =====
+  
+  // Create Teacher with Invitation Email
   const createTeacherMutation = useMutation(
     async (data: TeacherFormData) => {
-      // Always generate a secure password for new teachers
-      const finalPassword = generateSecurePassword();
-      
-      const result = await userCreationService.createUser({
+      // Create user with invitation (no password)
+      const result = await userCreationService.createUserWithInvitation({
         user_type: 'teacher',
         email: data.email,
         name: data.name,
-        password: finalPassword,
         phone: data.phone,
         company_id: companyId,
         teacher_code: data.teacher_code,
@@ -699,21 +625,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         }
       }
       
-      return { ...result, password: finalPassword };
+      return { ...result, email: data.email };
     },
     {
       onSuccess: (result) => {
-        // Always show the generated password for new teachers
-        if (result.password) {
-          setGeneratedPassword(result.password);
-          toast.success('Teacher created successfully. Copy the temporary password!');
-        } else {
-          // Fallback (shouldn't happen)
-          setShowCreateForm(false);
-          refetchTeachers();
-          resetForm();
-          toast.success('Teacher created successfully');
-        }
+        setInvitedTeacherEmail(result.email);
+        setShowInvitationSuccess(true);
+        setShowCreateForm(false);
+        refetchTeachers();
+        resetForm();
+        toast.success('Teacher created successfully. Invitation email sent!');
       },
       onError: (error: any) => {
         console.error('Create teacher error:', error);
@@ -722,27 +643,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
-  // CORRECTED UPDATE TEACHER MUTATION WITH EMAIL/PASSWORD AUTH.USERS SYNC
+  // Update Teacher
   const updateTeacherMutation = useMutation(
     async ({ teacherId, data }: { teacherId: string; data: Partial<TeacherFormData> }) => {
       // Find the teacher for user ID
       const teacher = teachers.find(t => t.id === teacherId);
       if (!teacher) throw new Error('Teacher not found');
 
-      // Track what was updated for proper response
+      // Track what was updated
       let emailUpdated = false;
-      let passwordGenerated: string | null = null;
-      let passwordResetEmailSent = false;
 
-      // ========== STEP 1: Handle Email Update (if changed) ==========
+      // Handle Email Update (if changed)
       if (data.email && data.email !== teacher.email) {
         try {
-          // Use the userCreationService to update email in BOTH auth.users and custom table
           await userCreationService.updateEmail(teacher.user_id, data.email);
           emailUpdated = true;
-          console.log('Email updated successfully in auth.users and custom table');
+          console.log('Email updated successfully');
           
-          // Note: Teacher will receive verification email for new address
           toast.info('Email updated. Teacher will receive a verification email at the new address.', {
             duration: 5000
           });
@@ -750,89 +667,34 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         } catch (emailError: any) {
           console.error('Email update error:', emailError);
           
-          // Check if it's a fallback warning (Edge Function unavailable)
           if (emailError.message?.includes('display only') || 
               emailError.message?.includes('admin intervention')) {
-            // Email was updated in custom table but NOT in auth.users
             toast.warning(
-              'Email updated in display only. Teacher must still log in with their ORIGINAL email. Contact system admin to complete the email change in authentication system.',
+              'Email updated in display only. Contact system admin to complete the email change.',
               { duration: 10000 }
             );
-            // Continue with update - display email is changed at least
           } else {
-            // Real error - stop the entire update
             throw new Error(emailError.message || 'Failed to update email');
           }
         }
       }
 
-      // ========== STEP 2: Handle Password Reset (if requested) ==========
-      if (generatePassword) {
-        // Determine the new password
-        const newPassword = !data.password || data.password === '' 
-          ? generateSecurePassword() 
-          : data.password;
-        
-        try {
-          // Use userCreationService to update password in auth.users
-          await userCreationService.updatePassword(teacher.user_id, newPassword);
-          console.log('Password updated successfully');
-          
-          // If we get here, password was updated directly (self-update scenario)
-          passwordGenerated = newPassword;
-          
-        } catch (passwordError: any) {
-          console.error('Password update error:', passwordError);
-          
-          // Check if it's a password reset email scenario (expected for admin updates)
-          if (passwordError.isPasswordReset && passwordError.userEmail) {
-            // Password reset email was sent - this is actually a success for admin updates!
-            toast.success(
-              `Password reset email sent to ${passwordError.userEmail}. The teacher will receive instructions to set their new password.`,
-              { duration: 6000 }
-            );
-            
-            // Mark that email was sent
-            passwordResetEmailSent = true;
-            // Don't show password modal since we sent an email
-            passwordGenerated = null;
-            
-            // Continue with the rest of the update - this is not an error
-          } else if (passwordError.message === 'PASSWORD_RESET_EMAIL_SENT') {
-            // Alternative error format
-            toast.success(
-              `Password reset email sent to ${teacher.email}. The teacher will receive instructions to set their new password.`,
-              { duration: 6000 }
-            );
-            passwordResetEmailSent = true;
-            passwordGenerated = null;
-            // Continue with the rest of the update
-          } else {
-            // Real error - throw it
-            throw new Error(passwordError.message || 'Failed to update password');
-          }
-        }
-      }
-
-      // ========== STEP 3: Update Teacher Profile in teachers table ==========
+      // Update Teacher Profile
       const teacherUpdates: any = {
         specialization: data.specialization,
         qualification: data.qualification,
         experience_years: data.experience_years,
         bio: data.bio,
         hire_date: data.hire_date,
-        // Handle UUID fields properly
         school_id: data.school_id && data.school_id !== '' ? data.school_id : null,
         branch_id: data.branch_id && data.branch_id !== '' ? data.branch_id : null,
         updated_at: new Date().toISOString()
       };
       
-      // Handle phone number update
       if (data.phone !== undefined) {
         teacherUpdates.phone = data.phone ? data.phone.toString() : null;
       }
       
-      // Execute teacher profile update
       const { error: teacherError } = await supabase
         .from('teachers')
         .update(teacherUpdates)
@@ -843,12 +705,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         throw new Error(`Failed to update teacher profile: ${teacherError.message}`);
       }
 
-      // ========== STEP 4: Update Metadata in custom users table ==========
+      // Update Metadata in custom users table
       const userUpdates: any = {
         updated_at: new Date().toISOString()
       };
       
-      // Update name in metadata if changed
       if (data.name && data.name !== teacher.name) {
         userUpdates.raw_user_meta_data = { 
           ...teacher.user_data?.raw_user_meta_data,
@@ -856,7 +717,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         };
       }
       
-      // Update phone in metadata if changed
       if (data.phone !== undefined) {
         if (!userUpdates.raw_user_meta_data) {
           userUpdates.raw_user_meta_data = { ...teacher.user_data?.raw_user_meta_data };
@@ -864,13 +724,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         userUpdates.raw_user_meta_data.phone = data.phone;
       }
       
-      // Update active status if changed
       if (data.is_active !== undefined && data.is_active !== teacher.is_active) {
         userUpdates.is_active = data.is_active;
       }
       
-      // Apply metadata updates if any changes exist
-      if (Object.keys(userUpdates).length > 1) { // More than just updated_at
+      if (Object.keys(userUpdates).length > 1) {
         const { error: metaError } = await supabase
           .from('users')
           .update(userUpdates)
@@ -878,23 +736,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         
         if (metaError) {
           console.error('Metadata update error:', metaError);
-          // Don't throw - this is non-critical
         }
       }
 
-      // ========== STEP 5: Update Teaching Relationships ==========
+      // Update Teaching Relationships
       try {
-        // Update departments (if provided)
         if (data.department_ids !== undefined) {
-          // Delete existing relationships
           await supabase
             .from('teacher_departments')
             .delete()
             .eq('teacher_id', teacherId);
           
-          // Insert new relationships
           if (data.department_ids.length > 0) {
-            const { error: deptError } = await supabase
+            await supabase
               .from('teacher_departments')
               .insert(
                 data.department_ids.map(dept_id => ({
@@ -902,24 +756,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   department_id: dept_id
                 }))
               );
-            
-            if (deptError && deptError.code !== '23505') { // Ignore duplicate key errors
-              console.error('Department assignment error:', deptError);
-            }
           }
         }
 
-        // Update grade levels (if provided)
         if (data.grade_level_ids !== undefined) {
-          // Delete existing relationships
           await supabase
             .from('teacher_grade_levels')
             .delete()
             .eq('teacher_id', teacherId);
           
-          // Insert new relationships
           if (data.grade_level_ids.length > 0) {
-            const { error: gradeError } = await supabase
+            await supabase
               .from('teacher_grade_levels')
               .insert(
                 data.grade_level_ids.map(grade_id => ({
@@ -927,24 +774,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   grade_level_id: grade_id
                 }))
               );
-            
-            if (gradeError && gradeError.code !== '23505') {
-              console.error('Grade level assignment error:', gradeError);
-            }
           }
         }
 
-        // Update sections (if provided)
         if (data.section_ids !== undefined) {
-          // Delete existing relationships
           await supabase
             .from('teacher_sections')
             .delete()
             .eq('teacher_id', teacherId);
           
-          // Insert new relationships
           if (data.section_ids.length > 0) {
-            const { error: sectionError } = await supabase
+            await supabase
               .from('teacher_sections')
               .insert(
                 data.section_ids.map(section_id => ({
@@ -952,86 +792,30 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   section_id: section_id
                 }))
               );
-            
-            if (sectionError && sectionError.code !== '23505') {
-              console.error('Section assignment error:', sectionError);
-            }
           }
         }
       } catch (err) {
         console.warn('Error updating teacher relationships:', err);
-        // Don't throw - relationships might be partially updated but main record is fine
       }
 
-      // ========== STEP 6: Send Notifications (if configured) ==========
-      if (data.send_credentials) {
-        try {
-          if (emailUpdated) {
-            // Email change notification is handled by Supabase Auth automatically
-            console.log('Email verification sent to new address:', data.email);
-          }
-          
-          if (passwordGenerated) {
-            // You could add custom email notification for password reset here
-            console.log('Password reset notification needed for:', teacher.email);
-            // Implement your email service call here if needed
-          }
-        } catch (notificationError) {
-          console.error('Failed to send notifications:', notificationError);
-          // Don't throw - update succeeded, notifications are secondary
-        }
-      }
-
-      // Return result with update status
       return { 
         success: true, 
-        password: passwordGenerated,
         emailUpdated: emailUpdated,
-        passwordResetEmailSent: passwordResetEmailSent,
         teacherId: teacherId
       };
     },
     {
       onSuccess: (result) => {
-        // Handle different success scenarios
-        if (result.password) {
-          // Password was reset directly - show the password modal
-          setGeneratedPassword(result.password);
-          toast.success('Teacher updated and password reset successfully!');
-        } else if (result.passwordResetEmailSent) {
-          // Password reset email was sent - close form without showing password
-          setShowEditForm(false);
-          refetchTeachers();
-          resetForm();
-          // Success toast already shown in the mutation
-        } else if (result.emailUpdated) {
-          // Email was updated - close form and refresh
-          toast.success('Teacher updated successfully. Email verification sent to new address.');
-          setShowEditForm(false);
-          refetchTeachers();
-          resetForm();
-        } else {
-          // Regular update without email/password changes
-          toast.success('Teacher updated successfully');
-          setShowEditForm(false);
-          refetchTeachers();
-          resetForm();
-        }
+        toast.success('Teacher updated successfully');
+        setShowEditForm(false);
+        refetchTeachers();
+        resetForm();
       },
       onError: (error: any) => {
         console.error('Update teacher error:', error);
-        
-        // Provide user-friendly error messages
-        if (error.message?.includes('email')) {
-          toast.error(`Email update failed: ${error.message}`);
-        } else if (error.message?.includes('password')) {
-          toast.error(`Password update failed: ${error.message}`);
-        } else {
-          toast.error(error.message || 'Failed to update teacher. Please try again.');
-        }
+        toast.error(error.message || 'Failed to update teacher');
       },
       onSettled: () => {
-        // Always called after success or error
         queryClient.invalidateQueries(['teachers', companyId]);
       }
     }
@@ -1118,8 +902,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       grade_level_ids: [],
       section_ids: [],
       is_active: true,
-      send_credentials: true,
-      password: ''
+      send_invitation: true
     });
     setFormErrors({});
     setTabErrors({
@@ -1129,7 +912,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     });
     setActiveTab('basic');
     setSelectedTeacher(null);
-    setShowPassword(false);
   }, [companyId]);
 
   const validateForm = useCallback((): boolean => {
@@ -1178,15 +960,54 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
     
     return Object.keys(errors).length === 0;
-  }, [formData, showEditForm]);
+  }, [formData]);
+
+  // Quick Password Reset Handler
+  const handleQuickPasswordReset = async (teacherId: string) => {
+    const teacher = teachers.find(t => t.id === teacherId);
+    if (!teacher) {
+      throw new Error('Teacher not found');
+    }
+
+    try {
+      // Use userCreationService to trigger password reset
+      const result = await userCreationService.updatePassword(teacher.user_id, '');
+      
+      // Log the action
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: user?.id,
+          action: 'password_reset_requested',
+          entity_type: 'teacher',
+          entity_id: teacherId,
+          details: {
+            teacher_name: teacher.name,
+            teacher_email: teacher.email,
+            reset_method: 'admin_quick_reset'
+          },
+          created_at: new Date().toISOString()
+        });
+        
+      return result;
+    } catch (error: any) {
+      // Check if it's a password reset email scenario (expected)
+      if (error.isPasswordReset && error.userEmail) {
+        return { success: true, emailSent: true };
+      } else if (error.message === 'PASSWORD_RESET_EMAIL_SENT') {
+        return { success: true, emailSent: true };
+      }
+      
+      throw error;
+    }
+  };
 
   // ===== EVENT HANDLERS =====
   const handleCreateTeacher = () => {
     resetForm();
     setFormData(prev => ({
       ...prev,
-      teacher_code: generateTeacherCode(companyId),
-      password: ''
+      teacher_code: generateTeacherCode(companyId)
     }));
     setShowCreateForm(true);
   };
@@ -1209,68 +1030,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
       section_ids: teacher.sections?.map(s => s.id) || [],
       is_active: teacher.is_active ?? true,
-      send_credentials: false,
-      password: ''
+      send_invitation: false
     });
     setShowEditForm(true);
     setActiveTab('basic');
-  };
-
-  const handleQuickPasswordReset = async (teacherId: string) => {
-    // Find the teacher
-    const teacher = teachers.find(t => t.id === teacherId);
-    if (!teacher) {
-      throw new Error('Teacher not found');
-    }
-
-    try {
-      // Use userCreationService to trigger password reset
-      const result = await userCreationService.updatePassword(teacher.user_id, '');
-      // This will trigger a password reset email
-      
-      // Log the action
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: user?.id,
-          action: 'password_reset_requested',
-          entity_type: 'teacher',
-          entity_id: teacherId,
-          details: {
-            teacher_name: teacher.name,
-            teacher_email: teacher.email,
-            reset_method: 'admin_quick_reset'
-          },
-          created_at: new Date().toISOString()
-        });
-        
-      return result;
-    } catch (error: any) {
-      // Check if it's a password reset email scenario (expected)
-      if (error.isPasswordReset && error.userEmail) {
-        // Success - email was sent
-        return { success: true, emailSent: true };
-      } else if (error.message === 'PASSWORD_RESET_EMAIL_SENT') {
-        // Alternative success format
-        return { success: true, emailSent: true };
-      }
-      
-      // Real error
-      throw error;
-    }
   };
 
   const handleSubmitForm = async () => {
     if (!validateForm()) return;
     
     if (showEditForm && selectedTeacher) {
-      // For edit mode, password resets are handled separately through PasswordResetManager
-      const updateData = { ...formData };
-      delete updateData.password; // Don't send password in update
-      
       updateTeacherMutation.mutate({
         teacherId: selectedTeacher.id,
-        data: updateData
+        data: formData
       });
     } else {
       createTeacherMutation.mutate(formData);
@@ -1298,145 +1070,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         activate: bulkAction === 'activate'
       });
     }
-  };
-
-  const copyPassword = () => {
-    if (generatedPassword) {
-      navigator.clipboard.writeText(generatedPassword);
-      setCopiedPassword(true);
-      setTimeout(() => setCopiedPassword(false), 2000);
-      toast.success('Password copied to clipboard');
-    }
-  };
-
-  const printPassword = () => {
-    if (generatedPassword) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Teacher Credentials - ${formData.name}</title>
-              <style>
-                body { 
-                  font-family: Arial, sans-serif; 
-                  padding: 40px;
-                  max-width: 600px;
-                  margin: 0 auto;
-                }
-                .header { 
-                  font-size: 24px; 
-                  font-weight: bold; 
-                  margin-bottom: 30px;
-                  color: #1f2937;
-                  border-bottom: 2px solid #8CC63F;
-                  padding-bottom: 10px;
-                }
-                .section {
-                  margin-bottom: 25px;
-                  background: #f9fafb;
-                  padding: 15px;
-                  border-radius: 8px;
-                }
-                .label {
-                  font-weight: bold;
-                  color: #4b5563;
-                  margin-bottom: 5px;
-                }
-                .value {
-                  color: #1f2937;
-                  font-size: 16px;
-                }
-                .password { 
-                  font-family: 'Courier New', monospace; 
-                  font-size: 18px; 
-                  background: #fef3c7; 
-                  padding: 15px;
-                  border: 2px dashed #f59e0b;
-                  border-radius: 8px;
-                  margin: 20px 0;
-                  text-align: center;
-                  letter-spacing: 2px;
-                }
-                .footer { 
-                  margin-top: 40px; 
-                  padding-top: 20px;
-                  border-top: 1px solid #e5e7eb;
-                  font-size: 14px; 
-                  color: #6b7280; 
-                }
-                .important {
-                  background: #fee2e2;
-                  border-left: 4px solid #ef4444;
-                  padding: 15px;
-                  margin: 20px 0;
-                }
-                @media print {
-                  body { padding: 20px; }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="header">Teacher Login Credentials</div>
-              
-              <div class="section">
-                <div class="label">Teacher Name:</div>
-                <div class="value">${formData.name}</div>
-              </div>
-              
-              <div class="section">
-                <div class="label">Email Address:</div>
-                <div class="value">${formData.email}</div>
-              </div>
-              
-              <div class="section">
-                <div class="label">Teacher Code:</div>
-                <div class="value">${formData.teacher_code}</div>
-              </div>
-              
-              <div class="section">
-                <div class="label">School:</div>
-                <div class="value">${availableSchools.find(s => s.id === formData.school_id)?.name || 'Not Assigned'}</div>
-              </div>
-              
-              <div class="section">
-                <div class="label">Temporary Password:</div>
-                <div class="password">${generatedPassword}</div>
-              </div>
-              
-              <div class="important">
-                <strong>Important Instructions:</strong>
-                <ul>
-                  <li>This is a temporary password that must be changed on first login</li>
-                  <li>Share this password securely with the teacher</li>
-                  <li>The teacher will receive a verification email</li>
-                  <li>Email verification is required before first login</li>
-                </ul>
-              </div>
-              
-              <div class="footer">
-                <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
-                <p><strong>Generated by:</strong> ${user?.name || user?.email || 'System Administrator'}</p>
-                <p style="margin-top: 20px; font-style: italic;">
-                  This document contains sensitive information. Please handle with care and dispose of securely after use.
-                </p>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
-      }
-    }
-  };
-
-  const closePasswordModal = () => {
-    setGeneratedPassword(null);
-    setShowCreateForm(false);
-    setShowEditForm(false);
-    resetForm();
-    refetchTeachers();
   };
 
   // ===== FILTERING =====
@@ -1524,16 +1157,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     );
   }
 
-  // ... REST OF THE COMPONENT (UI rendering) continues unchanged ...
-  // The UI rendering code from here onwards is identical to the original
-  // I'm including it for completeness but the only change was in the updateTeacherMutation
-
+  // ===== RENDER =====
   return (
     <div className="space-y-6">
-      {/* The entire return JSX remains exactly the same */}
-      {/* Including all the UI components, tables, modals, etc. */}
-      {/* This is a very long JSX section that I'm preserving as-is */}
-      
       {/* Header Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         
@@ -1872,7 +1498,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         )}
       </div>
 
-      {/* Create/Edit Teacher Form Modal with Enhanced UI */}
+      {/* Create/Edit Teacher Form Modal */}
       <SlideInForm
         title={showEditForm ? 'Edit Teacher' : 'Create New Teacher'}
         isOpen={showCreateForm || showEditForm}
@@ -1928,7 +1554,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     Basic Information
                   </h4>
                   <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                    Teacher's personal details and login credentials
+                    Teacher's personal details and contact information
                   </p>
                 </div>
               </div>
@@ -1950,7 +1576,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               label="Email Address" 
               required 
               error={formErrors.email}
-              helpText={showEditForm ? "Email can be changed. User will need to verify the new email address." : undefined}
+              helpText={showEditForm ? "Email can be changed. User will need to verify the new email address." : "An invitation email will be sent to this address"}
             >
               <div className="relative">
                 <Input
@@ -1960,11 +1586,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="teacher@school.com"
                   leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
-                  className={cn(
-                    "focus:ring-[#8CC63F] focus:border-[#8CC63F]",
-                    showEditForm && "bg-white dark:bg-gray-900"
-                  )}
-                  disabled={false}
+                  className="focus:ring-[#8CC63F] focus:border-[#8CC63F]"
                 />
                 {showEditForm && formData.email !== selectedTeacher?.email && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -2032,19 +1654,19 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
             </FormField>
 
-            {/* Password Info for New Teachers */}
+            {/* Invitation Info for New Teachers */}
             {!showEditForm && (
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
                   <div className="flex items-start gap-2">
-                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <Send className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                        Automatic Password Generation
+                        Invitation Email
                       </h4>
                       <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                        A secure temporary password will be automatically generated when you create the teacher. 
-                        You'll be able to copy and share it with them after creation.
+                        After creating the teacher account, an invitation email will be sent automatically. 
+                        The teacher will use the link in the email to set their own password and complete their profile.
                       </p>
                     </div>
                   </div>
@@ -2257,7 +1879,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </>
             )}
 
-            {/* Enhanced Account Status Section */}
+            {/* Account Status Section */}
             <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2 mb-4">
                 <Shield className="h-4 w-4 text-[#8CC63F]" />
@@ -2282,103 +1904,53 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   />
                 </div>
               </FormField>
-
-              {!showEditForm && (
-                <FormField id="send_credentials" label="Send Credentials">
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <input
-                      type="checkbox"
-                      id="send_credentials"
-                      checked={formData.send_credentials}
-                      onChange={(e) => setFormData({ ...formData, send_credentials: e.target.checked })}
-                      className="rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
-                    />
-                    <label htmlFor="send_credentials" className="text-sm text-gray-700 dark:text-gray-300">
-                      Send login credentials to teacher's email
-                    </label>
-                  </div>
-                </FormField>
-              )}
             </div>
           </TabsContent>
         </Tabs>
       </SlideInForm>
 
-      {/* Generated Password Modal */}
-      {generatedPassword && (
+      {/* Invitation Success Modal */}
+      {showInvitationSuccess && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 relative">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              {showEditForm ? 'Password Reset Successfully' : 'Teacher Account Created Successfully'}
-            </h3>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Teacher Account Created Successfully
+              </h3>
+            </div>
             
             <div className="mb-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                {showEditForm 
-                  ? `A new password has been generated for ${formData.name}.`
-                  : `A temporary password has been generated for ${formData.name}.`}
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                An invitation email has been sent to:
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                The teacher will receive a verification email and must verify their email before logging in.
-              </p>
-            </div>
-
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                {showEditForm ? 'New Password' : 'Temporary Password'}
-              </p>
-              <div className="flex items-center justify-between">
-                <code className="text-base font-mono font-semibold break-all pr-2 text-gray-900 dark:text-white">
-                  {generatedPassword}
-                </code>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={copyPassword}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                    title="Copy password"
-                  >
-                    {copiedPassword ? (
-                      <Check className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Copy className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                    )}
-                  </button>
-                  <button
-                    onClick={printPassword}
-                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                    title="Print credentials"
-                  >
-                    <Printer className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  </button>
-                </div>
+              <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+                <p className="font-medium text-gray-900 dark:text-white">{invitedTeacherEmail}</p>
               </div>
             </div>
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md mb-4 border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                <strong>Important:</strong> This password will not be shown again. Make sure to:
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700 mb-4">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Next Steps:</strong>
               </p>
-              <ul className="mt-2 text-sm text-amber-700 dark:text-amber-400 list-disc list-inside">
-                <li>Copy or print the password now</li>
-                <li>Share it securely with the teacher</li>
-                <li>Advise them to change it after first login</li>
+              <ul className="mt-2 text-sm text-blue-600 dark:text-blue-400 list-disc list-inside">
+                <li>The teacher will receive an email with setup instructions</li>
+                <li>They'll click the link to set their password</li>
+                <li>They can then log in and access their dashboard</li>
               </ul>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={printPassword}
-                className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Print
-              </Button>
+            <div className="flex justify-end">
               <Button 
-                onClick={closePasswordModal}
+                onClick={() => {
+                  setShowInvitationSuccess(false);
+                  setInvitedTeacherEmail('');
+                }}
                 className="bg-[#8CC63F] hover:bg-[#7AB532] text-white"
               >
-                Close
+                Done
               </Button>
             </div>
           </div>
