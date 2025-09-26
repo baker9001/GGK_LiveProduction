@@ -1,6 +1,6 @@
 // Edge Function: update-user-password
+// Updates user passwords using admin privileges
 // Path: supabase/functions/update-user-password/index.ts
-// COMPLETE VERSION - No truncation
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
@@ -12,70 +12,40 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders })
   }
 
   try {
     const body = await req.json()
-    console.log('Password update request for user:', body.user_id)
+    console.log('Updating password for user:', body.user_id)
 
     // Validate required fields
     if (!body.user_id || !body.new_password) {
       return new Response(
         JSON.stringify({ 
-          error: 'Missing required parameters',
-          message: 'Both user_id and new_password are required' 
-        }),
-        { status: 400, headers: corsHeaders }
-      )
-    }
-
-    // Validate password length
-    if (body.new_password.length < 8) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid password',
-          message: 'Password must be at least 8 characters long' 
+          success: false,
+          error: 'User ID and new password are required' 
         }),
         { status: 400, headers: corsHeaders }
       )
     }
 
     // Validate password complexity
-    const hasUpperCase = /[A-Z]/.test(body.new_password)
-    const hasLowerCase = /[a-z]/.test(body.new_password)
-    const hasNumber = /[0-9]/.test(body.new_password)
-    
-    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+    if (body.new_password.length < 8) {
       return new Response(
         JSON.stringify({ 
-          error: 'Weak password',
-          message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number' 
+          success: false,
+          error: 'Password must be at least 8 characters long' 
         }),
         { status: 400, headers: corsHeaders }
       )
     }
 
     // Initialize admin client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      console.error('Missing environment variables')
-      return new Response(
-        JSON.stringify({ 
-          error: 'Configuration error',
-          message: 'Server configuration error. Please contact support.' 
-        }),
-        { status: 500, headers: corsHeaders }
-      )
-    }
-    
     const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseServiceRoleKey,
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
         auth: {
           autoRefreshToken: false,
@@ -84,136 +54,160 @@ serve(async (req) => {
       }
     )
 
-    // First verify the user exists
-    console.log('Verifying user exists:', body.user_id)
-    const { data: userData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(
-      body.user_id
-    )
+    // Get the current user making the request
+    const authHeader = req.headers.get('Authorization')
+    let requestingUserId = null
     
-    if (getUserError) {
-      console.error('Error fetching user:', getUserError)
-      return new Response(
-        JSON.stringify({ 
-          error: 'User not found',
-          message: `Could not find user: ${getUserError.message}` 
-        }),
-        { status: 404, headers: corsHeaders }
-      )
-    }
-    
-    if (!userData.user) {
-      console.error('User data is null')
-      return new Response(
-        JSON.stringify({ 
-          error: 'User not found',
-          message: 'The specified user does not exist in the authentication system' 
-        }),
-        { status: 404, headers: corsHeaders }
-      )
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      
+      // Verify the token and get the user
+      const { data: { user: requestingUser }, error: authError } = await supabaseAdmin.auth.getUser(token)
+      
+      if (authError) {
+        console.error('Auth error:', authError)
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Invalid authentication token' 
+          }),
+          { status: 401, headers: corsHeaders }
+        )
+      }
+      
+      requestingUserId = requestingUser?.id
+      console.log('Request made by user:', requestingUserId)
     }
 
-    console.log('User found, updating password for:', userData.user.email)
+    // Check if this is a self-update or admin update
+    const isSelfUpdate = requestingUserId === body.user_id
+    console.log('Is self update:', isSelfUpdate)
 
-    // Update password in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      body.user_id,
-      {
-        password: body.new_password,
-        user_metadata: {
-          ...userData.user.user_metadata,
-          password_updated_at: new Date().toISOString(),
-          requires_password_change: false,
-          password_reset_needed: false
+    if (!isSelfUpdate) {
+      // For admin updates, verify the requesting user has permission
+      // Check if the requesting user is an admin
+      const { data: adminCheck } = await supabaseAdmin
+        .from('entity_users')
+        .select('admin_level')
+        .eq('user_id', requestingUserId)
+        .single()
+      
+      if (!adminCheck) {
+        // Check if they're a system admin
+        const { data: systemAdminCheck } = await supabaseAdmin
+          .from('admin_users')
+          .select('role_id')
+          .eq('id', requestingUserId)
+          .single()
+        
+        if (!systemAdminCheck) {
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: 'You do not have permission to update other users passwords' 
+            }),
+            { status: 403, headers: corsHeaders }
+          )
         }
       }
+      
+      console.log('Admin user verified, proceeding with password update')
+    }
+
+    // First check if the user exists in auth.users
+    const { data: { user: targetUser }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(
+      body.user_id
     )
 
-    if (authError) {
-      console.error('Auth password update error:', authError)
-      
-      // Specific error handling
-      if (authError.message?.includes('not found')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'User not found',
-            message: 'User not found in authentication system' 
-          }),
-          { status: 404, headers: corsHeaders }
-        )
-      }
-      
-      if (authError.message?.includes('weak')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Weak password',
-            message: 'Password does not meet security requirements' 
-          }),
-          { status: 400, headers: corsHeaders }
-        )
-      }
-      
-      if (authError.message?.includes('same password')) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Same password',
-            message: 'New password cannot be the same as the current password' 
-          }),
-          { status: 400, headers: corsHeaders }
-        )
-      }
-      
-      // Generic auth error
+    if (getUserError || !targetUser) {
+      console.error('User not found:', getUserError)
       return new Response(
         JSON.stringify({ 
-          error: 'Password update failed',
-          message: authError.message || 'Failed to update password in authentication system'
+          success: false,
+          error: 'User not found in authentication system. This user may need to be re-created.' 
+        }),
+        { status: 404, headers: corsHeaders }
+      )
+    }
+
+    console.log('Found user to update:', targetUser.email)
+
+    // Update the user's password
+    const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      body.user_id,
+      {
+        password: body.new_password
+      }
+    )
+
+    if (updateError) {
+      console.error('Password update error:', updateError)
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: `Failed to update password: ${updateError.message}` 
         }),
         { status: 400, headers: corsHeaders }
       )
     }
 
-    // Check if we got user data back
-    if (!authData || !authData.user) {
-      console.error('No user data returned after update')
-      return new Response(
-        JSON.stringify({ 
-          error: 'Update failed',
-          message: 'Password update failed - no user data returned' 
-        }),
-        { status: 400, headers: corsHeaders }
-      )
-    }
+    console.log('Password updated successfully for:', updatedUser.user?.email)
 
-    console.log('Password updated successfully for user:', authData.user.id)
-    console.log('User email:', authData.user.email)
+    // Update metadata in the public users table
+    try {
+      // First get the current metadata
+      const { data: currentUserData } = await supabaseAdmin
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', body.user_id)
+        .single()
+      
+      // Update with merged metadata
+      const { error: metadataError } = await supabaseAdmin
+        .from('users')
+        .update({
+          raw_user_meta_data: {
+            ...(currentUserData?.raw_user_meta_data || {}),
+            password_updated_at: new Date().toISOString(),
+            password_last_changed: new Date().toISOString(),
+            requires_password_change: false,
+            password_reset_needed: false,
+            password_reset_pending: false
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', body.user_id)
+
+      if (metadataError) {
+        console.warn('Failed to update metadata:', metadataError)
+        // Don't fail the whole operation if metadata update fails
+      }
+    } catch (metaError) {
+      console.warn('Metadata update error:', metaError)
+      // Don't fail the operation
+    }
 
     // Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        userId: authData.user.id,
-        email: authData.user.email,
-        message: 'Password updated successfully'
+        message: isSelfUpdate 
+          ? 'Your password has been updated successfully'
+          : `Password updated successfully for user ${targetUser.email}`,
+        user: {
+          id: updatedUser.user?.id,
+          email: updatedUser.user?.email
+        }
       }),
       { status: 200, headers: corsHeaders }
     )
 
   } catch (error) {
     console.error('Unexpected error in update-user-password:', error)
-    
-    // Log the full error for debugging
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      })
-    }
-    
     return new Response(
       JSON.stringify({ 
-        error: 'Internal server error',
-        message: error.message || 'An unexpected error occurred while updating the password' 
+        success: false,
+        error: error.message || 'Internal server error' 
       }),
       { status: 500, headers: corsHeaders }
     )
