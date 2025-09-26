@@ -219,46 +219,160 @@ export const userCreationService = {
         ...payload.metadata
       };
 
-      // Try Edge Function first
-      try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/create-entity-users-invite`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': accessToken ? `Bearer ${accessToken}` : '',
-            'apikey': SUPABASE_ANON_KEY
-          },
-          body: JSON.stringify({
+      // Determine which Edge Function to use based on user type
+      const isAdminUser = ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(payload.user_type);
+      const isTeacherOrStudent = ['teacher', 'student'].includes(payload.user_type);
+
+      if (isTeacherOrStudent) {
+        // Use the teacher/student Edge Function
+        console.log(`Creating ${payload.user_type} with Edge Function`);
+        
+        try {
+          const requestBody: any = {
             email: payload.email.toLowerCase(),
             name: sanitizeString(payload.name),
-            user_metadata: userMetadata,
-            admin_level: (payload as AdminUserPayload).admin_level,
+            user_type: payload.user_type,
             company_id: payload.company_id,
             company_name: await this.getCompanyName(payload.company_id),
             phone: payload.phone,
+            user_metadata: userMetadata,
             redirect_to: `${window.location.origin}/auth/callback`,
             send_invitation: payload.send_invitation !== false,
             created_by: currentUser?.email
-          })
-        });
+          };
 
-        if (response.ok) {
-          const result = await response.json();
-          
-          if (result.userId) {
-            await this.createUserInCustomTable(result.userId, payload, userMetadata);
-            console.log('User created via Edge Function with invitation:', result.userId);
-            return result.userId;
+          // Add password if provided
+          if (payload.password) {
+            requestBody.password = payload.password;
+          } else {
+            // Request temporary password to be returned (for display)
+            requestBody.return_password = true;
           }
-        } else {
-          const errorData = await response.json().catch(() => null);
-          console.warn('Edge Function failed:', errorData?.error || 'Unknown error');
+
+          // Add type-specific fields
+          if (payload.user_type === 'teacher') {
+            const teacherPayload = payload as TeacherUserPayload;
+            requestBody.teacher_code = teacherPayload.teacher_code;
+            requestBody.specialization = teacherPayload.specialization;
+            requestBody.qualification = teacherPayload.qualification;
+            requestBody.school_id = teacherPayload.school_id;
+            requestBody.branch_id = teacherPayload.branch_id;
+          } else if (payload.user_type === 'student') {
+            const studentPayload = payload as StudentUserPayload;
+            requestBody.student_code = studentPayload.student_code;
+            requestBody.enrollment_number = studentPayload.enrollment_number;
+            requestBody.grade_level = studentPayload.grade_level;
+            requestBody.section = studentPayload.section;
+            requestBody.parent_name = studentPayload.parent_name;
+            requestBody.parent_contact = studentPayload.parent_contact;
+            requestBody.parent_email = studentPayload.parent_email;
+            requestBody.school_id = studentPayload.school_id;
+            requestBody.branch_id = studentPayload.branch_id;
+          }
+
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-teacher-student-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+              'apikey': SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            
+            if (result.userId) {
+              // Create record in users table
+              await this.createUserInCustomTable(result.userId, payload, userMetadata);
+              
+              // Store temporary password if returned (for display to admin)
+              if (result.temporaryPassword) {
+                (payload as any).generatedPassword = result.temporaryPassword;
+              }
+              
+              console.log(`${payload.user_type} created via Edge Function:`, result.userId);
+              return result.userId;
+            }
+          } else {
+            const errorData = await response.json().catch(() => null);
+            console.warn('Teacher/Student Edge Function failed:', errorData?.error || 'Unknown error');
+            
+            // If Edge Function not found (404), fall back to direct creation
+            if (response.status === 404) {
+              console.warn('Teacher/Student Edge Function not deployed, using fallback...');
+              console.warn('Deploy with: supabase functions deploy create-teacher-student-user --no-verify-jwt');
+              return await this.createUserInUsersTableDirect(payload);
+            }
+            
+            throw new Error(errorData?.error || 'Failed to create user');
+          }
+        } catch (edgeError: any) {
+          console.error('Teacher/Student Edge Function error:', edgeError);
+          
+          // Fall back to direct creation if Edge Function not available
+          if (edgeError.message?.includes('fetch')) {
+            console.warn('Network error accessing Edge Function, using fallback...');
+            return await this.createUserInUsersTableDirect(payload);
+          }
+          
+          throw edgeError;
         }
-      } catch (edgeError) {
-        console.warn('Edge Function not available:', edgeError);
+      } else if (isAdminUser) {
+        // Use the admin Edge Function for admin users
+        console.log('Creating admin user with Edge Function');
+        
+        try {
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/create-entity-users-invite`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+              'apikey': SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+              email: payload.email.toLowerCase(),
+              name: sanitizeString(payload.name),
+              user_metadata: userMetadata,
+              admin_level: (payload as AdminUserPayload).admin_level,
+              company_id: payload.company_id,
+              company_name: await this.getCompanyName(payload.company_id),
+              phone: payload.phone,
+              redirect_to: `${window.location.origin}/auth/callback`,
+              send_invitation: payload.send_invitation !== false,
+              created_by: currentUser?.email
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            
+            if (result.userId) {
+              await this.createUserInCustomTable(result.userId, payload, userMetadata);
+              console.log('Admin user created via Edge Function with invitation:', result.userId);
+              return result.userId;
+            }
+          } else {
+            const errorData = await response.json().catch(() => null);
+            console.warn('Admin Edge Function failed:', errorData?.error || 'Unknown error');
+            
+            // If Edge Function not found (404), fall back
+            if (response.status === 404) {
+              console.warn('Admin Edge Function not deployed, using fallback...');
+              return await this.createUserInUsersTableDirect(payload);
+            }
+            
+            throw new Error(errorData?.error || 'Failed to create admin user');
+          }
+        } catch (edgeError) {
+          console.warn('Admin Edge Function not available:', edgeError);
+          return await this.createUserInUsersTableDirect(payload);
+        }
       }
 
-      // Fallback: Create directly in users table
+      // Fallback: Create directly in users table (no auth.users record)
+      console.warn('User type not handled by Edge Functions, using fallback');
       return await this.createUserInUsersTableDirect(payload);
       
     } catch (error: any) {
@@ -357,6 +471,8 @@ export const userCreationService = {
       ...(payload.permissions || {})
     };
 
+    // Note: email and name might be stored in users table, not entity_users
+    // Including them here in case entity_users has these columns
     const adminData = {
       user_id: userId,
       company_id: payload.company_id,
@@ -404,11 +520,10 @@ export const userCreationService = {
    * Create teacher user
    */
   async createTeacherUser(userId: string, payload: TeacherUserPayload): Promise<string> {
+    // Note: email and name are stored in the users table, not teachers table
     const teacherData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
       phone: payload.phone || null,
       teacher_code: payload.teacher_code,
       specialization: payload.specialization || [],
@@ -416,7 +531,6 @@ export const userCreationService = {
       experience_years: payload.experience_years || 0,
       bio: payload.bio || null,
       hire_date: payload.hire_date || new Date().toISOString(),
-      is_active: payload.is_active !== false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -445,11 +559,10 @@ export const userCreationService = {
    * Create student user
    */
   async createStudentUser(userId: string, payload: StudentUserPayload): Promise<string> {
+    // Note: email and name are stored in the users table, not students table
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      email: payload.email.toLowerCase(),
-      name: sanitizeString(payload.name),
       phone: payload.phone || null,
       student_code: payload.student_code,
       enrollment_number: payload.enrollment_number,
@@ -459,7 +572,6 @@ export const userCreationService = {
       parent_name: payload.parent_name || null,
       parent_contact: payload.parent_contact || null,
       parent_email: payload.parent_email || null,
-      is_active: payload.is_active !== false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
