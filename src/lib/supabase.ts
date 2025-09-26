@@ -135,7 +135,12 @@ export async function checkSupabaseConnection(): Promise<boolean> {
     console.log('✅ Supabase connection successful');
     return true;
   } catch (error) {
-    console.warn('❌ Supabase connection error:', error);
+    try {
+      handleSupabaseError(error, 'connection check');
+    } catch (handledError) {
+      // handleSupabaseError throws user-friendly errors, but we want to continue gracefully
+      console.warn('❌ Supabase connection error:', handledError.message);
+    }
     return false;
   }
 }
