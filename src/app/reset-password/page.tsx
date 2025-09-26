@@ -1,14 +1,15 @@
 // /home/project/src/app/reset-password/page.tsx
-// Updated with consistent UI/UX matching signin page
+// Enhanced version with better error handling for Supabase password updates
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
-import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { GraduationCap, Lock, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { supabase } from '../../lib/supabase';
 import bcrypt from 'bcryptjs/dist/bcrypt.min';
 import { getCurrentUser } from '../../lib/auth';
+import { toast } from '../../components/shared/Toast';
 
 interface PasswordStrength {
   score: number;
@@ -39,7 +40,6 @@ function calculatePasswordStrength(password: string): PasswordStrength {
 
 // Helper function to parse hash fragments
 function parseHashParams(hash: string): URLSearchParams {
-  // Remove the leading # if present
   const cleanHash = hash.startsWith('#') ? hash.substring(1) : hash;
   return new URLSearchParams(cleanHash);
 }
@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
   const error_code = hashParams.get('error_code') || searchParams.get('error_code');
   const error_description = hashParams.get('error_description') || searchParams.get('error_description');
   
-  // Legacy token support (for your existing system)
+  // Legacy token support
   const legacyToken = searchParams.get('token');
   
   const [password, setPassword] = useState('');
@@ -72,6 +72,7 @@ export default function ResetPasswordPage() {
   const [checkingToken, setCheckingToken] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>('');
   
   // State for first-login password change
   const [isFirstLoginChange, setIsFirstLoginChange] = useState(false);
@@ -86,6 +87,7 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const initializeReset = async () => {
       console.log('Initializing password reset...');
+      console.log('Full URL:', window.location.href);
       console.log('Hash params:', window.location.hash);
       console.log('Query params:', window.location.search);
       console.log('Parsed access_token:', access_token ? 'present' : 'missing');
@@ -93,6 +95,7 @@ export default function ResetPasswordPage() {
       
       // Check for Supabase error parameters
       if (error_code || error_description) {
+        console.error('Supabase error:', error_code, error_description);
         setError(error_description || 'Invalid or expired reset link');
         setTokenValid(false);
         setCheckingToken(false);
@@ -104,37 +107,64 @@ export default function ResetPasswordPage() {
         try {
           console.log('Setting Supabase session with recovery token...');
           
-          // Set the session with the recovery token
-          const { error: sessionError } = await supabase.auth.setSession({
+          // IMPORTANT: Set the session with the recovery token
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token,
             refresh_token: refresh_token || ''
           });
 
           if (sessionError) {
             console.error('Session error:', sessionError);
-            setError('Failed to verify reset link. Please request a new one.');
-            setTokenValid(false);
+            
+            // Try alternative approach: exchange tokens for session
+            console.log('Trying alternative session establishment...');
+            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(access_token);
+            
+            if (exchangeError) {
+              console.error('Exchange error:', exchangeError);
+              setError('Failed to verify reset link. The link may have expired. Please request a new one.');
+              setTokenValid(false);
+              setCheckingToken(false);
+              return;
+            }
+            
+            if (exchangeData?.user) {
+              console.log('Session established via exchange for user:', exchangeData.user.id);
+              setTokenValid(true);
+              setSessionReady(true);
+              setUserIdToProcess(exchangeData.user.id);
+              setUserEmail(exchangeData.user.email || '');
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+          } else if (sessionData?.user) {
+            console.log('Session established successfully for user:', sessionData.user.id);
+            setTokenValid(true);
+            setSessionReady(true);
+            setUserIdToProcess(sessionData.user.id);
+            setUserEmail(sessionData.user.email || '');
+            
+            // Clear the hash from the URL for cleaner appearance
+            window.history.replaceState(null, '', window.location.pathname);
           } else {
             // Get the current user from the session
             const { data: { user }, error: userError } = await supabase.auth.getUser();
             
             if (userError || !user) {
               console.error('User error:', userError);
-              setError('Failed to verify user. Please request a new reset link.');
+              setError('Session is valid but user not found. Please try requesting a new reset link.');
               setTokenValid(false);
             } else {
-              console.log('Session established successfully for user:', user.id);
+              console.log('User found in session:', user.id);
               setTokenValid(true);
               setSessionReady(true);
               setUserIdToProcess(user.id);
-              
-              // Clear the hash from the URL for cleaner appearance
+              setUserEmail(user.email || '');
               window.history.replaceState(null, '', window.location.pathname);
             }
           }
         } catch (err) {
           console.error('Error setting session:', err);
-          setError('Failed to process reset link');
+          setError('Failed to process reset link. Please try again or request a new one.');
           setTokenValid(false);
         } finally {
           setCheckingToken(false);
@@ -162,7 +192,7 @@ export default function ResetPasswordPage() {
       }
 
       console.log('No valid reset token found');
-      setError('No reset token provided');
+      setError('No reset token provided. Please use the link from your email.');
       setCheckingToken(false);
     };
 
@@ -171,7 +201,6 @@ export default function ResetPasswordPage() {
 
   const checkLegacyResetToken = async () => {
     try {
-      // Validate legacy token from your custom table
       const { data, error } = await supabase
         .from('password_reset_tokens')
         .select('*')
@@ -224,32 +253,76 @@ export default function ResetPasswordPage() {
       if (sessionReady) {
         console.log('Updating password via Supabase Auth...');
         
-        const { error: updateError } = await supabase.auth.updateUser({
+        // First, ensure we have a valid session
+        const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
+        
+        if (sessionCheckError || !session) {
+          console.error('No valid session found:', sessionCheckError);
+          
+          // Try to re-establish session if we still have tokens
+          if (access_token) {
+            const { error: reSessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token: refresh_token || ''
+            });
+            
+            if (reSessionError) {
+              throw new Error('Session expired. Please request a new password reset link.');
+            }
+          } else {
+            throw new Error('Session expired. Please request a new password reset link.');
+          }
+        }
+        
+        // Now update the password
+        const { data, error: updateError } = await supabase.auth.updateUser({
           password: password
         });
 
         if (updateError) {
-          throw new Error(updateError.message);
+          console.error('Password update error:', updateError);
+          
+          // Handle specific Supabase errors
+          if (updateError.message.includes('storage')) {
+            throw new Error('Password storage error. This might be a temporary issue. Please try again in a moment or contact support.');
+          } else if (updateError.message.includes('expired')) {
+            throw new Error('Your reset link has expired. Please request a new one.');
+          } else if (updateError.message.includes('same password')) {
+            throw new Error('New password must be different from your current password.');
+          } else {
+            throw new Error(updateError.message || 'Failed to update password. Please try again.');
+          }
         }
 
+        if (!data?.user) {
+          throw new Error('Password update failed. Please try again or contact support.');
+        }
+
+        console.log('Password updated successfully via Supabase Auth');
+
         // Also update the password hash in your custom tables for consistency
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        try {
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Update users table
-        const { error: userTableError } = await supabase
-          .from('users')
-          .update({
-            password_hash: hashedPassword,
-            password_updated_at: new Date().toISOString(),
-            requires_password_change: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userIdToProcess);
+          // Update users table
+          const { error: userTableError } = await supabase
+            .from('users')
+            .update({
+              password_hash: hashedPassword,
+              password_updated_at: new Date().toISOString(),
+              requires_password_change: false,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userIdToProcess)
+            .or(`email.eq.${userEmail}`); // Fallback to email if ID doesn't match
 
-        if (userTableError) {
-          console.error('Failed to update users table:', userTableError);
-          // Don't throw - the main password update in Supabase Auth succeeded
+          if (userTableError) {
+            console.warn('Failed to update users table (non-critical):', userTableError);
+            // Don't throw - the main password update in Supabase Auth succeeded
+          }
+        } catch (hashError) {
+          console.warn('Failed to update password hash in custom table (non-critical):', hashError);
         }
 
         // Sign out after password reset (Supabase best practice)
@@ -277,46 +350,32 @@ export default function ResetPasswordPage() {
           throw new Error(`Failed to update password: ${userUpdateError.message}`);
         }
 
-        // Also update admin_users table if this is an admin user
-        if (userTypeToProcess === 'admin' || userTypeToProcess === 'system') {
-          const { error: updateError } = await supabase
-            .from('admin_users')
-            .update({ 
-              password_hash: hashedPassword,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', userIdToProcess);
-
-          if (updateError) {
-            console.error('Failed to update admin_users table:', updateError);
-            // Don't throw - the main password update succeeded
-          }
-        }
-
         // Mark legacy token as used
         if (legacyTokenData && legacyTokenData.id) {
-          const { error: tokenError } = await supabase
+          await supabase
             .from('password_reset_tokens')
             .update({ 
               used: true, 
               used_at: new Date().toISOString() 
             })
             .eq('id', legacyTokenData.id);
-
-          if (tokenError) {
-            console.error('Failed to mark token as used:', tokenError);
-          }
         }
       }
       
       console.log('Password updated successfully');
+      toast.success('Password reset successful!');
       setSuccess(true);
+      
     } catch (err) {
       console.error('Password update error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reset password');
+      setError(err instanceof Error ? err.message : 'Failed to reset password. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRequestNewLink = () => {
+    navigate('/forgot-password');
   };
 
   if (checkingToken) {
@@ -379,7 +438,7 @@ export default function ResetPasswordPage() {
                 <AlertCircle className="h-6 w-6 text-red-400" />
               </div>
               <h2 className="mt-4 text-lg font-semibold text-white">
-                Invalid Reset Link
+                Invalid or Expired Reset Link
               </h2>
               <p className="mt-2 text-sm text-gray-300">
                 {error || 'This password reset link is invalid or has expired.'}
@@ -390,6 +449,7 @@ export default function ResetPasswordPage() {
                   onClick={() => navigate('/forgot-password')}
                   className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
                 >
+                  <RefreshCw className="h-4 w-4 mr-2" />
                   Request New Link
                 </Button>
                 
@@ -400,6 +460,12 @@ export default function ResetPasswordPage() {
                 >
                   Back to Sign In
                 </Button>
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-700">
+                <p className="text-xs text-gray-400">
+                  If you continue to have issues, please contact support for assistance.
+                </p>
               </div>
             </div>
           </div>
@@ -509,9 +575,21 @@ export default function ResetPasswordPage() {
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
           {/* Error Message */}
           {error && (
-            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg flex items-start border border-red-500/20">
-              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-              <span className="text-sm">{error}</span>
+            <div className="mb-4 bg-red-500/10 backdrop-blur text-red-400 p-4 rounded-lg border border-red-500/20">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <span className="text-sm">{error}</span>
+                  {error.includes('expired') && (
+                    <button
+                      onClick={handleRequestNewLink}
+                      className="mt-2 text-xs text-red-300 hover:text-white underline block"
+                    >
+                      Request a new reset link
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
