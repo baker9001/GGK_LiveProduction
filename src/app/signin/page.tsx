@@ -37,6 +37,7 @@ export default function SignInPage() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginErrorType, setLoginErrorType] = useState<string | null>(null);
   const [verificationNeeded, setVerificationNeeded] = useState(false);
   
   // Redirect path
@@ -74,6 +75,7 @@ export default function SignInPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoginErrorType(null);
     setVerificationNeeded(false);
     
     if (!email || !password) {
@@ -109,6 +111,7 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message?.toLowerCase().includes('invalid login credentials')) {
+          setLoginErrorType('invalid_credentials');
           setError('Invalid email or password. Please check your credentials.');
         } else if (authError.message?.toLowerCase().includes('too many requests')) {
           setError('Too many login attempts. Please try again later.');
@@ -422,6 +425,16 @@ export default function SignInPage() {
                   <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
                   <div>
                     <span className="text-sm">{error}</span>
+                    {loginErrorType === 'invalid_credentials' && (
+                      <div className="mt-3">
+                        <Link
+                          to="/forgot-password"
+                          className="inline-flex items-center text-sm font-medium text-red-300 hover:text-red-200 underline"
+                        >
+                          Forgot your password?
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
