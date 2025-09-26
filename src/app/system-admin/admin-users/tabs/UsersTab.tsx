@@ -1,6 +1,6 @@
 /**
  * File: /src/app/system-admin/admin-users/tabs/UsersTab.tsx
- * UPDATED VERSION - Using Edge Function for proper Supabase Auth integration
+ * FIXED VERSION - Complete Supabase Auth integration with proper data consistency
  */
 
 import React, { useState, useEffect } from 'react';
@@ -25,7 +25,9 @@ import {
   Shield,
   User,
   AlertCircle,
-  Send
+  Send,
+  Phone,
+  Building
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '../../../../components/shared/DataTable';
@@ -50,12 +52,32 @@ import {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-// ===== VALIDATION SCHEMAS =====
-const inviteUserSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address').transform(e => e.toLowerCase()),
-  role_id: z.string().uuid('Please select a role'),
+// ===== ENHANCED VALIDATION SCHEMAS =====
+const createUserSchema = z.object({
+  name: z.string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name must not exceed 100 characters')
+    .regex(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes'),
+  email: z.string()
+    .email('Invalid email address')
+    .transform(e => e.toLowerCase().trim()),
+  role_id: z.string().uuid('Please select a valid role'),
+  phone: z.string().optional(),
+  position: z.string().optional(),
+  department: z.string().optional(),
   personal_message: z.string().optional()
+});
+
+const updateUserSchema = z.object({
+  name: z.string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name must not exceed 100 characters')
+    .regex(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes'),
+  role_id: z.string().uuid('Please select a valid role'),
+  status: z.enum(['active', 'inactive']),
+  phone: z.string().optional(),
+  position: z.string().optional(),
+  department: z.string().optional()
 });
 
 // ===== TYPE DEFINITIONS =====
@@ -67,11 +89,15 @@ interface AdminUser {
   role_name: string;
   status: 'active' | 'inactive';
   created_at: string;
+  updated_at?: string;
   email_verified?: boolean;
   requires_password_change?: boolean;
   last_login_at?: string;
   invitation_status?: 'pending' | 'accepted' | 'expired';
-  updated_at?: string;
+  phone?: string;
+  position?: string;
+  department?: string;
+  avatar_url?: string;
 }
 
 interface Role {
@@ -134,12 +160,15 @@ async function checkUserExists(email: string): Promise<{ exists: boolean; isActi
 }
 
 /**
- * Create admin user using Edge Function for proper Supabase Auth integration
+ * ENHANCED: Create admin user using improved Edge Function
  */
 async function createAdminUser(data: {
   email: string;
   name: string;
   role_id: string;
+  phone?: string;
+  position?: string;
+  department?: string;
   personal_message?: string;
 }) {
   const currentUser = getAuthenticatedUser();
@@ -164,8 +193,8 @@ async function createAdminUser(data: {
       throw new Error('Session expired. Please refresh the page and try again.');
     }
 
-    // Call Edge Function to create user in Supabase Auth
-    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/create-admin-user-auth`;
+    // Call enhanced Edge Function
+    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/create-admin-user-complete`;
     
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
@@ -178,8 +207,12 @@ async function createAdminUser(data: {
         email: data.email.toLowerCase(),
         name: data.name,
         role_id: data.role_id,
+        phone: data.phone,
+        position: data.position,
+        department: data.department,
         personal_message: data.personal_message,
-        // Don't send password - let user set it via invitation email
+        send_invitation: true,
+        created_by: currentUser?.email,
         redirect_to: `${window.location.origin}/admin/set-password`
       })
     });
@@ -197,100 +230,17 @@ async function createAdminUser(data: {
 
     const result = await response.json();
     
-    if (!result.userId && !result.user?.id) {
-      throw new Error('Failed to create user - no ID returned from server');
+    if (!result.success || (!result.user?.id)) {
+      throw new Error(result.error || 'Failed to create user - no ID returned from server');
     }
 
-    const authUserId = result.userId || result.user.id;
-    console.log('Auth user created with ID:', authUserId);
-
-    // Step 2: Create record in custom users table with auth ID
-    const { error: usersError } = await supabase
-      .from('users')
-      .insert({
-        id: authUserId, // Use the auth.users ID
-        email: data.email.toLowerCase(),
-        user_type: 'system', // System admin user
-        is_active: true,
-        email_verified: false, // Will be true after email confirmation
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        raw_user_meta_data: {
-          name: data.name,
-          role_id: data.role_id,
-          invited_by: currentUser.email,
-          created_via: 'system_admin_module'
-        }
-      });
-
-    if (usersError) {
-      console.error('Failed to create users record:', usersError);
-      
-      // Note: We can't delete auth.users record without service role key
-      console.warn('Auth user created but profile creation failed. Manual cleanup may be needed.');
-      
-      if (usersError.code === '23505') {
-        // User already exists in our table - this might be okay
-        console.log('User already exists in users table, continuing...');
-      } else {
-        throw usersError;
-      }
-    }
-
-    // Step 3: Create admin_users record
-    const { error: adminError } = await supabase
-      .from('admin_users')
-      .insert({
-        id: authUserId,
-        name: data.name,
-        role_id: data.role_id,
-        can_manage_users: false, // Default value
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-    if (adminError) {
-      console.error('Failed to create admin_users record:', adminError);
-      
-      // Rollback users table entry if it was created
-      if (!usersError) {
-        await supabase.from('users').delete().eq('id', authUserId);
-      }
-      
-      if (adminError.code === '23505') {
-        throw new Error('An admin user with this ID already exists');
-      }
-      
-      throw adminError;
-    }
-
-    // Step 4: Log the action
-    try {
-      await supabase
-        .from('audit_logs')
-        .insert({
-          user_id: currentUser.id,
-          action: 'create_admin_user',
-          entity_type: 'admin_user',
-          entity_id: authUserId,
-          details: {
-            email: data.email,
-            role_id: data.role_id,
-            invited_by: currentUser.email,
-            method: 'edge_function'
-          }
-        });
-    } catch (logError) {
-      console.warn('Failed to log action:', logError);
-      // Don't fail the whole operation if logging fails
-    }
+    console.log('User created successfully:', result.user);
 
     return {
       success: true,
-      userId: authUserId,
-      message: result.message || 'Admin user created successfully. An invitation email has been sent.'
+      userId: result.user.id,
+      message: result.message
     };
-
   } catch (error: any) {
     console.error('Error creating admin user:', error);
     
@@ -305,6 +255,82 @@ async function createAdminUser(data: {
       throw new Error('Invalid role selected. Please refresh and try again.');
     }
     
+    throw error;
+  }
+}
+
+/**
+ * ENHANCED: Update admin user with complete field handling
+ */
+async function updateAdminUser(userId: string, updates: {
+  name: string;
+  role_id: string;
+  status: 'active' | 'inactive';
+  phone?: string;
+  position?: string;
+  department?: string;
+}) {
+  const currentUser = getAuthenticatedUser();
+  if (!currentUser) throw new Error('Not authenticated');
+
+  try {
+    // Validate the updates
+    const validatedData = updateUserSchema.parse(updates);
+
+    // Step 1: Update admin_users table
+    const { error: adminError } = await supabase
+      .from('admin_users')
+      .update({
+        name: validatedData.name,
+        role_id: validatedData.role_id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (adminError) throw adminError;
+
+    // Step 2: Update users table
+    const { error: userError } = await supabase
+      .from('users')
+      .update({
+        is_active: validatedData.status === 'active',
+        updated_at: new Date().toISOString(),
+        raw_user_meta_data: {
+          name: validatedData.name,
+          role_id: validatedData.role_id,
+          phone: validatedData.phone,
+          position: validatedData.position,
+          department: validatedData.department,
+          updated_by: currentUser.email,
+          updated_at: new Date().toISOString()
+        }
+      })
+      .eq('id', userId);
+
+    if (userError) throw userError;
+
+    // Step 3: Log the update
+    try {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser.id,
+          action: 'update_admin_user',
+          entity_type: 'admin_user',
+          entity_id: userId,
+          details: {
+            updates: validatedData,
+            updated_by: currentUser.email
+          },
+          created_at: new Date().toISOString()
+        });
+    } catch (logError) {
+      console.warn('Failed to log update action:', logError);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating admin user:', error);
     throw error;
   }
 }
@@ -386,7 +412,10 @@ export default function UsersTab() {
     name: '',
     email: '',
     role_id: '',
-    personal_message: ''
+    personal_message: '',
+    phone: '',
+    position: '',
+    department: ''
   });
 
   // Email validation state
@@ -404,7 +433,10 @@ export default function UsersTab() {
     name: '',
     email: '',
     role_id: '',
-    status: 'active' as 'active' | 'inactive'
+    status: 'active' as 'active' | 'inactive',
+    phone: '',
+    position: '',
+    department: ''
   });
 
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -436,22 +468,44 @@ export default function UsersTab() {
   } = useQuery<AdminUser[]>(
     ['admin-users', filters],
     async () => {
+      // ENHANCED: Fetch from admin_users with proper joins
       let query = supabase
-        .from('admin_users_view')
-        .select('*')
+        .from('admin_users')
+        .select(`
+          id,
+          name,
+          role_id,
+          can_manage_users,
+          avatar_url,
+          created_at,
+          updated_at,
+          roles!admin_users_role_id_fkey (
+            id,
+            name
+          ),
+          users!admin_users_id_fkey (
+            id,
+            email,
+            is_active,
+            email_verified,
+            last_login_at,
+            raw_user_meta_data
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (filters.name) {
         query = query.ilike('name', `%${filters.name}%`);
       }
       if (filters.email) {
-        query = query.ilike('email', `%${filters.email}%`);
+        query = query.ilike('users.email', `%${filters.email}%`);
       }
       if (filters.role) {
         query = query.eq('role_id', filters.role);
       }
       if (filters.status.length > 0) {
-        query = query.in('status', filters.status);
+        const statusBooleans = filters.status.map(s => s === 'active');
+        query = query.in('users.is_active', statusBooleans);
       }
 
       const { data, error } = await query;
@@ -460,7 +514,24 @@ export default function UsersTab() {
         throw error;
       }
 
-      return data || [];
+      // Transform the data to match AdminUser interface
+      return (data || []).map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.users?.email || '',
+        role_id: user.role_id,
+        role_name: user.roles?.name || 'Unknown Role',
+        status: user.users?.is_active ? 'active' : 'inactive',
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        email_verified: user.users?.email_verified || false,
+        requires_password_change: user.users?.raw_user_meta_data?.requires_password_change || false,
+        last_login_at: user.users?.last_login_at,
+        phone: user.users?.raw_user_meta_data?.phone,
+        position: user.users?.raw_user_meta_data?.position,
+        department: user.users?.raw_user_meta_data?.department,
+        avatar_url: user.avatar_url
+      })) as AdminUser[];
     },
     { 
       keepPreviousData: true, 
@@ -501,7 +572,7 @@ export default function UsersTab() {
   // Invite user mutation - now uses Edge Function
   const inviteUserMutation = useMutation(
     async (data: any) => {
-      const validatedData = inviteUserSchema.parse(data);
+      const validatedData = createUserSchema.parse(data);
       return await createAdminUser(validatedData);
     },
     {
@@ -513,7 +584,10 @@ export default function UsersTab() {
           name: '',
           email: '',
           role_id: '',
-          personal_message: ''
+          personal_message: '',
+          phone: '',
+          position: '',
+          department: ''
         });
         toast.success(result.message || 'Admin user created successfully');
       },
@@ -548,28 +622,7 @@ export default function UsersTab() {
   // Update user mutation
   const updateUserMutation = useMutation(
     async (data: { id: string; updates: any }) => {
-      const { error: adminError } = await supabase
-        .from('admin_users')
-        .update({
-          name: data.updates.name,
-          role_id: data.updates.role_id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', data.id);
-
-      if (adminError) throw adminError;
-
-      const { error: userError } = await supabase
-        .from('users')
-        .update({
-          is_active: data.updates.status === 'active',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', data.id);
-
-      if (userError) throw userError;
-
-      return { success: true };
+      return await updateAdminUser(data.id, data.updates);
     },
     {
       onSuccess: () => {
@@ -890,14 +943,20 @@ export default function UsersTab() {
         name: editingUser.name,
         email: editingUser.email,
         role_id: editingUser.role_id,
-        status: editingUser.status
+        status: editingUser.status,
+        phone: editingUser.phone || '',
+        position: editingUser.position || '',
+        department: editingUser.department || ''
       });
     } else {
       setEditFormState({
         name: '',
         email: '',
         role_id: '',
-        status: 'active'
+        status: 'active',
+        phone: '',
+        position: '',
+        department: ''
       });
     }
   }, [editingUser]);
@@ -918,7 +977,14 @@ export default function UsersTab() {
       enableSorting: true,
       cell: (row: AdminUser) => (
         <div className="flex items-center gap-2">
-          <span>{row.email}</span>
+          <div>
+            <div className="font-medium">{row.email}</div>
+            {row.phone && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                📞 {row.phone}
+              </div>
+            )}
+          </div>
           {row.requires_password_change && (
             <Shield className="h-3 w-3 text-amber-500" title="Password change required" />
           )}
@@ -930,6 +996,16 @@ export default function UsersTab() {
       header: 'Role',
       accessorKey: 'role_name',
       enableSorting: true,
+      cell: (row: AdminUser) => (
+        <div>
+          <div className="font-medium">{row.role_name}</div>
+          {row.position && (
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {row.position}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       id: 'status',
@@ -1173,7 +1249,10 @@ export default function UsersTab() {
             name: '',
             email: '',
             role_id: '',
-            personal_message: ''
+            personal_message: '',
+            phone: '',
+            position: '',
+            department: ''
           });
           setFormErrors({});
           setEmailValidation({ checking: false, exists: false });
@@ -1202,6 +1281,7 @@ export default function UsersTab() {
               placeholder="Enter name"
               value={inviteFormState.name}
               onChange={(e) => setInviteFormState({ ...inviteFormState, name: e.target.value })}
+              leftIcon={<User className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
 
@@ -1243,6 +1323,40 @@ export default function UsersTab() {
                 {emailValidation.message}
               </p>
             )}
+          </FormField>
+
+          <FormField id="invite-phone" label="Phone Number" error={formErrors.phone}>
+            <Input
+              id="invite-phone"
+              name="phone"
+              type="tel"
+              placeholder="Enter phone number"
+              value={inviteFormState.phone}
+              onChange={(e) => setInviteFormState({ ...inviteFormState, phone: e.target.value })}
+              leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField id="invite-position" label="Position" error={formErrors.position}>
+            <Input
+              id="invite-position"
+              name="position"
+              placeholder="Enter job position"
+              value={inviteFormState.position}
+              onChange={(e) => setInviteFormState({ ...inviteFormState, position: e.target.value })}
+              leftIcon={<User className="h-4 w-4 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField id="invite-department" label="Department" error={formErrors.department}>
+            <Input
+              id="invite-department"
+              name="department"
+              placeholder="Enter department"
+              value={inviteFormState.department}
+              onChange={(e) => setInviteFormState({ ...inviteFormState, department: e.target.value })}
+              leftIcon={<Building className="h-4 w-4 text-gray-400" />}
+            />
           </FormField>
 
           <FormField id="invite-role" label="Role" required error={formErrors.role_id}>
@@ -1336,6 +1450,40 @@ export default function UsersTab() {
               }))}
               value={editFormState.role_id}
               onChange={(value) => setEditFormState({ ...editFormState, role_id: value })}
+            />
+          </FormField>
+
+          <FormField id="edit-phone" label="Phone Number" error={formErrors.phone}>
+            <Input
+              id="edit-phone"
+              name="phone"
+              type="tel"
+              placeholder="Enter phone number"
+              value={editFormState.phone}
+              onChange={(e) => setEditFormState({ ...editFormState, phone: e.target.value })}
+              leftIcon={<Phone className="h-4 w-4 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField id="edit-position" label="Position" error={formErrors.position}>
+            <Input
+              id="edit-position"
+              name="position"
+              placeholder="Enter job position"
+              value={editFormState.position}
+              onChange={(e) => setEditFormState({ ...editFormState, position: e.target.value })}
+              leftIcon={<User className="h-4 w-4 text-gray-400" />}
+            />
+          </FormField>
+
+          <FormField id="edit-department" label="Department" error={formErrors.department}>
+            <Input
+              id="edit-department"
+              name="department"
+              placeholder="Enter department"
+              value={editFormState.department}
+              onChange={(e) => setEditFormState({ ...editFormState, department: e.target.value })}
+              leftIcon={<Building className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
 
