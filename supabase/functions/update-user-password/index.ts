@@ -42,6 +42,38 @@ serve(async (req) => {
       )
     }
 
+    // Enhanced password complexity validation
+    const passwordRegex = {
+      hasUppercase: /[A-Z]/,
+      hasLowercase: /[a-z]/,
+      hasNumbers: /\d/,
+      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/
+    }
+
+    const passwordErrors = []
+    if (!passwordRegex.hasUppercase.test(body.new_password)) {
+      passwordErrors.push('at least one uppercase letter')
+    }
+    if (!passwordRegex.hasLowercase.test(body.new_password)) {
+      passwordErrors.push('at least one lowercase letter')
+    }
+    if (!passwordRegex.hasNumbers.test(body.new_password)) {
+      passwordErrors.push('at least one number')
+    }
+    if (!passwordRegex.hasSpecialChar.test(body.new_password)) {
+      passwordErrors.push('at least one special character (!@#$%^&*(),.?":{}|<>)')
+    }
+
+    if (passwordErrors.length > 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: `Password must contain ${passwordErrors.join(', ')}`
+        }),
+        { status: 400, headers: corsHeaders }
+      )
+    }
+
     // Initialize admin client with service role key
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
