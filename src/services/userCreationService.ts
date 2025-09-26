@@ -1,14 +1,13 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * COMPLETE VERSION WITH ALL FIXES
+ * FINAL CORRECTED VERSION WITH ENHANCED ERROR HANDLING
  * 
- * This version includes:
- * ✅ Ultimate updatePassword with fallback mechanisms
- * ✅ Fixed updateEmail with proper error handling
- * ✅ Clear, actionable error messages
- * ✅ Automatic fallbacks when Edge Functions unavailable
- * ✅ Self-update vs admin-update detection
+ * Changes made:
+ * ✅ Enhanced updatePassword with explicit error messages
+ * ✅ Added detailed console logging for debugging
+ * ✅ Improved error propagation
+ * ✅ Better fallback handling
  */
 
 import { supabase } from '@/lib/supabase';
@@ -483,12 +482,16 @@ export const userCreationService = {
   },
 
   /**
-   * ULTIMATE FIX: Update password with comprehensive error handling and fallbacks
+   * ENHANCED UPDATE PASSWORD - With explicit error messages and debugging
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
+    console.log('🔐 updatePassword called with userId:', userId);
+    
     // Input validation
     if (!newPassword || newPassword.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+      const error = new Error('Password must be at least 8 characters long');
+      console.error('❌ Validation error:', error.message);
+      throw error;
     }
 
     // Password complexity check
@@ -497,38 +500,60 @@ export const userCreationService = {
     const hasNumber = /[0-9]/.test(newPassword);
     
     if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-      throw new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      const error = new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      console.error('❌ Complexity error:', error.message);
+      throw error;
     }
+
+    console.log('✅ Password validation passed');
 
     // Get current session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      throw new Error(`Authentication error: ${sessionError.message}`);
+      const error = new Error(`Authentication error: ${sessionError.message}`);
+      console.error('❌ Session error:', error.message);
+      throw error;
     }
     
     const accessToken = sessionData?.session?.access_token;
     
     if (!accessToken) {
-      throw new Error('Your session has expired. Please log in again to continue.');
+      const error = new Error('Your session has expired. Please log in again to continue.');
+      console.error('❌ No access token:', error.message);
+      throw error;
     }
+
+    console.log('✅ Session validated');
 
     // Check if we're updating our own password or someone else's
     const currentUserId = sessionData.session.user.id;
     const isUpdatingSelf = currentUserId === userId;
+    console.log('🔍 Is self-update:', isUpdatingSelf);
+
+    // Verify environment variables
+    console.log('🔍 Environment check:');
+    console.log('  SUPABASE_URL:', SUPABASE_URL ? 'Set' : 'NOT SET');
+    console.log('  SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'Set' : 'NOT SET');
+
+    if (!SUPABASE_URL || SUPABASE_URL === 'undefined' || SUPABASE_URL === '') {
+      const error = new Error('Configuration error: VITE_SUPABASE_URL is not set. Check your .env file.');
+      console.error('❌ Config error:', error.message);
+      throw error;
+    }
+
+    if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === 'undefined' || SUPABASE_ANON_KEY === '') {
+      const error = new Error('Configuration error: VITE_SUPABASE_ANON_KEY is not set. Check your .env file.');
+      console.error('❌ Config error:', error.message);
+      throw error;
+    }
 
     // Try Edge Function first
+    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/update-user-password`;
+    console.log('🔍 Edge Function URL:', edgeFunctionUrl);
+
     try {
-      // Verify environment variables are set
-      if (!SUPABASE_URL || SUPABASE_URL === 'undefined' || SUPABASE_URL === '') {
-        throw new Error('Configuration error: SUPABASE_URL is not set. Check your environment variables.');
-      }
-
-      if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === 'undefined' || SUPABASE_ANON_KEY === '') {
-        throw new Error('Configuration error: SUPABASE_ANON_KEY is not set. Check your environment variables.');
-      }
-
-      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/update-user-password`;
+      console.log('📡 Calling Edge Function...');
       
       // Make the request with timeout
       const controller = new AbortController();
@@ -548,13 +573,15 @@ export const userCreationService = {
         signal: controller.signal
       }).finally(() => clearTimeout(timeoutId));
 
+      console.log('📡 Response status:', response.status);
+
       // Get response as text first
       const responseText = await response.text();
+      console.log('📡 Response text (first 200 chars):', responseText.substring(0, 200));
       
       // Check if we got HTML (404 page)
       if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-        console.warn('Edge Function not found, trying fallback method...');
-        // Try fallback
+        console.warn('⚠️ Edge Function not found (HTML response), using fallback...');
         return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
       }
 
@@ -562,30 +589,29 @@ export const userCreationService = {
       let responseData;
       try {
         responseData = JSON.parse(responseText);
+        console.log('📡 Parsed response:', responseData);
       } catch (parseError) {
-        // If can't parse, try fallback
-        console.warn('Invalid Edge Function response, trying fallback...');
+        console.warn('⚠️ Invalid JSON response, using fallback...');
         return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
       }
 
       // Handle error responses
       if (!response.ok) {
         const errorMessage = responseData?.message || responseData?.error || 'Password update failed';
+        console.error('❌ Edge Function error:', errorMessage);
         
         // Specific error handling
-        if (response.status === 404 && errorMessage.includes('User not found')) {
-          throw new Error('User account not found. This user may not have a valid authentication account.');
-        } else if (response.status === 400) {
-          if (errorMessage.includes('Weak password')) {
-            throw new Error('Password does not meet security requirements. Please use a stronger password.');
+        if (response.status === 404) {
+          if (errorMessage.includes('User not found')) {
+            throw new Error('User account not found. This user may not have a valid authentication account.');
           }
+          // Edge Function endpoint not found
+          console.warn('⚠️ Edge Function endpoint not found, using fallback...');
+          return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
+        } else if (response.status === 400) {
           throw new Error(errorMessage);
         } else if (response.status === 401) {
           throw new Error('Authentication failed. Please log in again.');
-        } else if (response.status === 404) {
-          // Edge Function not found - try fallback
-          console.warn('Edge Function not available, trying fallback...');
-          return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
         } else {
           throw new Error(errorMessage);
         }
@@ -593,34 +619,35 @@ export const userCreationService = {
 
       // Check success flag
       if (!responseData.success) {
-        throw new Error(responseData.message || responseData.error || 'Password update failed');
+        const errorMessage = responseData.message || responseData.error || 'Password update failed';
+        console.error('❌ Update not successful:', errorMessage);
+        throw new Error(errorMessage);
       }
 
       // Success! Update metadata
       await this.updatePasswordMetadata(userId);
       
-      console.log('Password updated successfully via Edge Function');
+      console.log('✅ Password updated successfully via Edge Function');
 
     } catch (error: any) {
+      console.error('❌ Edge Function call failed:', error.message);
+      
       // Handle specific error cases
       if (error.name === 'AbortError') {
         throw new Error('Password update timed out. Please check your internet connection and try again.');
       }
       
       if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        // Network error - try fallback
-        console.warn('Network error, trying fallback method...');
+        console.warn('⚠️ Network error, using fallback...');
         return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
       }
       
-      if (error.message?.includes('Edge Function not found') || 
-          error.message?.includes('404')) {
-        // Edge Function not deployed - try fallback
-        console.warn('Edge Function not available, trying fallback...');
+      if (error.message?.includes('not found') || error.message?.includes('404')) {
+        console.warn('⚠️ Edge Function not available, using fallback...');
         return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
       }
       
-      // Re-throw other errors
+      // Re-throw the error with clear message
       throw error;
     }
   },
@@ -629,23 +656,26 @@ export const userCreationService = {
    * Fallback method for password update when Edge Function is not available
    */
   async updatePasswordFallback(userId: string, newPassword: string, isUpdatingSelf: boolean): Promise<void> {
-    console.log('Using fallback password update method...');
+    console.log('🔄 Using fallback password update method...');
     
     if (isUpdatingSelf) {
       // User is updating their own password - we can do this directly
       try {
+        console.log('🔄 Self-update via Supabase Auth...');
+        
         const { error } = await supabase.auth.updateUser({
           password: newPassword
         });
         
         if (error) {
+          console.error('❌ Self-update failed:', error.message);
           throw new Error(`Password update failed: ${error.message}`);
         }
         
         // Update metadata
         await this.updatePasswordMetadata(userId);
         
-        console.log('Password updated successfully (self-update)');
+        console.log('✅ Password updated successfully (self-update fallback)');
         return;
       } catch (error: any) {
         throw new Error(`Failed to update password: ${error.message}`);
@@ -653,6 +683,8 @@ export const userCreationService = {
     } else {
       // Admin trying to update another user's password
       // Without Edge Function, we can only send a reset email
+      console.log('🔄 Admin update - sending password reset email...');
+      
       try {
         // Get the user's email
         const { data: userData, error: userError } = await supabase
@@ -664,6 +696,8 @@ export const userCreationService = {
         if (userError || !userData) {
           throw new Error('Could not find user email for password reset');
         }
+        
+        console.log('📧 Sending reset email to:', userData.email);
         
         // Send password reset email
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(
@@ -678,7 +712,7 @@ export const userCreationService = {
         }
         
         // Update metadata to indicate password reset was sent
-        const { error: metaError } = await supabase
+        await supabase
           .from('users')
           .update({
             raw_user_meta_data: {
@@ -689,10 +723,9 @@ export const userCreationService = {
           })
           .eq('id', userId);
         
-        if (metaError) {
-          console.warn('Failed to update metadata:', metaError);
-        }
+        console.log('✅ Password reset email sent successfully');
         
+        // This is not an error, but we throw it to inform the UI
         throw new Error(
           'Direct password update not available. A password reset email has been sent to the user. ' +
           'To enable direct password updates, deploy the Edge Function with: ' +
