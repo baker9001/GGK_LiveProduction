@@ -1,14 +1,14 @@
 /**
- * File: /src/app/signin/page-corrected.tsx
+ * File: /src/app/signin/page.tsx
  * 
- * CORRECTED VERSION - Proper Supabase Auth Integration
- * =====================================================
+ * FINAL CORRECTED VERSION - Combines Best Practices
+ * ==================================================
  * 
- * Fixes:
- * 1. Email verification uses Supabase Auth's email_confirmed_at
- * 2. Removed dependency on custom users table for verification
- * 3. Better error handling for auth failures
- * 4. Clearer separation between auth and metadata
+ * This version combines:
+ * - Simple, reliable error handling from backup (avoids complex queries that fail)
+ * - Proper email verification using Supabase Auth
+ * - All UI improvements and features
+ * - Clean authentication flow
  */
 
 import React, { useState, useEffect } from 'react';
@@ -119,24 +119,8 @@ export default function SignInPage() {
           setVerificationNeeded(true);
           setError('Please verify your email before signing in. Check your inbox for the verification link.');
         } else if (authError.message?.toLowerCase().includes('invalid login credentials')) {
-          // Check if user exists but hasn't set password yet
-          const { data: existingUser } = await supabase
-            .from('users')
-            .select('id, is_active, password_hash, raw_user_meta_data')
-            .eq('email', normalizedEmail)
-            .maybeSingle();
-          
-          if (existingUser && existingUser.is_active) {
-            const requiresPasswordChange = existingUser.raw_user_meta_data?.requires_password_change;
-            
-            if (requiresPasswordChange) {
-              setError('Your account requires a password to be set. Please use the "Forgot password?" link below to set your password and complete your account setup.');
-            } else {
-              setError('Invalid email or password. Please check your credentials.');
-            }
-          } else {
-            setError('Invalid email or password. Please check your credentials.');
-          }
+          // Keep it simple - don't do complex database queries here
+          setError('Invalid email or password. Please check your credentials.');
         } else if (authError.message?.toLowerCase().includes('too many requests')) {
           setError('Too many login attempts. Please try again later.');
         } else if (authError.message?.toLowerCase().includes('unexpected_failure')) {
@@ -169,8 +153,6 @@ export default function SignInPage() {
       
       console.log('[Auth] Login successful for:', authData.user.email);
       
-      // Fetch user data from our database using auth_user_id for better reliability
-      
       // Get user metadata from custom tables
       let userId = authData.user.id;
       let userType = 'user';
@@ -185,6 +167,7 @@ export default function SignInPage() {
           email,
           user_type,
           is_active,
+          email_verified,
           raw_user_meta_data
         `)
         .eq('email', normalizedEmail)
@@ -218,7 +201,7 @@ export default function SignInPage() {
         // Create user in custom table if doesn't exist
         console.log('[Auth] Creating user in custom users table');
         
-        await supabase
+        const { error: upsertError } = await supabase
           .from('users')
           .upsert({
             id: authData.user.id,
@@ -229,7 +212,13 @@ export default function SignInPage() {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             raw_user_meta_data: authData.user.user_metadata
-          }, { onConflict: 'id' });
+          }, { 
+            onConflict: 'id' 
+          });
+        
+        if (upsertError) {
+          console.error('[Auth] Failed to create user in custom table:', upsertError);
+        }
         
         userId = authData.user.id;
         userName = authData.user.user_metadata?.name || userName;
@@ -241,7 +230,7 @@ export default function SignInPage() {
           const { data: adminUser } = await supabase
             .from('admin_users')
             .select('role_id, roles!inner(name)')
-            .eq('id', authData.user.id)
+            .eq('id', userId)
             .maybeSingle();
           
           if (adminUser?.roles?.name) {
@@ -280,6 +269,7 @@ export default function SignInPage() {
       await supabase
         .from('users')
         .update({
+          last_login_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
@@ -359,6 +349,24 @@ export default function SignInPage() {
     }
   };
   
+  const handleDevLogin = () => {
+    clearAuthenticatedUser();
+    
+    const devUser: User = {
+      id: 'dev-001',
+      email: 'dev@ggk.com',
+      name: 'Developer',
+      role: 'SSA',
+      userType: 'system'
+    };
+    
+    localStorage.setItem('ggk_remember_session', 'true');
+    setAuthenticatedUser(devUser);
+    
+    toast.success('Dev login successful!');
+    navigate('/app/system-admin/dashboard', { replace: true });
+  };
+  
   const getUserSystemRole = (roleName?: string): UserRole => {
     if (!roleName) return 'VIEWER';
     
@@ -383,30 +391,6 @@ export default function SignInPage() {
         return '/app/student-module/dashboard';
       default:
         return '/app/dashboard';
-    }
-  };
-
-  const handleDevLogin = async () => {
-    setLoading(true);
-    
-    try {
-      // Create a test user for development
-      const testUser: User = {
-        id: 'dev-user-ssa',
-        email: 'dev@ggklearning.com',
-        name: 'Development Admin',
-        role: 'SSA',
-        userType: 'system'
-      };
-      
-      setAuthenticatedUser(testUser);
-      toast.success('Development login successful!');
-      navigate('/app/system-admin/dashboard', { replace: true });
-    } catch (err) {
-      console.error('Dev login error:', err);
-      setError('Development login failed.');
-    } finally {
-      setLoading(false);
     }
   };
   
@@ -604,10 +588,69 @@ export default function SignInPage() {
                 </span>
               </div>
             </div>
+            
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Link
+                to="/contact-support"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+              >
+                Contact Support
+              </Link>
+              <Link
+                to="/request-access"
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-600 rounded-lg shadow-sm bg-gray-800/50 backdrop-blur text-sm font-medium text-gray-300 hover:bg-gray-700/50 transition-colors"
+              >
+                Request Access
+              </Link>
+            </div>
+          </div>
+          
+          {/* Dev Login - Only show in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <div className="mt-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-gray-900/50 text-gray-400">
+                      Development Access
+                    </span>
+                  </div>
+                </div>
+                
+                <Button
+                  onClick={handleDevLogin}
+                  variant="outline"
+                  className="mt-4 w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+                >
+                  🔧 Quick Dev Login (SSA)
+                </Button>
+                <p className="mt-2 text-xs text-center text-gray-500">
+                  Temporary access for development - bypasses regular authentication
+                </p>
+              </div>
+            </>
+          )}
+          
+          {/* Back to Home Button */}
+          <div className="mt-6">
+            <Button
+              onClick={() => navigate('/')}
+              variant="outline"
+              className="w-full justify-center bg-gray-800/50 backdrop-blur border-gray-600 text-gray-300 hover:bg-gray-700/50"
+            >
+              Back to Home
+            </Button>
           </div>
         </div>
+        
+        {/* Bottom text */}
+        <p className="mt-8 text-center text-sm text-gray-400">
+          Protected by industry-standard encryption
+        </p>
       </div>
     </div>
   );
 }
-        
