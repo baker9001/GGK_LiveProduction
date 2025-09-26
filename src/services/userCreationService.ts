@@ -1,15 +1,14 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * COMPLETE CORRECTED VERSION - Full Supabase Auth Integration
+ * COMPLETE VERSION WITH ALL FIXES
  * 
- * Features:
- * ✅ Fixed updatePassword method with proper error handling
- * ✅ Fixed updateEmail method with proper error handling
- * ✅ User creation with invitation flow
- * ✅ Support for all user types (admin, teacher, student)
- * ✅ Comprehensive error messages
- * ✅ Proper Edge Function response parsing
+ * This version includes:
+ * ✅ Ultimate updatePassword with fallback mechanisms
+ * ✅ Fixed updateEmail with proper error handling
+ * ✅ Clear, actionable error messages
+ * ✅ Automatic fallbacks when Edge Functions unavailable
+ * ✅ Self-update vs admin-update detection
  */
 
 import { supabase } from '@/lib/supabase';
@@ -138,7 +137,7 @@ export const SAFE_USER_COLUMNS = [
 
 export const userCreationService = {
   /**
-   * Create a new user with proper auth integration
+   * Create a new user
    */
   async createUser(payload: CreateUserPayload): Promise<{ userId: string; entityId: string }> {
     try {
@@ -162,15 +161,14 @@ export const userCreationService = {
         throw new Error('A user with this email already exists');
       }
 
-      // Start transaction-like operation
       let userId: string | null = null;
       let entityId: string | null = null;
 
       try {
-        // Step 1: Create user in Supabase Auth with invitation
+        // Create user in Supabase Auth
         userId = await this.createUserInSupabaseAuthWithInvite(payload);
 
-        // Step 2: Create entity-specific record
+        // Create entity-specific record
         switch (payload.user_type) {
           case 'entity_admin':
           case 'sub_entity_admin':
@@ -190,7 +188,6 @@ export const userCreationService = {
 
         return { userId, entityId };
       } catch (error) {
-        // Rollback on failure
         if (userId) {
           await this.rollbackUserCreation(userId);
         }
@@ -203,18 +200,16 @@ export const userCreationService = {
   },
 
   /**
-   * Create user via Edge Function with invitation flow
+   * Create user via Edge Function with invitation
    */
   async createUserInSupabaseAuthWithInvite(payload: CreateUserPayload): Promise<string> {
     try {
       const userTypes = getUserTypes(payload.user_type);
       const currentUser = await this.getCurrentUser();
       
-      // Get current session for authorization
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       
-      // Prepare metadata
       const userMetadata = {
         name: sanitizeString(payload.name),
         company_id: payload.company_id,
@@ -251,7 +246,6 @@ export const userCreationService = {
           const result = await response.json();
           
           if (result.userId) {
-            // Create in custom users table
             await this.createUserInCustomTable(result.userId, payload, userMetadata);
             console.log('User created via Edge Function with invitation:', result.userId);
             return result.userId;
@@ -306,7 +300,7 @@ export const userCreationService = {
   },
 
   /**
-   * Fallback: Create user directly without auth
+   * Fallback: Create user directly
    */
   async createUserInUsersTableDirect(payload: CreateUserPayload): Promise<string> {
     console.warn('Using direct creation fallback (invitation pending)');
@@ -393,7 +387,6 @@ export const userCreationService = {
       throw new Error(`Failed to create admin profile: ${error.message}`);
     }
 
-    // Create scope assignments if needed
     if (payload.assigned_schools?.length || payload.assigned_branches?.length) {
       await this.createScopeAssignments(
         userId, 
@@ -490,29 +483,58 @@ export const userCreationService = {
   },
 
   /**
-   * FIXED: Update user password via Edge Function with comprehensive error handling
+   * ULTIMATE FIX: Update password with comprehensive error handling and fallbacks
    */
   async updatePassword(userId: string, newPassword: string): Promise<void> {
-    // Validate password
+    // Input validation
     if (!newPassword || newPassword.length < 8) {
       throw new Error('Password must be at least 8 characters long');
     }
 
-    // Get current session for authorization
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-
-    // If no access token, we can't call the Edge Function
-    if (!accessToken) {
-      console.error('No access token available for password update');
-      throw new Error('Authentication required. Please log in and try again.');
+    // Password complexity check
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      throw new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
     }
 
+    // Get current session
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      throw new Error(`Authentication error: ${sessionError.message}`);
+    }
+    
+    const accessToken = sessionData?.session?.access_token;
+    
+    if (!accessToken) {
+      throw new Error('Your session has expired. Please log in again to continue.');
+    }
+
+    // Check if we're updating our own password or someone else's
+    const currentUserId = sessionData.session.user.id;
+    const isUpdatingSelf = currentUserId === userId;
+
+    // Try Edge Function first
     try {
-      console.log('Attempting to update password for user:', userId);
+      // Verify environment variables are set
+      if (!SUPABASE_URL || SUPABASE_URL === 'undefined' || SUPABASE_URL === '') {
+        throw new Error('Configuration error: SUPABASE_URL is not set. Check your environment variables.');
+      }
+
+      if (!SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === 'undefined' || SUPABASE_ANON_KEY === '') {
+        throw new Error('Configuration error: SUPABASE_ANON_KEY is not set. Check your environment variables.');
+      }
+
+      const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/update-user-password`;
       
-      // Call Edge Function for password update
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/update-user-password`, {
+      // Make the request with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(edgeFunctionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -522,128 +544,205 @@ export const userCreationService = {
         body: JSON.stringify({
           user_id: userId,
           new_password: newPassword
-        })
-      });
+        }),
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId));
 
-      console.log('Password update response status:', response.status);
-
-      // Parse response body regardless of status
-      let responseData;
+      // Get response as text first
       const responseText = await response.text();
       
+      // Check if we got HTML (404 page)
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        console.warn('Edge Function not found, trying fallback method...');
+        // Try fallback
+        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
+      }
+
+      // Parse JSON response
+      let responseData;
       try {
         responseData = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('Failed to parse response:', responseText);
-        
-        // If we can't parse the response, check common issues
-        if (response.status === 404) {
-          throw new Error('Password update service not found. Please deploy the update-user-password Edge Function.');
-        } else if (response.status === 500) {
-          throw new Error('Server error while updating password. Please check Edge Function logs.');
-        } else {
-          throw new Error(`Password update failed with status ${response.status}. Response: ${responseText}`);
-        }
+        // If can't parse, try fallback
+        console.warn('Invalid Edge Function response, trying fallback...');
+        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
       }
 
-      // Handle non-OK responses
+      // Handle error responses
       if (!response.ok) {
-        console.error('Password update failed:', responseData);
+        const errorMessage = responseData?.message || responseData?.error || 'Password update failed';
         
-        // Extract error message from response
-        const errorMessage = responseData?.message || responseData?.error || 'Unknown error';
-        
-        // Handle specific error types
-        if (response.status === 404) {
-          if (errorMessage.includes('User not found')) {
-            throw new Error('User not found in authentication system');
-          } else {
-            throw new Error('Password update service not found. Please deploy the update-user-password Edge Function.');
-          }
-        } else if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in and try again.');
+        // Specific error handling
+        if (response.status === 404 && errorMessage.includes('User not found')) {
+          throw new Error('User account not found. This user may not have a valid authentication account.');
         } else if (response.status === 400) {
-          // Handle specific validation errors
-          if (errorMessage.includes('Weak password') || errorMessage.includes('complexity')) {
-            throw new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
-          } else if (errorMessage.includes('at least 8')) {
-            throw new Error('Password must be at least 8 characters long');
-          } else {
-            throw new Error(errorMessage);
+          if (errorMessage.includes('Weak password')) {
+            throw new Error('Password does not meet security requirements. Please use a stronger password.');
           }
-        } else if (response.status === 500) {
-          throw new Error('Server error while updating password. Please try again later.');
+          throw new Error(errorMessage);
+        } else if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.');
+        } else if (response.status === 404) {
+          // Edge Function not found - try fallback
+          console.warn('Edge Function not available, trying fallback...');
+          return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
         } else {
-          // Use the error message from the Edge Function
           throw new Error(errorMessage);
         }
       }
 
-      // Check for success flag in response
+      // Check success flag
       if (!responseData.success) {
-        console.error('Password update returned unsuccessful:', responseData);
         throw new Error(responseData.message || responseData.error || 'Password update failed');
       }
 
-      console.log('Password updated successfully via Edge Function');
-      console.log('Updated user:', responseData.userId, responseData.email);
+      // Success! Update metadata
+      await this.updatePasswordMetadata(userId);
       
-      // Update metadata in custom users table to reflect password change
+      console.log('Password updated successfully via Edge Function');
+
+    } catch (error: any) {
+      // Handle specific error cases
+      if (error.name === 'AbortError') {
+        throw new Error('Password update timed out. Please check your internet connection and try again.');
+      }
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        // Network error - try fallback
+        console.warn('Network error, trying fallback method...');
+        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
+      }
+      
+      if (error.message?.includes('Edge Function not found') || 
+          error.message?.includes('404')) {
+        // Edge Function not deployed - try fallback
+        console.warn('Edge Function not available, trying fallback...');
+        return await this.updatePasswordFallback(userId, newPassword, isUpdatingSelf);
+      }
+      
+      // Re-throw other errors
+      throw error;
+    }
+  },
+
+  /**
+   * Fallback method for password update when Edge Function is not available
+   */
+  async updatePasswordFallback(userId: string, newPassword: string, isUpdatingSelf: boolean): Promise<void> {
+    console.log('Using fallback password update method...');
+    
+    if (isUpdatingSelf) {
+      // User is updating their own password - we can do this directly
       try {
-        // Get current user metadata
-        const { data: currentUser } = await supabase
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+        
+        if (error) {
+          throw new Error(`Password update failed: ${error.message}`);
+        }
+        
+        // Update metadata
+        await this.updatePasswordMetadata(userId);
+        
+        console.log('Password updated successfully (self-update)');
+        return;
+      } catch (error: any) {
+        throw new Error(`Failed to update password: ${error.message}`);
+      }
+    } else {
+      // Admin trying to update another user's password
+      // Without Edge Function, we can only send a reset email
+      try {
+        // Get the user's email
+        const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('raw_user_meta_data')
+          .select('email')
           .eq('id', userId)
           .single();
         
-        // Update metadata to reflect password change
-        const { error: updateError } = await supabase
+        if (userError || !userData) {
+          throw new Error('Could not find user email for password reset');
+        }
+        
+        // Send password reset email
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          userData.email,
+          {
+            redirectTo: `${window.location.origin}/auth/reset-password`
+          }
+        );
+        
+        if (resetError) {
+          throw new Error(`Failed to send password reset email: ${resetError.message}`);
+        }
+        
+        // Update metadata to indicate password reset was sent
+        const { error: metaError } = await supabase
           .from('users')
           .update({
             raw_user_meta_data: {
-              ...(currentUser?.raw_user_meta_data || {}),
-              requires_password_change: false,
-              password_reset_needed: false,
-              password_updated_at: new Date().toISOString(),
-              password_last_changed: new Date().toISOString()
+              password_reset_sent: new Date().toISOString(),
+              password_reset_pending: true
             },
             updated_at: new Date().toISOString()
           })
           .eq('id', userId);
         
-        if (updateError) {
-          console.error('Failed to update password metadata:', updateError);
-          // Don't throw - password was updated successfully in auth.users
+        if (metaError) {
+          console.warn('Failed to update metadata:', metaError);
         }
-      } catch (metadataError) {
-        console.error('Error updating password metadata:', metadataError);
-        // Don't throw - password was updated successfully in auth.users
-      }
-
-    } catch (error: any) {
-      console.error('Password update error:', error);
-      
-      // Check if it's a network/fetch error
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        throw new Error('Network error: Unable to connect to password update service. Please check your internet connection and try again.');
-      }
-      
-      // Check if Edge Function doesn't exist (typical 404 scenario)
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
+        
         throw new Error(
-          'Password update service is not available. Please contact your administrator with this message: ' +
-          '"Deploy the update-user-password Edge Function using: supabase functions deploy update-user-password"'
+          'Direct password update not available. A password reset email has been sent to the user. ' +
+          'To enable direct password updates, deploy the Edge Function with: ' +
+          'supabase functions deploy update-user-password --no-verify-jwt'
         );
+      } catch (error: any) {
+        if (error.message.includes('Direct password update not available')) {
+          throw error;
+        }
+        throw new Error(`Fallback password update failed: ${error.message}`);
       }
-      
-      // Re-throw the error with its message
-      throw new Error(error.message || 'Failed to update password');
     }
   },
 
   /**
-   * FIXED: Update user email with comprehensive error handling
+   * Update password metadata in users table
+   */
+  async updatePasswordMetadata(userId: string): Promise<void> {
+    try {
+      const { data: currentUser } = await supabase
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', userId)
+        .single();
+      
+      const { error } = await supabase
+        .from('users')
+        .update({
+          raw_user_meta_data: {
+            ...(currentUser?.raw_user_meta_data || {}),
+            requires_password_change: false,
+            password_reset_needed: false,
+            password_reset_pending: false,
+            password_updated_at: new Date().toISOString(),
+            password_last_changed: new Date().toISOString()
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+      
+      if (error) {
+        console.warn('Failed to update password metadata:', error);
+      }
+    } catch (error) {
+      console.warn('Error updating password metadata:', error);
+    }
+  },
+
+  /**
+   * Update user email with proper error handling
    */
   async updateEmail(userId: string, newEmail: string): Promise<void> {
     if (!newEmail || !validateEmail(newEmail)) {
@@ -664,19 +763,21 @@ export const userCreationService = {
       throw new Error('This email is already in use');
     }
 
-    // Get current session for authorization
+    // Get current session
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
 
     if (!accessToken) {
-      console.error('No access token available for email update');
       throw new Error('Authentication required. Please log in and try again.');
     }
 
     try {
-      console.log('Attempting to update email for user:', userId, 'to:', normalizedEmail);
-      
-      // Call Edge Function to update email in auth.users
+      // Verify environment variables
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Configuration error: Missing environment variables');
+      }
+
+      // Call Edge Function
       const response = await fetch(`${SUPABASE_URL}/functions/v1/update-user-email`, {
         method: 'POST',
         headers: {
@@ -690,65 +791,55 @@ export const userCreationService = {
         })
       });
 
-      console.log('Email update response status:', response.status);
-
-      // Parse response body
-      let responseData;
+      // Parse response
       const responseText = await response.text();
       
+      // Check for HTML (404)
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        // Edge Function not found - update only in custom table
+        console.warn('Email Edge Function not found, updating display only');
+        
+        const { error } = await supabase
+          .from('users')
+          .update({
+            email: normalizedEmail,
+            email_verified: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (error) {
+          throw new Error('Failed to update email');
+        }
+
+        throw new Error(
+          'Email updated for display only. User must still login with original email. ' +
+          'Deploy update-user-email Edge Function for full functionality.'
+        );
+      }
+
+      let responseData;
       try {
         responseData = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('Failed to parse response:', responseText);
-        
-        if (response.status === 404) {
-          throw new Error('Email update service not found. Please deploy the update-user-email Edge Function.');
-        } else if (response.status === 500) {
-          throw new Error('Server error while updating email. Please check Edge Function logs.');
-        } else {
-          throw new Error(`Email update failed with status ${response.status}. Response: ${responseText}`);
-        }
+        throw new Error('Invalid response from email update service');
       }
 
-      // Handle non-OK responses
+      // Handle errors
       if (!response.ok) {
-        console.error('Email update failed:', responseData);
+        const errorMessage = responseData?.message || responseData?.error || 'Email update failed';
         
-        const errorMessage = responseData?.message || responseData?.error || 'Unknown error';
-        
-        if (response.status === 404) {
-          if (errorMessage.includes('User not found')) {
-            throw new Error('User not found in authentication system');
-          } else {
-            throw new Error('Email update service not found. Please deploy the update-user-email Edge Function.');
-          }
-        } else if (response.status === 409) {
+        if (response.status === 409) {
           throw new Error('This email address is already registered to another account');
         } else if (response.status === 400) {
-          if (errorMessage.includes('Same email')) {
-            throw new Error('The new email is the same as the current email');
-          } else if (errorMessage.includes('Invalid email')) {
-            throw new Error('Please provide a valid email address');
-          } else {
-            throw new Error(errorMessage);
-          }
+          throw new Error(errorMessage);
         } else {
           throw new Error(errorMessage);
         }
       }
 
-      // Check for success flag
-      if (!responseData.success) {
-        console.error('Email update returned unsuccessful:', responseData);
-        throw new Error(responseData.message || responseData.error || 'Email update failed');
-      }
-
-      console.log('Email updated successfully in auth.users');
-      console.log('Old email:', responseData.oldEmail);
-      console.log('New email:', responseData.email);
-
-      // Update custom users table
-      const { error: customError } = await supabase
+      // Update custom table
+      await supabase
         .from('users')
         .update({
           email: normalizedEmail,
@@ -757,61 +848,18 @@ export const userCreationService = {
         })
         .eq('id', userId);
 
-      if (customError) {
-        console.error('Failed to sync email in custom table:', customError);
-        // Don't throw - auth.users is updated which is critical
-      }
+      console.log('Email updated successfully');
 
     } catch (error: any) {
-      console.error('Email update error:', error);
-      
-      // Check if it's a network error
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        throw new Error('Network error: Unable to connect to email update service. Please check your internet connection and try again.');
+      if (error.message?.includes('Failed to fetch')) {
+        throw new Error('Network error: Unable to connect to email update service');
       }
-      
-      // Check if Edge Function doesn't exist
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
-        // Fallback: Update only in custom table with warning
-        console.warn('Edge Function not available - email only updated in custom table');
-        
-        const { data: currentUser } = await supabase
-          .from('users')
-          .select('raw_user_meta_data')
-          .eq('id', userId)
-          .single();
-        
-        const { error: fallbackError } = await supabase
-          .from('users')
-          .update({
-            email: normalizedEmail,
-            email_verified: false,
-            raw_user_meta_data: {
-              ...(currentUser?.raw_user_meta_data || {}),
-              email_sync_required: true,
-              email_mismatch_warning: 'Auth email differs. User must login with original email.'
-            },
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-
-        if (fallbackError) {
-          throw new Error('Failed to update email');
-        }
-
-        throw new Error(
-          'Email update service not available. Email updated for display only. ' +
-          'User must still login with original email. Deploy update-user-email Edge Function for full functionality.'
-        );
-      }
-      
-      // Re-throw the error with its message
-      throw new Error(error.message || 'Failed to update email');
+      throw error;
     }
   },
 
   /**
-   * Create scope assignments for admins
+   * Create scope assignments
    */
   async createScopeAssignments(
     userId: string, 
@@ -851,17 +899,11 @@ export const userCreationService = {
     }
   },
 
-  /**
-   * Get current user
-   */
   async getCurrentUser(): Promise<any> {
     const { data: { user } } = await supabase.auth.getUser();
     return user;
   },
 
-  /**
-   * Get company name
-   */
   async getCompanyName(companyId: string): Promise<string> {
     const { data } = await supabase
       .from('companies')
@@ -872,9 +914,6 @@ export const userCreationService = {
     return data?.name || 'Unknown Company';
   },
 
-  /**
-   * Rollback user creation
-   */
   async rollbackUserCreation(userId: string): Promise<void> {
     try {
       await supabase.from('users').delete().eq('id', userId);
@@ -884,9 +923,6 @@ export const userCreationService = {
     }
   },
 
-  /**
-   * Deactivate user
-   */
   async deactivateUser(userId: string, actorId: string): Promise<void> {
     if (userId === actorId) {
       throw new Error('You cannot deactivate your own account');
@@ -905,12 +941,8 @@ export const userCreationService = {
     }
   },
 
-  /**
-   * Verify user password
-   */
   async verifyPassword(email: string, password: string): Promise<{ isValid: boolean; userId?: string }> {
     try {
-      // Use Supabase Auth for verification
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password: password
@@ -920,7 +952,6 @@ export const userCreationService = {
         return { isValid: false };
       }
 
-      // Check if user is active in our custom table
       const { data: userData } = await supabase
         .from('users')
         .select('is_active')
@@ -932,7 +963,6 @@ export const userCreationService = {
         throw new Error('Account is deactivated');
       }
 
-      // Update last login in our custom table
       await supabase
         .from('users')
         .update({
@@ -953,9 +983,6 @@ export const userCreationService = {
     }
   },
 
-  /**
-   * Get user by ID
-   */
   async getUserById(userId: string): Promise<any | null> {
     const { data, error } = await supabase
       .from('users')
@@ -971,9 +998,6 @@ export const userCreationService = {
     return data;
   },
 
-  /**
-   * Get default permissions based on admin level
-   */
   getDefaultPermissions(adminLevel: string): Record<string, any> {
     const permissionMap: Record<string, any> = {
       'entity_admin': {
@@ -1125,9 +1149,6 @@ export const userCreationService = {
     return permissionMap[adminLevel] || this.getMinimalPermissions();
   },
 
-  /**
-   * Get minimal permissions
-   */
   getMinimalPermissions(): Record<string, any> {
     return {
       users: {
