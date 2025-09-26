@@ -634,7 +634,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== MUTATIONS =====
   const createTeacherMutation = useMutation(
     async (data: TeacherFormData) => {
-      const finalPassword = generatePassword ? generateSecurePassword() : data.password || generateSecurePassword();
+      // Always generate a secure password for new teachers
+      const finalPassword = generateSecurePassword();
       
       const result = await userCreationService.createUser({
         user_type: 'teacher',
@@ -702,10 +703,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     },
     {
       onSuccess: (result) => {
-        if (generatePassword && result.password) {
+        // Always show the generated password for new teachers
+        if (result.password) {
           setGeneratedPassword(result.password);
           toast.success('Teacher created successfully. Copy the temporary password!');
         } else {
+          // Fallback (shouldn't happen)
           setShowCreateForm(false);
           refetchTeachers();
           resetForm();
@@ -1127,7 +1130,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     setActiveTab('basic');
     setSelectedTeacher(null);
     setShowPassword(false);
-    setGeneratePassword(true);
   }, [companyId]);
 
   const validateForm = useCallback((): boolean => {
@@ -1157,28 +1159,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       newTabErrors.basic = true;
     }
     
-    // Password validation - only for new teachers or when resetting password
-    if (!showEditForm && !generatePassword && !formData.password) {
-      errors.password = 'Password is required';
-      newTabErrors.basic = true;
-    }
-    
-    if (showEditForm && generatePassword && formData.password && formData.password !== '') {
-      const allRequirementsMet = PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!));
-      if (!allRequirementsMet) {
-        errors.password = 'Password does not meet all requirements';
-        newTabErrors.basic = true;
-      }
-    }
-    
-    if (!showEditForm && !generatePassword && formData.password) {
-      const allRequirementsMet = PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!));
-      if (!allRequirementsMet) {
-        errors.password = 'Password does not meet all requirements';
-        newTabErrors.basic = true;
-      }
-    }
-    
     // Assignment tab validation
     if (!formData.school_id) {
       errors.school_id = 'School is required';
@@ -1198,7 +1178,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
     
     return Object.keys(errors).length === 0;
-  }, [formData, showEditForm, generatePassword]);
+  }, [formData, showEditForm]);
 
   // ===== EVENT HANDLERS =====
   const handleCreateTeacher = () => {
@@ -1208,7 +1188,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       teacher_code: generateTeacherCode(companyId),
       password: ''
     }));
-    setGeneratePassword(true);
     setShowCreateForm(true);
   };
 
@@ -1233,7 +1212,6 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       send_credentials: false,
       password: ''
     });
-    setGeneratePassword(false); // Don't generate password by default in edit mode
     setShowEditForm(true);
     setActiveTab('basic');
   };
@@ -1286,11 +1264,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     if (!validateForm()) return;
     
     if (showEditForm && selectedTeacher) {
-      // Include password in update data if reset was requested
+      // For edit mode, password resets are handled separately through PasswordResetManager
       const updateData = { ...formData };
-      if (!generatePassword) {
-        delete updateData.password; // Don't send password if not resetting
-      }
+      delete updateData.password; // Don't send password in update
       
       updateTeacherMutation.mutate({
         teacherId: selectedTeacher.id,
@@ -2056,107 +2032,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </div>
             </FormField>
 
-            {/* Enhanced Password Section */}
+            {/* Password Info for New Teachers */}
             {!showEditForm && (
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="h-4 w-4 text-[#8CC63F]" />
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Security Settings</h3>
-                </div>
-
-                {/* Password Options */}
-                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg mb-4">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Password Options
-                  </p>
-                  
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="passwordOption"
-                        checked={generatePassword}
-                        onChange={() => {
-                          setGeneratePassword(true);
-                          setFormData({ ...formData, password: '' });
-                        }}
-                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                          Auto-generate secure password
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          System will create a strong 12-character password
-                        </p>
-                      </div>
-                    </label>
-                    
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="passwordOption"
-                        checked={!generatePassword}
-                        onChange={() => setGeneratePassword(false)}
-                        className="text-[#8CC63F] focus:ring-[#8CC63F]"
-                      />
-                      <div>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                          Set password manually
-                        </span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Enter your own password meeting complexity requirements
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Manual Password Input */}
-                {!generatePassword && (
-                  <FormField id="password" label="Password" required error={formErrors.password}>
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          value={formData.password || ''}
-                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          placeholder="Minimum 8 characters"
-                          className={cn(
-                            "pr-10 font-mono",
-                            formData.password && 
-                            PASSWORD_REQUIREMENTS.every(req => req.test(formData.password!))
-                              ? "border-green-500 focus:border-green-500 focus:ring-green-500"
-                              : "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                          )}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                        >
-                          {showPassword ? (
-                            <EyeOff className="w-4 h-4" />
-                          ) : (
-                            <EyeIcon className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                      <PasswordRequirementsChecker password={formData.password || ''} />
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Automatic Password Generation
+                      </h4>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                        A secure temporary password will be automatically generated when you create the teacher. 
+                        You'll be able to copy and share it with them after creation.
+                      </p>
                     </div>
-                  </FormField>
-                )}
-                
-                {/* Auto-generate Success Message */}
-                {generatePassword && (
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
-                    <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      A secure password will be automatically generated when you save
-                    </p>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
