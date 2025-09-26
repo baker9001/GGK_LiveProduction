@@ -1,15 +1,17 @@
 /**
  * File: /src/services/userCreationService.ts
  * 
- * FINAL COMPREHENSIVE VERSION
- * Combines invitation-first approach with full Edge Function support
+ * FINAL COMPLETE VERSION WITH PASSWORD RESET FIX
+ * Combines original comprehensive service with dedicated reset methods
  * 
  * Features:
- * ✅ Primary method: createUserWithInvitation (secure, no passwords)
+ * ✅ All original functionality preserved
+ * ✅ Added resetPasswordWithToken for email reset links
+ * ✅ Added initializeResetSession for token handling
+ * ✅ Added validatePassword helper
  * ✅ Edge Function integration with fallback mechanisms
  * ✅ Support for all user types (admins, teachers, students, parents, staff)
  * ✅ Comprehensive error handling and validation
- * ✅ Password reset via email (no direct password updates for other users)
  * ✅ Email update with verification
  * ✅ Scope assignments for admin users
  * ✅ Permission management
@@ -98,6 +100,11 @@ export interface UserCreationResult {
   temporaryPassword?: string; // Only returned for legacy method
 }
 
+export interface PasswordValidation {
+  isValid: boolean;
+  errors: string[];
+}
+
 // ============= CONFIGURATION =============
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
@@ -108,6 +115,35 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 function validateEmail(email: string): boolean {
   const emailRegex = /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
   return emailRegex.test(email.trim().toLowerCase());
+}
+
+function validatePassword(password: string): PasswordValidation {
+  const errors: string[] = [];
+  
+  if (!password || password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
+  }
+  
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+  
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter');
+  }
+  
+  if (!/[0-9]/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+  
+  if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 }
 
 function sanitizeString(input: string): string {
@@ -188,6 +224,175 @@ export const SAFE_USER_COLUMNS = [
 // ============= MAIN USER CREATION SERVICE =============
 
 export const userCreationService = {
+  
+  /**
+   * CRITICAL METHOD: Reset password from email link
+   * This handles the recovery token from password reset emails
+   */
+  async resetPasswordWithToken(newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('Starting password reset with token');
+      
+      // Validate password before attempting update
+      const validation = validatePassword(newPassword);
+      if (!validation.isValid) {
+        return { 
+          success: false, 
+          error: validation.errors.join('. ') 
+        };
+      }
+      
+      // Check if we have a valid session (from recovery token)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('No valid session found:', sessionError);
+        return { 
+          success: false, 
+          error: 'Invalid or expired reset link. Please request a new password reset.' 
+        };
+      }
+      
+      console.log('Session found, attempting password update...');
+      
+      // Attempt to update the password using the recovery session
+      const { data, error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (updateError) {
+        console.error('Password update failed:', updateError);
+        
+        // Handle specific Supabase error messages
+        if (updateError.message?.includes('Auth session missing')) {
+          return { 
+            success: false, 
+            error: 'Your reset session has expired. Please request a new password reset link.' 
+          };
+        }
+        
+        if (updateError.message?.includes('New password should be different')) {
+          return { 
+            success: false, 
+            error: 'New password must be different from your current password.' 
+          };
+        }
+        
+        if (updateError.message?.includes('Password should be at least')) {
+          return { 
+            success: false, 
+            error: 'Password does not meet the minimum security requirements.' 
+          };
+        }
+        
+        // Generic error
+        return { 
+          success: false, 
+          error: updateError.message || 'Failed to update password. Please try again.' 
+        };
+      }
+      
+      // Update successful
+      console.log('Password updated successfully');
+      
+      // Update metadata in custom users table if we have a user ID
+      if (session.user?.id) {
+        try {
+          await this.updatePasswordMetadata(session.user.id);
+        } catch (metaError) {
+          console.warn('Could not update password metadata:', metaError);
+          // Don't fail the operation if metadata update fails
+        }
+      }
+      
+      // Sign out after password reset to force re-login with new password
+      await supabase.auth.signOut();
+      
+      return { success: true };
+      
+    } catch (error: any) {
+      console.error('Unexpected error during password reset:', error);
+      return { 
+        success: false, 
+        error: 'An unexpected error occurred. Please try again or contact support.' 
+      };
+    }
+  },
+  
+  /**
+   * Initialize password reset session from URL
+   * Call this when the reset password page loads
+   */
+  async initializeResetSession(): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Check if we're on a password reset page with tokens in the URL
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
+      
+      if (!accessToken) {
+        // Check query params as fallback
+        const queryParams = new URLSearchParams(window.location.search);
+        const accessTokenQuery = queryParams.get('access_token');
+        const refreshTokenQuery = queryParams.get('refresh_token');
+        
+        if (!accessTokenQuery) {
+          return { 
+            success: false, 
+            error: 'No reset token found. Please use the link from your email.' 
+          };
+        }
+        
+        // Set session with query params tokens
+        const { error } = await supabase.auth.setSession({
+          access_token: accessTokenQuery,
+          refresh_token: refreshTokenQuery || ''
+        });
+        
+        if (error) {
+          console.error('Failed to set session from query params:', error);
+          return { 
+            success: false, 
+            error: 'Invalid or expired reset link.' 
+          };
+        }
+      } else {
+        // Verify it's a recovery token
+        if (type !== 'recovery') {
+          return { 
+            success: false, 
+            error: 'Invalid token type. This link is not for password reset.' 
+          };
+        }
+        
+        // Set session with hash params tokens
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || ''
+        });
+        
+        if (error) {
+          console.error('Failed to set session from hash params:', error);
+          return { 
+            success: false, 
+            error: 'Invalid or expired reset link.' 
+          };
+        }
+      }
+      
+      console.log('Reset session initialized successfully');
+      return { success: true };
+      
+    } catch (error: any) {
+      console.error('Error initializing reset session:', error);
+      return { 
+        success: false, 
+        error: 'Failed to initialize password reset session.' 
+      };
+    }
+  },
+
   /**
    * PRIMARY METHOD: Create user with email invitation
    * Recommended for all new users - they set their own password
@@ -812,16 +1017,9 @@ export const userCreationService = {
     }
 
     // Validate password
-    if (newPassword.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
-    }
-
-    const hasUpperCase = /[A-Z]/.test(newPassword);
-    const hasLowerCase = /[a-z]/.test(newPassword);
-    const hasNumber = /[0-9]/.test(newPassword);
-    
-    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-      throw new Error('Password must contain uppercase, lowercase, and number');
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      throw new Error(validation.errors.join('. '));
     }
 
     // Get current session
