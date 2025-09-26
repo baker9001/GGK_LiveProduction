@@ -128,9 +128,8 @@ export default function SignInPage() {
           
           if (existingUser && existingUser.is_active) {
             const requiresPasswordChange = existingUser.raw_user_meta_data?.requires_password_change;
-            const hasNoPassword = !existingUser.password_hash;
             
-            if (requiresPasswordChange || hasNoPassword) {
+            if (requiresPasswordChange) {
               setError('Your account requires a password to be set. Please use the "Forgot password?" link below to set your password and complete your account setup.');
             } else {
               setError('Invalid email or password. Please check your credentials.');
