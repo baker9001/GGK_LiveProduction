@@ -150,15 +150,59 @@ export const userCreationService = {
         throw new Error('Name must be at least 2 characters long');
       }
 
-      // Check if email already exists
-      const { data: existingUser } = await supabase
+      // Check if email already exists in public users table
+      const { data: existingUser, error: checkError } = await supabase
         .from('users')
-        .select('id')
+        .select('id, email, user_type')
         .eq('email', payload.email.toLowerCase())
         .maybeSingle();
 
       if (existingUser) {
-        throw new Error('A user with this email already exists');
+        // Check if this user already has a teacher/student/admin record
+        let hasEntityRecord = false;
+        let entityTable = '';
+        
+        switch (payload.user_type) {
+          case 'teacher':
+            const { data: teacherExists } = await supabase
+              .from('teachers')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .maybeSingle();
+            hasEntityRecord = !!teacherExists;
+            entityTable = 'teachers';
+            break;
+          case 'student':
+            const { data: studentExists } = await supabase
+              .from('students')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .maybeSingle();
+            hasEntityRecord = !!studentExists;
+            entityTable = 'students';
+            break;
+          case 'entity_admin':
+          case 'sub_entity_admin':
+          case 'school_admin':
+          case 'branch_admin':
+            const { data: adminExists } = await supabase
+              .from('entity_users')
+              .select('id')
+              .eq('user_id', existingUser.id)
+              .maybeSingle();
+            hasEntityRecord = !!adminExists;
+            entityTable = 'entity_users';
+            break;
+        }
+        
+        if (hasEntityRecord) {
+          throw new Error(`A ${payload.user_type.replace('_', ' ')} with this email already exists`);
+        } else {
+          throw new Error(
+            `This email is already registered as a ${existingUser.user_type}. ` +
+            `Each user can only have one role. Please use a different email address.`
+          );
+        }
       }
 
       let userId: string | null = null;
