@@ -24,7 +24,6 @@ import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { SearchableMultiSelect } from '../shared/SearchableMultiSelect';
 import { ToggleSwitch } from '../shared/ToggleSwitch';
 import { PhoneInput } from '../shared/PhoneInput';
-import { User, Users } from 'lucide-react';
 
 // ===== TYPE DEFINITIONS =====
 interface StudentFormData {
