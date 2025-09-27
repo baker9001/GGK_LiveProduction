@@ -1,4 +1,5 @@
-///home/project/src/components/layout/AdminLayout.tsx
+// /src/components/layout/AdminLayout.tsx
+// SECURITY ENHANCED VERSION with module access validation
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -36,7 +37,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
-import { clearAuthenticatedUser } from '../../lib/auth';
+import { clearAuthenticatedUser, getCurrentUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
 
@@ -82,6 +83,65 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const navigate = useNavigate();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
+
+  // SECURITY: Get current user for validation
+  const currentUser = getCurrentUser();
+  
+  // SECURITY: Validate module access on mount and when moduleKey changes
+  useEffect(() => {
+    const validateModuleAccess = () => {
+      if (!currentUser) {
+        console.error('[AdminLayout] No authenticated user');
+        navigate('/signin', { replace: true });
+        return;
+      }
+
+      const modulePermissions: Record<string, string[]> = {
+        'system-admin': ['SSA', 'SUPPORT', 'VIEWER'],
+        'entity-module': ['SSA', 'ENTITY_ADMIN'],
+        'student-module': ['SSA', 'STUDENT'],
+        'teachers-module': ['SSA', 'TEACHER']
+      };
+
+      const allowedRoles = modulePermissions[moduleKey];
+      
+      if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+        console.error(`[Security Violation] AdminLayout: User ${currentUser.email} (${currentUser.role}) attempted unauthorized access to ${moduleKey}`);
+        
+        // Log security event
+        const securityEvent = {
+          type: 'UNAUTHORIZED_MODULE_ACCESS',
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+          userRole: currentUser.role,
+          attemptedModule: moduleKey,
+          attemptedPath: location.pathname,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.error('[SECURITY EVENT]', securityEvent);
+        
+        // Store violation for audit
+        const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+        violations.push(securityEvent);
+        localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
+        
+        // Redirect to appropriate module
+        const redirectMap: Record<string, string> = {
+          'ENTITY_ADMIN': '/app/entity-module/dashboard',
+          'STUDENT': '/app/student-module/dashboard',
+          'TEACHER': '/app/teachers-module/dashboard',
+          'SSA': '/app/system-admin/dashboard',
+          'SUPPORT': '/app/system-admin/dashboard',
+          'VIEWER': '/app/system-admin/dashboard'
+        };
+        
+        navigate(redirectMap[currentUser.role] || '/signin', { replace: true });
+      }
+    };
+
+    validateModuleAccess();
+  }, [currentUser, moduleKey, navigate, location.pathname]);
 
   // Get navigation items
   const navigationItems = getSubmenusForModule(moduleKey);
