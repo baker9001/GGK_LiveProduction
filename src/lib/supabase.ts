@@ -67,6 +67,15 @@ try {
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file.');
 }
 
+// Additional validation for HTTPS when app is served over HTTPS
+if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !supabaseUrl.startsWith('https:')) {
+  console.error('Mixed content error: Application is served over HTTPS but Supabase URL uses HTTP');
+  console.error('Current protocol:', window.location.protocol);
+  console.error('Supabase URL:', supabaseUrl);
+  console.error('This can cause "Failed to fetch" errors due to browser security restrictions');
+  throw new Error('Mixed content error: Supabase URL must use HTTPS when the application is served over HTTPS. Please update your VITE_SUPABASE_URL to use https://');
+}
+
 // Create Supabase client with WebContainer-friendly configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
