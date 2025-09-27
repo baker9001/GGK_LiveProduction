@@ -594,6 +594,7 @@ export function StudentForm({
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -617,6 +618,7 @@ export function StudentForm({
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -640,6 +642,7 @@ export function StudentForm({
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
