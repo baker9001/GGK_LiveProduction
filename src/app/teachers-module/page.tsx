@@ -1,8 +1,11 @@
-// src/app/teachers-module/page.tsx
+// /src/app/teachers-module/page.tsx
+// SECURITY ENHANCED VERSION with module access control
 
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
+import { getCurrentUser } from '../../lib/auth';
+import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { Building2, Network, Settings, BarChart3, Users, User, GraduationCap, BookOpen, Calendar } from 'lucide-react';
 import ProfilePage from './profile/page';
 
@@ -183,6 +186,53 @@ function PerformancePage() {
 }
 
 export default function TeachersModulePage({ moduleKey }: TeachersModulePageProps) {
+  const navigate = useNavigate();
+  const currentUser = getCurrentUser();
+  
+  // SECURITY: Use the module security hook
+  useModuleSecurity('teachers-module');
+  
+  // SECURITY: Additional role check
+  useEffect(() => {
+    const allowedRoles = ['SSA', 'TEACHER'];
+    
+    if (currentUser && !allowedRoles.includes(currentUser.role)) {
+      console.error(`[Security] Unauthorized access to Teachers Module by ${currentUser.email} (${currentUser.role})`);
+      
+      // Log security event
+      const securityEvent = {
+        type: 'TEACHERS_MODULE_ACCESS_VIOLATION',
+        timestamp: new Date().toISOString(),
+        user: {
+          id: currentUser.id,
+          email: currentUser.email,
+          role: currentUser.role
+        },
+        module: 'teachers-module',
+        action: 'ACCESS_BLOCKED'
+      };
+      
+      console.error('[SECURITY EVENT]', securityEvent);
+      
+      // Store violation
+      const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+      violations.push(securityEvent);
+      localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
+      
+      // Redirect based on user role
+      const roleRedirects: Record<string, string> = {
+        'ENTITY_ADMIN': '/app/entity-module/dashboard',
+        'STUDENT': '/app/student-module/dashboard',
+        'SUPPORT': '/app/system-admin/dashboard',
+        'VIEWER': '/app/system-admin/dashboard',
+        'SSA': '/app/system-admin/dashboard',
+        'TEACHER': '/app/teachers-module/dashboard'
+      };
+      
+      navigate(roleRedirects[currentUser.role] || '/signin', { replace: true });
+    }
+  }, [currentUser, navigate]);
+  
   return (
     <AdminLayout moduleKey="teachers-module">
       <Routes>
