@@ -24,12 +24,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { 
-  GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter,
-  Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle,
-  CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings,
-  MapPin, Phone, Mail, Home, Edit, Eye, MoreVertical, User
-} from 'lucide-react';
+import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard as Edit, Eye, MoreVertical, User } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
@@ -45,17 +40,11 @@ interface StudentData {
   id: string;
   user_id: string;
   student_code: string;
-  enrollment_number?: string;
   name?: string;
   email?: string;
   grade_level?: string;
   section?: string;
   admission_date?: string;
-  parent_name?: string;
-  parent_contact?: string;
-  parent_email?: string;
-  emergency_contact?: Record<string, any>;
-  enrolled_programs?: string[];
   company_id: string;
   school_id?: string;
   branch_id?: string;
@@ -168,15 +157,9 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             id,
             user_id,
             student_code,
-            enrollment_number,
             grade_level,
             section,
             admission_date,
-            parent_name,
-            parent_contact,
-            parent_email,
-            emergency_contact,
-            enrolled_programs,
             company_id,
             school_id,
             branch_id,
@@ -872,7 +855,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                     </th>
                     <th className="text-left p-3 font-medium">Student</th>
                     <th className="text-left p-3 font-medium">Student Code</th>
-                    <th className="text-left p-3 font-medium">Enrollment #</th>
                     <th className="text-left p-3 font-medium">Grade</th>
                     <th className="text-left p-3 font-medium">Section</th>
                     <th className="text-left p-3 font-medium">School</th>
@@ -922,11 +904,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                         </span>
                       </td>
                       <td className="p-3">
-                        <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                          {student.enrollment_number || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="p-3">
                         <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
                           {student.grade_level || 'N/A'}
                         </span>
@@ -944,6 +921,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                       <td className="p-3">
                         <StatusBadge
                           status={student.is_active ? 'active' : 'inactive'}
+                          variant={student.is_active ? 'success' : 'warning'}
                         />
                       </td>
                       <td className="p-3">
