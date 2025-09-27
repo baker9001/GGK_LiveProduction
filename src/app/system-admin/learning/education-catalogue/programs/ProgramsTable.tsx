@@ -1,3 +1,5 @@
+///home/project/src/app/system-admin/learning/education-catalogue/programs/ProgramsTable.tsx
+
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
