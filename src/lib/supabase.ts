@@ -216,32 +216,30 @@ export async function checkSupabaseConnection(): Promise<{ connected: boolean; e
   }
   
   // Handle final error after all retries exhausted
-  try {
-    console.warn('❌ All Supabase connection attempts failed:', lastError);
-    console.warn('Error type:', typeof lastError);
-    console.warn('Error constructor:', lastError?.constructor?.name);
+  console.warn('❌ All Supabase connection attempts failed:', lastError);
+  console.warn('Error type:', typeof lastError);
+  console.warn('Error constructor:', lastError?.constructor?.name);
+  
+  // Check for specific error types and provide helpful logging
+  if (lastError instanceof TypeError && lastError.message.includes('Failed to fetch')) {
+    console.warn('Network connectivity issue detected. This might be due to:');
+    console.warn('1. WebContainer/StackBlitz network restrictions');
+    console.warn('2. Supabase service temporarily unavailable');
+    console.warn('3. Internet connectivity issues');
+    console.warn('4. Environment variable configuration issue');
+    console.warn('Current Supabase URL being used:', supabaseUrl);
     
-    // Check for specific error types and provide helpful logging
-    if (lastError instanceof TypeError && lastError.message.includes('Failed to fetch')) {
-      console.warn('Network connectivity issue detected. This might be due to:');
-      console.warn('1. WebContainer/StackBlitz network restrictions');
-      console.warn('2. Supabase service temporarily unavailable');
-      console.warn('3. Internet connectivity issues');
-      console.warn('4. Environment variable configuration issue');
-      console.warn('Current Supabase URL being used:', supabaseUrl);
-      
-      return { 
-        connected: false, 
-        error: `Unable to connect to the database after ${maxRetries} attempts. This may be due to network restrictions in the current environment or temporary service unavailability. Please try refreshing the page or check your internet connection.` 
-      };
-    }
-    
-    // Return false with generic error for any other connection failure
     return { 
       connected: false, 
-      error: lastError instanceof Error ? lastError.message : 'Unknown connection error occurred after multiple attempts' 
+      error: `Unable to connect to the database after ${maxRetries} attempts. This may be due to network restrictions in the current environment or temporary service unavailability. Please try refreshing the page or check your internet connection.` 
     };
   }
+  
+  // Return false with generic error for any other connection failure
+  return { 
+    connected: false, 
+    error: lastError instanceof Error ? lastError.message : 'Unknown connection error occurred after multiple attempts' 
+  };
 }
 
 // Helper function to handle Supabase errors with better context
