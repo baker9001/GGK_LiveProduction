@@ -360,8 +360,7 @@ export function StudentForm({
             relationship: '',
             address: ''
           },
-          program_id: '',
-          enrolled_subjects: [],
+          enrolled_programs: [],
           is_active: true
         });
       }
@@ -587,12 +586,14 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -610,12 +611,14 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -633,12 +636,14 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
+              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
