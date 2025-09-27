@@ -135,12 +135,18 @@ export async function checkSupabaseConnection(): Promise<boolean> {
     console.log('✅ Supabase connection successful');
     return true;
   } catch (error) {
-    try {
-      handleSupabaseError(error, 'connection check');
-    } catch (handledError) {
-      // handleSupabaseError throws user-friendly errors, but we want to continue gracefully
-      console.warn('❌ Supabase connection error:', handledError.message);
+    // Log the error details for debugging
+    console.warn('❌ Supabase connection error:', error);
+    
+    // Check for specific error types and provide helpful logging
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      console.warn('Network connectivity issue detected. This might be due to:');
+      console.warn('1. WebContainer/StackBlitz network restrictions');
+      console.warn('2. Supabase service temporarily unavailable');
+      console.warn('3. Internet connectivity issues');
     }
+    
+    // Always return false for any connection failure
     return false;
   }
 }
