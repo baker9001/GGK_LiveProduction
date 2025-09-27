@@ -33,6 +33,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
+// Debug logging for environment variables
+console.log('Environment variables check:');
+console.log('VITE_SUPABASE_URL:', supabaseUrl);
+console.log('VITE_SUPABASE_ANON_KEY length:', supabaseAnonKey?.length || 0);
+
 // Enhanced error checking with helpful messages
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables!');
@@ -52,8 +57,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Additional validation for URL format and completeness
-if (supabaseUrl.length < 20 || !supabaseUrl.includes('.supabase.co')) {
+if (supabaseUrl.length < 30 || !supabaseUrl.includes('.supabase.co')) {
   console.error('Invalid or incomplete Supabase URL:', supabaseUrl);
+  console.error('URL length:', supabaseUrl.length);
   console.error('Expected format: https://your-project-ref.supabase.co');
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file - it appears to be incomplete or malformed.');
 }
@@ -88,11 +94,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'User-Agent': 'GGK-Admin-App/1.0'
     }
   },
   // Enhanced fetch configuration for WebContainer with retry logic
   fetch: async (url, options = {}) => {
+    console.log('Supabase fetch attempt to:', url);
+    
     // Add retry logic for WebContainer environments
     const maxRetries = 3;
     let lastError;
@@ -100,7 +109,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     for (let i = 0; i < maxRetries; i++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout
         
         const response = await fetch(url, {
           ...options,
@@ -108,21 +117,30 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           // Add CORS mode for WebContainer
           mode: 'cors',
           credentials: 'omit',
+          headers: {
+            ...options.headers,
+            'Accept': 'application/json',
+          }
         });
         
         clearTimeout(timeoutId);
+        console.log('Supabase fetch successful:', response.status);
         return response;
       } catch (error) {
         lastError = error;
-        console.warn(`Fetch attempt ${i + 1} failed:`, error);
+        console.warn(`Supabase fetch attempt ${i + 1} failed:`, error);
+        console.warn('URL that failed:', url);
         
         // If it's a network error, wait before retrying
         if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+          const delay = Math.min(1000 * Math.pow(2, i), 5000); // Exponential backoff, max 5s
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
     
+    console.error('All Supabase fetch attempts failed:', lastError);
     throw lastError;
   },
   // Add realtime configuration
@@ -136,9 +154,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Connection health check function
 export async function checkSupabaseConnection(): Promise<boolean> {
   try {
+    console.log('Checking Supabase connection...');
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     if (error && error.code !== 'PGRST116') {
       console.warn('Supabase connection check failed:', error);
+      console.warn('Error code:', error.code);
+      console.warn('Error message:', error.message);
       return false;
     }
     console.log('✅ Supabase connection successful');
@@ -146,6 +167,8 @@ export async function checkSupabaseConnection(): Promise<boolean> {
   } catch (error) {
     // Log the error details for debugging
     console.warn('❌ Supabase connection error:', error);
+    console.warn('Error type:', typeof error);
+    console.warn('Error constructor:', error.constructor.name);
     
     // Check for specific error types and provide helpful logging
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
@@ -153,6 +176,8 @@ export async function checkSupabaseConnection(): Promise<boolean> {
       console.warn('1. WebContainer/StackBlitz network restrictions');
       console.warn('2. Supabase service temporarily unavailable');
       console.warn('3. Internet connectivity issues');
+      console.warn('4. Environment variable configuration issue');
+      console.warn('Current Supabase URL being used:', supabaseUrl);
     }
     
     // Always return false for any connection failure
