@@ -48,7 +48,8 @@ const studentSchema = z.object({
     relationship: z.string().optional(),
     address: z.string().optional()
   }).optional(),
-  enrolled_programs: z.array(z.string().uuid()).optional(),
+  program_id: z.string().uuid('Invalid program selection').optional().or(z.literal('')),
+  enrolled_subjects: z.array(z.string().uuid()).optional(),
   is_active: z.boolean()
 });
 
@@ -73,7 +74,8 @@ interface StudentFormData {
     relationship: string;
     address: string;
   };
-  enrolled_programs: string[];
+  program_id: string;
+  enrolled_subjects: string[];
   is_active: boolean;
 }
 
@@ -99,7 +101,8 @@ interface StudentFormProps {
     parent_contact?: string;
     parent_email?: string;
     emergency_contact?: Record<string, any>;
-    enrolled_programs?: string[];
+    program_id?: string;
+    enrolled_subjects?: string[];
     is_active: boolean;
     company_id: string;
   };
@@ -272,6 +275,41 @@ export function StudentForm({
     }
   );
 
+  // Fetch subjects for selected program
+  const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery(
+    ['subjects-for-program', formData.program_id],
+    async () => {
+      if (!formData.program_id) return [];
+
+      // First get data structures that match the selected program
+      const { data: dataStructures, error: dsError } = await supabase
+        .from('data_structures')
+        .select('subject_id')
+        .eq('program_id', formData.program_id)
+        .eq('status', 'active');
+
+      if (dsError) throw dsError;
+      if (!dataStructures || dataStructures.length === 0) return [];
+
+      // Get unique subject IDs
+      const subjectIds = [...new Set(dataStructures.map(ds => ds.subject_id))];
+
+      // Fetch subject details
+      const { data: subjectsData, error: subjectsError } = await supabase
+        .from('edu_subjects')
+        .select('id, name, code')
+        .in('id', subjectIds)
+        .eq('status', 'active')
+        .order('name');
+
+      if (subjectsError) throw subjectsError;
+      return subjectsData || [];
+    },
+    {
+      enabled: !!formData.program_id && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
   // ===== FORM INITIALIZATION =====
   useEffect(() => {
     if (isOpen) {
@@ -322,7 +360,8 @@ export function StudentForm({
             relationship: '',
             address: ''
           },
-          enrolled_programs: [],
+          program_id: '',
+          enrolled_subjects: [],
           is_active: true
         });
       }
