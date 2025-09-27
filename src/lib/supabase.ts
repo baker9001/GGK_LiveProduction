@@ -110,8 +110,6 @@ if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !c
 }
 
 // Create Supabase client with WebContainer-friendly configuration
-export const supabase = createClient(cleanUrl, supabaseAnonKey, {
-export const supabase = createClient(cleanUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
