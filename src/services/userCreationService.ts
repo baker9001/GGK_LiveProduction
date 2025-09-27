@@ -67,6 +67,8 @@ export interface StudentUserPayload extends BaseUserPayload {
   parent_name?: string;
   parent_contact?: string;
   parent_email?: string;
+  emergency_contact?: Record<string, any>;
+  enrolled_programs?: string[];
   school_id?: string;
   branch_id?: string;
 }
@@ -906,7 +908,6 @@ export const userCreationService = {
     const studentData: any = {
       user_id: userId,
       company_id: payload.company_id,
-      phone: payload.phone || null,
       student_code: payload.student_code,
       enrollment_number: payload.enrollment_number,
       grade_level: payload.grade_level || null,
@@ -915,6 +916,8 @@ export const userCreationService = {
       parent_name: payload.parent_name || null,
       parent_contact: payload.parent_contact || null,
       parent_email: payload.parent_email || null,
+      emergency_contact: payload.emergency_contact || {},
+      enrolled_programs: payload.enrolled_programs || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -1103,6 +1106,79 @@ export const userCreationService = {
       throw resetSentError;
       
     } catch (error: any) {
+      throw error;
+    }
+  },
+
+  /**
+   * Update student data
+   */
+  async updateStudent(userId: string, payload: Partial<StudentUserPayload & { name?: string; is_active?: boolean }>): Promise<void> {
+    try {
+      // Update users table if name, email, or is_active changed
+      const userUpdates: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (payload.name !== undefined) {
+        userUpdates.raw_user_meta_data = {
+          name: payload.name,
+          updated_at: new Date().toISOString()
+        };
+      }
+
+      if (payload.email !== undefined) {
+        userUpdates.email = payload.email.toLowerCase();
+      }
+
+      if (payload.is_active !== undefined) {
+        userUpdates.is_active = payload.is_active;
+      }
+
+      if (Object.keys(userUpdates).length > 1) { // More than just updated_at
+        const { error: userError } = await supabase
+          .from('users')
+          .update(userUpdates)
+          .eq('id', userId);
+
+        if (userError) {
+          throw new Error(`Failed to update user: ${userError.message}`);
+        }
+      }
+
+      // Update students table
+      const studentUpdates: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      if (payload.student_code !== undefined) studentUpdates.student_code = payload.student_code;
+      if (payload.enrollment_number !== undefined) studentUpdates.enrollment_number = payload.enrollment_number;
+      if (payload.grade_level !== undefined) studentUpdates.grade_level = payload.grade_level;
+      if (payload.section !== undefined) studentUpdates.section = payload.section;
+      if (payload.admission_date !== undefined) studentUpdates.admission_date = payload.admission_date;
+      if (payload.parent_name !== undefined) studentUpdates.parent_name = payload.parent_name;
+      if (payload.parent_contact !== undefined) studentUpdates.parent_contact = payload.parent_contact;
+      if (payload.parent_email !== undefined) studentUpdates.parent_email = payload.parent_email;
+      if (payload.emergency_contact !== undefined) studentUpdates.emergency_contact = payload.emergency_contact;
+      if (payload.enrolled_programs !== undefined) studentUpdates.enrolled_programs = payload.enrolled_programs;
+      if (payload.school_id !== undefined) studentUpdates.school_id = payload.school_id;
+      if (payload.branch_id !== undefined) studentUpdates.branch_id = payload.branch_id;
+      if (payload.is_active !== undefined) studentUpdates.is_active = payload.is_active;
+
+      if (Object.keys(studentUpdates).length > 1) { // More than just updated_at
+        const { error: studentError } = await supabase
+          .from('students')
+          .update(studentUpdates)
+          .eq('user_id', userId);
+
+        if (studentError) {
+          throw new Error(`Failed to update student: ${studentError.message}`);
+        }
+      }
+
+      console.log('✅ Student updated successfully');
+    } catch (error: any) {
+      console.error('updateStudent error:', error);
       throw error;
     }
   },
