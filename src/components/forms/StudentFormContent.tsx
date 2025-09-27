@@ -539,8 +539,11 @@ export function StudentFormContent({
                   className="green-theme"
                 />
                 
-                {/* Display selected subjects as chips */}
-                <SubjectChips />
+                {/* Subject count indicator */}
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  {formData.enrolled_subjects?.length || 0} subject{(formData.enrolled_subjects?.length || 0) !== 1 ? 's' : ''} selected
+                </p>
                 
                 {/* Info message */}
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
