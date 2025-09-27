@@ -57,33 +57,59 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Additional validation for URL format and completeness
-if (supabaseUrl.length < 30 || !supabaseUrl.includes('.supabase.co')) {
+if (supabaseUrl.length < 30) {
   console.error('Invalid or incomplete Supabase URL:', supabaseUrl);
   console.error('URL length:', supabaseUrl.length);
   console.error('Expected format: https://your-project-ref.supabase.co');
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file - it appears to be incomplete or malformed.');
 }
 
+// Enhanced URL validation to prevent common misconfigurations
+if (!supabaseUrl.includes('.supabase.co')) {
+  console.error('Invalid Supabase URL domain:', supabaseUrl);
+  console.error('Expected domain: .supabase.co');
+  throw new Error('Invalid Supabase URL domain. Please ensure your VITE_SUPABASE_URL uses the correct Supabase domain (.supabase.co).');
+}
+
+// Check for common URL misconfiguration (storage/auth endpoints instead of base URL)
+if (supabaseUrl.includes('/storage') || supabaseUrl.includes('/auth') || supabaseUrl.includes('/rest')) {
+  console.error('Supabase URL appears to be a service-specific endpoint:', supabaseUrl);
+  console.error('Expected base URL format: https://your-project-ref.supabase.co');
+  console.error('Current URL contains service path which should not be in VITE_SUPABASE_URL');
+  throw new Error('Invalid Supabase URL: Please use the base URL (https://your-project-ref.supabase.co) not a service-specific endpoint.');
+}
+
+// Validate URL doesn't have trailing slashes or extra paths
+const cleanUrl = supabaseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+if (cleanUrl !== supabaseUrl) {
+  console.warn('Supabase URL had trailing slashes, cleaning:', supabaseUrl, '->', cleanUrl);
+}
+
 // Validate URL format
 try {
-  new URL(supabaseUrl);
+  const urlObj = new URL(cleanUrl);
+  if (urlObj.pathname !== '/' && urlObj.pathname !== '') {
+    console.error('Supabase URL should not contain paths:', cleanUrl);
+    console.error('URL pathname:', urlObj.pathname);
+    console.error('Expected: https://your-project-ref.supabase.co (no additional paths)');
+    throw new Error('Invalid Supabase URL: Base URL should not contain additional paths.');
+  }
 } catch (error) {
-  console.error('Invalid Supabase URL format:', supabaseUrl);
+  console.error('Invalid Supabase URL format:', cleanUrl);
   console.error('URL validation error:', error);
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file.');
 }
 
 // Additional validation for HTTPS when app is served over HTTPS
-if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !supabaseUrl.startsWith('https:')) {
+if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !cleanUrl.startsWith('https:')) {
   console.error('Mixed content error: Application is served over HTTPS but Supabase URL uses HTTP');
   console.error('Current protocol:', window.location.protocol);
-  console.error('Supabase URL:', supabaseUrl);
+  console.error('Supabase URL:', cleanUrl);
   console.error('This can cause "Failed to fetch" errors due to browser security restrictions');
   throw new Error('Mixed content error: Supabase URL must use HTTPS when the application is served over HTTPS. Please update your VITE_SUPABASE_URL to use https://');
 }
 
 // Create Supabase client with WebContainer-friendly configuration
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
