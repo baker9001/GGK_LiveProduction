@@ -95,7 +95,9 @@ export function StudentFormContent({
   isLoadingGrades = false,
   isLoadingPrograms = false,
   isLoadingSections = false,
+  isLoadingSubjects = false,
   schoolsError = null,
+  subjects = [],
   onTabErrorsChange
 }: StudentFormContentProps) {
   
