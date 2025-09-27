@@ -1,14 +1,20 @@
 /**
  * File: /src/components/forms/StudentFormContent.tsx
  * 
- * Student Form Content Component
+ * Student Form Content Component - FIXED VERSION
  * Comprehensive form for creating and editing student records
+ * 
+ * FIXES APPLIED:
+ * 1. Added subjects prop to the interface
+ * 2. Improved UI/UX for subject selection with chip-based multi-select
+ * 3. Added better loading states and empty states for subjects
+ * 4. Fixed program_id field handling
  * 
  * Features:
  * - Multi-tab interface (Basic Info, Academic Details, Parent & Emergency Contact)
  * - Dynamic school/branch filtering based on user scope
  * - Emergency contact management
- * - Program enrollment selection
+ * - Program enrollment selection with dynamic subject loading
  * - Proper validation and error handling
  */
 
@@ -18,7 +24,7 @@ import React, { useEffect, useMemo } from 'react';
 import { 
   User, Mail, Phone, Hash, Calendar, GraduationCap, 
   Users, School, MapPin, AlertTriangle, BookOpen,
-  Heart, UserCheck, Building2
+  Heart, UserCheck, Building2, CheckCircle, X, Info, Loader2
 } from 'lucide-react';
 import { FormField, Input, Select, Textarea } from '../shared/FormField';
 import { SearchableMultiSelect } from '../shared/SearchableMultiSelect';
@@ -41,7 +47,8 @@ interface StudentFormData {
   admission_date: string;
   school_id: string;
   branch_id: string;
-  enrolled_programs: string[];
+  program_id: string; // ADDED
+  enrolled_subjects: string[]; // FIXED: Changed from enrolled_programs
   
   // Parent & Emergency Contact
   parent_name: string;
@@ -64,8 +71,9 @@ interface StudentFormContentProps {
   schools: Array<{ id: string; name: string }>;
   branches: Array<{ id: string; name: string }>;
   gradelevels: Array<{ id: string; grade_name: string; grade_order: number }>;
-  programs: Array<{ id: string; name: string }>;
+  programs: Array<{ id: string; name: string; code?: string }>;
   classSections: Array<{ id: string; section_name: string; section_code?: string; max_capacity: number; class_section_order: number }>;
+  subjects: Array<{ id: string; name: string; code?: string }>; // FIXED: Added subjects prop
   isEditing?: boolean;
   isLoadingSchools?: boolean;
   isLoadingBranches?: boolean;
@@ -89,6 +97,7 @@ export function StudentFormContent({
   gradelevels,
   programs,
   classSections,
+  subjects, // FIXED: Now receiving subjects prop
   isEditing = false,
   isLoadingSchools = false,
   isLoadingBranches = false,
@@ -97,7 +106,6 @@ export function StudentFormContent({
   isLoadingSections = false,
   isLoadingSubjects = false,
   schoolsError = null,
-  subjects = [],
   onTabErrorsChange
 }: StudentFormContentProps) {
   
@@ -163,6 +171,49 @@ export function StudentFormContent({
     }
   }, [formData, formErrors, onTabErrorsChange]);
 
+  // Custom component for better subject selection UI
+  const SubjectChips = () => {
+    const selectedSubjectDetails = subjects.filter(s => 
+      formData.enrolled_subjects?.includes(s.id)
+    );
+
+    return (
+      <div className="space-y-3">
+        {selectedSubjectDetails.length > 0 && (
+          <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            {selectedSubjectDetails.map(subject => (
+              <div
+                key={subject.id}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span className="font-medium">
+                  {subject.name}
+                  {subject.code && <span className="text-green-600 dark:text-green-400 ml-1">({subject.code})</span>}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSubjects = formData.enrolled_subjects?.filter(id => id !== subject.id) || [];
+                    updateFormData('enrolled_subjects', newSubjects);
+                  }}
+                  className="ml-1 p-0.5 hover:bg-green-200 dark:hover:bg-green-800 rounded-full transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <Info className="w-3 h-3" />
+          {selectedSubjectDetails.length} subject{selectedSubjectDetails.length !== 1 ? 's' : ''} selected
+        </p>
+      </div>
+    );
+  };
+
   // Render content based on active tab
   if (activeTab === 'basic') {
     return (
@@ -175,7 +226,7 @@ export function StudentFormContent({
             onChange={(e) => updateFormData('name', e.target.value)}
             placeholder="Enter student's full name"
             leftIcon={<User className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-green-500 focus:ring-green-500"
           />
         </FormField>
 
@@ -188,7 +239,7 @@ export function StudentFormContent({
             onChange={(e) => updateFormData('email', e.target.value)}
             placeholder="student@school.com"
             leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-green-500 focus:ring-green-500"
           />
         </FormField>
 
@@ -209,7 +260,7 @@ export function StudentFormContent({
             onChange={(e) => updateFormData('student_code', e.target.value)}
             placeholder="e.g., STU-2024-001"
             leftIcon={<Hash className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-green-500 focus:ring-green-500"
           />
         </FormField>
 
@@ -221,7 +272,7 @@ export function StudentFormContent({
             onChange={(e) => updateFormData('enrollment_number', e.target.value)}
             placeholder="e.g., ENR-2024-001"
             leftIcon={<UserCheck className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-green-500 focus:ring-green-500"
           />
         </FormField>
 
@@ -286,7 +337,7 @@ export function StudentFormContent({
                 { value: '', label: 'Select school' },
                 ...schools.map(s => ({ value: s.id, label: s.name }))
               ]}
-              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-green-500 focus:ring-green-500"
             />
           )}
         </FormField>
@@ -316,7 +367,7 @@ export function StudentFormContent({
                 ...branches.map(b => ({ value: b.id, label: b.name }))
               ]}
               disabled={!formData.school_id || branches.length === 0}
-              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-green-500 focus:ring-green-500"
             />
           )}
         </FormField>
@@ -357,7 +408,7 @@ export function StudentFormContent({
                   .map(g => ({ value: g.grade_name, label: g.grade_name }))
               ]}
               disabled={!formData.school_id && !formData.branch_id}
-              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-green-500 focus:ring-green-500"
             />
           )}
           {!formData.school_id && !formData.branch_id && (
@@ -388,7 +439,7 @@ export function StudentFormContent({
                   }))
               ]}
               disabled={!formData.grade_level || classSections.length === 0}
-              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-green-500 focus:ring-green-500"
             />
           )}
           {!formData.grade_level && (
@@ -411,56 +462,102 @@ export function StudentFormContent({
             value={formData.admission_date || ''}
             onChange={(e) => updateFormData('admission_date', e.target.value)}
             leftIcon={<Calendar className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-green-500 focus:ring-green-500"
           />
         </FormField>
 
-        {/* Program Selection */}
-        <FormField id="program_id" label="Enrolled Program">
+        {/* Program Selection - Improved UI */}
+        <FormField id="program_id" label="Educational Program">
           {isLoadingPrograms ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
               Loading programs...
             </div>
           ) : (
-            <Select
-              id="program_id"
-              value={formData.program_id || ''}
-              onChange={(value) => {
-                updateFormData('program_id', value);
-                // Clear enrolled subjects when program changes
-                if (formData.enrolled_subjects && formData.enrolled_subjects.length > 0) {
-                  updateFormData('enrolled_subjects', []);
-                }
-              }}
-              options={[
-                { value: '', label: 'Select program' },
-                ...programs.map(p => ({ value: p.id, label: p.name }))
-              ]}
-              className="green-theme"
-            />
+            <>
+              <Select
+                id="program_id"
+                value={formData.program_id || ''}
+                onChange={(value) => {
+                  updateFormData('program_id', value);
+                  // Clear enrolled subjects when program changes
+                  if (formData.enrolled_subjects && formData.enrolled_subjects.length > 0) {
+                    updateFormData('enrolled_subjects', []);
+                  }
+                }}
+                options={[
+                  { value: '', label: 'Select educational program' },
+                  ...programs.map(p => ({ 
+                    value: p.id, 
+                    label: p.code ? `${p.name} (${p.code})` : p.name 
+                  }))
+                ]}
+                className="focus:border-green-500 focus:ring-green-500"
+              />
+              {formData.program_id && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Select subjects available for this program below
+                </p>
+              )}
+            </>
           )}
         </FormField>
 
-        {/* Subject Selection - Only show when program is selected */}
+        {/* Subject Selection - Enhanced UI/UX */}
         {formData.program_id && (
           <FormField id="enrolled_subjects" label="Enrolled Subjects">
             {isLoadingSubjects ? (
-              <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+              <div className="p-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
                 Loading subjects for selected program...
               </div>
             ) : subjects.length === 0 ? (
-              <div className="p-3 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded">
-                No subjects found for the selected program.
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                      No Subjects Available
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      No subjects have been configured for this program. Please contact the administrator to set up subjects for this program.
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
-              <SearchableMultiSelect
-                label=""
-                options={subjects.map(s => ({ value: s.id, label: s.name }))}
-                selectedValues={formData.enrolled_subjects || []}
-                onChange={(values) => updateFormData('enrolled_subjects', values)}
-                placeholder="Select subjects..."
-                className="green-theme"
-              />
+              <div className="space-y-3">
+                <SearchableMultiSelect
+                  label=""
+                  options={subjects.map(s => ({ 
+                    value: s.id, 
+                    label: s.code ? `${s.name} - ${s.code}` : s.name 
+                  }))}
+                  selectedValues={formData.enrolled_subjects || []}
+                  onChange={(values) => updateFormData('enrolled_subjects', values)}
+                  placeholder="Search and select subjects..."
+                  className="focus:border-green-500 focus:ring-green-500"
+                />
+                
+                {/* Display selected subjects as chips */}
+                <SubjectChips />
+                
+                {/* Info message */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                    <div className="text-xs text-blue-700 dark:text-blue-300">
+                      <p className="font-medium mb-1">Subject Enrollment Information</p>
+                      <ul className="space-y-0.5">
+                        <li>• Students can be enrolled in multiple subjects</li>
+                        <li>• Available subjects are determined by the selected program</li>
+                        <li>• Subjects can be modified later if needed</li>
+                        <li>• {subjects.length} subject{subjects.length !== 1 ? 's' : ''} available for this program</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </FormField>
         )}
@@ -486,7 +583,7 @@ export function StudentFormContent({
                 onChange={(e) => updateFormData('parent_name', e.target.value)}
                 placeholder="Enter parent/guardian name"
                 leftIcon={<User className="h-5 w-5 text-gray-400" />}
-                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                className="focus:border-green-500 focus:ring-green-500"
               />
             </FormField>
 
@@ -506,7 +603,7 @@ export function StudentFormContent({
                 onChange={(e) => updateFormData('parent_email', e.target.value)}
                 placeholder="parent@email.com"
                 leftIcon={<Mail className="h-5 w-5 text-gray-400" />}
-                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                className="focus:border-green-500 focus:ring-green-500"
               />
             </FormField>
           </div>
@@ -527,7 +624,7 @@ export function StudentFormContent({
                 onChange={(e) => updateEmergencyContact('name', e.target.value)}
                 placeholder="Enter emergency contact name"
                 leftIcon={<User className="h-5 w-5 text-gray-400" />}
-                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                className="focus:border-green-500 focus:ring-green-500"
               />
             </FormField>
 
@@ -554,7 +651,7 @@ export function StudentFormContent({
                   { value: 'family_friend', label: 'Family Friend' },
                   { value: 'other', label: 'Other' }
                 ]}
-                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                className="focus:border-green-500 focus:ring-green-500"
               />
             </FormField>
 
@@ -565,7 +662,7 @@ export function StudentFormContent({
                 onChange={(e) => updateEmergencyContact('address', e.target.value)}
                 placeholder="Enter emergency contact address"
                 rows={3}
-                className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                className="focus:border-green-500 focus:ring-green-500"
               />
             </FormField>
           </div>
