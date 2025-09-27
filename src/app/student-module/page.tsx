@@ -1,8 +1,11 @@
-// src/app/student-module/page.tsx
+// /src/app/student-module/page.tsx
+// SECURITY ENHANCED VERSION with module access control
 
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
+import { getCurrentUser } from '../../lib/auth';
+import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { GraduationCap, Users, BookOpen, Trophy, TrendingUp, Route as RouteIcon } from 'lucide-react';
 
 interface StudentModulePageProps {
@@ -181,6 +184,53 @@ function PathwaysPage() {
 }
 
 export default function StudentModulePage({ moduleKey }: StudentModulePageProps) {
+  const navigate = useNavigate();
+  const currentUser = getCurrentUser();
+  
+  // SECURITY: Use the module security hook
+  useModuleSecurity('student-module');
+  
+  // SECURITY: Additional role check
+  useEffect(() => {
+    const allowedRoles = ['SSA', 'STUDENT'];
+    
+    if (currentUser && !allowedRoles.includes(currentUser.role)) {
+      console.error(`[Security] Unauthorized access to Student Module by ${currentUser.email} (${currentUser.role})`);
+      
+      // Log security event
+      const securityEvent = {
+        type: 'STUDENT_MODULE_ACCESS_VIOLATION',
+        timestamp: new Date().toISOString(),
+        user: {
+          id: currentUser.id,
+          email: currentUser.email,
+          role: currentUser.role
+        },
+        module: 'student-module',
+        action: 'ACCESS_BLOCKED'
+      };
+      
+      console.error('[SECURITY EVENT]', securityEvent);
+      
+      // Store violation
+      const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+      violations.push(securityEvent);
+      localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
+      
+      // Redirect based on user role
+      const roleRedirects: Record<string, string> = {
+        'ENTITY_ADMIN': '/app/entity-module/dashboard',
+        'TEACHER': '/app/teachers-module/dashboard',
+        'SUPPORT': '/app/system-admin/dashboard',
+        'VIEWER': '/app/system-admin/dashboard',
+        'SSA': '/app/system-admin/dashboard',
+        'STUDENT': '/app/student-module/dashboard'
+      };
+      
+      navigate(roleRedirects[currentUser.role] || '/signin', { replace: true });
+    }
+  }, [currentUser, navigate]);
+  
   return (
     <AdminLayout moduleKey="student-module">
       <Routes>
