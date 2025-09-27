@@ -1,3 +1,5 @@
+///home/project/src/app/system-admin/learning/education-catalogue/components/SubjectsTable.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
