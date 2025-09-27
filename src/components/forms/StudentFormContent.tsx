@@ -298,8 +298,8 @@ export function StudentFormContent({
             <Select
               id="branch_id"
               value={formData.branch_id || ''}
-              onChange={(value) => updateFormData('branch_id', value)}
-              options={[
+              onChange={(value) => {
+                updateFormData('branch_id', value);
                 // Clear grade level and section when branch changes
                 if (formData.grade_level) {
                   updateFormData('grade_level', '');
@@ -307,6 +307,8 @@ export function StudentFormContent({
                 if (formData.section) {
                   updateFormData('section', '');
                 }
+              }}
+              options={[
                 { value: '', label: 'Select branch (optional)' },
                 ...branches.map(b => ({ value: b.id, label: b.name }))
               ]}
