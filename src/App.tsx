@@ -1,5 +1,5 @@
-// /home/project/src/App.tsx
-// CORRECTED VERSION - Routes properly aligned with Supabase redirect URLs
+// /src/App.tsx
+// SECURITY FIXED VERSION - Module access control enforced in production
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
@@ -157,7 +157,7 @@ function AuthCallback() {
   );
 }
 
-// Module access control wrapper
+// SECURITY FIX: Module access control wrapper - NOW ENFORCES IN PRODUCTION
 function ModuleRoute({ 
   path, 
   element, 
@@ -168,21 +168,38 @@ function ModuleRoute({
   allowedRoles: string[] 
 }) {
   const currentUser = getCurrentUser();
-  const testMode = isInTestMode();
   
-  if (testMode && currentUser) {
-    if (!allowedRoles.includes(currentUser.role)) {
-      const redirectMap: Record<string, string> = {
-        'ENTITY_ADMIN': '/app/entity-module/dashboard',
-        'STUDENT': '/app/student-module/dashboard',
-        'TEACHER': '/app/teachers-module/dashboard',
-        'SSA': '/app/system-admin/dashboard',
-        'SUPPORT': '/app/system-admin/dashboard',
-        'VIEWER': '/app/system-admin/dashboard'
-      };
-      
-      return <Navigate to={redirectMap[currentUser.role] || '/signin'} replace />;
-    }
+  // SECURITY FIX: Always check roles, not just in test mode
+  if (!currentUser) {
+    console.error('[Security] No authenticated user, redirecting to signin');
+    return <Navigate to="/signin" replace />;
+  }
+  
+  if (!allowedRoles.includes(currentUser.role)) {
+    const redirectMap: Record<string, string> = {
+      'ENTITY_ADMIN': '/app/entity-module/dashboard',
+      'STUDENT': '/app/student-module/dashboard',
+      'TEACHER': '/app/teachers-module/dashboard',
+      'SSA': '/app/system-admin/dashboard',
+      'SUPPORT': '/app/system-admin/dashboard',
+      'VIEWER': '/app/system-admin/dashboard'
+    };
+    
+    // Log security violation
+    console.warn(`[Security Alert] User ${currentUser.email} (role: ${currentUser.role}) attempted to access ${path} - Access Denied`);
+    
+    // Store violation for audit
+    const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+    violations.push({
+      timestamp: new Date().toISOString(),
+      user: currentUser.email,
+      role: currentUser.role,
+      attemptedPath: path,
+      action: 'BLOCKED'
+    });
+    localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100))); // Keep last 100
+    
+    return <Navigate to={redirectMap[currentUser.role] || '/signin'} replace />;
   }
   
   return <>{element}</>;
@@ -256,7 +273,7 @@ function App() {
               <Route
                 path="/app/entity-module/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRoles={['SSA', 'ENTITY_ADMIN']}>
                     <ModuleRoute 
                       path="/app/entity-module"
                       allowedRoles={['SSA', 'ENTITY_ADMIN']}
@@ -276,7 +293,7 @@ function App() {
               <Route
                 path="/app/student-module/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRoles={['SSA', 'STUDENT']}>
                     <ModuleRoute 
                       path="/app/student-module"
                       allowedRoles={['SSA', 'STUDENT']}
@@ -296,7 +313,7 @@ function App() {
               <Route
                 path="/app/teachers-module/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRoles={['SSA', 'TEACHER']}>
                     <ModuleRoute 
                       path="/app/teachers-module"
                       allowedRoles={['SSA', 'TEACHER']}
@@ -316,7 +333,7 @@ function App() {
               <Route
                 path="/app/system-admin/*"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRoles={['SSA', 'SUPPORT', 'VIEWER']}>
                     <ModuleRoute 
                       path="/app/system-admin"
                       allowedRoles={['SSA', 'SUPPORT', 'VIEWER']}
