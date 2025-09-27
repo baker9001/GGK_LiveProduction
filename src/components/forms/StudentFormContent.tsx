@@ -253,7 +253,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Student Code */}
-        <FormField id="student_code" label="Student Code" error={formErrors.student_code}>
+        <FormField id="student_code" label="Student Code" required error={formErrors.student_code}>
           <Input
             id="student_code"
             value={formData.student_code || ''}
@@ -265,7 +265,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Enrollment Number */}
-        <FormField id="enrollment_number" label="Enrollment Number" error={formErrors.enrollment_number}>
+        <FormField id="enrollment_number" label="Enrollment Number" required error={formErrors.enrollment_number}>
           <Input
             id="enrollment_number"
             value={formData.enrollment_number || ''}
@@ -277,16 +277,16 @@ export function StudentFormContent({
         </FormField>
 
         {/* Status */}
-        <FormField id="is_active" label="Student Status" required>
+        <FormField id="is_active" label="Student Status">
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Student Status
+                Account Status
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {formData.is_active 
-                  ? 'Student is currently active' 
-                  : 'Student is currently inactive'}
+                  ? 'Student account is active and can access the platform' 
+                  : 'Student account is inactive and cannot access the platform'}
               </p>
             </div>
             <ToggleSwitch
