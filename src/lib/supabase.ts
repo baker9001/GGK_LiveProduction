@@ -195,5 +195,8 @@ if (import.meta.env.DEV) {
     if (!connected) {
       console.warn('⚠️ Initial Supabase connection failed. Will retry on first query.');
     }
+  }).catch(error => {
+    console.warn('⚠️ Initial Supabase connection check failed:', error.message);
+    console.warn('Application will continue to run. Connection will be retried on first query.');
   });
 }
