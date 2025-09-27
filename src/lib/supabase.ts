@@ -111,7 +111,6 @@ if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !c
 
 // Create Supabase client with WebContainer-friendly configuration
 export const supabase = createClient(cleanUrl, supabaseAnonKey, {
-export const supabase = createClient(cleanUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -178,8 +177,6 @@ export const supabase = createClient(cleanUrl, supabaseAnonKey, {
     }
   }
 });
-
-// Connection health check function
 
 // Connection health check function
 export async function checkSupabaseConnection(): Promise<boolean> {
