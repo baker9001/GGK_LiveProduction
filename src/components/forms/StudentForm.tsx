@@ -38,13 +38,13 @@ const studentSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
   email: z.string().email('Invalid email address').transform(email => email.toLowerCase().trim()),
   phone: z.string().optional(),
-  student_code: z.string().max(50, 'Student code too long').optional(),
+  student_code: z.string().min(1, 'Student code is required').max(50, 'Student code too long'),
   enrollment_number: z.string().max(50, 'Enrollment number too long').optional(),
-  grade_level: z.string().optional(),
-  section: z.string().optional(),
-  admission_date: z.string().optional(),
-  school_id: z.string().uuid('Invalid school selection').optional(),
-  branch_id: z.string().uuid('Invalid branch selection').optional(),
+  grade_level: z.string().min(1, 'Grade level is required'),
+  section: z.string().min(1, 'Section is required'),
+  admission_date: z.string().min(1, 'Admission date is required'),
+  school_id: z.string().uuid('Invalid school selection'),
+  branch_id: z.string().uuid('Invalid branch selection'),
   parent_name: z.string().optional(),
   parent_contact: z.string().optional(),
   parent_email: z.string().email('Invalid parent email').optional().or(z.literal('')),
@@ -54,8 +54,8 @@ const studentSchema = z.object({
     relationship: z.string().optional(),
     address: z.string().optional()
   }).optional(),
-  program_id: z.string().uuid('Invalid program selection').optional().or(z.literal('')),
-  enrolled_subjects: z.array(z.string().uuid()).optional(),
+  program_id: z.string().uuid('Invalid program selection'),
+  enrolled_subjects: z.array(z.string().uuid()).min(1, 'At least one subject must be selected'),
   is_active: z.boolean()
 });
 
@@ -507,8 +507,37 @@ export function StudentForm({
       newErrors.email = 'Email address is required';
     }
 
-    if (!formData.enrollment_number?.trim()) {
-      newErrors.enrollment_number = 'Enrollment number is required';
+    if (!formData.student_code?.trim()) {
+      newErrors.student_code = 'Student code is required';
+    }
+
+    // Academic tab validation - ALL FIELDS REQUIRED
+    if (!formData.school_id?.trim()) {
+      newErrors.school_id = 'School is required';
+    }
+
+    if (!formData.branch_id?.trim()) {
+      newErrors.branch_id = 'Branch is required';
+    }
+
+    if (!formData.grade_level?.trim()) {
+      newErrors.grade_level = 'Grade level is required';
+    }
+
+    if (!formData.section?.trim()) {
+      newErrors.section = 'Section is required';
+    }
+
+    if (!formData.admission_date?.trim()) {
+      newErrors.admission_date = 'Admission date is required';
+    }
+
+    if (!formData.program_id?.trim()) {
+      newErrors.program_id = 'Educational program is required';
+    }
+
+    if (!formData.enrolled_subjects || formData.enrolled_subjects.length === 0) {
+      newErrors.enrolled_subjects = 'At least one subject must be selected';
     }
 
     // Validate parent email format if provided
@@ -584,7 +613,6 @@ export function StudentForm({
             >
               <User className="w-4 h-4 mr-2" />
               Basic Info
-              {tabErrors.basic && <AlertCircle className="w-3 h-3 ml-1 text-red-500" />}
             </TabsTrigger>
             <TabsTrigger 
               value="academic"
@@ -592,7 +620,6 @@ export function StudentForm({
             >
               <GraduationCap className="w-4 h-4 mr-2" />
               Academic
-              {tabErrors.academic && <AlertCircle className="w-3 h-3 ml-1 text-red-500" />}
             </TabsTrigger>
             <TabsTrigger 
               value="contact"
@@ -600,7 +627,6 @@ export function StudentForm({
             >
               <Users className="w-4 h-4 mr-2" />
               Contact
-              {tabErrors.contact && <AlertCircle className="w-3 h-3 ml-1 text-red-500" />}
             </TabsTrigger>
           </TabsList>
 
