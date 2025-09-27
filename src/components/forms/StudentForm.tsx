@@ -360,7 +360,8 @@ export function StudentForm({
             relationship: '',
             address: ''
           },
-          enrolled_programs: [],
+          program_id: '',
+          enrolled_subjects: [],
           is_active: true
         });
       }
@@ -433,7 +434,8 @@ export function StudentForm({
         parent_contact: data.parent_contact,
         parent_email: data.parent_email,
         emergency_contact: data.emergency_contact,
-        enrolled_programs: data.enrolled_programs,
+        program_id: data.program_id,
+        enrolled_subjects: data.enrolled_subjects,
         is_active: data.is_active
       });
     },
@@ -586,14 +588,12 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
-              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
-              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -611,14 +611,12 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
-              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
-              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -636,14 +634,12 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
-              subjects={subjects}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
               isLoadingSections={isLoadingSections}
-              isLoadingSubjects={isLoadingSubjects}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />

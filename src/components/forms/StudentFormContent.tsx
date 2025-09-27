@@ -412,23 +412,55 @@ export function StudentFormContent({
           />
         </FormField>
 
-        {/* Enrolled Programs */}
-        <FormField id="enrolled_programs" label="Enrolled Programs">
+        {/* Program Selection */}
+        <FormField id="program_id" label="Enrolled Program">
           {isLoadingPrograms ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               Loading programs...
             </div>
           ) : (
-            <SearchableMultiSelect
-              label=""
-              options={programs.map(p => ({ value: p.id, label: p.name }))}
-              selectedValues={formData.enrolled_programs || []}
-              onChange={(values) => updateFormData('enrolled_programs', values)}
-              placeholder="Select programs..."
+            <Select
+              id="program_id"
+              value={formData.program_id || ''}
+              onChange={(value) => {
+                updateFormData('program_id', value);
+                // Clear enrolled subjects when program changes
+                if (formData.enrolled_subjects && formData.enrolled_subjects.length > 0) {
+                  updateFormData('enrolled_subjects', []);
+                }
+              }}
+              options={[
+                { value: '', label: 'Select program' },
+                ...programs.map(p => ({ value: p.id, label: p.name }))
+              ]}
               className="green-theme"
             />
           )}
         </FormField>
+
+        {/* Subject Selection - Only show when program is selected */}
+        {formData.program_id && (
+          <FormField id="enrolled_subjects" label="Enrolled Subjects">
+            {isLoadingSubjects ? (
+              <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+                Loading subjects for selected program...
+              </div>
+            ) : subjects.length === 0 ? (
+              <div className="p-3 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded">
+                No subjects found for the selected program.
+              </div>
+            ) : (
+              <SearchableMultiSelect
+                label=""
+                options={subjects.map(s => ({ value: s.id, label: s.name }))}
+                selectedValues={formData.enrolled_subjects || []}
+                onChange={(values) => updateFormData('enrolled_subjects', values)}
+                placeholder="Select subjects..."
+                className="green-theme"
+              />
+            )}
+          </FormField>
+        )}
       </div>
     );
   }
