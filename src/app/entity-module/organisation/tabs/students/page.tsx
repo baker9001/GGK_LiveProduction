@@ -150,8 +150,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // FIXED: Base query without 'name' column (doesn't exist in students table)
-        let query = supabase
+        // First, get students data
+        let studentsQuery = supabase
           .from('students')
           .select(`
             id,
@@ -165,13 +165,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             branch_id,
             created_at,
             updated_at,
-            users!inner (
-              id,
-              email,
-              is_active,
-              raw_user_meta_data,
-              last_login_at
-            ),
             schools (
               id,
               name,
@@ -184,7 +177,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             )
           `)
           .eq('company_id', companyId)
-          .eq('users.is_active', true)  // FIXED: Filter through users table
           .order('created_at', { ascending: false });
 
         // Apply scope-based filtering for non-entity admins
@@ -200,11 +192,11 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           }
           
           if (orConditions.length > 0) {
-            query = query.or(orConditions.join(','));
+            studentsQuery = studentsQuery.or(orConditions.join(','));
           }
         }
 
-        const { data: studentsData, error: studentsError } = await query;
+        const { data: studentsData, error: studentsError } = await studentsQuery;
 
         if (studentsError) {
           console.error('Students query error:', studentsError);
@@ -215,18 +207,47 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           return [];
         }
 
-        // FIXED: Transform and enrich data - name derived from users table
-        return studentsData.map(student => ({
+        // Get user IDs from students
+        const userIds = studentsData.map(s => s.user_id).filter(Boolean);
+        
+        // Fetch users data separately
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, email, is_active, raw_user_meta_data, last_login_at')
+          .in('id', userIds)
+          .eq('is_active', true);
+
+        if (usersError) {
+          console.error('Users query error:', usersError);
+          throw new Error(`Failed to fetch user data: ${usersError.message}`);
+        }
+
+        // Create a map of users by ID for quick lookup
+        const usersMap = new Map();
+        (usersData || []).forEach(user => {
+          usersMap.set(user.id, user);
+        });
+
+        // Filter students to only include those with active users
+        const studentsWithActiveUsers = studentsData.filter(student => 
+          student.user_id && usersMap.has(student.user_id)
+        );
+
+        // Transform and enrich data
+        return studentsWithActiveUsers.map(student => {
+          const userData = usersMap.get(student.user_id);
+          return {
           ...student,
-          name: student.users?.raw_user_meta_data?.name || 
-                student.users?.email?.split('@')[0] || 
+          name: userData?.raw_user_meta_data?.name || 
+                userData?.email?.split('@')[0] || 
                 'Unknown Student',
-          email: student.users?.email || '',
-          is_active: student.users?.is_active ?? true,
+          email: userData?.email || '',
+          is_active: userData?.is_active ?? true,
           school_name: student.schools?.name || 'No School Assigned',
           branch_name: student.branches?.name || 'No Branch Assigned',
-          user_data: student.users
-        })) as StudentData[];
+          user_data: userData
+          };
+        }) as StudentData[];
 
       } catch (error) {
         console.error('Error fetching students:', error);
