@@ -75,7 +75,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
           .select(`
             user_id,
             teacher_code,
-            users!inner(
+            users:user_id(
               id,
               email,
               created_at,
@@ -120,7 +120,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
             user_id,
             student_code,
             parent_name,
-            users!inner(
+            users:user_id(
               id,
               email,
               created_at,
@@ -162,7 +162,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
         }
       }
       
-      // Fetch entity users - FIXED: Specify the foreign key to use
+      // Fetch entity users
       if (selectedUserType === 'all' || selectedUserType === 'entity') {
         const { data: entityUsers, error: entityError } = await supabase
           .from('entity_users')
@@ -172,13 +172,13 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
             department,
             employee_id,
             admin_level,
-            users!entity_users_user_id_fkey(
+            users:user_id(
               id,
               email,
               created_at,
               raw_user_meta_data
             ),
-            companies!entity_users_company_id_fkey(
+            companies:company_id(
               name
             )
           `)
