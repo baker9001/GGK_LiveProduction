@@ -42,7 +42,7 @@ export function FormField({
         <div className="mb-1">
           <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
         </div>
-      </div>
+      )}
       
       {children}
       
