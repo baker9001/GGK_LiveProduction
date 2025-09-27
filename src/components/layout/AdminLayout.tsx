@@ -1,3 +1,5 @@
+///home/project/src/components/layout/AdminLayout.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
