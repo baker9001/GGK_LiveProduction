@@ -536,7 +536,7 @@ export function StudentFormContent({
                   selectedValues={formData.enrolled_subjects || []}
                   onChange={(values) => updateFormData('enrolled_subjects', values)}
                   placeholder="Search and select subjects..."
-                  className="focus:border-green-500 focus:ring-green-500"
+                  className="green-theme"
                 />
                 
                 {/* Display selected subjects as chips */}
