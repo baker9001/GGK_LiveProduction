@@ -94,7 +94,7 @@ export const queryActiveStudents = async (
         branch_id,
         created_at,
         updated_at,
-        users!students_user_id_fkey (
+        users!inner (
           id,
           email,
           is_active,
@@ -204,7 +204,7 @@ export const queryActiveTeachers = async (
         hire_date,
         created_at,
         updated_at,
-        users!teachers_user_id_fkey (
+        users!inner (
           id,
           email,
           is_active,

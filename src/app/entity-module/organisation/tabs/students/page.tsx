@@ -165,7 +165,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             branch_id,
             created_at,
             updated_at,
-            users!students_user_id_fkey (
+            users!inner (
               id,
               email,
               is_active,
