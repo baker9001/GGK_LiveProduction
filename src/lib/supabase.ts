@@ -79,7 +79,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      // Removed 'Content-Type': 'application/json' to allow proper MIME type detection for file uploads
+      'Content-Type': 'application/json'
     }
   },
   // Enhanced fetch configuration for WebContainer with retry logic
