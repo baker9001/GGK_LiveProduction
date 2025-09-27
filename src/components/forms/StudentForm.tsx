@@ -207,6 +207,35 @@ export function StudentForm({
     }
   );
 
+  // Get selected grade level ID from grade name
+  const selectedGradeLevelId = useMemo(() => {
+    if (!formData.grade_level || !gradelevels.length) return null;
+    const selectedGrade = gradelevels.find(g => g.grade_name === formData.grade_level);
+    return selectedGrade?.id || null;
+  }, [formData.grade_level, gradelevels]);
+
+  // Fetch class sections for selected grade level
+  const { data: classSections = [], isLoading: isLoadingSections } = useQuery(
+    ['class-sections-for-student', selectedGradeLevelId],
+    async () => {
+      if (!selectedGradeLevelId) return [];
+
+      const { data, error } = await supabase
+        .from('class_sections')
+        .select('id, section_name, section_code, max_capacity, class_section_order')
+        .eq('grade_level_id', selectedGradeLevelId)
+        .eq('status', 'active')
+        .order('class_section_order');
+
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      enabled: !!selectedGradeLevelId && isOpen,
+      staleTime: 5 * 60 * 1000,
+    }
+  );
+
   // Fetch available programs
   const { data: programs = [], isLoading: isLoadingPrograms } = useQuery(
     ['programs-for-student', companyId],
@@ -501,11 +530,13 @@ export function StudentForm({
               branches={branches}
               gradelevels={gradelevels}
               programs={programs}
+              classSections={classSections}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
+              isLoadingSections={isLoadingSections}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -522,11 +553,13 @@ export function StudentForm({
               branches={branches}
               gradelevels={gradelevels}
               programs={programs}
+              classSections={classSections}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
+              isLoadingSections={isLoadingSections}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />
@@ -543,11 +576,13 @@ export function StudentForm({
               branches={branches}
               gradelevels={gradelevels}
               programs={programs}
+              classSections={classSections}
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
               isLoadingGrades={isLoadingGrades}
               isLoadingPrograms={isLoadingPrograms}
+              isLoadingSections={isLoadingSections}
               schoolsError={schoolsError}
               onTabErrorsChange={setTabErrors}
             />

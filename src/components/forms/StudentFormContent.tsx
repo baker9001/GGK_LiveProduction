@@ -65,11 +65,13 @@ interface StudentFormContentProps {
   branches: Array<{ id: string; name: string }>;
   gradelevels: Array<{ id: string; grade_name: string; grade_order: number }>;
   programs: Array<{ id: string; name: string }>;
+  classSections: Array<{ id: string; section_name: string; section_code?: string; max_capacity: number; class_section_order: number }>;
   isEditing?: boolean;
   isLoadingSchools?: boolean;
   isLoadingBranches?: boolean;
   isLoadingGrades?: boolean;
   isLoadingPrograms?: boolean;
+  isLoadingSections?: boolean;
   schoolsError?: Error | null;
   onTabErrorsChange?: (errors: { basic: boolean; academic: boolean; contact: boolean }) => void;
 }
@@ -85,11 +87,13 @@ export function StudentFormContent({
   branches,
   gradelevels,
   programs,
+  classSections,
   isEditing = false,
   isLoadingSchools = false,
   isLoadingBranches = false,
   isLoadingGrades = false,
   isLoadingPrograms = false,
+  isLoadingSections = false,
   schoolsError = null,
   onTabErrorsChange
 }: StudentFormContentProps) {
@@ -315,7 +319,13 @@ export function StudentFormContent({
             <Select
               id="grade_level"
               value={formData.grade_level || ''}
-              onChange={(value) => updateFormData('grade_level', value)}
+              onChange={(value) => {
+                updateFormData('grade_level', value);
+                // Clear section when grade changes
+                if (formData.section) {
+                  updateFormData('section', '');
+                }
+              }}
               options={[
                 { value: '', label: 'Select grade level' },
                 ...gradelevels
@@ -329,14 +339,38 @@ export function StudentFormContent({
 
         {/* Section */}
         <FormField id="section" label="Section">
-          <Input
-            id="section"
-            value={formData.section || ''}
-            onChange={(e) => updateFormData('section', e.target.value)}
-            placeholder="e.g., A, B, Blue House"
-            leftIcon={<Users className="h-5 w-5 text-gray-400" />}
-            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-          />
+          {isLoadingSections ? (
+            <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
+              Loading sections...
+            </div>
+          ) : (
+            <Select
+              id="section"
+              value={formData.section || ''}
+              onChange={(value) => updateFormData('section', value)}
+              options={[
+                { value: '', label: 'Select section (optional)' },
+                ...classSections
+                  .sort((a, b) => a.class_section_order - b.class_section_order)
+                  .map(s => ({ 
+                    value: s.section_name, 
+                    label: `${s.section_name}${s.section_code ? ` (${s.section_code})` : ''} - Max: ${s.max_capacity}` 
+                  }))
+              ]}
+              disabled={!formData.grade_level || classSections.length === 0}
+              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            />
+          )}
+          {!formData.grade_level && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Please select a grade level first to see available sections
+            </p>
+          )}
+          {formData.grade_level && classSections.length === 0 && !isLoadingSections && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              No sections configured for this grade level
+            </p>
+          )}
         </FormField>
 
         {/* Admission Date */}
