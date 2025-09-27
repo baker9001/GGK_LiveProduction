@@ -278,7 +278,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      <div className={cn(
+        "lg:hidden fixed top-4 z-50 transition-all duration-300",
+        sidebarOpen ? "left-4" : "left-20"
+      )}>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="p-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800"
@@ -305,7 +308,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           </span>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className={cn(
+              "p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300",
+              !sidebarOpen && "absolute top-4 left-4 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700"
+            )}
           >
             <Menu className="h-5 w-5" />
           </button>
