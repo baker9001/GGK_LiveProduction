@@ -1,8 +1,14 @@
 /**
  * File: /src/components/forms/StudentForm.tsx
  * 
- * Student Form Component
+ * Student Form Component - FIXED VERSION
  * Wrapper component that manages student creation and editing
+ * 
+ * FIXES APPLIED:
+ * 1. Properly passes subjects data to StudentFormContent
+ * 2. Fixed subjects query to properly fetch from data_structures table
+ * 3. Added program_id field to form data
+ * 4. Improved enrolled_subjects handling
  * 
  * Features:
  * - Complete form state management
@@ -275,11 +281,13 @@ export function StudentForm({
     }
   );
 
-  // Fetch subjects for selected program
+  // FIXED: Fetch subjects for selected program
   const { data: subjects = [], isLoading: isLoadingSubjects } = useQuery(
     ['subjects-for-program', formData.program_id],
     async () => {
       if (!formData.program_id) return [];
+
+      console.log('Fetching subjects for program:', formData.program_id);
 
       // First get data structures that match the selected program
       const { data: dataStructures, error: dsError } = await supabase
@@ -288,13 +296,25 @@ export function StudentForm({
         .eq('program_id', formData.program_id)
         .eq('status', 'active');
 
-      if (dsError) throw dsError;
-      if (!dataStructures || dataStructures.length === 0) return [];
+      if (dsError) {
+        console.error('Error fetching data structures:', dsError);
+        throw dsError;
+      }
+
+      if (!dataStructures || dataStructures.length === 0) {
+        console.log('No data structures found for program');
+        return [];
+      }
 
       // Get unique subject IDs
-      const subjectIds = [...new Set(dataStructures.map(ds => ds.subject_id))];
+      const subjectIds = [...new Set(dataStructures.map(ds => ds.subject_id).filter(Boolean))];
+      console.log('Found subject IDs:', subjectIds);
 
-      // Fetch subject details
+      if (subjectIds.length === 0) {
+        return [];
+      }
+
+      // Fetch subject details from edu_subjects table
       const { data: subjectsData, error: subjectsError } = await supabase
         .from('edu_subjects')
         .select('id, name, code')
@@ -302,7 +322,12 @@ export function StudentForm({
         .eq('status', 'active')
         .order('name');
 
-      if (subjectsError) throw subjectsError;
+      if (subjectsError) {
+        console.error('Error fetching subjects:', subjectsError);
+        throw subjectsError;
+      }
+
+      console.log('Fetched subjects:', subjectsData);
       return subjectsData || [];
     },
     {
@@ -310,6 +335,7 @@ export function StudentForm({
       staleTime: 5 * 60 * 1000,
     }
   );
+
   // ===== FORM INITIALIZATION =====
   useEffect(() => {
     if (isOpen) {
@@ -335,7 +361,8 @@ export function StudentForm({
             relationship: initialData.emergency_contact?.relationship || '',
             address: initialData.emergency_contact?.address || ''
           },
-          enrolled_programs: initialData.enrolled_programs || [],
+          program_id: initialData.program_id || '',
+          enrolled_subjects: initialData.enrolled_subjects || [],
           is_active: initialData.is_active ?? true
         });
       } else {
@@ -394,7 +421,8 @@ export function StudentForm({
         parent_contact: data.parent_contact,
         parent_email: data.parent_email,
         emergency_contact: data.emergency_contact,
-        enrolled_programs: data.enrolled_programs,
+        program_id: data.program_id,
+        enrolled_subjects: data.enrolled_subjects,
         is_active: data.is_active,
         send_invitation: true
       });
@@ -588,6 +616,7 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects} // FIXED: Now passing subjects
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
@@ -612,6 +641,7 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects} // FIXED: Now passing subjects
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
@@ -636,6 +666,7 @@ export function StudentForm({
               gradelevels={gradelevels}
               programs={programs}
               classSections={classSections}
+              subjects={subjects} // FIXED: Now passing subjects
               isEditing={isEditing}
               isLoadingSchools={isLoadingSchools}
               isLoadingBranches={isLoadingBranches}
