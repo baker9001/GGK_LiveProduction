@@ -179,7 +179,7 @@ export const supabase = createClient(cleanUrl, supabaseAnonKey, {
 });
 
 // Connection health check function
-export async function checkSupabaseConnection(): Promise<boolean> {
+export async function checkSupabaseConnection(): Promise<{ connected: boolean; error?: string }> {
   try {
     console.log('Checking Supabase connection...');
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
@@ -187,10 +187,10 @@ export async function checkSupabaseConnection(): Promise<boolean> {
       console.warn('Supabase connection check failed:', error);
       console.warn('Error code:', error.code);
       console.warn('Error message:', error.message);
-      return false;
+      return { connected: false, error: `Database error: ${error.message}` };
     }
     console.log('✅ Supabase connection successful');
-    return true;
+    return { connected: true };
   } catch (error) {
     // Log the error details for debugging
     console.warn('❌ Supabase connection error:', error);
@@ -205,10 +205,18 @@ export async function checkSupabaseConnection(): Promise<boolean> {
       console.warn('3. Internet connectivity issues');
       console.warn('4. Environment variable configuration issue');
       console.warn('Current Supabase URL being used:', supabaseUrl);
+      
+      return { 
+        connected: false, 
+        error: 'Unable to connect to the database. This may be due to network restrictions in the current environment or temporary service unavailability. Please try refreshing the page or check your internet connection.' 
+      };
     }
     
-    // Always return false for any connection failure
-    return false;
+    // Return false with generic error for any other connection failure
+    return { 
+      connected: false, 
+      error: error instanceof Error ? error.message : 'Unknown connection error occurred' 
+    };
   }
 }
 
@@ -258,9 +266,12 @@ export async function supabaseQuery<T>(
 
 // Initialize connection check on load (development only)
 if (import.meta.env.DEV) {
-  checkSupabaseConnection().then(connected => {
+  checkSupabaseConnection().then(({ connected, error }) => {
     if (!connected) {
       console.warn('⚠️ Initial Supabase connection failed. Will retry on first query.');
+      if (error) {
+        console.warn('Connection error details:', error);
+      }
     }
   }).catch(error => {
     console.warn('⚠️ Initial Supabase connection check failed:', error.message);

@@ -65,11 +65,11 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
   const retryConnection = useCallback(async () => {
     setError(null);
     setRetryCount(prev => prev + 1);
-    const connected = await checkSupabaseConnection();
+    const { connected, error: connectionError } = await checkSupabaseConnection();
     if (connected) {
       await fetchPermissions();
     } else {
-      setError('Unable to connect to database. Please check your connection.');
+      setError(connectionError || 'Unable to connect to database. Please check your connection.');
     }
   }, []);
 
@@ -101,12 +101,12 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
       setError(null);
       
       // Check connection first
-      const isConnected = await checkSupabaseConnection();
+      const { connected: isConnected, error: connectionError } = await checkSupabaseConnection();
       if (!isConnected) {
-        console.warn('Supabase connection failed, using offline mode');
+        console.warn('Supabase connection failed, using offline mode:', connectionError);
         setPermissions(permissionService.getMinimalPermissions());
         setAdminLevel('entity_admin');
-        setError('Working in offline mode. Some features may be limited.');
+        setError(connectionError || 'Working in offline mode. Some features may be limited.');
         setIsLoading(false);
         return;
       }
@@ -201,7 +201,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     // Only set up subscriptions if we have a user
     if (user?.id) {
       // Check if we can establish connection before setting up subscriptions
-      checkSupabaseConnection().then((isConnected) => {
+      checkSupabaseConnection().then(({ connected: isConnected }) => {
         if (!isConnected) {
           console.warn('Skipping subscription setup due to connection failure');
           return;
