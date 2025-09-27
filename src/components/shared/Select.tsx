@@ -405,7 +405,7 @@ export function Select({
         onChange={(e) => onChange?.(e.target.value)}
         className="hidden"
         tabIndex={-1}
-      >
+        >
         <option value="">{placeholder}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>

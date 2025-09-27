@@ -345,7 +345,7 @@ export function SchoolFormContent({
             onChange={(e) => updateFormData('campus_address', e.target.value)}
             placeholder="Enter campus address"
             rows={3}
-            className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
           />
         </FormField>
 
@@ -356,7 +356,7 @@ export function SchoolFormContent({
               value={formData.campus_city || ''}
               onChange={(e) => updateFormData('campus_city', e.target.value)}
               placeholder="Enter city"
-              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
 
@@ -366,7 +366,7 @@ export function SchoolFormContent({
               value={formData.campus_state || ''}
               onChange={(e) => updateFormData('campus_state', e.target.value)}
               placeholder="Enter state/province"
-              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
 
@@ -376,7 +376,7 @@ export function SchoolFormContent({
               value={formData.campus_postal_code || ''}
               onChange={(e) => updateFormData('campus_postal_code', e.target.value)}
               placeholder="Enter postal code"
-              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
 
@@ -386,7 +386,7 @@ export function SchoolFormContent({
               type="date"
               value={formData.established_date || ''}
               onChange={(e) => updateFormData('established_date', e.target.value)}
-              className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
           </FormField>
         </div>
@@ -413,7 +413,7 @@ export function SchoolFormContent({
               value={formData.academic_year_start?.toString() || ''}
               onChange={(value) => updateFormData('academic_year_start', parseInt(value) || undefined)}
               className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-            />
+              />
           </FormField>
 
           <FormField id="academic_year_end" label="Academic Year End">
@@ -437,7 +437,7 @@ export function SchoolFormContent({
               value={formData.academic_year_end?.toString() || ''}
               onChange={(value) => updateFormData('academic_year_end', parseInt(value) || undefined)}
               className="mt-2 focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-            />
+              />
           </FormField>
         </div>
 

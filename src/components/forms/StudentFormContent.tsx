@@ -14,7 +14,7 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { 
   User, Mail, Phone, Hash, Calendar, GraduationCap, 
   Users, School, MapPin, AlertTriangle, BookOpen,
@@ -195,7 +195,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Student Code */}
-        <FormField id="student_code" label="Student Code" required error={formErrors.student_code}>
+        <FormField id="student_code" label="Student Code" error={formErrors.student_code}>
           <Input
             id="student_code"
             value={formData.student_code || ''}
@@ -207,7 +207,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Enrollment Number */}
-        <FormField id="enrollment_number" label="Enrollment Number" required error={formErrors.enrollment_number}>
+        <FormField id="enrollment_number" label="Enrollment Number" error={formErrors.enrollment_number}>
           <Input
             id="enrollment_number"
             value={formData.enrollment_number || ''}

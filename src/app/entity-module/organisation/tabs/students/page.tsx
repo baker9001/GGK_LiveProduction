@@ -669,31 +669,410 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
 
           {/* Feature Preview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {[
-              { icon: Users, title: 'Student Profiles', description: 'Comprehensive student information management', color: 'blue' },
-              { icon: BookOpen, title: 'Academic Records', description: 'Complete academic tracking and performance', color: 'green' },
-              { icon: Calendar, title: 'Attendance', description: 'Advanced attendance tracking and reporting', color: 'purple' },
-              { icon: Award, title: 'Achievements', description: 'Recognition and achievement tracking', color: 'yellow' },
-              { icon: Heart, title: 'Health & Welfare', description: 'Student health and wellbeing management', color: 'red' },
-              { icon: DollarSign, title: 'Financial', description: 'Student fees and financial tracking', color: 'emerald' },
-              { icon: Bus, title: 'Transport', description: 'School transport and logistics', color: 'orange' },
-              { icon: User, title: 'Parent Portal', description: 'Family engagement and communication', color: 'indigo' }
-            ].map((feature, index) => {
-              const IconComponent = feature.icon;
-              return (
-                <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                  <div className={`w-10 h-10 bg-${feature.color}-100 dark:bg-${feature.color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
-                    <IconComponent className={`w-5 h-5 text-${feature.color}-600 dark:text-${feature.color}-400`} />
-                  </div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
-                    {feature.title}
-                  </h4>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {feature.description}
+            {/* Core Learning System Features */}
+            <FeatureCard icon={Users} title="Student Profiles" description="Comprehensive student information management" color="blue" />
+            <FeatureCard icon={BookOpen} title="Student Progress" description="Track academic progress and performance" color="green" />
+            <FeatureCard icon={Award} title="Learning Achievements" description="Recognize and track student accomplishments" color="yellow" />
+            <FeatureCard icon={CreditCard} title="License Management" description="Manage assigned learning licenses" color="purple" />
+            <FeatureCard icon={BookOpen} title="Programs & Subjects" description="View enrolled programs and subjects" color="indigo" />
+            <FeatureCard icon={MapPin} title="Branch & Grade" description="Student's assigned branch and grade level" color="orange" />
+            <FeatureCard icon={Users} title="Class & Sections" description="Manage class and section assignments" color="teal" />
+            <FeatureCard icon={UserCheck} title="Assigned Teachers" description="View teachers assigned to student's classes" color="pink" />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'list' && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          {/* Filters */}
+          <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search students by name, email, or student code..."
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-4">
+              {availableGrades.length > 0 && (
+                <Select
+                  value={filterGrade}
+                  onChange={(value) => setFilterGrade(value)}
+                  options={[
+                    { value: 'all', label: 'All Grades' },
+                    ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
+                  ]}
+                  className="w-32"
+                />
+              )}
+              
+              {availableSchools.length > 0 && (
+                <Select
+                  value={filterSchool}
+                  onChange={(value) => setFilterSchool(value)}
+                  options={[
+                    { value: 'all', label: 'All Schools' },
+                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                  ]}
+                  className="w-48"
+                />
+              )}
+              
+              <Select
+                value={filterStatus}
+                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active Only' },
+                  { value: 'inactive', label: 'Inactive Only' }
+                ]}
+                className="w-32"
+              />
+            </div>
+          </div>
+
+          {/* Bulk Actions */}
+          {selectedStudents.length > 0 && (
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
+                </span>
+                <div className="flex gap-2">
+                  {canModifyStudent && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')}>
+                        <UserCheck className="w-4 h-4 mr-1" />
+                        Activate
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('transfer')}>
+                        <MapPin className="w-4 h-4 mr-1" />
+                        Transfer
+                      </Button>
+                    </>
+                  )}
+                  {canExportData && (
+                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('export')}>
+                      <FileText className="w-4 h-4 mr-1" />
+                      Export
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Students Table */}
+          {isLoadingStudents ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-600 dark:text-gray-400">Loading students...</span>
+            </div>
+          ) : studentsError ? (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                <div>
+                  <h3 className="font-semibold text-red-800 dark:text-red-200">
+                    Error Loading Students
+                  </h3>
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    {studentsError.message || 'Failed to load student data. Please try again.'}
                   </p>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="text-center p-8 text-gray-500 dark:text-gray-400">
+              <GraduationCap className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              {students.length === 0 ? (
+                <>
+                  <h3 className="text-lg font-medium mb-2">No Students Found</h3>
+                  <p className="text-sm mb-4">
+                    {!canAccessAll 
+                      ? "No students found within your assigned scope." 
+                      : "No students have been added to this organization yet."
+                    }
+                  </p>
+                  {canCreateStudent && (
+                    <Button onClick={handleCreateStudent}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add First Student
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium mb-2">No Matching Students</h3>
+                  <p className="text-sm">
+                    Try adjusting your search terms or filters to find students.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left p-3">
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedStudents.length === filteredStudents.length &&
+                          filteredStudents.length > 0
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedStudents(filteredStudents.map(s => s.id));
+                          } else {
+                            setSelectedStudents([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 dark:border-gray-600"
+                      />
+                    </th>
+                    <th className="text-left p-3 font-medium">Student</th>
+                    <th className="text-left p-3 font-medium">Student Code</th>
+                    <th className="text-left p-3 font-medium">Grade</th>
+                    <th className="text-left p-3 font-medium">Section</th>
+                    <th className="text-left p-3 font-medium">School</th>
+                    <th className="text-left p-3 font-medium">Status</th>
+                    <th className="text-left p-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((student) => (
+                    <tr 
+                      key={student.id} 
+                      className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.includes(student.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedStudents([...selectedStudents, student.id]);
+                            } else {
+                              setSelectedStudents(selectedStudents.filter(id => id !== student.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              {student.name}
+                            </div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {student.email}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                            {student.student_code || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                            {student.grade_level || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {student.section || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {student.school_name}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <StatusBadge
+                            status={student.is_active ? 'active' : 'inactive'}
+                            variant={student.is_active ? 'success' : 'warning'}
+                          />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-1">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewStudent(student)}
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {canModifyStudent && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleEditStudent(student)}
+                                title="Edit Student"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div className="space-y-6">
+            {/* Analytics Placeholder */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+              <BarChart3 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Student Analytics Dashboard
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Comprehensive analytics and insights will be available here
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Enrollment Trends</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Track student enrollment patterns over time</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Performance Metrics</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Analyze academic performance across grades</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-2">Attendance Patterns</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Monitor attendance rates and trends</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Development Status */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-3">
+            <Clock className="w-5 h-5" />
+            <span className="font-semibold">Development Status</span>
+          </div>
+          <p className="text-sm text-blue-600 dark:text-blue-400 mb-4">
+            Student management is operational with comprehensive access control. Features status:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-blue-600 dark:text-blue-400">Student listing and filtering ✓</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-blue-600 dark:text-blue-400">Scope-based access control ✓</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-blue-600 dark:text-blue-400">Multi-tab interface ✓</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-blue-600 dark:text-blue-400">Student registration forms ✓</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="text-blue-600 dark:text-blue-400">Academic records management</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="text-blue-600 dark:text-blue-400">Attendance tracking</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="text-blue-600 dark:text-blue-400">Parent portal integration</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="text-blue-600 dark:text-blue-400">Advanced analytics dashboard</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Student Form Modal */}
+        <StudentForm
+          isOpen={showStudentForm}
+          onClose={() => {
+            setShowStudentForm(false);
+            setEditingStudent(null);
+          }}
+          onSuccess={handleStudentFormSuccess}
+          companyId={companyId}
+          initialData={editingStudent ? {
+            id: editingStudent.id,
+            user_id: editingStudent.user_id,
+            name: editingStudent.name || '',
+            email: editingStudent.email || '',
+            phone: editingStudent.user_data?.raw_user_meta_data?.phone || '',
+            student_code: editingStudent.student_code || '',
+            enrollment_number: editingStudent.enrollment_number || '',
+            grade_level: editingStudent.grade_level || '',
+            section: editingStudent.section || '',
+            admission_date: editingStudent.admission_date || '',
+            school_id: editingStudent.school_id || '',
+            branch_id: editingStudent.branch_id || '',
+            parent_name: editingStudent.parent_name || '',
+            parent_contact: editingStudent.parent_contact || '',
+            parent_email: editingStudent.parent_email || '',
+            emergency_contact: editingStudent.emergency_contact || {},
+            enrolled_programs: editingStudent.enrolled_programs || [],
+            is_active: editingStudent.is_active ?? true,
+            company_id: editingStudent.company_id
+          } : undefined}
+        />
+      </div>
+    );
+  }
+
+  interface FeatureCardProps {
+    icon: React.ElementType;
+    title: string;
+    description: string;
+    color: string;
+  }
+
+  function FeatureCard({ icon: Icon, title, description, color }: FeatureCardProps) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <div className={`w-10 h-10 bg-${color}-100 dark:bg-${color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
+          <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
+        </div>
+        <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
+          {title}
+        </h4>
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          {description}
+        </p>
+      </div>
+    );
+  }
           </div>
         </div>
       )}

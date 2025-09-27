@@ -37,11 +37,11 @@ export function FormField({
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       
-      {/* Always render a div for description to maintain consistent spacing */}
-      <div className="min-h-[1.25rem] mb-1">
-        {description && (
+      {/* Render description only if provided, removing unnecessary space */}
+      {description && (
+        <div className="mb-1">
           <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-        )}
+        </div>
       </div>
       
       {children}

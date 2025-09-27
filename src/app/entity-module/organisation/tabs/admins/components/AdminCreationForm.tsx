@@ -591,7 +591,7 @@ export function AdminCreationForm({
               value={formData.name}
               onChange={(e) => handleFieldChange('name', e.target.value)}
               placeholder="Enter administrator's full name"
-              disabled={!canModifyThisAdmin}
+              disabled={!canModifyThisAdmin} // Keep disabled state
               leftIcon={<User className="h-4 w-4 text-gray-400" />}
             />
           </FormField>
@@ -610,7 +610,7 @@ export function AdminCreationForm({
               onChange={(e) => handleFieldChange('email', e.target.value)}
               onBlur={handleEmailBlur}
               placeholder="Enter email address"
-              disabled={!canModifyThisAdmin}
+              disabled={!canModifyThisAdmin} // Keep disabled state
               leftIcon={<Mail className="h-4 w-4 text-gray-400" />}
               rightIcon={isValidatingEmail ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
@@ -631,7 +631,7 @@ export function AdminCreationForm({
               value={formData.phone}
               onChange={(value) => handleFieldChange('phone', value)}
               placeholder="Enter phone number"
-              disabled={!canModifyThisAdmin}
+              disabled={!canModifyThisAdmin} // Keep disabled state
             />
           </FormField>
 
@@ -664,8 +664,8 @@ export function AdminCreationForm({
                     type={showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={(e) => handleFieldChange('password', e.target.value)}
-                    placeholder="Enter new password (optional)"
-                    disabled={!canModifyThisAdmin}
+                    placeholder="Enter new password (optional)" // Keep placeholder
+                    disabled={!canModifyThisAdmin} // Keep disabled state
                     leftIcon={<Lock className="h-4 w-4 text-gray-400" />}
                   />
                   <button
@@ -720,7 +720,7 @@ export function AdminCreationForm({
               value={formData.admin_level}
               onChange={(value) => handleFieldChange('admin_level', value)}
               options={availableAdminLevels}
-              disabled={!canModifyThisAdmin || availableAdminLevels.length <= 1}
+              disabled={!canModifyThisAdmin || availableAdminLevels.length <= 1} // Keep disabled state
             />
           </FormField>
           
@@ -728,7 +728,7 @@ export function AdminCreationForm({
             <ToggleSwitch
               checked={formData.is_active}
               onChange={(checked) => handleFieldChange('is_active', checked)}
-              disabled={isSelfEdit || !canModifyThisAdmin}
+              disabled={isSelfEdit || !canModifyThisAdmin} // Keep disabled state
               label="Account Status"
               description={formData.is_active ? 'User can access the system' : 'User cannot log in'}
               activeLabel="Active"
@@ -789,7 +789,7 @@ export function AdminCreationForm({
                   selectedValues={selectedSchools}
                   onChange={setSelectedSchools}
                   placeholder="Select schools to assign..."
-                  disabled={!canModifyThisAdmin || isLoadingSchools}
+                  disabled={!canModifyThisAdmin || isLoadingSchools} // Keep disabled state
                 />
               </FormField>
             )}
@@ -811,7 +811,7 @@ export function AdminCreationForm({
                         value: school.id, 
                         label: school.name 
                       }))
-                    ]}
+                    ]} // Keep options
                     disabled={!canModifyThisAdmin || isLoadingSchools}
                   />
                 </FormField>
@@ -831,8 +831,8 @@ export function AdminCreationForm({
                       }))}
                       selectedValues={selectedBranches}
                       onChange={setSelectedBranches}
-                      placeholder="Select branches to assign..."
-                      disabled={!canModifyThisAdmin || isLoadingBranches}
+                      placeholder="Select branches to assign..." // Keep placeholder
+                      disabled={!canModifyThisAdmin || isLoadingBranches} // Keep disabled state
                     />
                   </FormField>
                 )}

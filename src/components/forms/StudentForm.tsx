@@ -32,8 +32,8 @@ const studentSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
   email: z.string().email('Invalid email address').transform(email => email.toLowerCase().trim()),
   phone: z.string().optional(),
-  student_code: z.string().min(1, 'Student code is required').max(50, 'Student code too long'),
-  enrollment_number: z.string().min(1, 'Enrollment number is required').max(50, 'Enrollment number too long'),
+  student_code: z.string().max(50, 'Student code too long').optional(),
+  enrollment_number: z.string().max(50, 'Enrollment number too long').optional(),
   grade_level: z.string().optional(),
   section: z.string().optional(),
   admission_date: z.string().optional(),
@@ -391,10 +391,6 @@ export function StudentForm({
 
     if (!formData.email?.trim()) {
       newErrors.email = 'Email address is required';
-    }
-
-    if (!formData.student_code?.trim()) {
-      newErrors.student_code = 'Student code is required';
     }
 
     if (!formData.enrollment_number?.trim()) {
