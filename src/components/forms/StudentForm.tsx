@@ -187,22 +187,39 @@ export function StudentForm({
 
   // Fetch grade levels for selected school
   const { data: gradelevels = [], isLoading: isLoadingGrades } = useQuery(
-    ['grade-levels-for-student', formData.school_id],
+    ['grade-levels-for-student', formData.school_id, formData.branch_id],
     async () => {
-      if (!formData.school_id) return [];
+      // If branch is selected, prioritize branch-level grades
+      if (formData.branch_id) {
+        const { data, error } = await supabase
+          .from('grade_levels')
+          .select('id, grade_name, grade_order, education_level')
+          .eq('branch_id', formData.branch_id)
+          .eq('status', 'active')
+          .order('grade_order');
 
-      const { data, error } = await supabase
-        .from('grade_levels')
-        .select('id, grade_name, grade_order, education_level')
-        .eq('school_id', formData.school_id)
-        .eq('status', 'active')
-        .order('grade_order');
+        if (error) throw error;
+        return data || [];
+      }
+      
+      // Otherwise, get school-level grades
+      if (formData.school_id) {
+        const { data, error } = await supabase
+          .from('grade_levels')
+          .select('id, grade_name, grade_order, education_level')
+          .eq('school_id', formData.school_id)
+          .is('branch_id', null) // Only school-level grades (not assigned to branches)
+          .eq('status', 'active')
+          .order('grade_order');
 
-      if (error) throw error;
-      return data || [];
+        if (error) throw error;
+        return data || [];
+      }
+      
+      return [];
     },
     {
-      enabled: !!formData.school_id && isOpen,
+      enabled: (!!formData.school_id || !!formData.branch_id) && isOpen,
       staleTime: 5 * 60 * 1000,
     }
   );

@@ -300,6 +300,13 @@ export function StudentFormContent({
               value={formData.branch_id || ''}
               onChange={(value) => updateFormData('branch_id', value)}
               options={[
+                // Clear grade level and section when branch changes
+                if (formData.grade_level) {
+                  updateFormData('grade_level', '');
+                }
+                if (formData.section) {
+                  updateFormData('section', '');
+                }
                 { value: '', label: 'Select branch (optional)' },
                 ...branches.map(b => ({ value: b.id, label: b.name }))
               ]}
@@ -314,6 +321,18 @@ export function StudentFormContent({
           {isLoadingGrades ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               Loading grade levels...
+            </div>
+          ) : gradelevels.length === 0 && (formData.school_id || formData.branch_id) ? (
+            <div className="space-y-2">
+              <Select id="grade_level" disabled options={[]}>
+                <option value="">No grade levels available</option>
+              </Select>
+              <div className="p-2 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded">
+                {formData.branch_id 
+                  ? 'No grade levels configured for this branch. Please configure grade levels in the academic structure first.'
+                  : 'No grade levels configured for this school. Please configure grade levels in the academic structure first.'
+                }
+              </div>
             </div>
           ) : (
             <Select
@@ -332,8 +351,14 @@ export function StudentFormContent({
                   .sort((a, b) => a.grade_order - b.grade_order)
                   .map(g => ({ value: g.grade_name, label: g.grade_name }))
               ]}
+              disabled={!formData.school_id && !formData.branch_id}
               className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
             />
+          )}
+          {!formData.school_id && !formData.branch_id && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Please select a school first to see available grade levels
+            </p>
           )}
         </FormField>
 
