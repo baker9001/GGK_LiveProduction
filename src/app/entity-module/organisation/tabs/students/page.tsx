@@ -880,7 +880,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                               {student.email}
                             </div>
                           </div>
-                        </td>
+                        </div>
                         <td className="p-3">
                           <span className="font-mono text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                             {student.student_code || 'N/A'}
@@ -929,7 +929,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                             )}
                           </div>
                         </td>
-                      </tr>
+                      ];
                     ))}
                   </tbody>
                 </table>
