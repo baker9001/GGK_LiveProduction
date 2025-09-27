@@ -198,49 +198,68 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
   useEffect(() => {
     fetchPermissions();
 
-    // Only set up subscriptions if we have a user and no connection error
-    if (user?.id && !error?.includes('Connection')) {
-      const subscription = supabase
-        .channel(`permissions_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'entity_users',
-            filter: `user_id=eq.${user.id}`
-          },
-          () => {
-            console.log('Permissions updated, refreshing...');
-            fetchPermissions();
-          }
-        )
-        .subscribe();
+    // Only set up subscriptions if we have a user
+    if (user?.id) {
+      // Check if we can establish connection before setting up subscriptions
+      checkSupabaseConnection().then((isConnected) => {
+        if (!isConnected) {
+          console.warn('Skipping subscription setup due to connection failure');
+          return;
+        }
 
-      // Also subscribe to scope changes
-      const scopeSubscription = supabase
-        .channel(`scopes_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'entity_admin_scope',
-            filter: `user_id=eq.${user.id}`
-          },
-          () => {
-            console.log('Scopes updated, refreshing permissions...');
-            fetchPermissions();
-          }
-        )
-        .subscribe();
+        // Only proceed with subscriptions if connection is successful
+        const subscription = supabase
+          .channel(`permissions_${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'entity_users',
+              filter: `user_id=eq.${user.id}`
+            },
+            () => {
+              console.log('Permissions updated, refreshing...');
+              fetchPermissions();
+            }
+          )
+          .subscribe();
 
-      return () => {
-        subscription.unsubscribe();
-        scopeSubscription.unsubscribe();
-      };
+        // Also subscribe to scope changes
+        const scopeSubscription = supabase
+          .channel(`scopes_${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'entity_admin_scope',
+              filter: `user_id=eq.${user.id}`
+            },
+            () => {
+              console.log('Scopes updated, refreshing permissions...');
+              fetchPermissions();
+            }
+          )
+          .subscribe();
+
+        // Return cleanup function
+        return () => {
+          subscription.unsubscribe();
+          scopeSubscription.unsubscribe();
+        };
+      });
     }
-  }, [user?.id, fetchPermissions, error]);
+  }, [user?.id, fetchPermissions]);
+
+  // Separate effect for cleanup when user changes
+  useEffect(() => {
+    return () => {
+      // Cleanup any existing subscriptions when user changes
+      const subscription = supabase
+        .channel(`permissions_${user?.id || 'cleanup'}`)
+        .unsubscribe();
+      const scopeSubscription = supabase
 
   // Permission checking functions
   const hasPermission = useCallback((
