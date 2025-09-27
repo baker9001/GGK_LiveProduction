@@ -285,8 +285,7 @@ export function StudentForm({
       const { data: dataStructures, error: dsError } = await supabase
         .from('data_structures')
         .select('subject_id')
-        .eq('program_id', formData.program_id)
-        .eq('status', 'active');
+        .eq('program_id', formData.program_id);
 
       if (dsError) throw dsError;
       if (!dataStructures || dataStructures.length === 0) return [];
