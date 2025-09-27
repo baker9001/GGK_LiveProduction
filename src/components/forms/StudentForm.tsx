@@ -17,7 +17,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { GraduationCap, AlertCircle, CheckCircle } from 'lucide-react';
+import { GraduationCap, AlertCircle, CheckCircle, User, Users } from 'lucide-react';
 import { SlideInForm } from '../shared/SlideInForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../shared/Tabs';
 import { toast } from '../shared/Toast';
