@@ -148,15 +148,34 @@ export function StudentFormContent({
     if (!formData.student_code || formData.student_code.trim() === '') {
       errors.basic = true;
     }
-    if (!formData.enrollment_number || formData.enrollment_number.trim() === '') {
-      errors.basic = true;
-    }
-    if (formErrors.name || formErrors.email || formErrors.student_code || formErrors.enrollment_number) {
+    if (formErrors.name || formErrors.email || formErrors.student_code || formErrors.phone) {
       errors.basic = true;
     }
 
-    // Academic tab validation
-    if (formErrors.grade_level || formErrors.school_id) {
+    // Academic tab mandatory fields - ALL fields required
+    if (!formData.school_id || formData.school_id.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.branch_id || formData.branch_id.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.grade_level || formData.grade_level.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.section || formData.section.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.admission_date || formData.admission_date.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.program_id || formData.program_id.trim() === '') {
+      errors.academic = true;
+    }
+    if (!formData.enrolled_subjects || formData.enrolled_subjects.length === 0) {
+      errors.academic = true;
+    }
+    if (formErrors.school_id || formErrors.branch_id || formErrors.grade_level || formErrors.section || 
+        formErrors.admission_date || formErrors.program_id || formErrors.enrolled_subjects) {
       errors.academic = true;
     }
 
@@ -265,7 +284,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Enrollment Number */}
-        <FormField id="enrollment_number" label="Enrollment Number" required error={formErrors.enrollment_number}>
+        <FormField id="enrollment_number" label="Enrollment Number" error={formErrors.enrollment_number}>
           <Input
             id="enrollment_number"
             value={formData.enrollment_number || ''}
@@ -343,7 +362,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Branch Selection */}
-        <FormField id="branch_id" label="Branch">
+        <FormField id="branch_id" label="Branch" required error={formErrors.branch_id}>
           {isLoadingBranches ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               Loading branches...
@@ -363,7 +382,7 @@ export function StudentFormContent({
                 }
               }}
               options={[
-                { value: '', label: 'Select branch (optional)' },
+                { value: '', label: 'Select branch' },
                 ...branches.map(b => ({ value: b.id, label: b.name }))
               ]}
               disabled={!formData.school_id || branches.length === 0}
@@ -373,7 +392,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Grade Level */}
-        <FormField id="grade_level" label="Grade Level" error={formErrors.grade_level}>
+        <FormField id="grade_level" label="Grade Level" required error={formErrors.grade_level}>
           {isLoadingGrades ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               Loading grade levels...
@@ -419,7 +438,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Section */}
-        <FormField id="section" label="Section">
+        <FormField id="section" label="Section" required error={formErrors.section}>
           {isLoadingSections ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               Loading sections...
@@ -430,7 +449,7 @@ export function StudentFormContent({
               value={formData.section || ''}
               onChange={(value) => updateFormData('section', value)}
               options={[
-                { value: '', label: 'Select section (optional)' },
+                { value: '', label: 'Select section' },
                 ...classSections
                   .sort((a, b) => a.class_section_order - b.class_section_order)
                   .map(s => ({ 
@@ -455,7 +474,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Admission Date */}
-        <FormField id="admission_date" label="Admission Date">
+        <FormField id="admission_date" label="Admission Date" required error={formErrors.admission_date}>
           <Input
             id="admission_date"
             type="date"
@@ -467,7 +486,7 @@ export function StudentFormContent({
         </FormField>
 
         {/* Program Selection - Improved UI */}
-        <FormField id="program_id" label="Educational Program">
+        <FormField id="program_id" label="Educational Program" required error={formErrors.program_id}>
           {isLoadingPrograms ? (
             <div className="p-3 text-sm text-gray-600 dark:text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
@@ -505,7 +524,7 @@ export function StudentFormContent({
 
         {/* Subject Selection - Enhanced UI/UX */}
         {formData.program_id && (
-          <FormField id="enrolled_subjects" label="Enrolled Subjects">
+          <FormField id="enrolled_subjects" label="Enrolled Subjects" required error={formErrors.enrolled_subjects}>
             {isLoadingSubjects ? (
               <div className="p-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
