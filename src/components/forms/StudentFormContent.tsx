@@ -72,6 +72,7 @@ interface StudentFormContentProps {
   isLoadingGrades?: boolean;
   isLoadingPrograms?: boolean;
   isLoadingSections?: boolean;
+  isLoadingSubjects?: boolean;
   schoolsError?: Error | null;
   onTabErrorsChange?: (errors: { basic: boolean; academic: boolean; contact: boolean }) => void;
 }
