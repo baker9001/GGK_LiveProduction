@@ -260,6 +260,10 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
         .channel(`permissions_${user?.id || 'cleanup'}`)
         .unsubscribe();
       const scopeSubscription = supabase
+        .channel(`scopes_${user?.id || 'cleanup'}`)
+        .unsubscribe();
+    };
+  }, [user?.id]);
 
   // Permission checking functions
   const hasPermission = useCallback((
