@@ -1,17 +1,16 @@
-/**
- * File: /src/app/entity-module/page.tsx
- * 
- * Updated Entity Module Page with proper routing for organisation sub-routes and profile page
- */
+// /src/app/entity-module/page.tsx
+// SECURITY ENHANCED VERSION with module access control
 
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
+import { getCurrentUser } from '../../lib/auth';
+import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { Building2, Key, Settings, BarChart3, Users, User } from 'lucide-react';
-import OrganisationRouter from './organisation'; // Import the router instead of the page directly
-import ConfigurationPage from './configuration/page'; // Import the configuration page
-import ProfilePage from './profile/page'; // Import the profile page
-import LicenseManagementPage from './license-management/page'; // Import the license management page
+import OrganisationRouter from './organisation';
+import ConfigurationPage from './configuration/page';
+import ProfilePage from './profile/page';
+import LicenseManagementPage from './license-management/page';
 
 interface EntityModulePageProps {
   moduleKey?: string;
@@ -152,6 +151,53 @@ function AnalyticsPage() {
 }
 
 export default function EntityModulePage({ moduleKey }: EntityModulePageProps) {
+  const navigate = useNavigate();
+  const currentUser = getCurrentUser();
+  
+  // SECURITY: Use the module security hook
+  useModuleSecurity('entity-module');
+  
+  // SECURITY: Additional role check
+  useEffect(() => {
+    const allowedRoles = ['SSA', 'ENTITY_ADMIN'];
+    
+    if (currentUser && !allowedRoles.includes(currentUser.role)) {
+      console.error(`[Security] Unauthorized access to Entity Module by ${currentUser.email} (${currentUser.role})`);
+      
+      // Log security event
+      const securityEvent = {
+        type: 'ENTITY_MODULE_ACCESS_VIOLATION',
+        timestamp: new Date().toISOString(),
+        user: {
+          id: currentUser.id,
+          email: currentUser.email,
+          role: currentUser.role
+        },
+        module: 'entity-module',
+        action: 'ACCESS_BLOCKED'
+      };
+      
+      console.error('[SECURITY EVENT]', securityEvent);
+      
+      // Store violation
+      const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+      violations.push(securityEvent);
+      localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
+      
+      // Redirect based on user role
+      const roleRedirects: Record<string, string> = {
+        'STUDENT': '/app/student-module/dashboard',
+        'TEACHER': '/app/teachers-module/dashboard',
+        'SUPPORT': '/app/system-admin/dashboard',
+        'VIEWER': '/app/system-admin/dashboard',
+        'SSA': '/app/system-admin/dashboard',
+        'ENTITY_ADMIN': '/app/entity-module/dashboard'
+      };
+      
+      navigate(roleRedirects[currentUser.role] || '/signin', { replace: true });
+    }
+  }, [currentUser, navigate]);
+  
   return (
     <AdminLayout moduleKey="entity-module">
       <Routes>
