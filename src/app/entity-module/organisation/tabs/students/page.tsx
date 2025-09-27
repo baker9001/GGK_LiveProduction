@@ -1333,116 +1333,36 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           )}
         </div>
       )}
-
-      {activeTab === 'analytics' && (
-        <div className="space-y-6">
-          {/* Analytics Placeholder */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-            <BarChart3 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Student Analytics Dashboard
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Comprehensive analytics and insights will be available here
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Enrollment Trends</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Track student enrollment patterns over time</p>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Performance Metrics</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Analyze academic performance across grades</p>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Attendance Patterns</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Monitor attendance rates and trends</p>
-              </div>
-            </div>
+      
+      {/* Students Data Table */}
+      <DataTable
+        data={students}
+        columns={studentColumns}
+        keyField="id"
+        loading={isLoadingStudents}
+        onEdit={handleEditStudent}
+        emptyMessage="No students found. Create your first student to get started."
+        caption="List of students with their academic information and learning progress"
+        ariaLabel="Students data table"
+        renderActions={(student) => (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleEditStudent(student)}
+              leftIcon={<Edit2 className="h-3 w-3" />}
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleViewProgress(student)}
+              leftIcon={<TrendingUp className="h-3 w-3" />}
+              className="text-[#8CC63F] border-[#8CC63F] hover:bg-[#8CC63F]/10"
+            >
+              Progress
+            </Button>
           </div>
-        </div>
-      )}
-
-      {/* Development Status */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-3">
-          <Clock className="w-5 h-5" />
-          <span className="font-semibold">Development Status</span>
-        </div>
-        <p className="text-sm text-blue-600 dark:text-blue-400 mb-4">
-          Student management is operational with comprehensive access control. Features status:
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Student listing and filtering ✓</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Scope-based access control ✓</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Multi-tab interface ✓</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Student registration forms ✓</span>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Academic records management</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Attendance tracking</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Parent portal integration</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Advanced analytics dashboard</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Student Form Modal */}
-      <StudentForm
-        isOpen={showStudentForm}
-        onClose={() => {
-          setShowStudentForm(false);
-          setEditingStudent(null);
-        }}
-        onSuccess={handleStudentFormSuccess}
-        companyId={companyId}
-        initialData={editingStudent ? {
-          id: editingStudent.id,
-          user_id: editingStudent.user_id,
-          name: editingStudent.name || '',
-          email: editingStudent.email || '',
-          phone: editingStudent.user_data?.raw_user_meta_data?.phone || '',
-          student_code: editingStudent.student_code || '',
-          enrollment_number: editingStudent.enrollment_number || '',
-          grade_level: editingStudent.grade_level || '',
-          section: editingStudent.section || '',
-          admission_date: editingStudent.admission_date || '',
-          school_id: editingStudent.school_id || '',
-          branch_id: editingStudent.branch_id || '',
-          parent_name: editingStudent.parent_name || '',
-          parent_contact: editingStudent.parent_contact || '',
-          parent_email: editingStudent.parent_email || '',
-          emergency_contact: editingStudent.emergency_contact || {},
-          enrolled_programs: editingStudent.enrolled_programs || [],
-          is_active: editingStudent.is_active ?? true,
-          company_id: editingStudent.company_id
-        } : undefined}
+        )}
       />
-    </div>
-  );
-}
