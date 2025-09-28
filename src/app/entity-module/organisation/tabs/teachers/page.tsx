@@ -200,27 +200,98 @@ const GreenSearchableMultiSelect = ({ ...props }) => {
   return (
     <div className="green-select-wrapper">
       <style jsx global>{`
-        .green-select-wrapper .multi-select-selected-item {
+        /* Selected items styling */
+        .green-select-wrapper .multi-select-selected-item,
+        .green-select-wrapper [data-selected="true"],
+        .green-select-wrapper .selected-item,
+        .green-select-wrapper .bg-blue-100,
+        .green-select-wrapper .bg-blue-50 {
           background-color: #8CC63F20 !important;
           border-color: #8CC63F !important;
           color: #7AB532 !important;
         }
-        .green-select-wrapper .multi-select-selected-item button:hover {
+        
+        /* Remove button hover */
+        .green-select-wrapper .multi-select-selected-item button:hover,
+        .green-select-wrapper .multi-select-selected-item svg:hover {
           background-color: #8CC63F30 !important;
+          color: #7AB532 !important;
         }
-        .green-select-wrapper input:focus {
+        
+        /* Input field focus state */
+        .green-select-wrapper input:focus,
+        .green-select-wrapper input:focus-visible,
+        .green-select-wrapper .focus\\:ring-blue-500:focus,
+        .green-select-wrapper .focus\\:border-blue-500:focus {
           border-color: #8CC63F !important;
-          ring-color: #8CC63F !important;
+          outline-color: #8CC63F !important;
+          box-shadow: 0 0 0 3px rgba(140, 198, 63, 0.1) !important;
         }
-        .green-select-wrapper .multi-select-option:hover {
+        
+        /* Dropdown container border when focused */
+        .green-select-wrapper .border-blue-500,
+        .green-select-wrapper .border-blue-300,
+        .green-select-wrapper .ring-blue-500 {
+          border-color: #8CC63F !important;
+        }
+        
+        /* Option hover state */
+        .green-select-wrapper .multi-select-option:hover,
+        .green-select-wrapper .hover\\:bg-blue-50:hover,
+        .green-select-wrapper .hover\\:bg-gray-100:hover {
           background-color: #8CC63F10 !important;
         }
-        .green-select-wrapper .multi-select-option.selected {
-          background-color: #8CC63F20 !important;
+        
+        /* Selected option in dropdown */
+        .green-select-wrapper .multi-select-option.selected,
+        .green-select-wrapper .bg-blue-500,
+        .green-select-wrapper .bg-blue-600,
+        .green-select-wrapper [aria-selected="true"] {
+          background-color: #8CC63F25 !important;
           color: #7AB532 !important;
         }
+        
+        /* Tags/chips for selected values */
+        .green-select-wrapper .chip,
+        .green-select-wrapper .tag,
+        .green-select-wrapper .badge,
+        .green-select-wrapper span[class*="bg-blue"] {
+          background-color: #8CC63F20 !important;
+          border: 1px solid #8CC63F40 !important;
+          color: #7AB532 !important;
+        }
+        
+        /* Override any blue text colors */
+        .green-select-wrapper .text-blue-500,
+        .green-select-wrapper .text-blue-600,
+        .green-select-wrapper .text-blue-700 {
+          color: #7AB532 !important;
+        }
+        
+        /* Checkbox or selection indicators */
+        .green-select-wrapper input[type="checkbox"]:checked {
+          background-color: #8CC63F !important;
+          border-color: #8CC63F !important;
+        }
+        
+        /* Focus ring for accessibility */
+        .green-select-wrapper *:focus-visible {
+          outline: 2px solid #8CC63F !important;
+          outline-offset: 2px;
+        }
+        
+        /* Scrollbar styling for dropdown */
+        .green-select-wrapper ::-webkit-scrollbar-thumb {
+          background-color: #8CC63F40 !important;
+        }
+        .green-select-wrapper ::-webkit-scrollbar-thumb:hover {
+          background-color: #8CC63F60 !important;
+        }
       `}</style>
-      <SearchableMultiSelect {...props} />
+      <SearchableMultiSelect 
+        {...props} 
+        className={`${props.className || ''} focus:ring-[#8CC63F] focus:border-[#8CC63F]`}
+      />
     </div>
   );
 };
@@ -2011,6 +2082,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         section_ids: []
                       }))}
                       placeholder="Select schools"
+                      className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                     />
                   </FormField>
 
@@ -2026,6 +2098,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           section_ids: []
                         }))}
                         placeholder="Select branches"
+                        className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                       />
                     </FormField>
                   )}
@@ -2058,6 +2131,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         program_ids: values 
                       }))}
                       placeholder="Select programs (IGCSE, A Level, etc.)"
+                      className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                     />
                   </FormField>
 
@@ -2070,6 +2144,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         subject_ids: values 
                       }))}
                       placeholder="Select subjects"
+                      className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                     />
                   </FormField>
                 </div>
@@ -2113,6 +2188,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             section_ids: []
                           }))}
                           placeholder="Select grade levels"
+                          className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                         />
                       </FormField>
 
@@ -2126,6 +2202,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                               section_ids: values 
                             }))}
                             placeholder="Select sections"
+                            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                           />
                         </FormField>
                       )}
