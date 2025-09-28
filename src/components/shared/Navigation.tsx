@@ -81,9 +81,9 @@ export function Navigation() {
             <Button
               variant="default"
               onClick={handleSignInClick}
-              className="ml-4 bg-[#8CC63F] hover:bg-[#7AB32F]"
+              className="ml-4 bg-[#8CC63F] hover:bg-[#7AB635]"
             >
-              Sign In
+              Login
             </Button>
             
             <button
@@ -128,9 +128,9 @@ export function Navigation() {
                 setIsMenuOpen(false);
                 handleSignInClick();
               }}
-              className="w-full mt-4 bg-[#8CC63F] hover:bg-[#7AB32F]"
+              className="w-full mt-4 bg-[#8CC63F] hover:bg-[#7AB635]"
             >
-              Sign In
+              Login
             </Button>
           </div>
         </div>
