@@ -33,11 +33,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-// Debug logging for environment variables
-console.log('Environment variables check:');
-console.log('VITE_SUPABASE_URL:', supabaseUrl);
-console.log('VITE_SUPABASE_ANON_KEY length:', supabaseAnonKey?.length || 0);
-
 // Enhanced error checking with helpful messages
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase environment variables!');
@@ -57,60 +52,23 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Additional validation for URL format and completeness
-if (supabaseUrl.length < 30) {
+if (supabaseUrl.length < 20 || !supabaseUrl.includes('.supabase.co')) {
   console.error('Invalid or incomplete Supabase URL:', supabaseUrl);
-  console.error('URL length:', supabaseUrl.length);
   console.error('Expected format: https://your-project-ref.supabase.co');
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file - it appears to be incomplete or malformed.');
 }
 
-// Enhanced URL validation to prevent common misconfigurations
-if (!supabaseUrl.includes('.supabase.co')) {
-  console.error('Invalid Supabase URL domain:', supabaseUrl);
-  console.error('Expected domain: .supabase.co');
-  throw new Error('Invalid Supabase URL domain. Please ensure your VITE_SUPABASE_URL uses the correct Supabase domain (.supabase.co).');
-}
-
-// Check for common URL misconfiguration (storage/auth endpoints instead of base URL)
-if (supabaseUrl.includes('/storage') || supabaseUrl.includes('/auth') || supabaseUrl.includes('/rest')) {
-  console.error('Supabase URL appears to be a service-specific endpoint:', supabaseUrl);
-  console.error('Expected base URL format: https://your-project-ref.supabase.co');
-  console.error('Current URL contains service path which should not be in VITE_SUPABASE_URL');
-  throw new Error('Invalid Supabase URL: Please use the base URL (https://your-project-ref.supabase.co) not a service-specific endpoint.');
-}
-
-// Validate URL doesn't have trailing slashes or extra paths
-const cleanUrl = supabaseUrl.replace(/\/+$/, ''); // Remove trailing slashes
-if (cleanUrl !== supabaseUrl) {
-  console.warn('Supabase URL had trailing slashes, cleaning:', supabaseUrl, '->', cleanUrl);
-}
-
 // Validate URL format
 try {
-  const urlObj = new URL(cleanUrl);
-  if (urlObj.pathname !== '/' && urlObj.pathname !== '') {
-    console.error('Supabase URL should not contain paths:', cleanUrl);
-    console.error('URL pathname:', urlObj.pathname);
-    console.error('Expected: https://your-project-ref.supabase.co (no additional paths)');
-    throw new Error('Invalid Supabase URL: Base URL should not contain additional paths.');
-  }
+  new URL(supabaseUrl);
 } catch (error) {
-  console.error('Invalid Supabase URL format:', cleanUrl);
+  console.error('Invalid Supabase URL format:', supabaseUrl);
   console.error('URL validation error:', error);
   throw new Error('Invalid Supabase URL format. Please check your VITE_SUPABASE_URL in .env file.');
 }
 
-// Additional validation for HTTPS when app is served over HTTPS
-if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !cleanUrl.startsWith('https:')) {
-  console.error('Mixed content error: Application is served over HTTPS but Supabase URL uses HTTP');
-  console.error('Current protocol:', window.location.protocol);
-  console.error('Supabase URL:', cleanUrl);
-  console.error('This can cause "Failed to fetch" errors due to browser security restrictions');
-  throw new Error('Mixed content error: Supabase URL must use HTTPS when the application is served over HTTPS. Please update your VITE_SUPABASE_URL to use https://');
-}
-
 // Create Supabase client with WebContainer-friendly configuration
-export const supabase = createClient(cleanUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -121,14 +79,11 @@ export const supabase = createClient(cleanUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'GGK-Admin-App/1.0'
+      // Removed 'Content-Type': 'application/json' to allow proper MIME type detection for file uploads
     }
   },
   // Enhanced fetch configuration for WebContainer with retry logic
   fetch: async (url, options = {}) => {
-    console.log('Supabase fetch attempt to:', url);
-    
     // Add retry logic for WebContainer environments
     const maxRetries = 3;
     let lastError;
@@ -136,38 +91,29 @@ export const supabase = createClient(cleanUrl, supabaseAnonKey, {
     for (let i = 0; i < maxRetries; i++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
         
         const response = await fetch(url, {
           ...options,
           signal: options.signal || controller.signal,
           // Add CORS mode for WebContainer
           mode: 'cors',
-          credentials: 'omit',
-          headers: {
-            ...options.headers,
-            'Accept': 'application/json',
-          }
+          credentials: 'same-origin',
         });
         
         clearTimeout(timeoutId);
-        console.log('Supabase fetch successful:', response.status);
         return response;
       } catch (error) {
         lastError = error;
-        console.warn(`Supabase fetch attempt ${i + 1} failed:`, error);
-        console.warn('URL that failed:', url);
+        console.warn(`Fetch attempt ${i + 1} failed:`, error);
         
         // If it's a network error, wait before retrying
         if (i < maxRetries - 1) {
-          const delay = Math.min(1000 * Math.pow(2, i), 5000); // Exponential backoff, max 5s
-          console.log(`Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         }
       }
     }
     
-    console.error('All Supabase fetch attempts failed:', lastError);
     throw lastError;
   },
   // Add realtime configuration
@@ -179,81 +125,24 @@ export const supabase = createClient(cleanUrl, supabaseAnonKey, {
 });
 
 // Connection health check function
-export async function checkSupabaseConnection(): Promise<{ connected: boolean; error?: string }> {
-  const maxRetries = 3;
-  let lastError: any;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      console.log(`Checking Supabase connection (attempt ${attempt + 1}/${maxRetries})...`);
-      const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
-      if (error && error.code !== 'PGRST116') {
-        console.warn('Supabase connection check failed:', error);
-        console.warn('Error code:', error.code);
-        console.warn('Error message:', error.message);
-        return { connected: false, error: `Database error: ${error.message}` };
-      }
-      console.log('✅ Supabase connection successful');
-      return { connected: true };
-    } catch (error) {
-      lastError = error;
-      console.warn(`❌ Supabase connection attempt ${attempt + 1} failed:`, error);
-      
-      // Check if this is a "Failed to fetch" error that we should retry
-      const isRetryableError = error instanceof TypeError && 
-        (error.message.includes('Failed to fetch') || error.message.includes('fetch'));
-      
-      if (isRetryableError && attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 5000); // Exponential backoff, max 5s
-        console.log(`Retrying connection in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      
-      // If not retryable or we've exhausted retries, break out of loop
-      break;
+export async function checkSupabaseConnection(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+    if (error && error.code !== 'PGRST116') {
+      console.error('Supabase connection check failed:', error);
+      return false;
     }
+    console.log('✅ Supabase connection successful');
+    return true;
+  } catch (error) {
+    console.error('❌ Supabase connection error:', error);
+    return false;
   }
-  
-  // Handle final error after all retries exhausted
-  console.warn('❌ All Supabase connection attempts failed:', lastError);
-  console.warn('Error type:', typeof lastError);
-  console.warn('Error constructor:', lastError?.constructor?.name);
-  
-  // Check for specific error types and provide helpful logging
-  if (lastError instanceof TypeError && lastError.message.includes('Failed to fetch')) {
-    console.warn('Network connectivity issue detected. This might be due to:');
-    console.warn('1. WebContainer/StackBlitz network restrictions');
-    console.warn('2. Supabase service temporarily unavailable');
-    console.warn('3. Internet connectivity issues');
-    console.warn('4. Environment variable configuration issue');
-    console.warn('Current Supabase URL being used:', supabaseUrl);
-    
-    return { 
-      connected: false, 
-      error: `Unable to connect to the database after ${maxRetries} attempts. This may be due to network restrictions in the current environment or temporary service unavailability. Please try refreshing the page or check your internet connection.` 
-    };
-  }
-  
-  // Return false with generic error for any other connection failure
-  return { 
-    connected: false, 
-    error: lastError instanceof Error ? lastError.message : 'Unknown connection error occurred after multiple attempts' 
-  };
 }
 
 // Helper function to handle Supabase errors with better context
 export const handleSupabaseError = (error: any, context?: string) => {
   const errorMessage = error?.message || 'An error occurred while connecting to the database';
-  
-  // Check for Supabase backend errors
-  if (errorMessage.includes('Database error granting user') || 
-      errorMessage.includes('unexpected_failure')) {
-    console.error(`🔧 Supabase Backend Error${context ? ` in ${context}` : ''}:`, errorMessage);
-    console.error('This is a Supabase service issue. Check Supabase dashboard for service status.');
-    
-    throw new Error('Authentication service is temporarily unavailable. Please try again in a few moments.');
-  }
   
   // Check for common WebContainer issues
   if (errorMessage.includes('Failed to fetch') || errorMessage.includes('TypeError')) {
@@ -288,15 +177,9 @@ export async function supabaseQuery<T>(
 
 // Initialize connection check on load (development only)
 if (import.meta.env.DEV) {
-  checkSupabaseConnection().then(({ connected, error }) => {
+  checkSupabaseConnection().then(connected => {
     if (!connected) {
       console.warn('⚠️ Initial Supabase connection failed. Will retry on first query.');
-      if (error) {
-        console.warn('Connection error details:', error);
-      }
     }
-  }).catch(error => {
-    console.warn('⚠️ Initial Supabase connection check failed:', error.message);
-    console.warn('Application will continue to run. Connection will be retried on first query.');
   });
 }

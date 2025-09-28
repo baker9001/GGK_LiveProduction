@@ -1,21 +1,14 @@
 /**
  * File: /src/lib/auth.ts
  * Dependencies: 
- *   - supabase client for session management
+ *   - None (Supabase auth removed)
  * 
  * SECURITY FIXES:
  *   - Added auth change events
  *   - Improved session monitoring
  *   - Prevent redirect loops
  *   - Complete session cleanup
- *   - Enhanced test mode with 5-minute timeout
- *   - Security audit logging for test mode
  */
-
-import { supabase } from './supabase';
-
-// Auth state change listener
-let authStateListener: { data: { subscription: any } } | null = null;
 
 export type UserRole = 'SSA' | 'SUPPORT' | 'VIEWER' | 'TEACHER' | 'STUDENT' | 'ENTITY_ADMIN';
 
@@ -31,11 +24,6 @@ const AUTH_STORAGE_KEY = 'ggk_authenticated_user';
 const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
-
-// TEST MODE CONSTANTS
-const TEST_MODE_EXPIRATION_KEY = 'test_mode_expiration';
-const TEST_MODE_AUDIT_KEY = 'test_mode_audit';
-const TEST_MODE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Session durations
 const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -91,31 +79,7 @@ export function setAuthenticatedUser(user: User): void {
 }
 
 // Get authenticated user
-export async function getAuthenticatedUser(): Promise<User | null> {
-  // Check Supabase session first
-  try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error || !session) {
-      // Clear local storage if Supabase session is invalid
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    
-    // Validate session user ID
-    if (!session.user?.id || session.user.id === 'undefined' || session.user.id === 'null') {
-      console.error('[auth] Invalid session user ID:', { userId: session.user?.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error checking Supabase session:', error);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    return null;
-  }
-
+export function getAuthenticatedUser(): User | null {
   // First check if token is valid
   const token = getAuthToken();
   if (!token) {
@@ -132,41 +96,10 @@ export async function getAuthenticatedUser(): Promise<User | null> {
       localStorage.removeItem(AUTH_TOKEN_KEY);
       return null;
     }
-    
-    // Validate payload user ID
-    if (!payload.id || payload.id === 'undefined' || payload.id === 'null') {
-      console.error('[auth] Invalid token payload user ID:', { userId: payload.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
   } catch {
     return null;
   }
   
-  const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (!storedUser) return null;
-  
-  try {
-    const user = JSON.parse(storedUser);
-    // Validate stored user ID
-    if (!user?.id || user.id === 'undefined' || user.id === 'null' || typeof user.id !== 'string') {
-      console.error('[auth] Invalid stored user ID:', { userId: user?.id, userType: typeof user?.id });
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    return user;
-  } catch (error) {
-    console.error('[auth] Error parsing stored user:', error);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    return null;
-  }
-}
-
-// Synchronous version for backward compatibility (deprecated)
-export function getAuthenticatedUserSync(): User | null {
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
   return storedUser ? JSON.parse(storedUser) : null;
 }
@@ -214,7 +147,7 @@ export function isSessionExpiringSoon(): boolean {
 
 // Extend session (for activity-based renewal)
 export function extendSession(): void {
-  const user = getAuthenticatedUserSync(); // Use sync version here to avoid async issues
+  const user = getAuthenticatedUser();
   if (user) {
     setAuthenticatedUser(user);
     console.log('Session extended');
@@ -227,10 +160,6 @@ export function clearAuthenticatedUser(): void {
   localStorage.removeItem(TEST_USER_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(REMEMBER_SESSION_KEY);
-  localStorage.removeItem(TEST_MODE_EXPIRATION_KEY);
-  
-  // SECURITY: Clear Supabase authentication tokens
-  localStorage.removeItem('supabase.auth.token');
   
   // SECURITY: Clear cached user scope
   localStorage.removeItem('user_scope_cache');
@@ -242,9 +171,6 @@ export function clearAuthenticatedUser(): void {
     localStorage.removeItem('ggk_remembered_email');
     localStorage.removeItem('ggk_user_logout');
   }
-  
-  // Stop test mode expiration checker if running
-  stopTestModeExpirationChecker();
   
   sessionStorage.clear();
   console.log('User logged out, all auth data cleared');
@@ -264,14 +190,13 @@ export function markUserLogout(): void {
 }
 
 // Check if authenticated
-export async function isAuthenticated(): Promise<boolean> {
-  const user = await getAuthenticatedUser();
-  return !!user;
+export function isAuthenticated(): boolean {
+  return !!getAuthenticatedUser();
 }
 
 // Async version for compatibility
 export async function isAuthenticatedAsync(): Promise<boolean> {
-  return await isAuthenticated();
+  return isAuthenticated();
 }
 
 // Get user role
@@ -334,245 +259,36 @@ export function validateDeactivationRequest(targetUserId: string): {
   return { canDeactivate: true };
 }
 
-// ============================================
-// ENHANCED TEST MODE FUNCTIONS WITH TIMEOUT
-// ============================================
-
-// Test mode expiration checker interval
-let testModeExpirationInterval: NodeJS.Timeout | null = null;
-
-// Enhanced start test mode with security and timeout
-export async function startTestMode(testUser: User): Promise<void> {
-  // Use async version and await it
-  const currentUser = await getAuthenticatedUser();
-  
-  // Security check: Only SSA can start test mode
+// Test mode functions
+export function startTestMode(testUser: User): void {
+  const currentUser = getAuthenticatedUser();
   if (!currentUser || currentUser.role !== 'SSA') {
-    console.error('[Security] Non-SSA user attempted to start test mode:', currentUser);
-    // Note: Remove alert() - handled by Toast in UI
+    alert('Only Super Admins can use test mode');
     return;
   }
   
-  // Set expiration time (5 minutes from now)
-  const expirationTime = Date.now() + TEST_MODE_DURATION;
-  localStorage.setItem(TEST_MODE_EXPIRATION_KEY, expirationTime.toString());
-  
-  // Log test mode activation for audit
-  const testModeEvent = {
-    type: 'TEST_MODE_START',
-    timestamp: new Date().toISOString(),
-    expirationTime: new Date(expirationTime).toISOString(),
-    adminUser: {
-      id: currentUser.id,
-      email: currentUser.email,
-      role: currentUser.role
-    },
-    testUser: {
-      id: testUser.id,
-      email: testUser.email,
-      role: testUser.role,
-      userType: testUser.userType
-    }
-  };
-  
-  console.log('[TEST MODE]', testModeEvent);
-  
-  // Store in audit log
-  const auditLog = JSON.parse(localStorage.getItem(TEST_MODE_AUDIT_KEY) || '[]');
-  auditLog.push(testModeEvent);
-  localStorage.setItem(TEST_MODE_AUDIT_KEY, JSON.stringify(auditLog.slice(-50)));
-  
-  // Store security event for general audit
-  const securityEvents = JSON.parse(localStorage.getItem('security_events') || '[]');
-  securityEvents.push({
-    ...testModeEvent,
-    severity: 'medium'
-  });
-  localStorage.setItem('security_events', JSON.stringify(securityEvents.slice(-100)));
-  
-  // Store test user
   localStorage.setItem(TEST_USER_KEY, JSON.stringify(testUser));
   console.log('Test mode started for user:', testUser);
-  
-  // Start expiration checker
-  startTestModeExpirationChecker();
   
   // Redirect to appropriate module
   const redirectPath = getRedirectPathForUser(testUser);
   window.location.href = redirectPath;
 }
 
-// Enhanced exit test mode with audit logging
 export function exitTestMode(): void {
-  const testUser = getTestModeUser();
-  const realAdmin = getRealAdminUser();
-  
-  if (testUser) {
-    // Log test mode end for audit
-    const testModeEvent = {
-      type: 'TEST_MODE_END',
-      timestamp: new Date().toISOString(),
-      adminUser: realAdmin ? {
-        id: realAdmin.id,
-        email: realAdmin.email,
-        role: realAdmin.role
-      } : null,
-      testUser: {
-        id: testUser.id,
-        email: testUser.email,
-        role: testUser.role
-      },
-      sessionDuration: calculateTestModeDuration()
-    };
-    
-    console.log('[TEST MODE]', testModeEvent);
-    
-    // Store in audit log
-    const auditLog = JSON.parse(localStorage.getItem(TEST_MODE_AUDIT_KEY) || '[]');
-    auditLog.push(testModeEvent);
-    localStorage.setItem(TEST_MODE_AUDIT_KEY, JSON.stringify(auditLog.slice(-50)));
-  }
-  
-  // Clear test mode data
   localStorage.removeItem(TEST_USER_KEY);
-  localStorage.removeItem(TEST_MODE_EXPIRATION_KEY);
-  
-  // Stop expiration checker
-  stopTestModeExpirationChecker();
-  
   console.log('Test mode ended');
   window.location.href = '/app/system-admin/dashboard';
 }
 
-// Enhanced isInTestMode with expiration check
 export function isInTestMode(): boolean {
-  const hasTestUser = !!localStorage.getItem(TEST_USER_KEY);
-  if (!hasTestUser) return false;
-  
-  // Check if expired
-  const expirationTime = localStorage.getItem(TEST_MODE_EXPIRATION_KEY);
-  if (!expirationTime) {
-    // No expiration set, clean up
-    localStorage.removeItem(TEST_USER_KEY);
-    return false;
-  }
-  
-  if (Date.now() > parseInt(expirationTime)) {
-    // Expired, clean up
-    localStorage.removeItem(TEST_USER_KEY);
-    localStorage.removeItem(TEST_MODE_EXPIRATION_KEY);
-    return false;
-  }
-  
-  return true;
+  return !!localStorage.getItem(TEST_USER_KEY);
 }
 
 export function getTestModeUser(): User | null {
-  if (!isInTestMode()) return null;
-  
   const testUser = localStorage.getItem(TEST_USER_KEY);
   return testUser ? JSON.parse(testUser) : null;
 }
-
-// Check if test mode has expired
-export function isTestModeExpired(): boolean {
-  if (!isInTestMode()) return false;
-  
-  const expirationTime = localStorage.getItem(TEST_MODE_EXPIRATION_KEY);
-  if (!expirationTime) return true;
-  
-  return Date.now() > parseInt(expirationTime);
-}
-
-// Get remaining time in test mode (in seconds)
-export function getTestModeRemainingTime(): number {
-  if (!isInTestMode()) return 0;
-  
-  const expirationTime = localStorage.getItem(TEST_MODE_EXPIRATION_KEY);
-  if (!expirationTime) return 0;
-  
-  const remaining = Math.max(0, parseInt(expirationTime) - Date.now());
-  return Math.floor(remaining / 1000);
-}
-
-// Calculate test mode session duration
-function calculateTestModeDuration(): string {
-  const startTime = getTestModeStartTime();
-  if (!startTime) return 'Unknown';
-  
-  const duration = Date.now() - startTime;
-  const minutes = Math.floor(duration / 60000);
-  const seconds = Math.floor((duration % 60000) / 1000);
-  
-  return `${minutes}m ${seconds}s`;
-}
-
-// Get test mode start time
-function getTestModeStartTime(): number | null {
-  const expirationTime = localStorage.getItem(TEST_MODE_EXPIRATION_KEY);
-  if (!expirationTime) return null;
-  
-  return parseInt(expirationTime) - TEST_MODE_DURATION;
-}
-
-// Start test mode expiration checker
-function startTestModeExpirationChecker(): void {
-  stopTestModeExpirationChecker();
-  
-  testModeExpirationInterval = setInterval(() => {
-    if (isTestModeExpired()) {
-      console.log('[TEST MODE] Session expired, forcing exit');
-      
-      const testUser = getTestModeUser();
-      const realAdmin = getRealAdminUser();
-      
-      const expirationEvent = {
-        type: 'TEST_MODE_EXPIRED',
-        timestamp: new Date().toISOString(),
-        adminUser: realAdmin ? {
-          id: realAdmin.id,
-          email: realAdmin.email
-        } : null,
-        testUser: testUser ? {
-          id: testUser.id,
-          email: testUser.email
-        } : null
-      };
-      
-      const auditLog = JSON.parse(localStorage.getItem(TEST_MODE_AUDIT_KEY) || '[]');
-      auditLog.push(expirationEvent);
-      localStorage.setItem(TEST_MODE_AUDIT_KEY, JSON.stringify(auditLog.slice(-50)));
-      
-      exitTestMode();
-    }
-  }, 5000); // Check every 5 seconds
-}
-
-// Stop test mode expiration checker
-function stopTestModeExpirationChecker(): void {
-  if (testModeExpirationInterval) {
-    clearInterval(testModeExpirationInterval);
-    testModeExpirationInterval = null;
-  }
-}
-
-// Get test mode audit log
-export function getTestModeAuditLog(): any[] {
-  return JSON.parse(localStorage.getItem(TEST_MODE_AUDIT_KEY) || '[]');
-}
-
-// Clear test mode audit log (SSA only)
-export function clearTestModeAuditLog(): void {
-  const currentUser = getCurrentUser();
-  if (currentUser?.role === 'SSA') {
-    localStorage.removeItem(TEST_MODE_AUDIT_KEY);
-    console.log('[AUDIT] Test mode audit log cleared by', currentUser.email);
-  }
-}
-
-// ============================================
-// END OF TEST MODE ENHANCEMENTS
-// ============================================
 
 // CRITICAL: This function returns the current active user (test mode or real)
 export function getCurrentUser(): User | null {
@@ -580,16 +296,16 @@ export function getCurrentUser(): User | null {
   if (testUser) {
     return JSON.parse(testUser);
   }
-  return getAuthenticatedUserSync();
+  return getAuthenticatedUser();
 }
 
 export function getRealAdminUser(): User | null {
-  return getAuthenticatedUserSync();
+  return getAuthenticatedUser();
 }
 
 // Simplified session refresh (no Supabase)
 export async function refreshSession(): Promise<boolean> {
-  const user = await getAuthenticatedUser();
+  const user = getAuthenticatedUser();
   if (user) {
     // Regenerate token with same remember me setting
     const token = getAuthToken();
@@ -639,7 +355,7 @@ export function startSessionMonitoring(): void {
   setTimeout(() => {
     isMonitoringActive = true;
     
-    sessionCheckInterval = setInterval(async () => {
+    sessionCheckInterval = setInterval(() => {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
       
@@ -651,7 +367,7 @@ export function startSessionMonitoring(): void {
         return;
       }
       
-      const user = await getAuthenticatedUser();
+      const user = getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
         console.log('Session expired. Redirecting to login.');
@@ -689,7 +405,7 @@ export function stopSessionMonitoring(): void {
 export function setupSessionRefresh(): void {
   setInterval(async () => {
     // Only refresh if authenticated and not on public page
-    if (await isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
+    if (isAuthenticated() && !isSessionExpiringSoon() && !isPublicPage()) {
       await refreshSession();
     }
   }, 30 * 60 * 1000); // 30 minutes
@@ -697,61 +413,15 @@ export function setupSessionRefresh(): void {
 
 // Initialize on app start - but with delay
 if (typeof window !== 'undefined') {
-  // Check on load if test mode is active
-  if (isInTestMode()) {
-    if (isTestModeExpired()) {
-      console.log('[TEST MODE] Expired session detected on load, cleaning up');
-      exitTestMode();
-    } else {
-      // Restart the expiration checker
-      startTestModeExpirationChecker();
-    }
-  }
-  
-  // Setup Supabase auth state listener
-  const setupAuthStateListener = () => {
-    if (authStateListener) {
-      authStateListener.data.subscription.unsubscribe();
-    }
-    
-    authStateListener = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Supabase auth state change:', event, session?.user?.id);
-      
-      // Handle auth state changes that indicate session is invalid
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || event === 'TOKEN_REFRESHED') {
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          // Token refresh failed
-          console.log('Token refresh failed, clearing auth data');
-          clearAuthenticatedUser();
-          
-          // Only redirect if not on public page
-          if (!isPublicPage()) {
-            window.location.replace('/signin');
-          }
-        } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-          console.log('User signed out or deleted, clearing auth data');
-          clearAuthenticatedUser();
-          
-          // Only redirect if not on public page
-          if (!isPublicPage()) {
-            window.location.replace('/signin');
-          }
-        }
-      }
-    });
-  };
-  
   // Wait for app to fully load before starting session management
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     });
   } else {
     // DOM already loaded
     setTimeout(() => {
-      setupAuthStateListener();
       setupSessionRefresh();
       startSessionMonitoring();
     }, 1000);

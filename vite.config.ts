@@ -11,6 +11,7 @@ export default defineConfig({
       'crypto': 'crypto-browserify',
       'buffer': 'buffer',
       'stream': 'stream-browserify',
+      'process': 'process/browser',
     },
   },
   define: {
