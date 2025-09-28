@@ -137,6 +137,15 @@ interface GradeLevel {
   grade_order: number;
   school_id?: string;
   branch_id?: string;
+  display_name?: string;
+  schools?: {
+    id: string;
+    name: string;
+  };
+  branches?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface ClassSection {
@@ -335,6 +344,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [showBulkActionConfirmation, setShowBulkActionConfirmation] = useState(false);
   const [showInvitationSuccess, setShowInvitationSuccess] = useState(false);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingTeacher, setViewingTeacher] = useState<TeacherData | null>(null);
   
   const [selectedTeacher, setSelectedTeacher] = useState<TeacherData | null>(null);
   const [bulkAction, setBulkAction] = useState<'activate' | 'deactivate' | 'delete' | null>(null);
@@ -709,7 +720,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   );
 
-  // Fetch grade levels for selected school/branch
+  // Fetch grade levels for selected school/branch with school/branch info
   const { data: availableGradeLevels = [] } = useQuery(
     ['grade-levels', assignmentFormData.school_ids, assignmentFormData.branch_ids],
     async () => {
@@ -717,7 +728,22 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       let query = supabase
         .from('grade_levels')
-        .select('id, grade_name, grade_code, grade_order, school_id, branch_id')
+        .select(`
+          id, 
+          grade_name, 
+          grade_code, 
+          grade_order, 
+          school_id, 
+          branch_id,
+          schools!inner (
+            id,
+            name
+          ),
+          branches (
+            id,
+            name
+          )
+        `)
         .in('school_id', assignmentFormData.school_ids)
         .eq('status', 'active')
         .order('grade_order');
@@ -736,7 +762,13 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         return [];
       }
       
-      return (data || []) as GradeLevel[];
+      // Transform data to include school/branch context
+      const gradeLevelsWithContext = (data || []).map(grade => ({
+        ...grade,
+        display_name: `${grade.grade_name} (${grade.grade_code}) - ${grade.schools?.name}${grade.branches ? ` / ${grade.branches.name}` : ''}`
+      }));
+      
+      return gradeLevelsWithContext;
     },
     { 
       enabled: assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0,
@@ -1375,53 +1407,79 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     }
   };
 
+  // View Teacher Details Handler
+  const handleViewTeacher = (teacher: TeacherData) => {
+    setViewingTeacher(teacher);
+    setShowViewModal(true);
+  };
+
   // Open Assignment Modal
   const handleOpenAssignmentModal = async (teacher: TeacherData) => {
     setSelectedTeacher(teacher);
     
-    // Initialize with existing data
-    let initialData = {
-      school_ids: teacher.school_id ? [teacher.school_id] : [],
-      branch_ids: teacher.branch_id ? [teacher.branch_id] : [],
+    // Initialize with existing data from the teacher object
+    const initialData = {
+      school_ids: [],
+      branch_ids: [],
       program_ids: teacher.programs?.map(p => p.id) || [],
       subject_ids: teacher.subjects?.map(s => s.id) || [],
       grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
       section_ids: teacher.sections?.map(s => s.id) || []
     };
     
-    // Note: If you have separate teacher_schools and teacher_branches junction tables,
-    // uncomment the following to fetch all assigned schools/branches (not just primary)
-    /*
+    // Fetch all school and branch assignments
+    // Since teachers table only stores primary school/branch, we need to check junction tables
+    // or use the primary values
+    if (teacher.school_id) {
+      initialData.school_ids = [teacher.school_id];
+    }
+    
+    if (teacher.branch_id) {
+      initialData.branch_ids = [teacher.branch_id];
+    }
+    
+    // Try to fetch from junction tables if they exist (for multiple school/branch assignments)
     try {
       const { data: teacherSchools } = await supabase
         .from('teacher_schools')
         .select('school_id')
         .eq('teacher_id', teacher.id);
       
+      if (teacherSchools && teacherSchools.length > 0) {
+        initialData.school_ids = teacherSchools.map(ts => ts.school_id);
+      }
+    } catch (error) {
+      // Junction table doesn't exist, use primary school from teachers table
+      console.log('Using primary school from teachers table');
+    }
+    
+    try {
       const { data: teacherBranches } = await supabase
         .from('teacher_branches')
         .select('branch_id')
         .eq('teacher_id', teacher.id);
       
-      if (teacherSchools && teacherSchools.length > 0) {
-        initialData.school_ids = teacherSchools.map(ts => ts.school_id);
-      }
-      
       if (teacherBranches && teacherBranches.length > 0) {
         initialData.branch_ids = teacherBranches.map(tb => tb.branch_id);
       }
     } catch (error) {
-      console.log('Using primary school/branch from teachers table');
+      // Junction table doesn't exist, use primary branch from teachers table
+      console.log('Using primary branch from teachers table');
     }
-    */
     
+    // Set the form data
     setAssignmentFormData(initialData);
     setCurrentAssignmentStep(1);
     setShowAssignmentModal(true);
     
-    // Trigger a refetch of grade levels if schools are already selected
+    // Force refetch of dependent data
     if (initialData.school_ids.length > 0) {
-      queryClient.invalidateQueries(['grade-levels', initialData.school_ids, initialData.branch_ids]);
+      await queryClient.invalidateQueries(['branches-for-schools', initialData.school_ids]);
+      await queryClient.invalidateQueries(['grade-levels', initialData.school_ids, initialData.branch_ids]);
+      
+      if (initialData.grade_level_ids.length > 0) {
+        await queryClient.invalidateQueries(['sections', initialData.grade_level_ids]);
+      }
     }
   };
 
@@ -1622,7 +1680,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const getSelectedGradeNames = () => {
     return availableGradeLevels
       .filter(g => assignmentFormData.grade_level_ids.includes(g.id))
-      .map(g => `${g.grade_name} (${g.grade_code})`);
+      .map(g => g.display_name || `${g.grade_name} (${g.grade_code}) - ${g.schools?.name}${g.branches ? ` / ${g.branches.name}` : ''}`);
   };
 
   const getSelectedSectionNames = () => {
@@ -1989,6 +2047,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     </td>
                     <td className="p-3">
                       <div className="flex gap-1" role="group" aria-label={`Actions for ${teacher.name}`}>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleViewTeacher(teacher)}
+                          title="View Teacher Details"
+                          className="hover:border-[#8CC63F] hover:text-[#8CC63F]"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                         {canModifyTeacher && (
                           <>
                             <Button 
@@ -2245,26 +2312,30 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     </div>
                   ) : (
                     <>
+                    <>
                       <FormField id="wizard_grades" label="Grade Levels (Optional)">
                         <GreenSearchableMultiSelect
-                          options={availableGradeLevels.map(g => ({ value: g.id, label: `${g.grade_name} (${g.grade_code})` }))}
+                          options={availableGradeLevels.map(g => ({ 
+                            value: g.id, 
+                            label: g.display_name || `${g.grade_name} (${g.grade_code}) - ${g.schools?.name}${g.branches ? ` / ${g.branches.name}` : ''}`
+                          }))}
                           selectedValues={assignmentFormData.grade_level_ids}
                           onChange={(values) => setAssignmentFormData(prev => ({ 
                             ...prev, 
                             grade_level_ids: values,
                             section_ids: []
                           }))}
-                          placeholder="Select grade levels"
+                          placeholder="Select grade levels (shows: Grade - School / Branch)"
                           className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                         />
                       </FormField>
 
-                      {assignmentFormData.grade_level_ids.length > 0 && (
+                      {assignmentFormData.grade_level_ids.length > 0 ? (
                         <div className="space-y-2">
                           <FormField id="wizard_sections" label="Class Sections (Optional)">
                             <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
                               <p className="text-xs text-amber-700 dark:text-amber-300">
-                                💡 Sections are grouped by grade level for easier selection
+                                💡 Sections show grade level for easier identification (e.g., "Grade 9 - Section A")
                               </p>
                             </div>
                             <GreenSearchableMultiSelect
@@ -2277,9 +2348,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                                 ...prev, 
                                 section_ids: values 
                               }))}
-                              placeholder="Select sections (shows: Grade - Section Name)"
+                              placeholder="Select sections (Grade - Section Name)"
                               className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
                             />
+                            {availableSections.length === 0 && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                No sections available for selected grades. Sections may not be configured yet.
+                              </p>
+                            )}
                           </FormField>
                           
                           {/* Visual helper showing selected sections grouped by grade */}
@@ -2303,7 +2379,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                                     <span className="text-xs font-medium text-[#8CC63F]">{gradeName}:</span>
                                     <div className="flex flex-wrap gap-1">
                                       {sections.map(s => (
-                                        <span key={s.id} className="text-xs px-2 py-0.5 bg-[#8CC63F]/10 rounded">
+                                        <span key={s.id} className="text-xs px-2 py-0.5 bg-[#8CC63F]/10 rounded border border-[#8CC63F]/30">
                                           {s.section_name}
                                         </span>
                                       ))}
@@ -2313,6 +2389,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                               </div>
                             </div>
                           )}
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Please select grade levels first to see available sections
+                          </p>
                         </div>
                       )}
                     </>
@@ -2430,7 +2512,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Sections:</p>
-                          {getSelectedSectionNames().length > 0 ? (
+                          {assignmentFormData.section_ids.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {getSelectedSectionNames().map((name, idx) => (
                                 <span key={idx} className="px-3 py-1 bg-[#8CC63F]/20 text-[#7AB532] rounded-full text-sm border border-[#8CC63F]/30">
@@ -2508,6 +2590,334 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     }}
                   >
                     Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Teacher Details Modal */}
+      {showViewModal && viewingTeacher && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB532]/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#8CC63F]/20 rounded-full flex items-center justify-center">
+                    <GraduationCap className="w-5 h-5 text-[#8CC63F]" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      Teacher Details
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Complete profile and assignment information
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setViewingTeacher(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-6">
+                {/* Basic Information Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <User className="w-4 h-4 mr-2 text-[#8CC63F]" />
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Full Name</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{viewingTeacher.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Email Address</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{viewingTeacher.email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Phone Number</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{viewingTeacher.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Teacher Code</p>
+                      <p className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded inline-block">
+                        {viewingTeacher.teacher_code}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                      <StatusBadge
+                        status={viewingTeacher.is_active ? 'active' : 'inactive'}
+                        variant={viewingTeacher.is_active ? 'success' : 'warning'}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Last Sign In</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.user_data?.last_sign_in_at 
+                          ? new Date(viewingTeacher.user_data.last_sign_in_at).toLocaleDateString()
+                          : 'Never'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Professional Information Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <Briefcase className="w-4 h-4 mr-2 text-purple-600" />
+                    Professional Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Specialization</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {viewingTeacher.specialization && viewingTeacher.specialization.length > 0 ? (
+                          viewingTeacher.specialization.map((spec, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">
+                              {spec}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">None specified</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Qualification</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.qualification || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Experience</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.experience_years ? `${viewingTeacher.experience_years} years` : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Hire Date</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.hire_date 
+                          ? new Date(viewingTeacher.hire_date).toLocaleDateString()
+                          : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  {viewingTeacher.bio && (
+                    <div className="mt-4">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Bio</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                        {viewingTeacher.bio}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* School & Branch Assignment Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <School className="w-4 h-4 mr-2 text-[#8CC63F]" />
+                    School & Branch Assignment
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">School</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.school_name || 'No School Assigned'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Branch</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {viewingTeacher.branch_name || 'No Branch Assigned'}
+                      </p>
+                    </div>
+                  </div>
+                  {viewingTeacher.departments && viewingTeacher.departments.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Departments</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {viewingTeacher.departments.map(dept => (
+                          <span key={dept.id} className="px-2 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded">
+                            {dept.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Academic Programs Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <BookOpenCheck className="w-4 h-4 mr-2 text-purple-600" />
+                    Academic Programs
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Programs</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {viewingTeacher.programs && viewingTeacher.programs.length > 0 ? (
+                          viewingTeacher.programs.map(prog => (
+                            <span key={prog.id} className="px-3 py-1 bg-[#8CC63F]/20 text-[#7AB532] rounded-full text-sm border border-[#8CC63F]/30">
+                              {prog.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">No programs assigned</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Subjects</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {viewingTeacher.subjects && viewingTeacher.subjects.length > 0 ? (
+                          viewingTeacher.subjects.map(subj => (
+                            <span key={subj.id} className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
+                              {subj.name} ({subj.code})
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">No subjects assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Classes Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <Layers className="w-4 h-4 mr-2 text-orange-600" />
+                    Classes
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Grade Levels</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {viewingTeacher.grade_levels && viewingTeacher.grade_levels.length > 0 ? (
+                          viewingTeacher.grade_levels.map(grade => (
+                            <span key={grade.id} className="px-3 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-full text-sm">
+                              {grade.grade_name} ({grade.grade_code})
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">No grades assigned</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Sections</p>
+                      {viewingTeacher.sections && viewingTeacher.sections.length > 0 ? (
+                        <div className="mt-2">
+                          {Object.entries(
+                            viewingTeacher.sections.reduce((acc, section) => {
+                              const gradeLevel = viewingTeacher.grade_levels?.find(g => g.id === section.grade_level_id);
+                              const gradeName = gradeLevel?.grade_name || 'Unknown Grade';
+                              if (!acc[gradeName]) acc[gradeName] = [];
+                              acc[gradeName].push(section);
+                              return acc;
+                            }, {} as Record<string, typeof viewingTeacher.sections>)
+                          ).map(([gradeName, sections]) => (
+                            <div key={gradeName} className="flex items-start gap-2 mb-2">
+                              <span className="text-xs font-medium text-[#8CC63F] min-w-[80px]">{gradeName}:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {sections.map(s => (
+                                  <span key={s.id} className="text-xs px-2 py-0.5 bg-[#8CC63F]/10 rounded border border-[#8CC63F]/30">
+                                    {s.section_name} ({s.section_code})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">No sections assigned</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metadata Section */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                    <Info className="w-4 h-4 mr-2 text-gray-600" />
+                    System Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Created At</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {new Date(viewingTeacher.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Last Updated</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {new Date(viewingTeacher.updated_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  This is a read-only view. Use Edit or Assignments buttons to make changes.
+                </p>
+                <div className="flex gap-3">
+                  {canModifyTeacher && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowViewModal(false);
+                          handleEditTeacher(viewingTeacher);
+                        }}
+                        className="border-blue-500 text-blue-500 hover:bg-blue-50"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Details
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowViewModal(false);
+                          handleOpenAssignmentModal(viewingTeacher);
+                        }}
+                        className="border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F]/10"
+                      >
+                        <Link2 className="w-4 h-4 mr-2" />
+                        Manage Assignments
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      setViewingTeacher(null);
+                    }}
+                  >
+                    Close
                   </Button>
                 </div>
               </div>
