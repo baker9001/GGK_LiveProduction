@@ -660,11 +660,11 @@ export default function LandingPage() {
               <div className="space-y-3">
                 <div className="flex items-center">
                   <Mail className="h-5 w-5 text-[#8CC63F] mr-3" />
-                  <span className="text-gray-400">support@ggklearning.com</span>
+                  <span className="text-gray-400">support@ggknowledge.com</span>
                 </div>
                 <div className="flex items-center">
                   <Phone className="h-5 w-5 text-[#8CC63F] mr-3" />
-                  <span className="text-gray-400">+965 2XXX XXXX</span>
+                  <span className="text-gray-400">+965 9722 2711</span>
                 </div>
                 <div className="flex items-center">
                   <MapPin className="h-5 w-5 text-[#8CC63F] mr-3" />
