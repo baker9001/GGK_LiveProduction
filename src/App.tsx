@@ -1,4 +1,5 @@
 // /home/project/src/App.tsx
+// FIXED: Added missing routes for subjects, resources, about, and contact pages
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -14,10 +15,49 @@ import SignInPage from './app/signin/page';
 import ForgotPasswordPage from './app/forgot-password/page';
 import ResetPasswordPage from './app/reset-password/page';
 import LandingPage from './app/landing/page';
+import SubjectsPage from './app/landing/subjects/page';
 import EntityModulePage from './app/entity-module/page';
 import StudentModulePage from './app/student-module/page';
 import TeachersModulePage from './app/teachers-module/page';
 import FormValidationPage from './pages/FormValidationPage';
+
+// Placeholder components for missing pages - replace with actual components when ready
+const ResourcesPage = () => (
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="max-w-7xl mx-auto px-4 py-16">
+      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">Resources</h1>
+      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
+        Access past papers, study guides, and learning materials
+      </p>
+    </div>
+  </div>
+);
+
+const AboutPage = () => (
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="max-w-7xl mx-auto px-4 py-16">
+      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">About GGK Learning</h1>
+      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
+        Your trusted partner for IGCSE, O-Level, and A-Level success
+      </p>
+    </div>
+  </div>
+);
+
+const ContactPage = () => (
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="max-w-7xl mx-auto px-4 py-16">
+      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">Contact Us</h1>
+      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
+        Get in touch with our support team
+      </p>
+      <div className="text-center mt-8">
+        <p className="text-gray-600 dark:text-gray-400">Email: support@ggklearning.com</p>
+        <p className="text-gray-600 dark:text-gray-400">Phone: +965 9722 2711</p>
+      </div>
+    </div>
+  </div>
+);
 
 // Module access control wrapper
 function ModuleRoute({ 
@@ -72,7 +112,18 @@ function App() {
             <TestModeBar />
             
             <Routes>
+              {/* ============================================ */}
+              {/* PUBLIC LANDING PAGES - NO AUTHENTICATION REQUIRED */}
+              {/* ============================================ */}
               <Route path="/" element={<LandingPage />} />
+              <Route path="/subjects" element={<SubjectsPage />} />
+              <Route path="/resources" element={<ResourcesPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              
+              {/* ============================================ */}
+              {/* AUTHENTICATION PAGES */}
+              {/* ============================================ */}
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -87,6 +138,10 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              
+              {/* ============================================ */}
+              {/* PROTECTED MODULE ROUTES */}
+              {/* ============================================ */}
               
               {/* Entity Module - Only ENTITY_ADMIN and SSA */}
               <Route
@@ -167,6 +222,9 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              
+              {/* Catch-all route - redirect to home */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PermissionProvider>
         </UserProvider>
