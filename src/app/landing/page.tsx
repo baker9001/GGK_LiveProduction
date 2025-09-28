@@ -1,6 +1,6 @@
 /**
- * GGK Learning Platform - Enhanced Landing Page FINAL VERSION
- * MAINTAINS ORIGINAL SUBJECTS SECTION WITH ALL 15 SUBJECTS
+ * GGK Learning Platform - Landing Page with Fixed Footer Sizing
+ * Reduced padding and spacing to fit content
  */
 
 import React, { useState, useEffect, memo, useRef } from 'react';
@@ -571,91 +571,91 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Statistics Section */}
-      <div className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
+      {/* Statistics Section - REDUCED PADDING */}
+      <div className="py-12 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-white mb-2">
               Proven Results That Speak for Themselves
             </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center text-white">
-              <div className="text-4xl font-bold mb-2">15,000+</div>
-              <div className="text-sm opacity-90">Past Papers Database</div>
+              <div className="text-3xl font-bold mb-1">15,000+</div>
+              <div className="text-xs opacity-90">Past Papers Database</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-4xl font-bold mb-2">3,000+</div>
-              <div className="text-sm opacity-90">Video Lessons</div>
+              <div className="text-3xl font-bold mb-1">3,000+</div>
+              <div className="text-xs opacity-90">Video Lessons</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-4xl font-bold mb-2">500+</div>
-              <div className="text-sm opacity-90">Mock Exams</div>
+              <div className="text-3xl font-bold mb-1">500+</div>
+              <div className="text-xs opacity-90">Mock Exams</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-4xl font-bold mb-2">24/7</div>
-              <div className="text-sm opacity-90">Learning Support</div>
+              <div className="text-3xl font-bold mb-1">24/7</div>
+              <div className="text-xs opacity-90">Learning Support</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Enhanced Footer */}
+      {/* Footer - REDUCED PADDING */}
       <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Company Info */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center">
-                <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
-                <span className="ml-2 text-2xl font-bold">GGK Learning</span>
+                <GraduationCap className="h-7 w-7 text-[#8CC63F]" />
+                <span className="ml-2 text-xl font-bold">GGK Learning</span>
               </div>
-              <p className="text-gray-400">
+              <p className="text-gray-400 text-sm">
                 Your trusted partner for IGCSE, O-Level, and A-Level success. 
                 Official Cambridge and Edexcel exam preparation platform.
               </p>
-              <div className="flex space-x-4">
+              <div className="flex space-x-3">
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Facebook className="h-5 w-5" />
+                  <Facebook className="h-4 w-4" />
                 </a>
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Twitter className="h-5 w-5" />
+                  <Twitter className="h-4 w-4" />
                 </a>
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Instagram className="h-5 w-5" />
+                  <Instagram className="h-4 w-4" />
                 </a>
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
-                  <Youtube className="h-5 w-5" />
+                  <Youtube className="h-4 w-4" />
                 </a>
               </div>
             </div>
 
             {/* Quick Links */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-              <ul className="space-y-2">
+              <h3 className="text-base font-semibold mb-3">Quick Links</h3>
+              <ul className="space-y-1.5">
                 <li>
-                  <a href="/subjects" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
                     IGCSE Subjects
                   </a>
                 </li>
                 <li>
-                  <a href="/resources" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/resources" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Past Papers
                   </a>
                 </li>
                 <li>
-                  <a href="/mock-exams" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/mock-exams" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Mock Exams
                   </a>
                 </li>
                 <li>
-                  <a href="/video-lessons" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/video-lessons" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Video Lessons
                   </a>
                 </li>
                 <li>
-                  <a href="/pricing" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/pricing" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Pricing Plans
                   </a>
                 </li>
@@ -664,70 +664,70 @@ export default function LandingPage() {
 
             {/* Exam Boards */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Exam Boards</h3>
-              <ul className="space-y-2">
+              <h3 className="text-base font-semibold mb-3">Exam Boards</h3>
+              <ul className="space-y-1.5">
                 <li>
-                  <a href="/cambridge-igcse" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/cambridge-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge IGCSE
                   </a>
                 </li>
                 <li>
-                  <a href="/edexcel-igcse" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/edexcel-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Edexcel International
                   </a>
                 </li>
                 <li>
-                  <a href="/cambridge-a-level" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/cambridge-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge A-Level
                   </a>
                 </li>
                 <li>
-                  <a href="/edexcel-a-level" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/edexcel-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Edexcel A-Level
                   </a>
                 </li>
                 <li>
-                  <a href="/cambridge-o-level" className="text-gray-400 hover:text-white transition-colors">
+                  <a href="/cambridge-o-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge O-Level
                   </a>
                 </li>
               </ul>
             </div>
 
-            {/* Contact Info - FIXED EMAIL AND PHONE */}
+            {/* Contact Info */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
-              <div className="space-y-3">
+              <h3 className="text-base font-semibold mb-3">Contact Us</h3>
+              <div className="space-y-2">
                 <div className="flex items-center">
-                  <Mail className="h-5 w-5 text-[#8CC63F] mr-3" />
-                  <span className="text-gray-400">support@ggklearning.com</span>
+                  <Mail className="h-4 w-4 text-[#8CC63F] mr-2" />
+                  <span className="text-gray-400 text-sm">support@ggklearning.com</span>
                 </div>
                 <div className="flex items-center">
-                  <Phone className="h-5 w-5 text-[#8CC63F] mr-3" />
-                  <span className="text-gray-400">+965 9722 2711</span>
+                  <Phone className="h-4 w-4 text-[#8CC63F] mr-2" />
+                  <span className="text-gray-400 text-sm">+965 9722 2711</span>
                 </div>
                 <div className="flex items-center">
-                  <MapPin className="h-5 w-5 text-[#8CC63F] mr-3" />
-                  <span className="text-gray-400">Kuwait City, Kuwait</span>
+                  <MapPin className="h-4 w-4 text-[#8CC63F] mr-2" />
+                  <span className="text-gray-400 text-sm">Kuwait City, Kuwait</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Bottom Bar */}
-          <div className="border-t border-gray-800 mt-12 pt-8">
+          <div className="border-t border-gray-800 mt-8 pt-6">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-400 text-xs">
                 © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
               </p>
-              <div className="flex space-x-6 mt-4 md:mt-0">
-                <a href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
+              <div className="flex space-x-4 mt-3 md:mt-0">
+                <a href="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Privacy Policy
                 </a>
-                <a href="/terms" className="text-gray-400 hover:text-white text-sm transition-colors">
+                <a href="/terms" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Terms of Service
                 </a>
-                <a href="/cookies" className="text-gray-400 hover:text-white text-sm transition-colors">
+                <a href="/cookies" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Cookie Policy
                 </a>
               </div>
