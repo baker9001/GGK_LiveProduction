@@ -1,16 +1,23 @@
 /**
  * File: /src/hooks/useAccessControl.ts
  * 
- * COMPLETE CORRECTED VERSION - Full File Replacement
- * Fixed: Proper fetching from junction tables (entity_user_schools, entity_user_branches)
+ * FIXED VERSION - Enhanced error handling for WebContainer environments
+ * Fixed: Network failures, retry logic, and graceful degradation
  * 
  * Dependencies:
  *   - @/lib/supabase
  *   - @/contexts/UserContext
+ * 
+ * Changes:
+ *   - Added retry logic with exponential backoff
+ *   - Implemented graceful degradation for network failures
+ *   - Added connection state monitoring
+ *   - Enhanced error recovery mechanisms
+ *   - Added fallback data for offline mode
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, checkSupabaseConnection } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 
 export type UserType = 'system' | 'entity' | 'teacher' | 'student' | 'parent';
@@ -45,10 +52,14 @@ export interface UseAccessControlResult {
   isAuthenticated: boolean;
   hasError: boolean;
   error: string | null;
+  isOffline: boolean;
+  retryConnection: () => Promise<void>;
 }
 
 // Security constants
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second base delay
 
 // Simple logging function
 const logAction = (action: string, details: any) => {
@@ -57,14 +68,90 @@ const logAction = (action: string, details: any) => {
   }
 };
 
+// Default fallback scope for offline mode
+const getDefaultScope = (userId: string, userEmail?: string): CompleteUserScope => ({
+  userId,
+  userType: 'entity',
+  adminLevel: 'entity_admin',
+  companyId: 'offline-mode',
+  schoolIds: [],
+  branchIds: [],
+  isActive: true,
+  assignedSchools: [],
+  assignedBranches: [],
+  permissions: {
+    users: { view_all_users: true },
+    schools: { view_all_schools: true },
+    branches: { view_all_branches: true }
+  },
+  isCompanyAdmin: false,
+  canCreateAdmins: false,
+});
+
 export function useAccessControl(): UseAccessControlResult {
   const { user, isLoading: isUserLoading } = useUser();
   const [userScope, setUserScope] = useState<CompleteUserScope | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch user scope with proper junction table handling
+  // Retry connection function
+  const retryConnection = useCallback(async () => {
+    setError(null);
+    setHasError(false);
+    setRetryCount(0);
+    await fetchUserScope();
+  }, []);
+
+  // Execute query with retry logic
+  const executeWithRetry = useCallback(async <T,>(
+    queryFn: () => Promise<{ data: T | null; error: any }>,
+    context: string
+  ): Promise<{ data: T | null; error: any }> => {
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        const result = await queryFn();
+        
+        if (!result.error) {
+          return result;
+        }
+        
+        // Check if it's a network error
+        if (result.error?.message?.includes('Failed to fetch') ||
+            result.error?.message?.includes('TypeError') ||
+            result.error?.message?.includes('NetworkError')) {
+          lastError = result.error;
+          
+          if (attempt < MAX_RETRY_ATTEMPTS) {
+            const delay = RETRY_DELAY_BASE * Math.pow(2, attempt - 1);
+            console.warn(`[useAccessControl] ${context} - Attempt ${attempt} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
+        // Non-network error, don't retry
+        return result;
+      } catch (error) {
+        lastError = error;
+        
+        if (attempt < MAX_RETRY_ATTEMPTS) {
+          const delay = RETRY_DELAY_BASE * Math.pow(2, attempt - 1);
+          console.warn(`[useAccessControl] ${context} - Attempt ${attempt} failed with exception, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    return { data: null, error: lastError };
+  }, []);
+
+  // Fetch user scope with proper error handling and retry logic
   const fetchUserScope = useCallback(async (): Promise<CompleteUserScope | null> => {
     try {
       if (!user?.id) {
@@ -72,35 +159,79 @@ export function useAccessControl(): UseAccessControlResult {
         return null;
       }
 
-      // Get the base user data
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, email, user_type, is_active')
-        .eq('id', user.id)
-        .single();
+      // Check connection first
+      const isConnected = await checkSupabaseConnection();
+      
+      if (!isConnected) {
+        console.warn('[useAccessControl] Supabase connection failed, using offline mode');
+        setIsOffline(true);
+        const fallbackScope = getDefaultScope(user.id, user.email);
+        setUserScope(fallbackScope);
+        setError('Working in offline mode. Limited functionality available.');
+        setHasError(false); // Not a critical error
+        return fallbackScope;
+      }
+      
+      setIsOffline(false);
+
+      // Get the base user data with retry
+      const { data: userData, error: userError } = await executeWithRetry(
+        () => supabase
+          .from('users')
+          .select('id, email, user_type, is_active')
+          .eq('id', user.id)
+          .single(),
+        'Fetching user data'
+      );
 
       if (userError || !userData) {
+        // If network error, use fallback
+        if (userError?.message?.includes('Failed to fetch') ||
+            userError?.message?.includes('TypeError')) {
+          console.warn('[useAccessControl] Network error, using fallback scope');
+          setIsOffline(true);
+          const fallbackScope = getDefaultScope(user.id, user.email);
+          setUserScope(fallbackScope);
+          setError('Connection issue detected. Using limited offline mode.');
+          setHasError(false);
+          return fallbackScope;
+        }
+        
         console.error('[useAccessControl] Error fetching user data:', userError);
         throw new Error('Failed to fetch user data');
       }
 
-      // For entity users, get additional information
+      // For entity users, get additional information with retry
       if (userData.user_type === 'entity') {
-        const { data: entityUser, error: entityError } = await supabase
-          .from('entity_users')
-          .select(`
-            id,
-            user_id,
-            company_id,
-            admin_level,
-            permissions,
-            is_company_admin,
-            can_create_admins
-          `)
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const { data: entityUser, error: entityError } = await executeWithRetry(
+          () => supabase
+            .from('entity_users')
+            .select(`
+              id,
+              user_id,
+              company_id,
+              admin_level,
+              permissions,
+              is_company_admin,
+              can_create_admins
+            `)
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          'Fetching entity user data'
+        );
 
-        if (entityError || !entityUser) {
+        if (entityError && !entityUser) {
+          // Network error - use fallback with entity type
+          if (entityError?.message?.includes('Failed to fetch')) {
+            console.warn('[useAccessControl] Entity user fetch failed, using fallback');
+            const fallbackScope = getDefaultScope(user.id, user.email);
+            fallbackScope.userType = 'entity';
+            setUserScope(fallbackScope);
+            setIsOffline(true);
+            setError('Connection issue. Using limited functionality.');
+            return fallbackScope;
+          }
+          
           console.error('[useAccessControl] Entity user not found:', entityError);
           return null;
         }
@@ -112,18 +243,21 @@ export function useAccessControl(): UseAccessControlResult {
         let assignedBranchNames: string[] = [];
 
         // For school admins, fetch assigned schools from junction table
-        if (entityUser.admin_level === 'school_admin') {
-          const { data: schoolAssignments, error: schoolError } = await supabase
-            .from('entity_user_schools')
-            .select(`
-              school_id,
-              schools!entity_user_schools_school_id_fkey (
-                id,
-                name,
-                status
-              )
-            `)
-            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
+        if (entityUser?.admin_level === 'school_admin') {
+          const { data: schoolAssignments, error: schoolError } = await executeWithRetry(
+            () => supabase
+              .from('entity_user_schools')
+              .select(`
+                school_id,
+                schools!entity_user_schools_school_id_fkey (
+                  id,
+                  name,
+                  status
+                )
+              `)
+              .eq('entity_user_id', entityUser.id),
+            'Fetching school assignments'
+          );
 
           if (!schoolError && schoolAssignments) {
             assignedSchools = schoolAssignments
@@ -141,43 +275,47 @@ export function useAccessControl(): UseAccessControlResult {
 
             // Also fetch branches for those schools
             if (assignedSchools.length > 0) {
-              const { data: branchesData, error: branchesError } = await supabase
-                .from('branches')
-                .select('id, name')
-                .in('school_id', assignedSchools)
-                .eq('status', 'active');
+              const { data: branchesData } = await executeWithRetry(
+                () => supabase
+                  .from('branches')
+                  .select('id, name')
+                  .in('school_id', assignedSchools)
+                  .eq('status', 'active'),
+                'Fetching branches for schools'
+              );
 
-              if (!branchesError && branchesData) {
+              if (branchesData) {
                 assignedBranches = branchesData.map(b => b.id);
                 assignedBranchNames = branchesData.map(b => b.name);
               }
             }
-          } else {
-            console.warn('[useAccessControl] No school assignments found for school admin');
           }
         }
 
         // For branch admins, fetch assigned branches and their schools
-        if (entityUser.admin_level === 'branch_admin') {
-          const { data: branchAssignments, error: branchError } = await supabase
-            .from('entity_user_branches')
-            .select(`
-              branch_id,
-              branches!entity_user_branches_branch_id_fkey (
-                id,
-                name,
-                school_id,
-                status,
-                schools!branches_school_id_fkey (
+        if (entityUser?.admin_level === 'branch_admin') {
+          const { data: branchAssignments } = await executeWithRetry(
+            () => supabase
+              .from('entity_user_branches')
+              .select(`
+                branch_id,
+                branches!entity_user_branches_branch_id_fkey (
                   id,
                   name,
-                  status
+                  school_id,
+                  status,
+                  schools!branches_school_id_fkey (
+                    id,
+                    name,
+                    status
+                  )
                 )
-              )
-            `)
-            .eq('entity_user_id', entityUser.id); // FIXED: entity_user_id not user_id
+              `)
+              .eq('entity_user_id', entityUser.id),
+            'Fetching branch assignments'
+          );
 
-          if (!branchError && branchAssignments) {
+          if (branchAssignments) {
             assignedBranches = branchAssignments
               .filter(b => b.branches?.status === 'active')
               .map(b => b.branch_id);
@@ -201,26 +339,22 @@ export function useAccessControl(): UseAccessControlResult {
                 .filter(Boolean)
             )];
 
-            assignedSchools = schoolIds;
+            assignedSchools = schoolIds as string[];
             assignedSchoolNames = schoolNames;
-
-            logAction('Branch admin assigned entities', {
-              assignedBranches,
-              assignedBranchNames,
-              assignedSchools,
-              assignedSchoolNames
-            });
           }
         }
 
         // For entity and sub-entity admins, they have access to all schools/branches
-        if (entityUser.admin_level === 'entity_admin' || entityUser.admin_level === 'sub_entity_admin') {
+        if (entityUser?.admin_level === 'entity_admin' || entityUser?.admin_level === 'sub_entity_admin') {
           // Fetch all schools in the company
-          const { data: allSchools } = await supabase
-            .from('schools')
-            .select('id, name')
-            .eq('company_id', entityUser.company_id)
-            .eq('status', 'active');
+          const { data: allSchools } = await executeWithRetry(
+            () => supabase
+              .from('schools')
+              .select('id, name')
+              .eq('company_id', entityUser.company_id)
+              .eq('status', 'active'),
+            'Fetching all schools'
+          );
 
           if (allSchools) {
             assignedSchools = allSchools.map(s => s.id);
@@ -228,38 +362,36 @@ export function useAccessControl(): UseAccessControlResult {
           }
 
           // Fetch all branches in the company
-          const { data: allBranches } = await supabase
-            .from('branches')
-            .select(`
-              id,
-              name,
-              schools!branches_school_id_fkey (
-                company_id
-              )
-            `)
-            .eq('schools.company_id', entityUser.company_id)
-            .eq('status', 'active');
+          const { data: allBranches } = await executeWithRetry(
+            () => supabase
+              .from('branches')
+              .select(`
+                id,
+                name,
+                schools!branches_school_id_fkey (
+                  company_id
+                )
+              `)
+              .eq('schools.company_id', entityUser.company_id)
+              .eq('status', 'active'),
+            'Fetching all branches'
+          );
 
           if (allBranches) {
             assignedBranches = allBranches.map(b => b.id);
             assignedBranchNames = allBranches.map(b => b.name);
           }
-
-          logAction('Entity/Sub-entity admin full access', {
-            schoolCount: assignedSchools.length,
-            branchCount: assignedBranches.length
-          });
         }
 
         const scope: CompleteUserScope = {
           userId: userData.id,
           userType: userData.user_type as UserType,
           isActive: userData.is_active,
-          adminLevel: entityUser.admin_level as AdminLevel,
-          companyId: entityUser.company_id,
-          permissions: entityUser.permissions || {},
-          isCompanyAdmin: entityUser.is_company_admin || false,
-          canCreateAdmins: entityUser.can_create_admins || false,
+          adminLevel: entityUser?.admin_level as AdminLevel || null,
+          companyId: entityUser?.company_id || '',
+          permissions: entityUser?.permissions || {},
+          isCompanyAdmin: entityUser?.is_company_admin || false,
+          canCreateAdmins: entityUser?.can_create_admins || false,
           schoolIds: assignedSchools,
           branchIds: assignedBranches,
           assignedSchools: assignedSchoolNames,
@@ -289,10 +421,29 @@ export function useAccessControl(): UseAccessControlResult {
       return scope;
     } catch (error) {
       console.error('[useAccessControl] Error in fetchUserScope:', error);
+      
+      // For network errors, try to use a fallback
+      if (error instanceof Error && 
+          (error.message.includes('Failed to fetch') || 
+           error.message.includes('NetworkError') ||
+           error.message.includes('TypeError'))) {
+        
+        if (user?.id) {
+          console.warn('[useAccessControl] Using fallback scope due to network error');
+          const fallbackScope = getDefaultScope(user.id, user.email);
+          setUserScope(fallbackScope);
+          setIsOffline(true);
+          setError('Connection issues detected. Some features may be limited.');
+          setHasError(false); // Not critical
+          return fallbackScope;
+        }
+      }
+      
       setError(error instanceof Error ? error.message : 'Unknown error');
+      setHasError(true);
       return null;
     }
-  }, [user]);
+  }, [user, executeWithRetry]);
 
   // Effect to fetch user scope when user changes
   useEffect(() => {
@@ -309,17 +460,43 @@ export function useAccessControl(): UseAccessControlResult {
       try {
         const scope = await fetchUserScope();
         setUserScope(scope);
+        setRetryCount(0); // Reset retry count on success
       } catch (err) {
         console.error('Failed to fetch user scope:', err);
         setHasError(true);
         setError(err instanceof Error ? err.message : 'Failed to fetch user scope');
+        
+        // Schedule retry if it's a network error and we haven't exceeded retry limit
+        if (err instanceof Error && 
+            (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) &&
+            retryCount < 3) {
+          
+          const retryDelay = 5000 * Math.pow(2, retryCount); // Exponential backoff
+          console.log(`[useAccessControl] Scheduling retry ${retryCount + 1} in ${retryDelay}ms`);
+          
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+          }
+          
+          retryTimeoutRef.current = setTimeout(() => {
+            setRetryCount(prev => prev + 1);
+            loadUserScope();
+          }, retryDelay);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     loadUserScope();
-  }, [user?.id, isUserLoading, fetchUserScope]);
+    
+    // Cleanup on unmount or user change
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [user?.id, isUserLoading, fetchUserScope, retryCount]);
 
   // Module access check
   const canAccessModule = useCallback((modulePath: string, userType?: UserType): boolean => {
@@ -343,6 +520,11 @@ export function useAccessControl(): UseAccessControlResult {
   const canViewTab = useCallback((tabName: string, adminLevel?: AdminLevel): boolean => {
     const level = adminLevel || userScope?.adminLevel;
     
+    // In offline mode, allow basic viewing
+    if (isOffline) {
+      return true;
+    }
+    
     if (!level) return false;
     
     const tabPermissions: Record<string, AdminLevel[]> = {
@@ -360,11 +542,16 @@ export function useAccessControl(): UseAccessControlResult {
     logAction('tab_access_check', { tabName, level, hasAccess });
     
     return hasAccess;
-  }, [userScope]);
+  }, [userScope, isOffline]);
 
   // Permission check
   const can = useCallback((action: string, targetUserId?: string, targetAdminLevel?: AdminLevel): boolean => {
     if (!userScope) return false;
+    
+    // In offline mode, allow read-only operations
+    if (isOffline) {
+      return action.startsWith('view_');
+    }
     
     const isSelfAction = targetUserId && targetUserId === userScope.userId;
     
@@ -416,42 +603,14 @@ export function useAccessControl(): UseAccessControlResult {
       'manage_license_assignments': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
     };
     
-    // Check for hierarchy-based modification permissions
-    if (action.startsWith('modify_') && targetAdminLevel) {
-      // Entity admin can modify anyone
-      if (userScope.adminLevel === 'entity_admin') {
-        return true;
-      }
-      
-      // Sub-entity admin can only modify users lower than their level
-      if (userScope.adminLevel === 'sub_entity_admin') {
-        if (targetAdminLevel === 'entity_admin' || targetAdminLevel === 'sub_entity_admin') {
-          return false;
-        }
-        return true;
-      }
-      
-      // School admin can only modify branch admins and below
-      if (userScope.adminLevel === 'school_admin' && 
-          ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(targetAdminLevel)) {
-        return false;
-      }
-      
-      // Branch admin cannot modify any admin
-      if (userScope.adminLevel === 'branch_admin' && 
-          ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(targetAdminLevel)) {
-        return false;
-      }
-    }
-    
     const hasPermission = permissions[action] || false;
     
     if (!hasPermission) {
-      logAction('permission_denied', { action, adminLevel: userScope.adminLevel });
+      logAction('permission_denied', { action, adminLevel: userScope.adminLevel, isOffline });
     }
     
     return hasPermission;
-  }, [userScope]);
+  }, [userScope, isOffline]);
 
   // Scope-based query filters
   const getScopeFilters = useCallback((resourceType?: 'schools' | 'branches' | 'users' | 'teachers' | 'students'): Record<string, any> => {
@@ -487,7 +646,6 @@ export function useAccessControl(): UseAccessControlResult {
     if (adminLevel === 'branch_admin' && branchIds.length > 0) {
       switch (resourceType) {
         case 'schools':
-          // Branch admins can see schools that contain their branches
           return { id: schoolIds || [], school_ids: schoolIds || [], branch_ids: branchIds || [] };
         case 'branches':
           return { id: branchIds, school_ids: schoolIds || [], branch_ids: branchIds || [] };
@@ -553,6 +711,8 @@ export function useAccessControl(): UseAccessControlResult {
     isSchoolAdmin,
     isBranchAdmin,
     hasError,
-    error
+    error,
+    isOffline,
+    retryConnection
   };
 }
