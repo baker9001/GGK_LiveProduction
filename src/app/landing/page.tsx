@@ -364,7 +364,7 @@ export default function LandingPage() {
                 <div className="text-sm opacity-90">Active Students</div>
               </div>
               <div className="text-white">
-                <div className="text-3xl font-bold">95%</div>
+                <div className="text-3xl font-bold">%</div>
                 <div className="text-sm opacity-90">Pass Rate</div>
               </div>
               <div className="text-white">
