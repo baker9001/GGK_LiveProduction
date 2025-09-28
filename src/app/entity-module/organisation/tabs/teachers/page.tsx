@@ -145,6 +145,13 @@ interface ClassSection {
   section_code: string;
   grade_level_id: string;
   max_capacity?: number;
+  grade_name?: string;
+  grade_code?: string;
+  display_name?: string;
+  grade_levels?: {
+    grade_name: string;
+    grade_code: string;
+  };
 }
 
 interface Program {
@@ -715,8 +722,11 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         .eq('status', 'active')
         .order('grade_order');
 
+      // If branches are selected, filter by them
+      // Otherwise, include grades with null branch_id OR matching branch_ids
       if (assignmentFormData.branch_ids && assignmentFormData.branch_ids.length > 0) {
-        query = query.in('branch_id', assignmentFormData.branch_ids);
+        // Get grades that either have no branch (school-level) or match selected branches
+        query = query.or(`branch_id.in.(${assignmentFormData.branch_ids.join(',')}),branch_id.is.null`);
       }
       
       const { data, error } = await query;
@@ -730,11 +740,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     },
     { 
       enabled: assignmentFormData.school_ids && assignmentFormData.school_ids.length > 0,
-      staleTime: 5 * 60 * 1000
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
     }
   );
 
-  // Fetch sections for selected grade levels
+  // Fetch sections for selected grade levels with grade info
   const { data: availableSections = [] } = useQuery(
     ['sections', assignmentFormData.grade_level_ids],
     async () => {
@@ -742,7 +753,16 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       const { data, error } = await supabase
         .from('class_sections')
-        .select('id, section_name, section_code, grade_level_id')
+        .select(`
+          id, 
+          section_name, 
+          section_code, 
+          grade_level_id,
+          grade_levels!inner (
+            grade_name,
+            grade_code
+          )
+        `)
         .in('grade_level_id', assignmentFormData.grade_level_ids)
         .eq('status', 'active')
         .order('class_section_order');
@@ -752,11 +772,23 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         return [];
       }
       
-      return (data || []) as ClassSection[];
+      // Transform data to include grade info in the section object
+      const sectionsWithGrade = (data || []).map(section => ({
+        id: section.id,
+        section_name: section.section_name,
+        section_code: section.section_code,
+        grade_level_id: section.grade_level_id,
+        grade_name: section.grade_levels?.grade_name || '',
+        grade_code: section.grade_levels?.grade_code || '',
+        display_name: `${section.grade_levels?.grade_name || ''} - ${section.section_name} (${section.section_code})`
+      }));
+      
+      return sectionsWithGrade;
     },
     { 
       enabled: assignmentFormData.grade_level_ids && assignmentFormData.grade_level_ids.length > 0,
-      staleTime: 5 * 60 * 1000
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
     }
   );
 
@@ -1344,18 +1376,53 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   };
 
   // Open Assignment Modal
-  const handleOpenAssignmentModal = (teacher: TeacherData) => {
+  const handleOpenAssignmentModal = async (teacher: TeacherData) => {
     setSelectedTeacher(teacher);
-    setAssignmentFormData({
+    
+    // Initialize with existing data
+    let initialData = {
       school_ids: teacher.school_id ? [teacher.school_id] : [],
       branch_ids: teacher.branch_id ? [teacher.branch_id] : [],
       program_ids: teacher.programs?.map(p => p.id) || [],
       subject_ids: teacher.subjects?.map(s => s.id) || [],
       grade_level_ids: teacher.grade_levels?.map(g => g.id) || [],
       section_ids: teacher.sections?.map(s => s.id) || []
-    });
+    };
+    
+    // Note: If you have separate teacher_schools and teacher_branches junction tables,
+    // uncomment the following to fetch all assigned schools/branches (not just primary)
+    /*
+    try {
+      const { data: teacherSchools } = await supabase
+        .from('teacher_schools')
+        .select('school_id')
+        .eq('teacher_id', teacher.id);
+      
+      const { data: teacherBranches } = await supabase
+        .from('teacher_branches')
+        .select('branch_id')
+        .eq('teacher_id', teacher.id);
+      
+      if (teacherSchools && teacherSchools.length > 0) {
+        initialData.school_ids = teacherSchools.map(ts => ts.school_id);
+      }
+      
+      if (teacherBranches && teacherBranches.length > 0) {
+        initialData.branch_ids = teacherBranches.map(tb => tb.branch_id);
+      }
+    } catch (error) {
+      console.log('Using primary school/branch from teachers table');
+    }
+    */
+    
+    setAssignmentFormData(initialData);
     setCurrentAssignmentStep(1);
     setShowAssignmentModal(true);
+    
+    // Trigger a refetch of grade levels if schools are already selected
+    if (initialData.school_ids.length > 0) {
+      queryClient.invalidateQueries(['grade-levels', initialData.school_ids, initialData.branch_ids]);
+    }
   };
 
   // Handle step navigation
@@ -1561,7 +1628,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const getSelectedSectionNames = () => {
     return availableSections
       .filter(s => assignmentFormData.section_ids.includes(s.id))
-      .map(s => `${s.section_name} (${s.section_code})`);
+      .map(s => s.display_name || `${s.grade_name} - ${s.section_name} (${s.section_code})`);
   };
 
   // ===== LOADING & ERROR STATES =====
@@ -2193,18 +2260,60 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       </FormField>
 
                       {assignmentFormData.grade_level_ids.length > 0 && (
-                        <FormField id="wizard_sections" label="Class Sections (Optional)">
-                          <GreenSearchableMultiSelect
-                            options={availableSections.map(s => ({ value: s.id, label: `${s.section_name} (${s.section_code})` }))}
-                            selectedValues={assignmentFormData.section_ids}
-                            onChange={(values) => setAssignmentFormData(prev => ({ 
-                              ...prev, 
-                              section_ids: values 
-                            }))}
-                            placeholder="Select sections"
-                            className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
-                          />
-                        </FormField>
+                        <div className="space-y-2">
+                          <FormField id="wizard_sections" label="Class Sections (Optional)">
+                            <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                              <p className="text-xs text-amber-700 dark:text-amber-300">
+                                💡 Sections are grouped by grade level for easier selection
+                              </p>
+                            </div>
+                            <GreenSearchableMultiSelect
+                              options={availableSections.map(s => ({ 
+                                value: s.id, 
+                                label: s.display_name || `${s.grade_name} - ${s.section_name} (${s.section_code})`
+                              }))}
+                              selectedValues={assignmentFormData.section_ids}
+                              onChange={(values) => setAssignmentFormData(prev => ({ 
+                                ...prev, 
+                                section_ids: values 
+                              }))}
+                              placeholder="Select sections (shows: Grade - Section Name)"
+                              className="focus:border-[#8CC63F] focus:ring-[#8CC63F]"
+                            />
+                          </FormField>
+                          
+                          {/* Visual helper showing selected sections grouped by grade */}
+                          {assignmentFormData.section_ids.length > 0 && (
+                            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                                Selected Sections by Grade:
+                              </p>
+                              <div className="space-y-1">
+                                {Object.entries(
+                                  availableSections
+                                    .filter(s => assignmentFormData.section_ids.includes(s.id))
+                                    .reduce((acc, section) => {
+                                      const gradeName = section.grade_name || 'Unknown Grade';
+                                      if (!acc[gradeName]) acc[gradeName] = [];
+                                      acc[gradeName].push(section);
+                                      return acc;
+                                    }, {} as Record<string, typeof availableSections>)
+                                ).map(([gradeName, sections]) => (
+                                  <div key={gradeName} className="flex items-start gap-2">
+                                    <span className="text-xs font-medium text-[#8CC63F]">{gradeName}:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {sections.map(s => (
+                                        <span key={s.id} className="text-xs px-2 py-0.5 bg-[#8CC63F]/10 rounded">
+                                          {s.section_name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </>
                   )}
