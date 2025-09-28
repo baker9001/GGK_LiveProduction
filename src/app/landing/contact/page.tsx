@@ -66,7 +66,7 @@ const contactInfo = [
     details: [
       'Sunday - Thursday: 8:00 AM - 8:00 PM',
       'Friday: 2:00 PM - 6:00 PM',
-      'Saturday: 10:00 AM - 6:00 PM',
+      'Saturday: 2:00 PM - 6:00 PM',
       '24/7 Emergency Exam Support'
     ],
     description: 'Extended hours during exam seasons'
@@ -76,31 +76,31 @@ const contactInfo = [
 const departments = [
   {
     name: 'IGCSE Academic Support',
-    email: 'academic@ggklearning.com',
+    email: 'academic@ggknowledge.com',
     description: 'Cambridge & Edexcel syllabus queries, past papers help',
     responseTime: '2-4 hours'
   },
   {
     name: 'Technical Support',
-    email: 'technical@ggklearning.com',
+    email: 'technical@ggknowledge.com',
     description: 'Platform issues, video playback, download problems',
     responseTime: '1-2 hours'
   },
   {
     name: 'School Partnerships',
-    email: 'schools@ggklearning.com',
+    email: 'schools@ggknowledge.com',
     description: 'Institutional subscriptions, bulk licenses, teacher accounts',
     responseTime: '24 hours'
   },
   {
     name: 'Exam Preparation Help',
-    email: 'exams@ggklearning.com',
+    email: 'exams@ggknowledge.com',
     description: 'Mock exam queries, grade predictions, study plans',
     responseTime: '4-6 hours'
   },
   {
     name: 'Parent Support',
-    email: 'parents@ggklearning.com',
+    email: 'parents@ggknowledge.com',
     description: 'Progress tracking, subscription management, payment queries',
     responseTime: '24 hours'
   }
