@@ -347,7 +347,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight className="ml-2 -mr-1 h-5 w-5" />}
               >
-                Start Free Trial
+               Login
               </Button>
               <Button
                 size="lg"
@@ -360,7 +360,7 @@ export default function LandingPage() {
             {/* Trust badges */}
             <div className="mt-8 flex items-center justify-center gap-8">
               <div className="text-white">
-                <div className="text-3xl font-bold">50,000+</div>
+                <div className="text-3xl font-bold">+</div>
                 <div className="text-sm opacity-90">Active Students</div>
               </div>
               <div className="text-white">
@@ -368,7 +368,7 @@ export default function LandingPage() {
                 <div className="text-sm opacity-90">Pass Rate</div>
               </div>
               <div className="text-white">
-                <div className="text-3xl font-bold">500+</div>
+                <div className="text-3xl font-bold">+</div>
                 <div className="text-sm opacity-90">Schools Trust Us</div>
               </div>
             </div>
