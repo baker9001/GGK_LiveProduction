@@ -1,608 +1,697 @@
-// /src/app/landing/page.tsx
-// Updated with standardized buttons and improved navigation
+/**
+ * GGK Learning Platform - Enhanced Landing Page with Fixed Images
+ * Includes fallback images and better error handling
+ */
 
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, memo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  GraduationCap, 
-  BookOpen, 
-  Users, 
-  Award, 
-  ChevronRight, 
-  Play,
-  CheckCircle,
-  Star,
-  ArrowRight,
-  Globe,
-  Zap,
-  Shield,
-  Target,
-  TrendingUp,
-  Heart,
-  Lightbulb,
-  Rocket,
-  Trophy,
-  Clock,
-  BarChart3,
-  UserCheck,
-  BookMarked,
-  Sparkles
+  Book, Users, BarChart3, MessageSquare, ChevronRight, ChevronDown, ChevronUp, PlayCircle, 
+  Star, Quote, GraduationCap, Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube,
+  Award, CheckCircle, FileText, Video, Clock, Globe, Zap, Target
 } from 'lucide-react';
-import { Navigation } from '../../components/shared/Navigation';
 import { Button } from '../../components/shared/Button';
+import { Navigation } from '../../components/shared/Navigation';
 
-export default function LandingPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState('home');
+// Fallback image for subjects
+const FALLBACK_IMAGE = "https://images.pexels.com/photos/256395/pexels-photo-256395.jpeg?auto=compress&cs=tinysrgb&w=600";
 
-  // Set default active section to 'home' when landing on the page
-  useEffect(() => {
-    // Check if we're on the root landing page or /landing
-    if (location.pathname === '/' || location.pathname === '/landing') {
-      setActiveSection('home');
+// Alternative image sources (using Pexels for reliability)
+const IMAGE_SOURCES = {
+  mathematics: "https://images.pexels.com/photos/3729557/pexels-photo-3729557.jpeg?auto=compress&cs=tinysrgb&w=600",
+  physics: "https://images.pexels.com/photos/256381/pexels-photo-256381.jpeg?auto=compress&cs=tinysrgb&w=600",
+  chemistry: "https://images.pexels.com/photos/2280571/pexels-photo-2280571.jpeg?auto=compress&cs=tinysrgb&w=600",
+  biology: "https://images.pexels.com/photos/2280568/pexels-photo-2280568.jpeg?auto=compress&cs=tinysrgb&w=600",
+  english: "https://images.pexels.com/photos/256455/pexels-photo-256455.jpeg?auto=compress&cs=tinysrgb&w=600",
+  computerScience: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=600",
+  economics: "https://images.pexels.com/photos/210574/pexels-photo-210574.jpeg?auto=compress&cs=tinysrgb&w=600",
+  business: "https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=600",
+  history: "https://images.pexels.com/photos/256431/pexels-photo-256431.jpeg?auto=compress&cs=tinysrgb&w=600",
+  geography: "https://images.pexels.com/photos/269633/pexels-photo-269633.jpeg?auto=compress&cs=tinysrgb&w=600",
+  french: "https://images.pexels.com/photos/256417/pexels-photo-256417.jpeg?auto=compress&cs=tinysrgb&w=600",
+  spanish: "https://images.pexels.com/photos/256408/pexels-photo-256408.jpeg?auto=compress&cs=tinysrgb&w=600",
+  arabic: "https://images.pexels.com/photos/256450/pexels-photo-256450.jpeg?auto=compress&cs=tinysrgb&w=600",
+  environmental: "https://images.pexels.com/photos/886521/pexels-photo-886521.jpeg?auto=compress&cs=tinysrgb&w=600"
+};
+
+// Simplified Image Cache Manager
+class ImageCacheManager {
+  private cache: Map<string, string> = new Map();
+  
+  async preloadImage(src: string): Promise<string> {
+    if (this.cache.has(src)) {
+      return this.cache.get(src)!;
     }
-  }, [location.pathname]);
 
-  // Handle navigation with prevention of page refresh for same tab
-  const handleNavigation = (section: string, path: string) => {
-    // If user clicks on the same tab they're already on, prevent navigation
-    if (activeSection === section && (location.pathname === path || 
-        (section === 'home' && (location.pathname === '/' || location.pathname === '/landing')))) {
-      return; // Do nothing - prevent page refresh
-    }
-    
-    setActiveSection(section);
-    navigate(path);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        this.cache.set(src, src);
+        resolve(src);
+      };
+      img.onerror = () => {
+        // Return fallback on error
+        resolve(FALLBACK_IMAGE);
+      };
+      img.src = src;
+    });
+  }
+
+  isCached(src: string): boolean {
+    return this.cache.has(src);
+  }
+}
+
+const imageCache = new ImageCacheManager();
+
+// Updated Subjects Data with reliable image sources
+const ALL_SUBJECTS = [
+  // Core IGCSE Subjects (Priority)
+  { 
+    title: "IGCSE Mathematics", 
+    image: IMAGE_SOURCES.mathematics,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Complete Cambridge & Edexcel IGCSE syllabus 0580/0606/4MA1",
+    badges: ["Past Papers", "Video Solutions", "Mock Exams"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Physics", 
+    image: IMAGE_SOURCES.physics,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0625 & Edexcel 4PH1 complete coverage",
+    badges: ["Lab Simulations", "Animated Concepts", "Past Papers"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Chemistry", 
+    image: IMAGE_SOURCES.chemistry,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Master Cambridge 0620 & Edexcel 4CH1 syllabi",
+    badges: ["Virtual Labs", "3D Molecules", "Exam Practice"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Biology", 
+    image: IMAGE_SOURCES.biology,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0610 & Edexcel 4BI1 comprehensive resources",
+    badges: ["Interactive Diagrams", "Video Lessons", "Topic Tests"],
+    priority: true
+  },
+  { 
+    title: "IGCSE English Language", 
+    image: IMAGE_SOURCES.english,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "First & Second Language 0500/0510 exam preparation",
+    badges: ["Writing Guides", "Speaking Practice", "Model Answers"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Computer Science", 
+    image: IMAGE_SOURCES.computerScience,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0478 & Edexcel programming & theory",
+    badges: ["Coding Practice", "Algorithm Visualizations", "Projects"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Economics", 
+    image: IMAGE_SOURCES.economics,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0455 micro & macro economics mastery",
+    badges: ["Case Studies", "Data Response", "Essay Writing"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Business Studies", 
+    image: IMAGE_SOURCES.business,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0450 & Edexcel business concepts",
+    badges: ["Real Cases", "Financial Analysis", "Marketing Plans"],
+    priority: true
+  },
+  { 
+    title: "IGCSE History", 
+    image: IMAGE_SOURCES.history,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0470 20th century world history",
+    badges: ["Source Analysis", "Essay Templates", "Timeline Tools"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Geography", 
+    image: IMAGE_SOURCES.geography,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0460 physical & human geography",
+    badges: ["Map Skills", "Case Studies", "Fieldwork Guides"],
+    priority: true
+  },
+  { 
+    title: "IGCSE French", 
+    image: IMAGE_SOURCES.french,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0520 French language mastery",
+    badges: ["Audio Practice", "Grammar Drills", "Speaking Tests"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Spanish", 
+    image: IMAGE_SOURCES.spanish,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0530 Spanish comprehensive course",
+    badges: ["Interactive Lessons", "Vocabulary Games", "Exam Prep"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Arabic", 
+    image: IMAGE_SOURCES.arabic,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "First & Foreign Language Arabic 0508/0544",
+    badges: ["Native Speakers", "Grammar Mastery", "Writing Skills"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Additional Mathematics", 
+    image: IMAGE_SOURCES.mathematics,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0606 advanced mathematics preparation",
+    badges: ["Calculus", "Vectors", "A-Level Bridge"],
+    priority: true
+  },
+  { 
+    title: "IGCSE Environmental Management", 
+    image: IMAGE_SOURCES.environmental,
+    fallbackImage: FALLBACK_IMAGE,
+    description: "Cambridge 0680 sustainability & environmental science",
+    badges: ["Case Studies", "Field Work", "Project Ideas"],
+    priority: true
+  }
+];
+
+const PRIORITY_SUBJECTS = ALL_SUBJECTS.filter(s => s.priority);
+
+// Enhanced Testimonials
+const testimonials = [
+  {
+    name: "Sarah Johnson",
+    role: "IGCSE Graduate - 9A*s",
+    image: "https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400",
+    content: "GGK Learning's past papers database and video solutions were instrumental in achieving straight A*s in my IGCSE exams. The Cambridge and Edexcel materials were perfectly aligned!",
+    rating: 5,
+    subject: "Cambridge IGCSE",
+    results: "9 A* Grades"
+  },
+  {
+    name: "Ahmed Al-Rashid",
+    role: "A-Level Student",
+    image: "https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=400",
+    content: "The animated chemistry videos and virtual lab simulations made complex topics crystal clear. Moving from IGCSE to A-Level was seamless with GGK's comprehensive resources.",
+    rating: 5,
+    subject: "Chemistry & Physics",
+    results: "A* in Sciences"
+  },
+  {
+    name: "Emma Thompson",
+    role: "IGCSE Teacher - 10 Years",
+    image: "https://images.pexels.com/photos/1181690/pexels-photo-1181690.jpeg?auto=compress&cs=tinysrgb&w=400",
+    content: "As an educator, I recommend GGK to all my students. The exam board-specific content, mock tests, and progress tracking have consistently improved my students' performance by 30%+.",
+    rating: 5,
+    subject: "Mathematics Teacher",
+    results: "95% Pass Rate"
+  }
+];
+
+// Simplified Subject Card with better error handling
+const SubjectCard = memo(({ 
+  title, 
+  image, 
+  fallbackImage,
+  description,
+  badges,
+  priority = false 
+}: { 
+  title: string; 
+  image: string; 
+  fallbackImage: string;
+  description: string;
+  badges?: string[];
+  priority?: boolean;
+}) => {
+  const [imgSrc, setImgSrc] = useState(image);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const handleImageError = () => {
+    setImgSrc(fallbackImage);
   };
 
-  // Check if a tab is currently active
-  const isTabActive = (section: string, path: string) => {
-    if (section === 'home') {
-      return location.pathname === '/' || location.pathname === '/landing';
-    }
-    return location.pathname === path;
+  const handleImageLoad = () => {
+    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <Navigation />
-      
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#8CC63F]/10 to-blue-500/10 dark:from-[#8CC63F]/20 dark:to-blue-500/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-          <div className="text-center">
-            <div className="flex justify-center mb-8">
-              <div className="relative">
-                <div className="absolute inset-0 bg-[#8CC63F]/20 blur-3xl rounded-full"></div>
-                <GraduationCap className="relative h-24 w-24 text-[#8CC63F] mx-auto" />
-              </div>
-            </div>
-            
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-              Transform Education with{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#8CC63F] to-blue-600">
-                GGK Learning
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 overflow-hidden hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200 group">
+      <div className="h-48 w-full overflow-hidden bg-gray-200 dark:bg-gray-700 relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        )}
+        <img
+          src={imgSrc}
+          alt={title}
+          className={`w-full h-full object-cover transform group-hover:scale-105 transition-all duration-300 ${
+            isLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          loading="lazy"
+        />
+        <div className="absolute top-2 right-2">
+          <span className="bg-[#8CC63F] text-white text-xs px-2 py-1 rounded-full font-medium">
+            IGCSE
+          </span>
+        </div>
+      </div>
+      <div className="p-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{description}</p>
+        {badges && (
+          <div className="flex flex-wrap gap-2">
+            {badges.map((badge, index) => (
+              <span 
+                key={index}
+                className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full"
+              >
+                {badge}
               </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+SubjectCard.displayName = 'SubjectCard';
+
+// Enhanced Feature Card
+const FeatureCard = memo(({ icon, title, description }: { 
+  icon: React.ReactNode; 
+  title: string; 
+  description: string 
+}) => (
+  <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200">
+    <div className="h-16 w-16 bg-[#8CC63F] bg-opacity-10 dark:bg-opacity-20 text-[#8CC63F] rounded-2xl flex items-center justify-center mb-6">
+      {icon}
+    </div>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
+    <p className="text-gray-600 dark:text-gray-400">{description}</p>
+  </div>
+));
+
+FeatureCard.displayName = 'FeatureCard';
+
+// Main Landing Page Component
+export default function LandingPage() {
+  const navigate = useNavigate();
+  const [showAllSubjects, setShowAllSubjects] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
+      <Navigation />
+
+      {/* Hero Section */}
+      <div className="relative h-screen">
+        <div className="absolute inset-0 overflow-hidden">
+          <img
+            src="https://images.pexels.com/photos/5212345/pexels-photo-5212345.jpeg?auto=compress&cs=tinysrgb&w=1920"
+            alt="IGCSE Cambridge Edexcel Students Learning"
+            className="w-full h-full object-cover"
+            loading="eager"
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-60" />
+        </div>
+        <div className="relative max-w-7xl mx-auto h-full flex items-center px-4 sm:px-6 lg:px-8">
+          <div className="text-center w-full">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-6">
+              Master IGCSE, O-Level & A-Level
+              <span className="block text-[#8CC63F]">Cambridge & Edexcel Excellence</span>
             </h1>
-            
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
-              Comprehensive learning management system designed for modern educational institutions. 
-              Empower students, support teachers, and streamline administration.
+            <p className="mt-3 max-w-lg mx-auto text-xl text-gray-100 sm:mt-5">
+              Complete exam preparation with 10+ years of past papers, animated video lessons, 
+              mock exams, and AI-powered personalized learning.
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
                 size="lg"
+                className="bg-[#8CC63F] hover:bg-[#7AB32F] text-white rounded-full px-8 w-full sm:w-auto font-semibold"
                 onClick={() => navigate('/signin')}
-                className="bg-[#8CC63F] hover:bg-[#7AB635] text-white px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300"
-                rightIcon={<ArrowRight className="h-5 w-5" />}
+                rightIcon={<ChevronRight className="ml-2 -mr-1 h-5 w-5" />}
               >
-                Login
+                Start Free Trial
               </Button>
-              
               <Button
-                variant="outline"
                 size="lg"
-                onClick={() => handleNavigation('about', '/about')}
-                className="border-2 border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white px-8 py-4 text-lg font-semibold transition-all duration-300"
-                rightIcon={<Play className="h-5 w-5" />}
+                className="bg-white/10 backdrop-blur hover:bg-white/20 text-white border-2 border-white/30 rounded-full px-8 w-full sm:w-auto font-semibold"
+                leftIcon={<PlayCircle className="mr-2 h-5 w-5" />}
               >
-                Learn More
+                Watch Demo
               </Button>
+            </div>
+            {/* Trust badges */}
+            <div className="mt-8 flex items-center justify-center gap-8">
+              <div className="text-white">
+                <div className="text-3xl font-bold">50,000+</div>
+                <div className="text-sm opacity-90">Active Students</div>
+              </div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">95%</div>
+                <div className="text-sm opacity-90">Pass Rate</div>
+              </div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">500+</div>
+                <div className="text-sm opacity-90">Schools Trust Us</div>
+              </div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Navigation Tabs */}
-      <section className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-16 z-40">
+      {/* Exam Boards Section */}
+      <div className="py-16 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8 overflow-x-auto">
-            {[
-              { id: 'home', label: 'Home', path: '/landing' },
-              { id: 'subjects', label: 'Subjects', path: '/subjects' },
-              { id: 'resources', label: 'Resources', path: '/resources' },
-              { id: 'about', label: 'About', path: '/about' },
-              { id: 'contact', label: 'Contact', path: '/contact' }
-            ].map((tab) => {
-              const isActive = isTabActive(tab.id, tab.path);
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleNavigation(tab.id, tab.path)}
-                  disabled={isActive} // Disable if already active
-                  className={`
-                    inline-flex items-center px-1 pt-4 pb-4 text-sm font-medium transition-all duration-200
-                    ${isActive
-                      ? 'text-[#8CC63F] border-b-2 border-[#8CC63F] cursor-default'
-                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-b-2 hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer'
-                    }
-                    ${isActive ? 'pointer-events-none' : ''}
-                  `}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Powerful Features for Modern Education
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Official Exam Board Coverage
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Everything you need to create engaging learning experiences and manage educational operations efficiently.
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Complete syllabus coverage for all major examination boards
             </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* Student Management */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-6">
-                <Users className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Student Management</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Comprehensive student profiles, enrollment tracking, and academic progress monitoring.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('about', '/about')}
-                className="w-full border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                Learn More
-              </Button>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Cambridge</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">IGCSE & A-Level</p>
             </div>
-
-            {/* Learning Analytics */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#8CC63F] to-green-600 rounded-2xl flex items-center justify-center mb-6">
-                <BarChart3 className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Learning Analytics</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Data-driven insights into student performance, learning patterns, and educational outcomes.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('about', '/about')}
-                className="w-full border-[#8CC63F] text-[#8CC63F] hover:bg-[#8CC63F] hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                Explore Analytics
-              </Button>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">Edexcel</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">International GCSE</p>
             </div>
-
-            {/* Content Library */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6">
-                <BookOpen className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Content Library</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Rich multimedia content, interactive lessons, and comprehensive curriculum resources.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('resources', '/resources')}
-                className="w-full border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                Browse Library
-              </Button>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">AQA</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
             </div>
-
-            {/* Assessment Tools */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-6">
-                <Award className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Assessment Tools</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Create, distribute, and grade assessments with automated scoring and detailed feedback.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('about', '/about')}
-                className="w-full border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                View Tools
-              </Button>
-            </div>
-
-            {/* Communication Hub */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-6">
-                <Globe className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Communication Hub</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Seamless communication between students, teachers, and parents with real-time updates.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('contact', '/contact')}
-                className="w-full border-indigo-500 text-indigo-500 hover:bg-indigo-500 hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                Get Connected
-              </Button>
-            </div>
-
-            {/* Smart Scheduling */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl flex items-center justify-center mb-6">
-                <Clock className="h-8 w-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Smart Scheduling</h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Intelligent timetable management with conflict detection and resource optimization.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => handleNavigation('about', '/about')}
-                className="w-full border-teal-500 text-teal-500 hover:bg-teal-500 hover:text-white"
-                rightIcon={<ChevronRight className="h-4 w-4" />}
-              >
-                See Scheduling
-              </Button>
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-xl text-center">
+              <Award className="h-12 w-12 text-[#8CC63F] mx-auto mb-3" />
+              <h3 className="font-semibold text-gray-900 dark:text-white">OCR</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">GCSE & A-Level</p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Benefits Section */}
-      <section className="py-20 bg-white dark:bg-gray-800">
+      {/* Enhanced Feature Highlights */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Why Choose GGK Learning?
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              Complete IGCSE & A-Level Success Platform
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Join thousands of educational institutions worldwide who trust GGK Learning to deliver exceptional educational experiences.
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Everything you need to excel in Cambridge and Edexcel examinations
             </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-[#8CC63F]/20 to-[#8CC63F]/30 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <Zap className="h-10 w-10 text-[#8CC63F]" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Lightning Fast</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Optimized performance ensures smooth operation even with thousands of concurrent users.
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-blue-500/30 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <Shield className="h-10 w-10 text-blue-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Secure & Reliable</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Enterprise-grade security with 99.9% uptime guarantee and comprehensive data protection.
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-purple-500/30 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <Target className="h-10 w-10 text-purple-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Precision Focused</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Tailored solutions that adapt to your institution's unique needs and educational goals.
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-br from-orange-500/20 to-orange-500/30 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                <TrendingUp className="h-10 w-10 text-orange-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Proven Results</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Measurable improvements in student engagement, learning outcomes, and operational efficiency.
-              </p>
-            </div>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              icon={<FileText className="h-8 w-8" />}
+              title="10+ Years Past Papers"
+              description="Complete database of Cambridge & Edexcel past papers with mark schemes and examiner reports"
+            />
+            <FeatureCard
+              icon={<Video className="h-8 w-8" />}
+              title="Animated Video Lessons"
+              description="3000+ animated videos explaining complex concepts with visual clarity"
+            />
+            <FeatureCard
+              icon={<BarChart3 className="h-8 w-8" />}
+              title="AI-Powered Mock Exams"
+              description="Personalized mock tests that adapt to your learning level with instant feedback"
+            />
+            <FeatureCard
+              icon={<Users className="h-8 w-8" />}
+              title="Expert Teacher Support"
+              description="Direct access to qualified IGCSE & A-Level teachers for doubt resolution"
+            />
           </div>
         </div>
-      </section>
+      </div>
+
+      {/* Subjects Section */}
+      <div className="py-24 bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              IGCSE & A-Level Subjects We Offer
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Complete Cambridge & Edexcel syllabus coverage with exam board-specific resources
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {PRIORITY_SUBJECTS.map((subject) => (
+              <SubjectCard 
+                key={subject.title} 
+                {...subject} 
+                priority={true}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Enhanced Testimonials */}
+      <div className="py-24 bg-white dark:bg-gray-900 transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-[#8CC63F] mb-4">
+              Success Stories from IGCSE & A-Level Students
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              Join thousands of students achieving top grades with GGK Learning
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {testimonials.map((testimonial, index) => (
+              <div
+                key={index}
+                className="bg-gray-50 dark:bg-gray-800 rounded-xl p-8 shadow-sm dark:shadow-gray-900/20 hover:shadow-lg dark:hover:shadow-gray-900/30 transition-all duration-200"
+              >
+                <div className="flex items-center mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+                  ))}
+                  <span className="ml-auto bg-[#8CC63F] text-white text-xs px-3 py-1 rounded-full font-semibold">
+                    {testimonial.results}
+                  </span>
+                </div>
+                
+                <div className="relative mb-6">
+                  <Quote className="absolute -top-2 -left-2 h-8 w-8 text-[#8CC63F] opacity-20" />
+                  <p className="text-gray-700 dark:text-gray-300 italic pl-6">
+                    "{testimonial.content}"
+                  </p>
+                </div>
+                
+                <div className="flex items-center">
+                  <img
+                    src={testimonial.image}
+                    alt={testimonial.name}
+                    className="h-12 w-12 rounded-full object-cover mr-4"
+                    loading="lazy"
+                  />
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">
+                      {testimonial.name}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {testimonial.role}
+                    </p>
+                    <p className="text-xs text-[#8CC63F] font-medium">
+                      {testimonial.subject}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Statistics Section */}
-      <section className="py-20 bg-gradient-to-r from-[#8CC63F] to-green-600">
+      <div className="py-20 bg-gradient-to-r from-[#8CC63F] to-[#7AB635]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              Trusted by Educational Leaders
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Proven Results That Speak for Themselves
             </h2>
-            <p className="text-xl text-green-100 max-w-3xl mx-auto">
-              Our platform serves educational institutions across the globe, delivering measurable impact.
-            </p>
           </div>
-
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2">500+</div>
-              <div className="text-green-100">Educational Institutions</div>
+            <div className="text-center text-white">
+              <div className="text-4xl font-bold mb-2">15,000+</div>
+              <div className="text-sm opacity-90">Past Papers Database</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2">50K+</div>
-              <div className="text-green-100">Active Students</div>
+            <div className="text-center text-white">
+              <div className="text-4xl font-bold mb-2">3,000+</div>
+              <div className="text-sm opacity-90">Video Lessons</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2">5K+</div>
-              <div className="text-green-100">Educators</div>
+            <div className="text-center text-white">
+              <div className="text-4xl font-bold mb-2">500+</div>
+              <div className="text-sm opacity-90">Mock Exams</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl md:text-5xl font-bold text-white mb-2">99.9%</div>
-              <div className="text-green-100">Uptime</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section className="py-20 bg-white dark:bg-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              What Our Users Say
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
-              Real feedback from educators and administrators using GGK Learning.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-8 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-700 dark:text-gray-300 mb-6 italic">
-                "GGK Learning has revolutionized how we manage our institution. The intuitive interface and powerful features have improved our efficiency by 40%."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  SM
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-white">Sarah Mitchell</div>
-                  <div className="text-gray-600 dark:text-gray-400">Principal, Greenwood Academy</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-8 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-700 dark:text-gray-300 mb-6 italic">
-                "The analytics dashboard provides incredible insights into student performance. We can now identify and support struggling students much earlier."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#8CC63F] to-green-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  DR
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-white">Dr. Robert Chen</div>
-                  <div className="text-gray-600 dark:text-gray-400">Academic Director, Tech Institute</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-8 border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-700 dark:text-gray-300 mb-6 italic">
-                "Our teachers love the content creation tools. They can easily develop engaging lessons and track student progress in real-time."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  MJ
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-white">Maria Johnson</div>
-                  <div className="text-gray-600 dark:text-gray-400">Head of Curriculum, Valley School</div>
-                </div>
-              </div>
+            <div className="text-center text-white">
+              <div className="text-4xl font-bold mb-2">24/7</div>
+              <div className="text-sm opacity-90">Learning Support</div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-              Ready to Transform Your Educational Institution?
-            </h2>
-            <p className="text-xl text-gray-300 mb-8">
-              Join the revolution in educational technology. Start your journey with GGK Learning today.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                size="lg"
-                onClick={() => navigate('/signin')}
-                className="bg-[#8CC63F] hover:bg-[#7AB635] text-white px-8 py-4 text-lg font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300"
-                rightIcon={<Rocket className="h-5 w-5" />}
-              >
-                Get Started Now
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => handleNavigation('contact', '/contact')}
-                className="border-2 border-white text-white hover:bg-white hover:text-gray-900 px-8 py-4 text-lg font-semibold transition-all duration-300"
-                rightIcon={<Heart className="h-5 w-5" />}
-              >
-                Contact Sales
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-black text-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center mb-6">
-                <GraduationCap className="h-8 w-8 text-[#8CC63F] mr-3" />
-                <span className="text-2xl font-bold">GGK Learning</span>
+      {/* Enhanced Footer */}
+      <footer className="bg-gray-900 dark:bg-gray-950 text-white transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {/* Company Info */}
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <GraduationCap className="h-8 w-8 text-[#8CC63F]" />
+                <span className="ml-2 text-2xl font-bold">GGK Learning</span>
               </div>
-              <p className="text-gray-400 mb-6 max-w-md">
-                Empowering educational institutions with cutting-edge technology to create exceptional learning experiences and drive student success.
+              <p className="text-gray-400">
+                Your trusted partner for IGCSE, O-Level, and A-Level success. 
+                Official Cambridge and Edexcel exam preparation platform.
               </p>
               <div className="flex space-x-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-400 hover:text-white"
-                >
-                  Privacy Policy
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-400 hover:text-white"
-                >
-                  Terms of Service
-                </Button>
+                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                  <Facebook className="h-5 w-5" />
+                </a>
+                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                  <Twitter className="h-5 w-5" />
+                </a>
+                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                  <Instagram className="h-5 w-5" />
+                </a>
+                <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
+                  <Youtube className="h-5 w-5" />
+                </a>
               </div>
             </div>
 
+            {/* Quick Links */}
             <div>
-              <h3 className="text-lg font-semibold mb-6">Platform</h3>
-              <ul className="space-y-3">
+              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              <ul className="space-y-2">
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleNavigation('subjects', '/subjects')}
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Subjects
-                  </Button>
+                  <a href="/subjects" className="text-gray-400 hover:text-white transition-colors">
+                    IGCSE Subjects
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleNavigation('resources', '/resources')}
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Resources
-                  </Button>
+                  <a href="/resources" className="text-gray-400 hover:text-white transition-colors">
+                    Past Papers
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Analytics
-                  </Button>
+                  <a href="/mock-exams" className="text-gray-400 hover:text-white transition-colors">
+                    Mock Exams
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Assessments
-                  </Button>
+                  <a href="/video-lessons" className="text-gray-400 hover:text-white transition-colors">
+                    Video Lessons
+                  </a>
+                </li>
+                <li>
+                  <a href="/pricing" className="text-gray-400 hover:text-white transition-colors">
+                    Pricing Plans
+                  </a>
                 </li>
               </ul>
             </div>
 
+            {/* Exam Boards */}
             <div>
-              <h3 className="text-lg font-semibold mb-6">Support</h3>
-              <ul className="space-y-3">
+              <h3 className="text-lg font-semibold mb-4">Exam Boards</h3>
+              <ul className="space-y-2">
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleNavigation('about', '/about')}
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    About Us
-                  </Button>
+                  <a href="/cambridge-igcse" className="text-gray-400 hover:text-white transition-colors">
+                    Cambridge IGCSE
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleNavigation('contact', '/contact')}
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Contact
-                  </Button>
+                  <a href="/edexcel-igcse" className="text-gray-400 hover:text-white transition-colors">
+                    Edexcel International
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Help Center
-                  </Button>
+                  <a href="/cambridge-a-level" className="text-gray-400 hover:text-white transition-colors">
+                    Cambridge A-Level
+                  </a>
                 </li>
                 <li>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal justify-start"
-                  >
-                    Documentation
-                  </Button>
+                  <a href="/edexcel-a-level" className="text-gray-400 hover:text-white transition-colors">
+                    Edexcel A-Level
+                  </a>
+                </li>
+                <li>
+                  <a href="/cambridge-o-level" className="text-gray-400 hover:text-white transition-colors">
+                    Cambridge O-Level
+                  </a>
                 </li>
               </ul>
+            </div>
+
+            {/* Contact Info */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <Mail className="h-5 w-5 text-[#8CC63F] mr-3" />
+                  <span className="text-gray-400">support@ggklearning.com</span>
+                </div>
+                <div className="flex items-center">
+                  <Phone className="h-5 w-5 text-[#8CC63F] mr-3" />
+                  <span className="text-gray-400">+965 2XXX XXXX</span>
+                </div>
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 text-[#8CC63F] mr-3" />
+                  <span className="text-gray-400">Kuwait City, Kuwait</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-800 mt-12 pt-8 text-center">
-            <p className="text-gray-400">
-              © 2025 GGK Learning Platform. All rights reserved.
-            </p>
+          {/* Bottom Bar */}
+          <div className="border-t border-gray-800 mt-12 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <p className="text-gray-400 text-sm">
+                © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
+              </p>
+              <div className="flex space-x-6 mt-4 md:mt-0">
+                <a href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  Privacy Policy
+                </a>
+                <a href="/terms" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  Terms of Service
+                </a>
+                <a href="/cookies" className="text-gray-400 hover:text-white text-sm transition-colors">
+                  Cookie Policy
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
