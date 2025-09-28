@@ -119,7 +119,6 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
           .select(`
             user_id,
             student_code,
-            parent_name,
             users:user_id(
               id,
               email,
@@ -142,11 +141,6 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
                 studentName = student.users.raw_user_meta_data.full_name;
               } else if (student.student_code) {
                 studentName = `Student ${student.student_code}`;
-              }
-              
-              // Add parent info if available
-              if (student.parent_name) {
-                studentName += ` (Parent: ${student.parent_name})`;
               }
               
               users.push({
