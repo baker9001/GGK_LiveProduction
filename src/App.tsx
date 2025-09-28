@@ -1,5 +1,33 @@
-// /home/project/src/App.tsx
-// FIXED: Added missing routes for subjects, resources, about, and contact pages
+/**
+ * File: /src/App.tsx
+ * Dependencies: 
+ *   - @/components/auth/ProtectedRoute
+ *   - @/contexts/UserContext, PermissionContext
+ *   - @/lib/auth
+ *   - All page components from /app directories
+ *   - React Router DOM
+ * 
+ * Preserved Features:
+ *   - Authentication flow with ProtectedRoute
+ *   - Module-based access control with role checking
+ *   - Test mode support with TestModeBar
+ *   - All existing module routes (system-admin, entity-module, student-module, teachers-module)
+ *   - Password change route
+ *   - Form validation route
+ * 
+ * Added/Modified:
+ *   - Added missing public landing page routes (/subjects, /resources, /about, /contact)
+ *   - Added /landing route as alias to home
+ *   - Proper imports for all actual landing page components
+ * 
+ * Database Tables:
+ *   - users (via auth context)
+ *   - permissions (via permission context)
+ * 
+ * Connected Files:
+ *   - All page components import this router setup
+ *   - Protected routes use this for navigation
+ */
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -10,56 +38,25 @@ import { Toast } from './components/shared/Toast';
 import { ReactQueryProvider } from './providers/ReactQueryProvider';
 import { TestModeBar } from './components/admin/TestModeBar';
 import { isInTestMode, getCurrentUser } from './lib/auth';
+
+// Import existing page components - PRESERVED all original imports
 import SystemAdminPage from './app/system-admin/page';
 import SignInPage from './app/signin/page';
 import ForgotPasswordPage from './app/forgot-password/page';
 import ResetPasswordPage from './app/reset-password/page';
 import LandingPage from './app/landing/page';
-import SubjectsPage from './app/landing/subjects/page';
 import EntityModulePage from './app/entity-module/page';
 import StudentModulePage from './app/student-module/page';
 import TeachersModulePage from './app/teachers-module/page';
 import FormValidationPage from './pages/FormValidationPage';
 
-// Placeholder components for missing pages - replace with actual components when ready
-const ResourcesPage = () => (
-  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div className="max-w-7xl mx-auto px-4 py-16">
-      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">Resources</h1>
-      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
-        Access past papers, study guides, and learning materials
-      </p>
-    </div>
-  </div>
-);
+// ADDED: Import actual landing page components that exist in the project
+import SubjectsPage from './app/landing/subjects/page';
+import ResourcesPage from './app/landing/resources/page';
+import AboutPage from './app/landing/about/page';
+import ContactPage from './app/landing/contact/page';
 
-const AboutPage = () => (
-  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div className="max-w-7xl mx-auto px-4 py-16">
-      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">About GGK Learning</h1>
-      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
-        Your trusted partner for IGCSE, O-Level, and A-Level success
-      </p>
-    </div>
-  </div>
-);
-
-const ContactPage = () => (
-  <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div className="max-w-7xl mx-auto px-4 py-16">
-      <h1 className="text-4xl font-bold text-center text-gray-900 dark:text-white mb-8">Contact Us</h1>
-      <p className="text-xl text-center text-gray-600 dark:text-gray-400">
-        Get in touch with our support team
-      </p>
-      <div className="text-center mt-8">
-        <p className="text-gray-600 dark:text-gray-400">Email: support@ggklearning.com</p>
-        <p className="text-gray-600 dark:text-gray-400">Phone: +965 9722 2711</p>
-      </div>
-    </div>
-  </div>
-);
-
-// Module access control wrapper
+// PRESERVED: Module access control wrapper
 function ModuleRoute({ 
   path, 
   element, 
@@ -93,7 +90,7 @@ function ModuleRoute({
 }
 
 function App() {
-  // Add class to body when in test mode for visual styling
+  // PRESERVED: Add class to body when in test mode for visual styling
   React.useEffect(() => {
     if (isInTestMode()) {
       document.body.classList.add('test-mode-active');
@@ -108,14 +105,21 @@ function App() {
         <UserProvider>
           <PermissionProvider>
             <Toast />
-            {/* Test Mode Bar - Shows only when in test mode */}
+            {/* PRESERVED: Test Mode Bar - Shows only when in test mode */}
             <TestModeBar />
             
             <Routes>
               {/* ============================================ */}
               {/* PUBLIC LANDING PAGES - NO AUTHENTICATION REQUIRED */}
               {/* ============================================ */}
+              
+              {/* PRESERVED: Home route */}
               <Route path="/" element={<LandingPage />} />
+              
+              {/* ADDED: Landing route as alias to home */}
+              <Route path="/landing" element={<LandingPage />} />
+              
+              {/* ADDED: Public landing page routes using actual components */}
               <Route path="/subjects" element={<SubjectsPage />} />
               <Route path="/resources" element={<ResourcesPage />} />
               <Route path="/about" element={<AboutPage />} />
@@ -124,12 +128,14 @@ function App() {
               {/* ============================================ */}
               {/* AUTHENTICATION PAGES */}
               {/* ============================================ */}
+              
+              {/* PRESERVED: All authentication routes */}
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/form-validation" element={<FormValidationPage />} />
               
-              {/* Password Change Route - Protected */}
+              {/* PRESERVED: Password Change Route - Protected */}
               <Route
                 path="/app/settings/change-password"
                 element={
@@ -143,7 +149,7 @@ function App() {
               {/* PROTECTED MODULE ROUTES */}
               {/* ============================================ */}
               
-              {/* Entity Module - Only ENTITY_ADMIN and SSA */}
+              {/* PRESERVED: Entity Module - Only ENTITY_ADMIN and SSA */}
               <Route
                 path="/app/entity-module/*"
                 element={
@@ -163,7 +169,7 @@ function App() {
                 }
               />
               
-              {/* Student Module - Only STUDENT and SSA */}
+              {/* PRESERVED: Student Module - Only STUDENT and SSA */}
               <Route
                 path="/app/student-module/*"
                 element={
@@ -183,7 +189,7 @@ function App() {
                 }
               />
               
-              {/* Teachers Module - Only TEACHER and SSA */}
+              {/* PRESERVED: Teachers Module - Only TEACHER and SSA */}
               <Route
                 path="/app/teachers-module/*"
                 element={
@@ -203,7 +209,7 @@ function App() {
                 }
               />
               
-              {/* System Admin Module - SSA, SUPPORT, VIEWER */}
+              {/* PRESERVED: System Admin Module - SSA, SUPPORT, VIEWER */}
               <Route
                 path="/app/system-admin/*"
                 element={
@@ -223,7 +229,7 @@ function App() {
                 }
               />
               
-              {/* Catch-all route - redirect to home */}
+              {/* PRESERVED: Catch-all route - redirect to home */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PermissionProvider>

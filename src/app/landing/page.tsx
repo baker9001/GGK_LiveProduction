@@ -287,16 +287,7 @@ const SubjectCard = memo(({
             ))}
           </div>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          rounded="lg"
-          className="w-full"
-          onClick={() => navigate('/subjects')}
-          rightIcon={<ChevronRight className="w-4 h-4" />}
-        >
-          Learn More
-        </Button>
+  
       </div>
     </div>
   );
@@ -360,7 +351,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight />}
               >
-                Start Free Trial
+                Signin
               </Button>
               <Button
                 variant="outline"
@@ -375,15 +366,15 @@ export default function LandingPage() {
             {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
             <div className="mt-8 flex items-center justify-center gap-8">
               <div className="text-white">
-                <div className="text-3xl font-bold">50,000+</div>
+                <div className="text-3xl font-bold">+</div>
                 <div className="text-sm opacity-90">Active Students</div>
               </div>
               <div className="text-white">
-                <div className="text-3xl font-bold">95%</div>
+                <div className="text-3xl font-bold">%</div>
                 <div className="text-sm opacity-90">Pass Rate</div>
               </div>
               <div className="text-white">
-                <div className="text-3xl font-bold">500+</div>
+                <div className="text-3xl font-bold">+</div>
                 <div className="text-sm opacity-90">Schools Trust Us</div>
               </div>
             </div>
@@ -700,7 +691,7 @@ export default function LandingPage() {
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Mail className="h-4 w-4 text-[#8CC63F] mr-2" />
-                  <span className="text-gray-400 text-sm">support@ggklearning.com</span>
+                  <span className="text-gray-400 text-sm">support@ggknowledge.com</span>
                 </div>
                 <div className="flex items-center">
                   <Phone className="h-4 w-4 text-[#8CC63F] mr-2" />
