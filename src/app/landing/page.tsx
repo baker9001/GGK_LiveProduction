@@ -344,7 +344,7 @@ export default function LandingPage() {
               <Button
                 size="lg"
                 className="bg-[#8CC63F] hover:bg-[#7AB32F] text-white rounded-full px-8 w-full sm:w-auto font-semibold"
-                onClick={() => navigate('/Login')}
+                onClick={() => navigate('/signin')}
                 rightIcon={<ChevronRight className="ml-2 -mr-1 h-5 w-5" />}
               >
                 Login
