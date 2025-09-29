@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, memo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Book, Users, BarChart3, MessageSquare, ChevronRight, ChevronDown, ChevronUp, PlayCircle, 
   Star, Quote, GraduationCap, Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube,
@@ -626,29 +626,29 @@ export default function LandingPage() {
               <h3 className="text-base font-semibold mb-3">Quick Links</h3>
               <ul className="space-y-1.5">
                 <li>
-                  <a href="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/subjects" className="text-gray-400 hover:text-white transition-colors text-sm">
                     IGCSE Subjects
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/resources" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/resources" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Past Papers
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/mock-exams" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/mock-exams" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Mock Exams
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/video-lessons" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/video-lessons" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Video Lessons
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/pricing" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/pricing" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Pricing Plans
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -658,29 +658,29 @@ export default function LandingPage() {
               <h3 className="text-base font-semibold mb-3">Exam Boards</h3>
               <ul className="space-y-1.5">
                 <li>
-                  <a href="/cambridge-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/cambridge-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge IGCSE
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/edexcel-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/edexcel-igcse" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Edexcel International
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/cambridge-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/cambridge-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge A-Level
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/edexcel-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/edexcel-a-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Edexcel A-Level
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="/cambridge-o-level" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link to="/cambridge-o-level" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Cambridge O-Level
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -712,15 +712,15 @@ export default function LandingPage() {
                 © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
               </p>
               <div className="flex space-x-4 mt-3 md:mt-0">
-                <a href="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
+                <Link to="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Privacy Policy
-                </a>
-                <a href="/terms" className="text-gray-400 hover:text-white text-xs transition-colors">
+                </Link>
+                <Link to="/terms" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Terms of Service
-                </a>
-                <a href="/cookies" className="text-gray-400 hover:text-white text-xs transition-colors">
+                </Link>
+                <Link to="/cookies" className="text-gray-400 hover:text-white text-xs transition-colors">
                   Cookie Policy
-                </a>
+                </Link>
               </div>
             </div>
           </div>
