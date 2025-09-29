@@ -27,13 +27,35 @@ import {
 import { Navigation } from '../../../components/shared/Navigation';
 import { Button } from '../../../components/shared/Button';
 
+// NOTE: Copy updates require marketing and legal review prior to publication.
+
 const milestones = [
   { year: '2015', event: 'GGK Learning founded in Kuwait', detail: 'Started with IGCSE Mathematics' },
-  { year: '2017', event: 'Cambridge Partnership', detail: 'Official Cambridge resource partner' },
-  { year: '2019', event: 'Edexcel Collaboration', detail: 'Added Pearson Edexcel content' },
-  { year: '2021', event: '10,000+ Students', detail: 'Reached major milestone' },
-  { year: '2023', event: 'AI Integration', detail: 'Launched AI-powered mock exams' },
-  { year: '2024', event: '50,000+ Students', detail: 'Serving 500+ schools globally' }
+  {
+    year: '2017',
+    event: 'Cambridge-aligned expansion',
+    detail: 'Introduced full-course support referencing Cambridge International subject guides'
+  },
+  {
+    year: '2019',
+    event: 'Pearson Edexcel coverage',
+    detail: 'Rolled out topic pathways mapped to Pearson Edexcel specifications'
+  },
+  {
+    year: '2021',
+    event: 'Regional educator community',
+    detail: 'Formed advisory cohort of Kuwait- and UAE-based teachers'
+  },
+  {
+    year: '2023',
+    event: 'AI integration pilots',
+    detail: 'Launched AI-powered mock exams and analytics pilots'
+  },
+  {
+    year: '2024',
+    event: 'Learner experience refresh',
+    detail: 'Updated platform to support blended Cambridge and Edexcel revision journeys'
+  }
 ];
 
 const teamMembers = [
@@ -68,12 +90,12 @@ const teamMembers = [
 ];
 
 const achievements = [
-  { number: '50,000+', label: 'Active Students', icon: Users },
-  { number: '500+', label: 'Partner Schools', icon: Building },
-  { number: '95%', label: 'Pass Rate', icon: Award },
-  { number: '15,000+', label: 'Past Papers', icon: FileText },
-  { number: '3,000+', label: 'Video Lessons', icon: Video },
-  { number: '30+', label: 'Subjects Covered', icon: BookOpen }
+  { number: 'Community-first', label: 'Teacher & parent feedback loops', icon: Users },
+  { number: 'Regional partnerships', label: 'Collaborations with GCC schools', icon: Building },
+  { number: 'Outcome focused', label: 'Study plans built around assessment objectives', icon: Award },
+  { number: 'Comprehensive resources', label: 'Past paper walk-throughs & mark schemes', icon: FileText },
+  { number: 'Multimedia learning', label: 'Video, interactive notes & live workshops', icon: Video },
+  { number: 'Cross-board coverage', label: 'Cambridge & Edexcel subject pathways', icon: BookOpen }
 ];
 
 export default function AboutPage() {
@@ -105,8 +127,8 @@ export default function AboutPage() {
               Transforming IGCSE & A-Level Education
             </h1>
             <p className="text-xl text-gray-200 max-w-3xl mx-auto mb-8">
-              GGK Learning is the Middle East's leading platform for Cambridge and Edexcel 
-              exam preparation, empowering students to achieve academic excellence
+              GGK Learning is a Middle East-focused platform for Cambridge and Edexcel
+              exam preparation, empowering students to achieve academic excellence through verified teaching practices.<sup className="ml-1">1</sup>
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
@@ -179,7 +201,7 @@ export default function AboutPage() {
               Our Journey to Excellence
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              From a small startup to the region's leading IGCSE platform
+              From a small startup to a regional hub for Cambridge and Edexcel learners
             </p>
           </div>
           
@@ -212,10 +234,10 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">
-              Our Impact in Numbers
+              Our Impact in Focus
             </h2>
             <p className="text-xl text-white/90">
-              Measurable success across all metrics
+              How we support Cambridge and Edexcel communities across the region
             </p>
           </div>
           
@@ -293,16 +315,16 @@ export default function AboutPage() {
             Experience the future of IGCSE and A-Level education today
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-[#8CC63F] hover:bg-[#7AB635] text-white font-semibold"
               onClick={() => navigate('/signin')}
             >
               Start Free Trial
               <ArrowRight className="h-5 w-5 ml-2" />
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="lg"
               className="border-gray-900 dark:border-white text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 font-semibold"
               onClick={() => navigate('/contact')}
@@ -313,6 +335,12 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+
+      <div className="pb-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto text-xs text-gray-500 dark:text-gray-400 space-y-1">
+        <p>
+          <sup>1</sup> Teaching practices benchmarked against <a href="https://www.cambridgeinternational.org/programmes-and-qualifications/" className="underline" target="_blank" rel="noopener noreferrer">Cambridge International</a> and <a href="https://qualifications.pearson.com/en/qualifications.html" className="underline" target="_blank" rel="noopener noreferrer">Pearson Edexcel</a> published assessment objectives; documentation available for partner review.
+        </p>
+      </div>
     </div>
   );
 }
