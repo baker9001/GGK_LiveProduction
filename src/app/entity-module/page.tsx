@@ -6,11 +6,12 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { getCurrentUser } from '../../lib/auth';
 import { useModuleSecurity } from '../../hooks/useModuleSecurity';
-import { Building2, Key, Settings, BarChart3, Users, User } from 'lucide-react';
+import { Building2, Key, Settings, BarChart3, Users, User, ClipboardList } from 'lucide-react';
 import OrganisationRouter from './organisation';
 import ConfigurationPage from './configuration/page';
 import ProfilePage from './profile/page';
 import LicenseManagementPage from './license-management/page';
+import EntityMockExamsPage from './mock-exams/page';
 
 interface EntityModulePageProps {
   moduleKey?: string;
@@ -104,6 +105,22 @@ function DashboardPage() {
           </div>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Manage your personal profile, security settings, and account preferences.
+          </p>
+          <div className="text-sm text-gray-500 dark:text-gray-500">
+            Available
+          </div>
+        </div>
+
+        {/* Mock Exam Management */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center mb-4">
+            <ClipboardList className="h-6 w-6 text-emerald-600 dark:text-emerald-400 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Mock Exam Management
+            </h3>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Orchestrate IGCSE-aligned mock papers, monitor staffing, and track learner readiness before final exam windows.
           </p>
           <div className="text-sm text-gray-500 dark:text-gray-500">
             Available
@@ -205,6 +222,7 @@ export default function EntityModulePage({ moduleKey }: EntityModulePageProps) {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="organisation/*" element={<OrganisationRouter />} />
         <Route path="configuration" element={<ConfigurationPage />} />
+        <Route path="mock-exams" element={<EntityMockExamsPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="license-management" element={<LicenseManagementPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />

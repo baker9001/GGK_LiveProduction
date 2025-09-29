@@ -144,6 +144,13 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'entity-module'
   },
   {
+    id: 'entity-mock-exams',
+    label: 'Mock Exams',
+    path: '/app/entity-module/mock-exams',
+    icon: 'ClipboardList',
+    moduleKey: 'entity-module'
+  },
+  {
     id: 'entity-analytics',
     label: 'Analytics',
     path: '/app/entity-module/analytics',
