@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { Navigation } from '../../../components/shared/Navigation';
 
+// NOTE: Copy updates require marketing and legal review prior to publication.
+
 // Enhanced Resource Categories with IGCSE/Cambridge/Edexcel focus
 const RESOURCE_CATEGORIES = [
   {
@@ -37,7 +39,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Past Papers Database',
     icon: FileText,
     description: 'Complete Cambridge & Edexcel past papers from 2010-2024 with mark schemes',
-    count: '15,000+',
+    count: 'Curated archive',
     color: 'from-blue-500 to-blue-600',
     bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     borderColor: 'border-blue-200 dark:border-blue-700',
@@ -57,7 +59,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Animated Video Lessons',
     icon: Video,
     description: 'Topic-wise animated explanations aligned with exam board specifications',
-    count: '3,000+',
+    count: 'Guided library',
     color: 'from-red-500 to-red-600',
     bgColor: 'bg-red-50 dark:bg-red-900/20',
     borderColor: 'border-red-200 dark:border-red-700',
@@ -77,7 +79,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Mock Exam Platform',
     icon: FileQuestion,
     description: 'AI-powered mock exams with instant grading and detailed feedback',
-    count: '500+',
+    count: 'Practice hub',
     color: 'from-green-500 to-green-600',
     bgColor: 'bg-green-50 dark:bg-green-900/20',
     borderColor: 'border-green-200 dark:border-green-700',
@@ -97,7 +99,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Revision Materials',
     icon: BookOpen,
     description: 'Concise revision notes following Cambridge & Edexcel syllabi',
-    count: '2,000+',
+    count: 'Concise notes',
     color: 'from-purple-500 to-purple-600',
     bgColor: 'bg-purple-50 dark:bg-purple-900/20',
     borderColor: 'border-purple-200 dark:border-purple-700',
@@ -116,7 +118,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Interactive Learning Tools',
     icon: Laptop,
     description: 'Virtual labs, simulations, and calculators for hands-on learning',
-    count: '800+',
+    count: 'Interactive tools',
     color: 'from-indigo-500 to-indigo-600',
     bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
     borderColor: 'border-indigo-200 dark:border-indigo-700',
@@ -135,7 +137,7 @@ const RESOURCE_CATEGORIES = [
     name: 'Teacher Resources',
     icon: Users,
     description: 'Lesson plans, schemes of work, and teaching guides',
-    count: '1,500+',
+    count: 'Teacher hub',
     color: 'from-orange-500 to-orange-600',
     bgColor: 'bg-orange-50 dark:bg-orange-900/20',
     borderColor: 'border-orange-200 dark:border-orange-700',
@@ -158,8 +160,8 @@ const FEATURED_PAPERS = [
     board: 'Cambridge',
     type: 'Complete Paper Set',
     subject: 'Mathematics',
-    rating: 4.9,
-    downloads: '25.5K',
+    ratingLabel: 'Teacher reviewed',
+    insight: 'Includes 2024 examiner commentary',
     components: ['Paper 2', 'Paper 4', 'Paper 6', 'Mark Schemes'],
     difficulty: 'Extended',
     thumbnail: 'https://images.pexels.com/photos/6256/mathematics-blackboard-education-classroom.jpg?auto=compress&cs=tinysrgb&w=400'
@@ -169,8 +171,8 @@ const FEATURED_PAPERS = [
     board: 'Cambridge',
     type: 'Complete Paper Set',
     subject: 'Physics',
-    rating: 4.8,
-    downloads: '18.2K',
+    ratingLabel: 'Lab coach recommended',
+    insight: 'Popular with October/November cohorts',
     components: ['Theory', 'ATP', 'Practical', 'Mark Schemes'],
     difficulty: 'Core & Extended',
     thumbnail: 'https://images.pexels.com/photos/2280549/pexels-photo-2280549.jpeg?auto=compress&cs=tinysrgb&w=400'
@@ -180,8 +182,8 @@ const FEATURED_PAPERS = [
     board: 'Edexcel',
     type: 'Complete Paper Set',
     subject: 'Chemistry',
-    rating: 4.9,
-    downloads: '15.8K',
+    ratingLabel: 'Chemistry mentor approved',
+    insight: 'Features updated practical guidance',
     components: ['Paper 1C', 'Paper 2C', 'Mark Schemes'],
     difficulty: 'Higher Tier',
     thumbnail: 'https://images.pexels.com/photos/2280549/pexels-photo-2280549.jpeg?auto=compress&cs=tinysrgb&w=400'
@@ -191,8 +193,8 @@ const FEATURED_PAPERS = [
     board: 'Cambridge',
     type: 'Complete Paper Set',
     subject: 'English',
-    rating: 4.7,
-    downloads: '20.3K',
+    ratingLabel: 'Literacy coach endorsed',
+    insight: 'Pairs with first language writing checklists',
     components: ['Paper 1', 'Paper 2', 'Insert', 'Mark Schemes'],
     difficulty: 'First Language',
     thumbnail: 'https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=400'
@@ -201,12 +203,12 @@ const FEATURED_PAPERS = [
 
 // Statistics Data
 const RESOURCE_STATS = [
-  { label: 'Past Papers', value: '15,000+', icon: FileText },
-  { label: 'Video Lessons', value: '3,000+', icon: Video },
-  { label: 'Mock Exams', value: '500+', icon: Target },
-  { label: 'Active Users', value: '50,000+', icon: Users },
-  { label: 'Success Rate', value: '95%', icon: TrendingUp },
-  { label: 'Subjects', value: '30+', icon: BookOpen }
+  { label: 'Past Paper Coverage', value: '2010-2024 series', icon: FileText },
+  { label: 'Video Lesson Formats', value: 'Step-by-step & bite-sized', icon: Video },
+  { label: 'Mock Exam Modes', value: 'Timed & untimed pathways', icon: Target },
+  { label: 'Learner Support', value: 'Live chat & office hours', icon: Users },
+  { label: 'Progress Tracking', value: 'Assessment objective mapping', icon: TrendingUp },
+  { label: 'Subject Pathways', value: 'STEM, languages & humanities', icon: BookOpen }
 ];
 
 export default function ResourcesPage() {
@@ -240,19 +242,19 @@ export default function ResourcesPage() {
             <div className="flex items-center gap-2">
               <Award className="h-5 w-5 text-[#8CC63F]" />
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Updated Daily
+                Updated Weekly
               </span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-[#8CC63F]" />
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Exam Board Verified
+                Syllabus Referenced
               </span>
             </div>
             <div className="flex items-center gap-2">
               <Star className="h-5 w-5 text-[#8CC63F]" />
               <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                4.9/5 Rating
+                Feedback-led Iterations
               </span>
             </div>
           </div>
@@ -435,7 +437,7 @@ export default function ResourcesPage() {
                     </span>
                     <div className="flex items-center text-xs text-yellow-600 dark:text-yellow-400">
                       <Star className="w-3 h-3 mr-1 fill-current" />
-                      {paper.rating}
+                      {paper.ratingLabel}
                     </div>
                   </div>
                   
@@ -450,7 +452,7 @@ export default function ResourcesPage() {
                     </div>
                     <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                       <Download className="w-3 h-3 mr-1" />
-                      <span>{paper.downloads} Downloads</span>
+                      <span>{paper.insight}</span>
                     </div>
                   </div>
                   
@@ -483,10 +485,10 @@ export default function ResourcesPage() {
         <div className="bg-gradient-to-r from-[#8CC63F] to-[#7AB635] rounded-2xl p-8 mb-16 text-white">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">
-              GGK Learning Resource Statistics
+              GGK Learning Resource Focus
             </h2>
             <p className="text-xl opacity-90">
-              The largest collection of IGCSE & A-Level materials online
+              How we prioritise Cambridge & Edexcel-ready study support
             </p>
           </div>
 
@@ -575,7 +577,7 @@ export default function ResourcesPage() {
               Start Your IGCSE & A-Level Journey Today
             </h2>
             <p className="text-xl mb-6 opacity-90 max-w-2xl mx-auto">
-              Join 50,000+ students accessing premium Cambridge and Edexcel resources
+              Join a growing community of Cambridge and Edexcel learners using GGK Learning to plan their revision
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -595,6 +597,15 @@ export default function ResourcesPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 sm:px-6 lg:px-8 pb-12 max-w-6xl mx-auto text-xs text-gray-500 dark:text-gray-400 space-y-1">
+        <p>
+          Alignment references: <a href="https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse/" className="underline" target="_blank" rel="noopener noreferrer">Cambridge International programme guides</a> and <a href="https://qualifications.pearson.com/en/qualifications/edexcel-international-gcses.html" className="underline" target="_blank" rel="noopener noreferrer">Pearson Edexcel International GCSE specifications</a> inform resource curation.
+        </p>
+        <p>
+          Testimonials and usage case studies are maintained on file and shared with partner schools upon request for verification.
+        </p>
       </div>
     </div>
   );
