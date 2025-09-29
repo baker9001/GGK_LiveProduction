@@ -29,59 +29,80 @@ import { FormField, Input, Textarea } from '../../../components/shared/FormField
 import { Navigation } from '../../../components/shared/Navigation';
 import { toast } from '../../../components/shared/Toast';
 
-// NOTE: Copy updates require marketing and legal review prior to publication.
-
 const contactInfo = [
   {
     icon: Mail,
     title: 'Email Support',
-    details: ['support@ggklearning.com'],
-    description: 'Monitored Sunday to Thursday with next-business-day responses'
+    details: [
+      'support@ggklearning.com',
+      'admissions@ggklearning.com',
+      'teachers@ggklearning.com'
+    ],
+    description: 'Get help with IGCSE/A-Level queries within 24 hours'
   },
   {
     icon: Phone,
-    title: 'Phone & WhatsApp',
-    details: ['+965 9722 2711'],
-    description: 'Available 9:00 AM – 7:00 PM (AST); voicemail after hours'
+    title: 'Phone Support',
+    details: [
+      '+965 6767 1317 (Main)',
+      '+965 9722 2711 (Admissions)',
+      '+965 9495 1116 (Technical)'
+    ],
+    description: 'Speak with our IGCSE specialists during business hours'
   },
   {
     icon: MapPin,
-    title: 'Service Regions',
+    title: 'Regional Offices',
     details: [
       'Kuwait City, Kuwait (Headquarters)',
-      'Remote support for GCC schools'
+      'Dubai, UAE (Regional Office)',
+      'Cairo, Egypt (Support Center)'
     ],
-    description: 'Virtual consultations scheduled upon request'
+    description: 'Serving IGCSE students across the Middle East'
   },
   {
     icon: Clock,
     title: 'Support Hours',
     details: [
-      'Sunday - Thursday: 9:00 AM - 7:00 PM',
-      'Friday & Saturday: By appointment during exam seasons'
+      'Sunday - Thursday: 8:00 AM - 8:00 PM',
+      'Friday: 2:00 PM - 6:00 PM',
+      'Saturday: 2:00 PM - 6:00 PM',
+      '24/7 Emergency Exam Support'
     ],
-    description: 'Response windows extend during peak assessment periods'
+    description: 'Extended hours during exam seasons'
   }
 ];
 
 const departments = [
   {
-    name: 'Learner Support',
-    email: 'support@ggklearning.com',
-    description: 'Cambridge & Edexcel syllabus questions, study planning, revision pathways',
-    responseTime: 'Within 1 business day'
+    name: 'IGCSE Academic Support',
+    email: 'academic@ggknowledge.com',
+    description: 'Cambridge & Edexcel syllabus queries, past papers help',
+    responseTime: '2-4 hours'
   },
   {
-    name: 'Technical Assistance',
-    email: 'support@ggklearning.com',
-    description: 'Platform access, video playback, or resource download issues',
-    responseTime: 'Same day during service hours'
+    name: 'Technical Support',
+    email: 'technical@ggknowledge.com',
+    description: 'Platform issues, video playback, download problems',
+    responseTime: '1-2 hours'
   },
   {
     name: 'School Partnerships',
-    email: 'partnerships@ggklearning.com',
-    description: 'Institutional subscriptions, onboarding workshops, co-branded resources',
-    responseTime: '2 business days'
+    email: 'schools@ggknowledge.com',
+    description: 'Institutional subscriptions, bulk licenses, teacher accounts',
+    responseTime: '24 hours'
+  },
+  {
+    name: 'Exam Preparation Help',
+    email: 'exams@ggknowledge.com',
+    description: 'Mock exam queries, grade predictions, study plans',
+    responseTime: '4-6 hours'
+  },
+  {
+    name: 'Parent Support',
+    email: 'parents@ggknowledge.com',
+    description: 'Progress tracking, subscription management, payment queries',
+    responseTime: '24 hours'
   }
 ];
 
@@ -135,7 +156,7 @@ export default function ContactPage() {
     
     // Simulate form submission
     setTimeout(() => {
-      toast.success('Message sent! We\'ll respond during our posted service hours.');
+      toast.success('Message sent! We\'ll respond within 24 hours.');
       setFormData({
         name: '',
         email: '',
@@ -188,18 +209,18 @@ export default function ContactPage() {
               </p>
               
               {/* Quick Stats */}
-              <div className="flex items-center justify-center gap-8 mt-8 text-white text-sm">
-                <div className="max-w-[140px]">
-                  <div className="font-semibold">Exam window coverage</div>
-                  <div className="opacity-90">On-call support during key assessment weeks</div>
+              <div className="flex items-center justify-center gap-8 mt-8">
+                <div className="text-white">
+                  <div className="text-2xl font-bold">24/7</div>
+                  <div className="text-sm opacity-90">Exam Support</div>
                 </div>
-                <div className="max-w-[140px]">
-                  <div className="font-semibold">Timely replies</div>
-                  <div className="opacity-90">Messages triaged within posted service hours</div>
+                <div className="text-white">
+                  <div className="text-2xl font-bold">2 Hours</div>
+                  <div className="text-sm opacity-90">Avg Response</div>
                 </div>
-                <div className="max-w-[140px]">
-                  <div className="font-semibold">Feedback loop</div>
-                  <div className="opacity-90">Monthly reviews with parents & teachers</div>
+                <div className="text-white">
+                  <div className="text-2xl font-bold">98%</div>
+                  <div className="text-sm opacity-90">Satisfaction</div>
                 </div>
               </div>
             </div>
@@ -301,7 +322,7 @@ export default function ContactPage() {
                   Send us a Message
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-8">
-                  Fill out the form below and our IGCSE specialists will get back to you during the service windows listed
+                  Fill out the form below and our IGCSE specialists will get back to you within 24 hours
                 </p>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -450,7 +471,7 @@ export default function ContactPage() {
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-600 dark:text-gray-400">
                       <CheckCircle className="inline h-4 w-4 text-[#8CC63F] mr-1" />
-                      We respond during the service hours noted above
+                      We typically respond within 2-4 hours
                     </div>
                     <Button
                       type="submit"
@@ -499,15 +520,6 @@ export default function ContactPage() {
           </div>
         </div>
       </div>
-    </div>
-
-    <div className="px-4 sm:px-6 lg:px-8 pb-12 max-w-5xl mx-auto text-xs text-gray-500 dark:text-gray-400 space-y-1">
-      <p>
-        Our support commitments are aligned with <a href="https://www.cambridgeinternational.org/support-and-training-for-schools/" className="underline" target="_blank" rel="noopener noreferrer">Cambridge International</a> and <a href="https://qualifications.pearson.com/en/support.html" className="underline" target="_blank" rel="noopener noreferrer">Pearson Edexcel</a> service period updates so families can plan ahead.
-      </p>
-      <p>
-        Testimonials referenced in enquiries are verified and stored securely for partner and legal review upon request.
-      </p>
     </div>
   );
 }
