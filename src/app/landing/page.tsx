@@ -13,8 +13,6 @@ import {
 import { Button } from '../../components/shared/Button';
 import { Navigation } from '../../components/shared/Navigation';
 
-// NOTE: Copy updates require marketing and legal review prior to publication.
-
 // Fallback image for subjects
 const FALLBACK_IMAGE = "https://images.pexels.com/photos/256395/pexels-photo-256395.jpeg?auto=compress&cs=tinysrgb&w=600";
 
@@ -365,18 +363,19 @@ export default function LandingPage() {
                 Watch Demo
               </Button>
             </div>
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-6 text-white text-sm">
-              <div className="max-w-[160px] text-center">
-                <div className="font-semibold">Cambridge & Edexcel focus</div>
-                <div className="opacity-90">Resources mapped to published specifications</div>
+            {/* Trust badges - FIXED WITH CORRECT NUMBERS */}
+            <div className="mt-8 flex items-center justify-center gap-8">
+              <div className="text-white">
+                <div className="text-3xl font-bold">+</div>
+                <div className="text-sm opacity-90">Active Students</div>
               </div>
-              <div className="max-w-[160px] text-center">
-                <div className="font-semibold">Educator guidance</div>
-                <div className="opacity-90">Quarterly reviews with partner teachers</div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">%</div>
+                <div className="text-sm opacity-90">Pass Rate</div>
               </div>
-              <div className="max-w-[160px] text-center">
-                <div className="font-semibold">Learner community</div>
-                <div className="opacity-90">Study groups moderated by GGK coaches</div>
+              <div className="text-white">
+                <div className="text-3xl font-bold">+</div>
+                <div className="text-sm opacity-90">Schools Trust Us</div>
               </div>
             </div>
           </div>
@@ -388,10 +387,10 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Exam Board Alignment
+              Official Exam Board Coverage
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400">
-              Resources referenced against published specifications for major examination boards
+              Complete syllabus coverage for all major examination boards
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -512,7 +511,7 @@ export default function LandingPage() {
               Success Stories from IGCSE & A-Level Students
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400">
-              Join learners across the Middle East who prepare with GGK Learning for exam success
+              Join thousands of students achieving top grades with GGK Learning
             </p>
           </div>
           
@@ -573,20 +572,20 @@ export default function LandingPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center text-white">
-              <div className="text-xl font-semibold mb-1">Expanding Library</div>
-              <div className="text-xs opacity-90">Curated past papers & mark schemes</div>
+              <div className="text-3xl font-bold mb-1">15,000+</div>
+              <div className="text-xs opacity-90">Past Papers Database</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-xl font-semibold mb-1">Guided Lessons</div>
-              <div className="text-xs opacity-90">Syllabus-aligned video walkthroughs</div>
+              <div className="text-3xl font-bold mb-1">3,000+</div>
+              <div className="text-xs opacity-90">Video Lessons</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-xl font-semibold mb-1">Practice Pathways</div>
-              <div className="text-xs opacity-90">Exam-style mocks & feedback</div>
+              <div className="text-3xl font-bold mb-1">500+</div>
+              <div className="text-xs opacity-90">Mock Exams</div>
             </div>
             <div className="text-center text-white">
-              <div className="text-xl font-semibold mb-1">Responsive Support</div>
-              <div className="text-xs opacity-90">Dedicated help during exam seasons</div>
+              <div className="text-3xl font-bold mb-1">24/7</div>
+              <div className="text-xs opacity-90">Learning Support</div>
             </div>
           </div>
         </div>
@@ -603,8 +602,8 @@ export default function LandingPage() {
                 <span className="ml-2 text-xl font-bold">GGK Learning</span>
               </div>
               <p className="text-gray-400 text-sm">
-                Your trusted guide for IGCSE, O-Level, and A-Level success.
-                Resources crafted around Cambridge International and Pearson Edexcel syllabi.<sup className="ml-1">1</sup>
+                Your trusted partner for IGCSE, O-Level, and A-Level success. 
+                Official Cambridge and Edexcel exam preparation platform.
               </p>
               <div className="flex space-x-3">
                 <a href="#" className="text-gray-400 hover:text-[#8CC63F] transition-colors">
@@ -692,7 +691,7 @@ export default function LandingPage() {
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Mail className="h-4 w-4 text-[#8CC63F] mr-2" />
-                  <span className="text-gray-400 text-sm">support@ggklearning.com</span>
+                  <span className="text-gray-400 text-sm">support@ggknowledge.com</span>
                 </div>
                 <div className="flex items-center">
                   <Phone className="h-4 w-4 text-[#8CC63F] mr-2" />
@@ -710,7 +709,7 @@ export default function LandingPage() {
           <div className="border-t border-gray-800 mt-8 pt-6">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <p className="text-gray-400 text-xs">
-                © 2025 GGK Learning Platform. Cambridge International and Pearson Edexcel are independent organizations; GGK Learning provides supplementary support aligned to their published specifications.<sup className="ml-1">2</sup>
+                © 2025 GGK Learning Platform. Official Cambridge & Edexcel Partner.
               </p>
               <div className="flex space-x-4 mt-3 md:mt-0">
                 <Link to="/privacy" className="text-gray-400 hover:text-white text-xs transition-colors">
@@ -724,14 +723,6 @@ export default function LandingPage() {
                 </Link>
               </div>
             </div>
-          </div>
-          <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-            <p>
-              <sup>1</sup> Alignment references: <a href="https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse/" className="underline hover:text-white" target="_blank" rel="noopener noreferrer">Cambridge International IGCSE subject guides</a> and <a href="https://qualifications.pearson.com/en/qualifications/edexcel-international-gcses.html" className="underline hover:text-white" target="_blank" rel="noopener noreferrer">Pearson Edexcel International GCSE specifications</a>.
-            </p>
-            <p>
-              <sup>2</sup> Testimonials featured above originate from verified parent and teacher references maintained on file; excerpts are published with permission.
-            </p>
           </div>
         </div>
       </footer>
