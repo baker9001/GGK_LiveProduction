@@ -160,14 +160,14 @@ export function useAccessControl(): UseAccessControlResult {
       }
 
       // Check connection first
-      const isConnected = await checkSupabaseConnection();
-      
+      const { connected: isConnected, error: connectionError } = await checkSupabaseConnection();
+
       if (!isConnected) {
         console.warn('[useAccessControl] Supabase connection failed, using offline mode');
         setIsOffline(true);
         const fallbackScope = getDefaultScope(user.id, user.email);
         setUserScope(fallbackScope);
-        setError('Working in offline mode. Limited functionality available.');
+        setError(connectionError || 'Working in offline mode. Limited functionality available.');
         setHasError(false); // Not a critical error
         return fallbackScope;
       }

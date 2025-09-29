@@ -2,7 +2,7 @@
 // FIXED VERSION WITH BETTER ERROR HANDLING FOR WEBCONTAINER
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, checkSupabaseConnection, handleSupabaseError } from '@/lib/supabase';
+import { supabase, checkSupabaseConnection } from '@/lib/supabase';
 import { useUser } from './UserContext';
 import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
 import { AdminPermissions, AdminLevel } from '@/app/entity-module/organisation/tabs/admins/types/admin.types';
@@ -201,9 +201,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     // Only set up subscriptions if we have a user
     if (user?.id) {
       // Check if we can establish connection before setting up subscriptions
-      checkSupabaseConnection().then(({ connected: isConnected }) => {
+      checkSupabaseConnection().then(({ connected: isConnected, error: connectionError }) => {
         if (!isConnected) {
-          console.warn('Skipping subscription setup due to connection failure');
+          console.warn('Skipping subscription setup due to connection failure', connectionError);
           return;
         }
 
