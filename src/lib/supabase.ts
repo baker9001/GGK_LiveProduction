@@ -125,23 +125,42 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Connection health check function
-export async function checkSupabaseConnection(): Promise<boolean> {
+export async function checkSupabaseConnection(): Promise<{ connected: boolean; error?: string }> {
   try {
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     if (error && error.code !== 'PGRST116') {
+      const errorMessage = error.message || 'Failed to connect to Supabase';
       console.warn('Supabase connection check failed:', error);
-      return false;
+      return {
+        connected: false,
+        error: errorMessage
+      };
     }
     console.log('✅ Supabase connection successful');
-    return true;
+    return { connected: true };
   } catch (error) {
+    let errorMessage = 'Unable to connect to the database. Please check your connection and try again.';
+
     try {
       handleSupabaseError(error, 'connection check');
-    } catch (handledError) {
-      // handleSupabaseError throws user-friendly errors, but we want to continue gracefully
-      console.warn('❌ Supabase connection error:', handledError.message);
+    } catch (handledError: any) {
+      errorMessage = handledError?.message || String(handledError);
+      console.warn('❌ Supabase connection error:', errorMessage);
+      return {
+        connected: false,
+        error: errorMessage
+      };
     }
-    return false;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    console.warn('❌ Supabase connection error:', errorMessage);
+    return {
+      connected: false,
+      error: errorMessage
+    };
   }
 }
 
@@ -191,7 +210,7 @@ export async function supabaseQuery<T>(
 
 // Initialize connection check on load (development only)
 if (import.meta.env.DEV) {
-  checkSupabaseConnection().then(connected => {
+  checkSupabaseConnection().then(({ connected }) => {
     if (!connected) {
       console.warn('⚠️ Initial Supabase connection failed. Will retry on first query.');
     }
