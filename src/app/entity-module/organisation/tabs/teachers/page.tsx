@@ -399,6 +399,64 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     };
   }, []);
 
+  // FIXED: Effect to trigger dependent queries when editing teacher
+  useEffect(() => {
+    if (showEditForm && formData.school_ids && formData.school_ids.length > 0) {
+      // Force refetch of dependent data when edit form opens with schools
+      queryClient.invalidateQueries(['branches-for-form', formData.school_ids]);
+      queryClient.invalidateQueries(['grade-levels-for-form', formData.school_ids, formData.branch_ids]);
+      
+      if (formData.grade_level_ids && formData.grade_level_ids.length > 0) {
+        queryClient.invalidateQueries(['sections-for-form', formData.grade_level_ids]);
+      }
+    }
+  }, [showEditForm, formData.school_ids, formData.branch_ids, formData.grade_level_ids, queryClient]);
+
+  // FIXED: Add ESC key and outside click handlers for assignment modal
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showAssignmentModal) {
+          handleCloseAssignmentModal();
+        } else if (showViewModal) {
+          handleCloseViewModal();
+        }
+      }
+    };
+
+    if (showAssignmentModal || showViewModal) {
+      document.addEventListener('keydown', handleEscapeKey);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+      document.body.style.overflow = 'unset';
+    };
+  }, [showAssignmentModal, showViewModal]);
+
+  // Helper function to close assignment modal
+  const handleCloseAssignmentModal = useCallback(() => {
+    setShowAssignmentModal(false);
+    setSelectedTeacher(null);
+    setAssignmentFormData({
+      school_ids: [],
+      branch_ids: [],
+      program_ids: [],
+      subject_ids: [],
+      grade_level_ids: [],
+      section_ids: []
+    });
+    setCurrentAssignmentStep(1);
+  }, []);
+
+  // Helper function to close view modal
+  const handleCloseViewModal = useCallback(() => {
+    setShowViewModal(false);
+    setViewingTeacher(null);
+  }, []);
+
   // ===== ACCESS CONTROL CHECK =====
   useEffect(() => {
     if (!isAccessControlLoading && !canViewTab('teachers')) {
@@ -709,6 +767,108 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     { 
       enabled: !!(formData.school_ids && formData.school_ids.length > 0),
       staleTime: 5 * 60 * 1000
+    }
+  );
+
+  // FIXED: Fetch grade levels for form (when editing)
+  const { data: formGradeLevels = [] } = useQuery<GradeLevel[]>(
+    ['grade-levels-for-form', formData.school_ids, formData.branch_ids],
+    async () => {
+      if (!formData.school_ids || formData.school_ids.length === 0) return [];
+      
+      let query = supabase
+        .from('grade_levels')
+        .select(`
+          id, 
+          grade_name, 
+          grade_code, 
+          grade_order, 
+          school_id, 
+          branch_id,
+          schools!inner (
+            id,
+            name
+          ),
+          branches (
+            id,
+            name
+          )
+        `)
+        .in('school_id', formData.school_ids)
+        .eq('status', 'active')
+        .order('grade_order');
+
+      // If branches are selected, include both branch-specific and school-level grades
+      if (formData.branch_ids && formData.branch_ids.length > 0) {
+        query = query.or(`branch_id.in.(${formData.branch_ids.join(',')}),branch_id.is.null`);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Form grade levels query error:', error);
+        return [];
+      }
+      
+      // Transform data to include school/branch context
+      const gradeLevelsWithContext = (data || []).map(grade => ({
+        ...grade,
+        display_name: `${grade.grade_name} (${grade.grade_code}) - ${grade.schools?.name}${grade.branches ? ` / ${grade.branches.name}` : ''}`
+      }));
+      
+      return gradeLevelsWithContext;
+    },
+    { 
+      enabled: !!(formData.school_ids && formData.school_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
+    }
+  );
+
+  // FIXED: Fetch sections for form (when editing)
+  const { data: formSections = [] } = useQuery<ClassSection[]>(
+    ['sections-for-form', formData.grade_level_ids],
+    async () => {
+      if (!formData.grade_level_ids || formData.grade_level_ids.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('class_sections')
+        .select(`
+          id, 
+          section_name, 
+          section_code, 
+          grade_level_id,
+          grade_levels!inner (
+            grade_name,
+            grade_code
+          )
+        `)
+        .in('grade_level_id', formData.grade_level_ids)
+        .eq('status', 'active')
+        .order('class_section_order');
+      
+      if (error) {
+        console.error('Form sections query error:', error);
+        return [];
+      }
+      
+      // Transform data to include grade info
+      const sectionsWithGrade = (data || []).map(section => ({
+        id: section.id,
+        section_name: section.section_name,
+        section_code: section.section_code,
+        grade_level_id: section.grade_level_id,
+        grade_name: section.grade_levels?.grade_name || '',
+        grade_code: section.grade_levels?.grade_code || '',
+        display_name: `${section.grade_levels?.grade_name || ''} - ${section.section_name} (${section.section_code})`
+      }));
+      
+      return sectionsWithGrade;
+    },
+    { 
+      enabled: !!(formData.grade_level_ids && formData.grade_level_ids.length > 0),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false
     }
   );
 
@@ -2275,7 +2435,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
       {/* Enhanced Assignment Modal with Wizard - FIXED BUTTONS */}
       {showAssignmentModal && selectedTeacher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            // Close modal if clicking on backdrop (outside the modal content)
+            if (e.target === e.currentTarget) {
+              handleCloseAssignmentModal();
+            }
+          }}
+        >
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB532]/10">
@@ -2290,20 +2458,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setShowAssignmentModal(false);
-                  setSelectedTeacher(null);
-                  setAssignmentFormData({
-                    school_ids: [],
-                    branch_ids: [],
-                    program_ids: [],
-                    subject_ids: [],
-                    grade_level_ids: [],
-                    section_ids: []
-                  });
-                  setCurrentAssignmentStep(1);
-                }}
+                onClick={handleCloseAssignmentModal}
                 className="text-gray-500 hover:text-gray-700"
+                title="Close (ESC)"
               >
                 <X className="w-5 h-5" />
               </Button>
@@ -2758,19 +2915,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowAssignmentModal(false);
-                      setSelectedTeacher(null);
-                      setAssignmentFormData({
-                        school_ids: [],
-                        branch_ids: [],
-                        program_ids: [],
-                        subject_ids: [],
-                        grade_level_ids: [],
-                        section_ids: []
-                      });
-                      setCurrentAssignmentStep(1);
-                    }}
+                    onClick={handleCloseAssignmentModal}
                     disabled={isAssignmentLoading}
                   >
                     Cancel
@@ -2784,7 +2929,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
       {/* FIXED: View Teacher Details Modal - Complete Implementation with Multiple Assignments */}
       {showViewModal && viewingTeacher && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            // Close modal if clicking on backdrop (outside the modal content)
+            if (e.target === e.currentTarget) {
+              handleCloseViewModal();
+            }
+          }}
+        >
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#8CC63F]/10 to-[#7AB532]/10">
@@ -2805,11 +2958,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setViewingTeacher(null);
-                  }}
+                  onClick={handleCloseViewModal}
                   className="text-gray-500 hover:text-gray-700"
+                  title="Close (ESC)"
                 >
                   <X className="w-5 h-5" />
                 </Button>
@@ -3081,10 +3232,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   )}
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowViewModal(false);
-                      setViewingTeacher(null);
-                    }}
+                    onClick={handleCloseViewModal}
                   >
                     Close
                   </Button>
@@ -3241,7 +3389,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 <SearchableMultiSelect
                   options={availableSchools.map(s => ({ value: s.id, label: s.name }))}
                   selectedValues={formData.school_ids || []}
-                  onChange={(values) => setFormData({ ...formData, school_ids: values, branch_ids: [] })}
+                  onChange={(values) => setFormData({ ...formData, school_ids: values, branch_ids: [], grade_level_ids: [], section_ids: [] })}
                   placeholder="Select schools (at least one required)"
                   className={formErrors.school_ids ? 'border-red-500' : ''}
                 />
@@ -3252,7 +3400,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   <SearchableMultiSelect
                     options={formBranches.map(b => ({ value: b.id, label: b.name }))}
                     selectedValues={formData.branch_ids || []}
-                    onChange={(values) => setFormData({ ...formData, branch_ids: values })}
+                    onChange={(values) => setFormData({ ...formData, branch_ids: values, grade_level_ids: [], section_ids: [] })}
                     placeholder="Select branches"
                   />
                 </FormField>
@@ -3267,10 +3415,68 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 />
               </FormField>
 
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  💡 For detailed class assignments (grades, sections, programs, subjects), 
-                  use the Assignments button after creating the teacher.
+              {/* FIXED: Add grade levels and sections to the form */}
+              {formData.school_ids && formData.school_ids.length > 0 && (
+                <>
+                  <FormField id="grade_level_ids" label="Grade Levels (Optional)">
+                    <SearchableMultiSelect
+                      options={formGradeLevels.map(g => ({ 
+                        value: g.id, 
+                        label: g.display_name || `${g.grade_name} (${g.grade_code}) - ${g.schools?.name}${g.branches ? ` / ${g.branches.name}` : ''}`
+                      }))}
+                      selectedValues={formData.grade_level_ids || []}
+                      onChange={(values) => setFormData({ ...formData, grade_level_ids: values, section_ids: [] })}
+                      placeholder="Select grade levels"
+                    />
+                    {formGradeLevels.length === 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        No grade levels available for selected schools. Grade levels may not be configured yet.
+                      </p>
+                    )}
+                  </FormField>
+
+                  {formData.grade_level_ids && formData.grade_level_ids.length > 0 && (
+                    <FormField id="section_ids" label="Class Sections (Optional)">
+                      <SearchableMultiSelect
+                        options={formSections.map(s => ({ 
+                          value: s.id, 
+                          label: s.display_name || `${s.grade_name} - ${s.section_name} (${s.section_code})`
+                        }))}
+                        selectedValues={formData.section_ids || []}
+                        onChange={(values) => setFormData({ ...formData, section_ids: values })}
+                        placeholder="Select sections"
+                      />
+                      {formSections.length === 0 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          No sections available for selected grades. Sections may not be configured yet.
+                        </p>
+                      )}
+                    </FormField>
+                  )}
+
+                  <FormField id="program_ids" label="Programs (Optional)">
+                    <SearchableMultiSelect
+                      options={availablePrograms.map(p => ({ value: p.id, label: p.name }))}
+                      selectedValues={formData.program_ids || []}
+                      onChange={(values) => setFormData({ ...formData, program_ids: values })}
+                      placeholder="Select programs"
+                    />
+                  </FormField>
+
+                  <FormField id="subject_ids" label="Subjects (Optional)">
+                    <SearchableMultiSelect
+                      options={availableSubjects.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                      selectedValues={formData.subject_ids || []}
+                      onChange={(values) => setFormData({ ...formData, subject_ids: values })}
+                      placeholder="Select subjects"
+                    />
+                  </FormField>
+                </>
+              )}
+
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  💡 You can assign basic relationships here, or use the detailed Assignment Wizard after saving for more advanced configuration.
                 </p>
               </div>
             </TabsContent>
