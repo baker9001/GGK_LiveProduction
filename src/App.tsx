@@ -55,6 +55,17 @@ import SubjectsPage from './app/landing/subjects/page';
 import ResourcesPage from './app/landing/resources/page';
 import AboutPage from './app/landing/about/page';
 import ContactPage from './app/landing/contact/page';
+import MockExamsPage from './app/landing/mock-exams/page';
+import VideoLessonsPage from './app/landing/video-lessons/page';
+import PricingPage from './app/landing/pricing/page';
+import CambridgeIgcsePage from './app/landing/cambridge-igcse/page';
+import EdexcelIgcsePage from './app/landing/edexcel-igcse/page';
+import CambridgeALevelPage from './app/landing/cambridge-a-level/page';
+import EdexcelALevelPage from './app/landing/edexcel-a-level/page';
+import CambridgeOLevelPage from './app/landing/cambridge-o-level/page';
+import PrivacyPage from './app/landing/privacy/page';
+import TermsPage from './app/landing/terms/page';
+import CookiesPage from './app/landing/cookies/page';
 
 // PRESERVED: Module access control wrapper
 function ModuleRoute({ 
@@ -124,6 +135,17 @@ function App() {
               <Route path="/resources" element={<ResourcesPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/contact" element={<ContactPage />} />
+              <Route path="/mock-exams" element={<MockExamsPage />} />
+              <Route path="/video-lessons" element={<VideoLessonsPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/cambridge-igcse" element={<CambridgeIgcsePage />} />
+              <Route path="/edexcel-igcse" element={<EdexcelIgcsePage />} />
+              <Route path="/cambridge-a-level" element={<CambridgeALevelPage />} />
+              <Route path="/edexcel-a-level" element={<EdexcelALevelPage />} />
+              <Route path="/cambridge-o-level" element={<CambridgeOLevelPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/cookies" element={<CookiesPage />} />
               
               {/* ============================================ */}
               {/* AUTHENTICATION PAGES */}
