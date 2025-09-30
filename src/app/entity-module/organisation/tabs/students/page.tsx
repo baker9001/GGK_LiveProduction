@@ -24,7 +24,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit, Eye, MoreVertical, User } from 'lucide-react';
+import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, Edit2, Eye, MoreVertical, User } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
@@ -946,7 +946,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                               onClick={() => handleEditStudent(student)}
                               title="Edit Student"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </Button>
                           )}
                         </div>

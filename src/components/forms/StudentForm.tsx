@@ -451,6 +451,7 @@ export function StudentForm({
       await userCreationService.updateStudent(initialData.user_id, {
         name: data.name,
         email: data.email,
+        phone: data.phone,
         student_code: data.student_code,
         enrollment_number: data.enrollment_number,
         grade_level: data.grade_level,
