@@ -103,35 +103,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   // Get user context early for company ID
   const userContext = getUserContext();
-  const deleteCount = deleteContext?.ids.length ?? 0;
-  const deleteTitle = deleteCount > 1 ? 'Delete Branches' : 'Delete Branch';
-  const deleteNamesPreview = deleteContext ? deleteContext.names.slice(0, 3).join(', ') : '';
-  const deleteMessage = deleteCount === 1
-    ? `Are you sure you want to delete "${deleteContext?.names[0]}"? This action cannot be undone.`
-    : deleteCount > 1
-      ? `Are you sure you want to delete ${deleteCount} branches? This action cannot be undone.${deleteNamesPreview ? ` Selected: ${deleteNamesPreview}${deleteCount > 3 ? '…' : ''}` : ''}`
-      : '';
-  
-  // AUTO-SELECT USER'S COMPANY
-  const companyId = useMemo(() => {
-    if (userContext?.companyId) {
-      console.log('Using company ID from user context:', userContext.companyId);
-      return userContext.companyId;
-    }
-    
-    if (user?.company_id) {
-      console.log('Using company ID from user object:', user.company_id);
-      return user.company_id;
-    }
-    
-    if (propCompanyId) {
-      console.log('Using company ID from prop:', propCompanyId);
-      return propCompanyId;
-    }
-    
-    console.error('No company ID found in user context, user object, or props');
-    return null;
-  }, [userContext, user, propCompanyId]);
 
   // State management
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -145,12 +116,43 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
-  
+
   // Confirmation dialog state
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deleteContext, setDeleteContext] = useState<{ ids: string[]; names: string[] } | null>(null);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // Delete confirmation variables (calculated after deleteContext is declared)
+  const deleteCount = deleteContext?.ids.length ?? 0;
+  const deleteTitle = deleteCount > 1 ? 'Delete Branches' : 'Delete Branch';
+  const deleteNamesPreview = deleteContext ? deleteContext.names.slice(0, 3).join(', ') : '';
+  const deleteMessage = deleteCount === 1
+    ? `Are you sure you want to delete "${deleteContext?.names[0]}"? This action cannot be undone.`
+    : deleteCount > 1
+      ? `Are you sure you want to delete ${deleteCount} branches? This action cannot be undone.${deleteNamesPreview ? ` Selected: ${deleteNamesPreview}${deleteCount > 3 ? '…' : ''}` : ''}`
+      : '';
+
+  // AUTO-SELECT USER'S COMPANY
+  const companyId = useMemo(() => {
+    if (userContext?.companyId) {
+      console.log('Using company ID from user context:', userContext.companyId);
+      return userContext.companyId;
+    }
+
+    if (user?.company_id) {
+      console.log('Using company ID from user object:', user.company_id);
+      return user.company_id;
+    }
+
+    if (propCompanyId) {
+      console.log('Using company ID from prop:', propCompanyId);
+      return propCompanyId;
+    }
+
+    console.error('No company ID found in user context, user object, or props');
+    return null;
+  }, [userContext, user, propCompanyId]);
 
   // ACCESS CHECK: Block entry if user cannot view this tab
   useEffect(() => {
