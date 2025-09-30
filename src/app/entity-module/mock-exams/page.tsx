@@ -232,9 +232,13 @@ export default function EntityMockExamsPage() {
   const { data: stats } = useMockExamStats(companyId, assignedSchoolIds);
   const { data: dataStructures = [] } = useDataStructures(companyId);
   const { data: schools = [] } = useSchools(companyId);
-  const selectedSchoolIds = formState.schools.length > 0 ? formState.schools : (assignedSchoolIds || []);
-  const { data: gradeLevels = [] } = useGradeLevels(selectedSchoolIds);
-  const { data: classSections = [] } = useClassSections(selectedSchoolIds, formState.gradeBands);
+  const { data: gradeLevels = [], isLoading: isLoadingGradeLevels } = useGradeLevels(
+    formState.schools.length > 0 ? formState.schools : undefined
+  );
+  const { data: classSections = [] } = useClassSections(
+    formState.schools.length > 0 ? formState.schools : undefined,
+    formState.gradeBands
+  );
   const { data: teachers = [] } = useTeachers(assignedSchoolIds || []);
   const createMockExam = useCreateMockExam();
 
@@ -1001,17 +1005,28 @@ export default function EntityMockExamsPage() {
                     sections: []
                   }));
                 }}
-                placeholder="Select year groups"
+                placeholder={isLoadingGradeLevels ? "Loading year groups..." : "Select year groups"}
                 className="green-theme"
                 usePortal={false}
-                disabled={formState.schools.length === 0}
+                disabled={formState.schools.length === 0 || isLoadingGradeLevels}
               />
               {formErrors.gradeBands && (
                 <p className="text-xs text-red-500">{formErrors.gradeBands}</p>
               )}
-              {formState.schools.length > 0 && formState.gradeBands.length === 0 && (
+              {isLoadingGradeLevels && formState.schools.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading year groups for selected school{formState.schools.length > 1 ? 's' : ''}...
+                </p>
+              )}
+              {!isLoadingGradeLevels && formState.schools.length > 0 && gradeLevels.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No year groups found for selected school{formState.schools.length > 1 ? 's' : ''}
+                </p>
+              )}
+              {!isLoadingGradeLevels && formState.schools.length > 0 && gradeLevels.length > 0 && formState.gradeBands.length === 0 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Year groups linked to selected school{formState.schools.length > 1 ? 's' : ''}
+                  {gradeLevels.length} year group{gradeLevels.length > 1 ? 's' : ''} available for selected school{formState.schools.length > 1 ? 's' : ''}
                 </p>
               )}
             </div>
