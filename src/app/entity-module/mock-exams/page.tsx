@@ -27,6 +27,7 @@ import {
   useMockExamStats,
   useDataStructures,
   useSchools,
+  useBranches,
   useGradeLevels,
   useClassSections,
   useTeachers,
@@ -94,8 +95,10 @@ interface CreateMockExamFormState {
   board: string;
   program: string;
   subject: string;
+  subjectId: string;
   paper: string;
   schools: string[];
+  branches: string[];
   gradeBands: string[];
   sections: string[];
   examWindow: string;
@@ -164,8 +167,10 @@ const initialCreateFormState: CreateMockExamFormState = {
   board: '',
   program: '',
   subject: '',
+  subjectId: '',
   paper: paperOptions[0]?.value ?? '',
   schools: [],
+  branches: [],
   gradeBands: [],
   sections: [],
   examWindow: 'Term 2',
@@ -232,6 +237,9 @@ export default function EntityMockExamsPage() {
   const { data: stats } = useMockExamStats(companyId, assignedSchoolIds);
   const { data: dataStructures = [] } = useDataStructures(companyId);
   const { data: schools = [] } = useSchools(companyId);
+  const { data: branches = [], isLoading: isLoadingBranches } = useBranches(
+    formState.schools.length > 0 ? formState.schools : undefined
+  );
   const { data: gradeLevels = [], isLoading: isLoadingGradeLevels } = useGradeLevels(
     formState.schools.length > 0 ? formState.schools : undefined
   );
@@ -239,7 +247,10 @@ export default function EntityMockExamsPage() {
     formState.schools.length > 0 ? formState.schools : undefined,
     formState.gradeBands
   );
-  const { data: teachers = [] } = useTeachers(assignedSchoolIds || []);
+  const { data: teachers = [], isLoading: isLoadingTeachers } = useTeachers(
+    formState.schools.length > 0 ? formState.schools : undefined,
+    formState.subjectId || undefined
+  );
   const createMockExam = useCreateMockExam();
 
   const programOptions = useMemo(() => {
@@ -267,6 +278,36 @@ export default function EntityMockExamsPage() {
       label: `${cs.grade_level_name} - ${cs.name} (${cs.student_count} students)`
     }));
   }, [classSections]);
+
+  const branchOptions = useMemo(() => {
+    if (!branches || branches.length === 0) return [];
+
+    const groupedBranches = branches.reduce((acc: any, branch: any) => {
+      const schoolId = branch.school_id;
+      if (!acc[schoolId]) {
+        acc[schoolId] = {
+          school: schools.find(s => s.id === schoolId),
+          branches: []
+        };
+      }
+      acc[schoolId].branches.push(branch);
+      return acc;
+    }, {});
+
+    const options: any[] = [];
+    Object.values(groupedBranches).forEach((group: any) => {
+      if (group.school) {
+        group.branches.forEach((branch: any) => {
+          options.push({
+            value: branch.id,
+            label: `${group.school.name} → ${branch.name}`
+          });
+        });
+      }
+    });
+
+    return options;
+  }, [branches, schools]);
 
   const teacherDirectory = useMemo(() => {
     return teachers.map(t => ({
@@ -411,6 +452,40 @@ export default function EntityMockExamsPage() {
       return true;
     });
   }, [filters, transformedExams, gradeLevels]);
+
+  useEffect(() => {
+    if (selectedDataStructure) {
+      const ds = dataStructures.find(d => d.id === selectedDataStructure);
+      if (ds && ds.subject_id !== formState.subjectId) {
+        setFormState(prev => ({
+          ...prev,
+          subjectId: ds.subject_id,
+          teachers: []
+        }));
+      }
+    }
+  }, [selectedDataStructure, dataStructures, formState.subjectId]);
+
+  useEffect(() => {
+    if (formState.schools.length === 0) {
+      setFormState(prev => ({
+        ...prev,
+        branches: [],
+        gradeBands: [],
+        sections: [],
+        teachers: []
+      }));
+    }
+  }, [formState.schools.length]);
+
+  useEffect(() => {
+    if (formState.gradeBands.length === 0) {
+      setFormState(prev => ({
+        ...prev,
+        sections: []
+      }));
+    }
+  }, [formState.gradeBands.length]);
 
   const validateForm = () => {
     const nextErrors: FormErrors = {};
@@ -947,7 +1022,8 @@ export default function EntityMockExamsPage() {
                       ...prev,
                       program: ds.program_name,
                       board: ds.provider_name,
-                      subject: ds.subject_name
+                      subject: ds.subject_name,
+                      subjectId: ds.subject_id
                     }));
                   }
                 }}
@@ -969,18 +1045,20 @@ export default function EntityMockExamsPage() {
             </FormField>
             <div className="space-y-2">
               <SearchableMultiSelect
-                label="Schools / Branches"
+                label="Schools"
                 options={schools.map(school => ({ label: `${school.name} (${school.student_count} students)`, value: school.id }))}
                 selectedValues={formState.schools}
                 onChange={values => {
                   setFormState(prev => ({
                     ...prev,
                     schools: values,
+                    branches: [],
                     gradeBands: [],
-                    sections: []
+                    sections: [],
+                    teachers: []
                   }));
                 }}
-                placeholder="Select schools or branches"
+                placeholder="Select schools"
                 className="green-theme"
                 usePortal={false}
               />
@@ -989,10 +1067,40 @@ export default function EntityMockExamsPage() {
               )}
               {formState.schools.length === 0 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Select schools first to determine available year groups and sections
+                  Select schools first to determine available branches, year groups, and teachers
                 </p>
               )}
             </div>
+            {formState.schools.length > 0 && (
+              <div className="space-y-2">
+                <SearchableMultiSelect
+                  label="Branches (optional)"
+                  options={branchOptions}
+                  selectedValues={formState.branches}
+                  onChange={values => setFormState(prev => ({ ...prev, branches: values }))}
+                  placeholder={isLoadingBranches ? "Loading branches..." : "Select branches within schools"}
+                  className="green-theme"
+                  usePortal={false}
+                  disabled={isLoadingBranches}
+                />
+                {isLoadingBranches && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading branches...
+                  </p>
+                )}
+                {!isLoadingBranches && branches.length === 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    No branches configured for selected school{formState.schools.length > 1 ? 's' : ''}
+                  </p>
+                )}
+                {!isLoadingBranches && branches.length > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {branches.length} branch{branches.length > 1 ? 'es' : ''} available across selected schools
+                  </p>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <SearchableMultiSelect
                 label="Year groups"
@@ -1088,18 +1196,47 @@ export default function EntityMockExamsPage() {
                 usePortal={false}
               />
             </FormField>
-            <SearchableMultiSelect
-              label="Lead teachers"
-              options={teacherDirectory.map(teacher => ({ label: teacher.label, value: teacher.id }))}
-              selectedValues={formState.teachers}
-              onChange={values => setFormState(prev => ({ ...prev, teachers: values }))}
-              placeholder="Assign responsible teachers"
-              className="green-theme"
-              usePortal={false}
-            />
-            {formErrors.teachers && (
-              <p className="text-xs text-red-500">{formErrors.teachers}</p>
-            )}
+            <div className="space-y-2">
+              <SearchableMultiSelect
+                label="Lead teachers"
+                options={teacherDirectory.map(teacher => ({ label: teacher.label, value: teacher.id }))}
+                selectedValues={formState.teachers}
+                onChange={values => setFormState(prev => ({ ...prev, teachers: values }))}
+                placeholder={isLoadingTeachers ? "Loading teachers..." : "Assign responsible teachers"}
+                className="green-theme"
+                usePortal={false}
+                disabled={formState.schools.length === 0 || !formState.subjectId || isLoadingTeachers}
+              />
+              {formErrors.teachers && (
+                <p className="text-xs text-red-500">{formErrors.teachers}</p>
+              )}
+              {isLoadingTeachers && formState.schools.length > 0 && formState.subjectId && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading teachers qualified for {formState.subject}...
+                </p>
+              )}
+              {!isLoadingTeachers && formState.schools.length > 0 && formState.subjectId && teachers.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  No teachers found qualified for {formState.subject} in selected schools. Please assign teachers to this subject first.
+                </p>
+              )}
+              {!isLoadingTeachers && formState.schools.length > 0 && formState.subjectId && teachers.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {teachers.length} qualified teacher{teachers.length > 1 ? 's' : ''} available for {formState.subject}
+                </p>
+              )}
+              {formState.schools.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Select schools first to view available teachers
+                </p>
+              )}
+              {!formState.subjectId && formState.schools.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Select a subject first to filter teachers by qualification
+                </p>
+              )}
+            </div>
             <div className="space-y-4">
               <ToggleSwitch
                 checked={formState.aiProctoringEnabled}
