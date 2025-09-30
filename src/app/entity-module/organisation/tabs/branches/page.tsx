@@ -649,19 +649,6 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     setShowDeleteConfirmation(true);
   }, []);
 
-  const handleBulkDelete = useCallback(() => {
-    if (selectedBranches.length === 0) return;
-
-    const selected = filteredBranches.filter(branch => selectedBranches.includes(branch.id));
-    if (selected.length === 0) return;
-
-    setDeleteContext({
-      ids: selected.map(branch => branch.id),
-      names: selected.map(branch => branch.name)
-    });
-    setShowDeleteConfirmation(true);
-  }, [filteredBranches, selectedBranches]);
-
   const handleConfirmDelete = useCallback(() => {
     if (deleteContext) {
       deleteBranchMutation.mutate(deleteContext.ids);
@@ -683,6 +670,20 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       return matchesSearch && matchesStatus && matchesSchool;
     });
   }, [branches, searchTerm, filterStatus, filterSchool]);
+
+  // Bulk delete - must be defined AFTER filteredBranches
+  const handleBulkDelete = useCallback(() => {
+    if (selectedBranches.length === 0) return;
+
+    const selected = filteredBranches.filter(branch => selectedBranches.includes(branch.id));
+    if (selected.length === 0) return;
+
+    setDeleteContext({
+      ids: selected.map(branch => branch.id),
+      names: selected.map(branch => branch.name)
+    });
+    setShowDeleteConfirmation(true);
+  }, [filteredBranches, selectedBranches]);
 
   const isAllSelected = viewMode === 'list' &&
     filteredBranches.length > 0 &&
