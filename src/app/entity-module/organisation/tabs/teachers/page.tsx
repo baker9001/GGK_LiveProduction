@@ -3247,14 +3247,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       {(showCreateForm || showEditForm) && (
         <SlideInForm
           title={showEditForm ? 'Edit Teacher' : 'Create New Teacher'}
-          open={showCreateForm || showEditForm}
+          isOpen={showCreateForm || showEditForm}
           onClose={() => {
             setShowCreateForm(false);
             setShowEditForm(false);
             resetForm();
           }}
-          onSubmit={handleSubmitForm}
-          isSubmitting={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
+          onSave={handleSubmitForm}
+          loading={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
         >
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
             <TabsList className="grid w-full grid-cols-3">
