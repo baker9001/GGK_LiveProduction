@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, CreditCard as Edit, Trash2, MoreVertical } from 'lucide-react';
+import { Eye, Edit2, Trash2 } from 'lucide-react';
 
 interface ActionButtonsProps {
   onView?: () => void;
@@ -48,7 +48,7 @@ export function ActionButtons({
           title="Edit"
           aria-label="Edit"
         >
-          <Edit className="w-4 h-4" />
+          <Edit2 className="w-4 h-4" />
         </button>
       )}
 
