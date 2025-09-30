@@ -217,6 +217,13 @@ export default function EntityMockExamsPage() {
   const assignedSchoolIds = userContext?.assignedSchoolIds;
   const assignedBranchIds = userContext?.assignedBranchIds;
 
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [selectedExam, setSelectedExam] = useState<MockExam | null>(null);
+  const [formState, setFormState] = useState<CreateMockExamFormState>(initialCreateFormState);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
+
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
     companyId,
     assignedSchoolIds,
@@ -230,13 +237,6 @@ export default function EntityMockExamsPage() {
   const { data: classSections = [] } = useClassSections(selectedSchoolIds, formState.gradeBands);
   const { data: teachers = [] } = useTeachers(assignedSchoolIds || []);
   const createMockExam = useCreateMockExam();
-
-  const [filters, setFilters] = useState<FilterState>(initialFilters);
-  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [selectedExam, setSelectedExam] = useState<MockExam | null>(null);
-  const [formState, setFormState] = useState<CreateMockExamFormState>(initialCreateFormState);
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
 
   const programOptions = useMemo(() => {
     const uniquePrograms = new Set(dataStructures.map(ds => ds.program_name));
