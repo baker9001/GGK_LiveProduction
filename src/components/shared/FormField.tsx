@@ -61,10 +61,6 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input({ className, error, leftIcon, rightIcon, hideNativeCalendarIcon, ...props }: InputProps) {
-  // Check if we're in a green-theme context
-  const isGreenTheme = typeof document !== 'undefined' && 
-    (document.querySelector('.green-theme') || className?.includes('focus:ring-[#8CC63F]'));
-  
   return (
     <div className="relative">
       {leftIcon && (
@@ -75,10 +71,7 @@ export function Input({ className, error, leftIcon, rightIcon, hideNativeCalenda
       <input
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200',
-          'focus:outline-none focus:ring-2',
-          isGreenTheme 
-            ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]' 
-            : 'focus:ring-blue-500 focus:border-blue-500',
+          'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
           leftIcon && 'pl-10',
           rightIcon && 'pr-10',
@@ -147,18 +140,11 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 
 export function Textarea({ className, error, ...props }: TextareaProps) {
-  // Check if we're in a green-theme context
-  const isGreenTheme = typeof document !== 'undefined' && 
-    (document.querySelector('.green-theme') || className?.includes('focus:ring-[#8CC63F]'));
-  
   return (
     <textarea
       className={cn(
         'w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200',
-        'focus:outline-none focus:ring-2',
-        isGreenTheme 
-          ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]' 
-          : 'focus:ring-blue-500 focus:border-blue-500',
+        'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]',
         'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
         error
           ? 'border-red-300 dark:border-red-600 placeholder-red-300 dark:placeholder-red-400'

@@ -67,7 +67,7 @@ export function ToggleSwitch({
 
   const colorClasses = {
     default: {
-      on: 'bg-blue-600 dark:bg-blue-500',
+      on: 'bg-[#8CC63F] dark:bg-[#8CC63F]',
       off: 'bg-gray-200 dark:bg-gray-700'
     },
     green: {

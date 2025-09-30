@@ -199,7 +199,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
                 value={searchCountry}
                 onChange={(e) => setSearchCountry(e.target.value)}
                 placeholder="Search country or code..."
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#8CC63F]"
                 autoFocus
               />
             </div>
@@ -238,7 +238,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         required={required}
-        className={`flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+        className={`flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800' : ''
         }`}
       />

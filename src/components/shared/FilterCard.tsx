@@ -41,9 +41,8 @@ function FilterDropdown({
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const unregisterPortalRef = React.useRef<(() => void) | null>(null);
   
-  // Check if we're in a green-theme context
-  const isGreenTheme = typeof document !== 'undefined' && 
-    document.querySelector('.green-theme');
+  // Always use green theme for consistency
+  const isGreenTheme = true;
   
   const filteredOptions = options.filter(option => 
     option.label.toLowerCase().includes(searchTerm.toLowerCase())

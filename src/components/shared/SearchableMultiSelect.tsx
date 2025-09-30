@@ -62,8 +62,8 @@ export function SearchableMultiSelect({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
 
-  // Determine if we're using green theme
-  const isGreenTheme = className?.includes('green-theme');
+  // Always use green theme for consistency
+  const isGreenTheme = true;
 
   // Ensure selectedValues is always an array
   const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];

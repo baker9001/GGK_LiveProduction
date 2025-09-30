@@ -47,9 +47,8 @@ export function Select({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const unregisterPortalRef = useRef<(() => void) | null>(null);
 
-  // Check if we're in a green-theme context
-  const isGreenTheme = typeof document !== 'undefined' && 
-    (document.querySelector('.green-theme') || className?.includes('focus:ring-[#8CC63F]'));
+  // Always use green theme for consistency
+  const isGreenTheme = true;
 
   // Update selectedOption when value or defaultValue changes
   useEffect(() => {
