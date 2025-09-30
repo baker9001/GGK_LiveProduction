@@ -329,7 +329,7 @@ export class MockExamService {
    */
   static async getGradeLevelsForSchools(schoolIds: string[]): Promise<GradeLevel[]> {
     try {
-      const { data, error } = await supabase
+      const { data: schoolGradeLevels, error: schoolError } = await supabase
         .from('grade_level_schools')
         .select(`
           grade_level_id,
@@ -341,10 +341,48 @@ export class MockExamService {
         `)
         .in('school_id', schoolIds);
 
-      if (error) throw error;
+      if (schoolError) throw schoolError;
+
+      const { data: branches, error: branchesError } = await supabase
+        .from('branches')
+        .select('id')
+        .in('school_id', schoolIds);
+
+      if (branchesError) throw branchesError;
+
+      const branchIds = (branches || []).map((b: any) => b.id);
+
+      let branchGradeLevels: any[] = [];
+      if (branchIds.length > 0) {
+        const { data, error: branchError } = await supabase
+          .from('grade_level_branches')
+          .select(`
+            grade_level_id,
+            grade_levels!grade_level_branches_grade_level_id_fkey (
+              id,
+              name,
+              description
+            )
+          `)
+          .in('branch_id', branchIds);
+
+        if (branchError) throw branchError;
+        branchGradeLevels = data || [];
+      }
 
       const uniqueGradeLevels = new Map();
-      (data || []).forEach((item: any) => {
+
+      (schoolGradeLevels || []).forEach((item: any) => {
+        if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
+          uniqueGradeLevels.set(item.grade_levels.id, {
+            id: item.grade_levels.id,
+            name: item.grade_levels.name,
+            description: item.grade_levels.description
+          });
+        }
+      });
+
+      branchGradeLevels.forEach((item: any) => {
         if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
           uniqueGradeLevels.set(item.grade_levels.id, {
             id: item.grade_levels.id,
@@ -409,61 +447,58 @@ export class MockExamService {
   static async getTeachersForSchools(schoolIds: string[], subjectId?: string): Promise<Teacher[]> {
     try {
       let query = supabase
-        .from('entity_user_schools')
+        .from('teachers')
         .select(`
-          entity_user_id,
-          entity_users!entity_user_schools_entity_user_id_fkey (
-            id,
-            user_id,
-            admin_level,
-            users!entity_users_user_id_fkey (
-              email,
-              raw_user_meta_data
-            )
+          id,
+          user_id,
+          school_id,
+          is_active,
+          users!teachers_user_id_fkey (
+            email,
+            raw_user_meta_data
           )
         `)
-        .in('school_id', schoolIds);
+        .in('school_id', schoolIds)
+        .eq('is_active', true);
 
       const { data, error } = await query;
 
       if (error) throw error;
 
-      let filteredData = (data || [])
-        .filter((item: any) => item.entity_users?.admin_level !== 'branch_admin');
+      let filteredData = data || [];
 
-      if (subjectId) {
-        const entityUserIds = filteredData.map((item: any) => item.entity_users?.id).filter(Boolean);
+      if (subjectId && filteredData.length > 0) {
+        const teacherIds = filteredData.map((teacher: any) => teacher.id).filter(Boolean);
 
-        if (entityUserIds.length > 0) {
+        if (teacherIds.length > 0) {
           const { data: teacherSubjects, error: tsError } = await supabase
             .from('teacher_subjects')
-            .select('entity_user_id')
-            .in('entity_user_id', entityUserIds)
+            .select('teacher_id')
+            .in('teacher_id', teacherIds)
             .eq('subject_id', subjectId);
 
           if (tsError) {
             console.error('Error fetching teacher subjects:', tsError);
           } else if (teacherSubjects) {
-            const qualifiedTeacherIds = new Set(teacherSubjects.map(ts => ts.entity_user_id));
-            filteredData = filteredData.filter((item: any) =>
-              qualifiedTeacherIds.has(item.entity_users?.id)
+            const qualifiedTeacherIds = new Set(teacherSubjects.map(ts => ts.teacher_id));
+            filteredData = filteredData.filter((teacher: any) =>
+              qualifiedTeacherIds.has(teacher.id)
             );
           }
         }
       }
 
       const uniqueTeachers = new Map();
-      filteredData.forEach((item: any) => {
-        const teacherId = item.entity_users?.id;
-        if (teacherId && !uniqueTeachers.has(teacherId)) {
-          uniqueTeachers.set(teacherId, {
-            id: teacherId,
-            user_id: item.entity_users?.user_id,
-            name: item.entity_users?.users?.raw_user_meta_data?.name ||
-                  item.entity_users?.users?.email?.split('@')[0] ||
+      filteredData.forEach((teacher: any) => {
+        if (teacher.id && !uniqueTeachers.has(teacher.id)) {
+          uniqueTeachers.set(teacher.id, {
+            id: teacher.id,
+            user_id: teacher.user_id,
+            name: teacher.users?.raw_user_meta_data?.name ||
+                  teacher.users?.email?.split('@')[0] ||
                   'Unknown',
-            email: item.entity_users?.users?.email || '',
-            role: item.entity_users?.admin_level || 'teacher'
+            email: teacher.users?.email || '',
+            role: 'teacher'
           });
         }
       });
