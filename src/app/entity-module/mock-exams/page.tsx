@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import {
   AlertTriangle,
@@ -17,10 +17,22 @@ import {
   Plus,
   Search,
   Sparkles,
-  Users
+  Users,
+  Loader2
 } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
+import {
+  useMockExams,
+  useMockExamStats,
+  useDataStructures,
+  useSchools,
+  useGradeLevels,
+  useClassSections,
+  useTeachers,
+  useCreateMockExam
+} from '../../../hooks/useMockExams';
+import toast from 'react-hot-toast';
 import { Button } from '../../../components/shared/Button';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { FilterCard } from '../../../components/shared/FilterCard';
@@ -36,7 +48,7 @@ interface MockExamTeacher {
   role: string;
 }
 
-type MockExamStatus = 'planned' | 'scheduled' | 'completed' | 'in_review';
+type MockExamStatus = 'planned' | 'scheduled' | 'in_progress' | 'grading' | 'completed' | 'cancelled';
 
 type MockExamMode = 'In-person' | 'Digital (exam hall)' | 'Remote proctored';
 
@@ -99,47 +111,13 @@ interface CreateMockExamFormState {
 
 type FormErrors = Partial<Record<keyof CreateMockExamFormState, string>>;
 
-const programOptions = [
-  { value: 'Cambridge IGCSE', label: 'Cambridge IGCSE' },
-  { value: 'Pearson Edexcel IGCSE', label: 'Pearson Edexcel IGCSE' },
-  { value: 'Cambridge O Level', label: 'Cambridge O Level' }
-];
-
-const boardOptions = [
-  { value: 'Cambridge International', label: 'Cambridge International' },
-  { value: 'Pearson Edexcel', label: 'Pearson Edexcel' },
-  { value: 'Oxford AQA', label: 'Oxford AQA' }
-];
-
-const subjectOptions = [
-  { value: 'Mathematics', label: 'Mathematics' },
-  { value: 'English Language', label: 'English Language' },
-  { value: 'Physics', label: 'Physics' },
-  { value: 'Biology', label: 'Biology' },
-  { value: 'Chemistry', label: 'Chemistry' },
-  { value: 'Business Studies', label: 'Business Studies' }
-];
 
 const paperOptions = [
   { value: 'Paper 1', label: 'Paper 1' },
   { value: 'Paper 2', label: 'Paper 2' },
   { value: 'Paper 3', label: 'Paper 3' },
+  { value: 'Paper 4', label: 'Paper 4' },
   { value: 'Specimen', label: 'Specimen (school authored)' }
-];
-
-const gradeOptions = [
-  { value: 'Year 10', label: 'Year 10' },
-  { value: 'Year 11', label: 'Year 11' },
-  { value: 'Year 12', label: 'Year 12' }
-];
-
-const sectionOptions = [
-  { value: '10A', label: 'Year 10 - Section A' },
-  { value: '10B', label: 'Year 10 - Section B' },
-  { value: '11A', label: 'Year 11 - Section A' },
-  { value: '11B', label: 'Year 11 - Section B' },
-  { value: '11C', label: 'Year 11 - Section C' },
-  { value: '12A', label: 'Year 12 - Section A' }
 ];
 
 const examWindowOptions = [
@@ -159,107 +137,12 @@ const deliveryModeOptions: { value: MockExamMode; label: string }[] = [
 const statusOptions = [
   { value: 'planned', label: 'Planned' },
   { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in_review', label: 'In review' },
-  { value: 'completed', label: 'Completed' }
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'grading', label: 'Grading' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' }
 ];
 
-const teacherDirectory = [
-  { id: 't1', label: 'Anita Patel — Head of Mathematics', role: 'Head of Mathematics' },
-  { id: 't2', label: 'Michael Chen — IGCSE Maths Specialist', role: 'IGCSE Maths Specialist' },
-  { id: 't3', label: 'Sarah Al-Khalifa — English Faculty Lead', role: 'English Faculty Lead' },
-  { id: 't4', label: 'David Njoroge — Science Coordinator', role: 'Science Coordinator' },
-  { id: 't5', label: 'Laura Sánchez — Biology Teacher', role: 'Biology Teacher' }
-];
-
-const studentCohorts = [
-  { id: 'year11_math', label: 'Year 11 Cambridge IGCSE Mathematics (48 students)', studentCount: 48 },
-  { id: 'year11_english', label: 'Year 11 English Language (52 students)', studentCount: 52 },
-  { id: 'year10_science', label: 'Year 10 Coordinated Science (44 students)', studentCount: 44 },
-  { id: 'year12_business', label: 'Year 12 Business Studies (36 students)', studentCount: 36 }
-];
-
-const initialMockExams: MockExam[] = [
-  {
-    id: 'mock-001',
-    title: 'Year 11 Mathematics Mock – Paper 2 (Extended)',
-    board: 'Cambridge International',
-    program: 'Cambridge IGCSE',
-    subject: 'Mathematics',
-    paper: 'Paper 2',
-    gradeBands: ['Year 11'],
-    sections: ['11A', '11B'],
-    examWindow: 'Term 2',
-    scheduledStart: dayjs().add(14, 'day').hour(9).minute(0).second(0).toISOString(),
-    durationMinutes: 120,
-    readiness: 68,
-    status: 'planned',
-    deliveryMode: 'In-person',
-    teachers: [
-      { id: 't1', name: 'Anita Patel', role: 'Head of Mathematics' },
-      { id: 't2', name: 'Michael Chen', role: 'IGCSE Maths Specialist' }
-    ],
-    studentCohorts: ['year11_math'],
-    studentCount: 48,
-    flaggedStudents: 6,
-    aiProctoringEnabled: false,
-    releaseAnalyticsToStudents: true,
-    allowRetakes: false,
-    notes: 'Focus on algebraic manipulation, functions and extended paper problem solving. Diagnostic review shared with team.'
-  },
-  {
-    id: 'mock-002',
-    title: 'Year 11 English Language Mock – Paper 2',
-    board: 'Cambridge International',
-    program: 'Cambridge IGCSE',
-    subject: 'English Language',
-    paper: 'Paper 2',
-    gradeBands: ['Year 11'],
-    sections: ['11A', '11C'],
-    examWindow: 'Term 1',
-    scheduledStart: dayjs().subtract(7, 'day').hour(8).minute(30).second(0).toISOString(),
-    durationMinutes: 120,
-    readiness: 74,
-    status: 'in_review',
-    deliveryMode: 'Digital (exam hall)',
-    teachers: [
-      { id: 't3', name: 'Sarah Al-Khalifa', role: 'English Faculty Lead' }
-    ],
-    studentCohorts: ['year11_english'],
-    studentCount: 52,
-    flaggedStudents: 3,
-    aiProctoringEnabled: true,
-    releaseAnalyticsToStudents: false,
-    allowRetakes: true,
-    notes: 'Scripts under examiner moderation. Spoken language mock scheduled with same cohort next week.'
-  },
-  {
-    id: 'mock-003',
-    title: 'Year 10 Coordinated Science Mock – Biology & Chemistry blend',
-    board: 'Pearson Edexcel',
-    program: 'Pearson Edexcel IGCSE',
-    subject: 'Biology',
-    paper: 'Specimen',
-    gradeBands: ['Year 10'],
-    sections: ['10A', '10B'],
-    examWindow: 'Trial Exams',
-    scheduledStart: dayjs().add(32, 'day').hour(10).minute(15).second(0).toISOString(),
-    durationMinutes: 135,
-    readiness: 61,
-    status: 'scheduled',
-    deliveryMode: 'Remote proctored',
-    teachers: [
-      { id: 't4', name: 'David Njoroge', role: 'Science Coordinator' },
-      { id: 't5', name: 'Laura Sánchez', role: 'Biology Teacher' }
-    ],
-    studentCohorts: ['year10_science'],
-    studentCount: 44,
-    flaggedStudents: 9,
-    aiProctoringEnabled: true,
-    releaseAnalyticsToStudents: true,
-    allowRetakes: false,
-    notes: 'Cross-discipline paper emphasising practical analysis. Additional intervention list shared with tutors.'
-  }
-];
 
 const initialFilters: FilterState = {
   search: '',
@@ -275,8 +158,8 @@ const initialFilters: FilterState = {
 
 const initialCreateFormState: CreateMockExamFormState = {
   title: '',
-  board: boardOptions[0]?.value ?? '',
-  program: programOptions[0]?.value ?? '',
+  board: '',
+  program: '',
   subject: '',
   paper: paperOptions[0]?.value ?? '',
   gradeBands: [],
@@ -326,19 +209,64 @@ export default function EntityMockExamsPage() {
     getUserContext
   } = useAccessControl();
 
-  const [mockExams, setMockExams] = useState<MockExam[]>(initialMockExams);
+  const userContext = getUserContext();
+  const companyId = userContext?.companyId;
+  const assignedSchoolIds = userContext?.assignedSchoolIds;
+  const assignedBranchIds = userContext?.assignedBranchIds;
+
+  const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
+    companyId,
+    assignedSchoolIds,
+    assignedBranchIds
+  );
+  const { data: stats } = useMockExamStats(companyId, assignedSchoolIds);
+  const { data: dataStructures = [] } = useDataStructures(companyId);
+  const { data: schools = [] } = useSchools(companyId);
+  const { data: gradeLevels = [] } = useGradeLevels(assignedSchoolIds || []);
+  const { data: classSections = [] } = useClassSections(assignedSchoolIds || []);
+  const { data: teachers = [] } = useTeachers(assignedSchoolIds || []);
+  const createMockExam = useCreateMockExam();
+
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [selectedExam, setSelectedExam] = useState<MockExam | null>(null);
   const [formState, setFormState] = useState<CreateMockExamFormState>(initialCreateFormState);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
 
-  const cohortLookup = useMemo(() => {
-    return studentCohorts.reduce<Record<string, typeof studentCohorts[number]>>((acc, cohort) => {
-      acc[cohort.id] = cohort;
-      return acc;
-    }, {});
-  }, []);
+  const programOptions = useMemo(() => {
+    const uniquePrograms = new Set(dataStructures.map(ds => ds.program_name));
+    return Array.from(uniquePrograms).map(name => ({ value: name, label: name }));
+  }, [dataStructures]);
+
+  const boardOptions = useMemo(() => {
+    const uniqueBoards = new Set(dataStructures.map(ds => ds.provider_name));
+    return Array.from(uniqueBoards).map(name => ({ value: name, label: name }));
+  }, [dataStructures]);
+
+  const subjectOptions = useMemo(() => {
+    const uniqueSubjects = new Set(dataStructures.map(ds => ds.subject_name));
+    return Array.from(uniqueSubjects).map(name => ({ value: name, label: name }));
+  }, [dataStructures]);
+
+  const gradeOptions = useMemo(() => {
+    return gradeLevels.map(gl => ({ value: gl.id, label: gl.name }));
+  }, [gradeLevels]);
+
+  const sectionOptions = useMemo(() => {
+    return classSections.map(cs => ({
+      value: cs.id,
+      label: `${cs.grade_level_name} - ${cs.name} (${cs.student_count} students)`
+    }));
+  }, [classSections]);
+
+  const teacherDirectory = useMemo(() => {
+    return teachers.map(t => ({
+      id: t.id,
+      label: `${t.name} — ${t.role}`,
+      role: t.role
+    }));
+  }, [teachers]);
 
   const accessDescription = useMemo(() => {
     if (isEntityAdmin || isSubEntityAdmin) {
@@ -356,30 +284,68 @@ export default function EntityMockExamsPage() {
     return 'Your access is read-only. Contact your entity administrator to request additional permissions.';
   }, [isBranchAdmin, isEntityAdmin, isSchoolAdmin, isSubEntityAdmin]);
 
-  const stats = useMemo(() => {
-    const total = mockExams.length;
-    const upcoming = mockExams.filter(exam => dayjs(exam.scheduledStart).isAfter(dayjs())).length;
-    const flaggedStudents = mockExams.reduce((sum, exam) => sum + exam.flaggedStudents, 0);
-    const aiEnabled = mockExams.filter(exam => exam.aiProctoringEnabled).length;
-    const totalStudents = mockExams.reduce((sum, exam) => sum + exam.studentCount, 0);
-    const averageReadiness = total
-      ? Math.round(mockExams.reduce((sum, exam) => sum + exam.readiness, 0) / total)
-      : 0;
-
+  const displayStats = useMemo(() => {
+    if (!stats) {
+      return {
+        total: mockExams.length,
+        upcoming: 0,
+        totalStudents: 0,
+        flaggedStudents: 0,
+        aiEnabled: 0,
+        averageReadiness: 0
+      };
+    }
     return {
-      total,
-      upcoming,
-      flaggedStudents,
-      aiEnabled,
-      totalStudents,
-      averageReadiness
+      total: stats.total,
+      upcoming: stats.upcoming,
+      totalStudents: stats.totalStudents,
+      flaggedStudents: stats.totalFlagged,
+      aiEnabled: stats.aiEnabled,
+      averageReadiness: stats.avgReadiness
     };
+  }, [stats, mockExams.length]);
+
+  const transformedExams = useMemo(() => {
+    return mockExams.map(exam => {
+      const scheduledDateTime = exam.scheduled_time
+        ? `${exam.scheduled_date}T${exam.scheduled_time}`
+        : exam.scheduled_date;
+
+      return {
+        id: exam.id,
+        title: exam.title,
+        board: exam.exam_board,
+        program: exam.programme,
+        subject: exam.subject,
+        paper: exam.paper_type || '',
+        gradeBands: exam.grade_levels.map(gl => gl.name),
+        sections: exam.schools.map(s => s.name),
+        examWindow: exam.exam_window,
+        scheduledStart: scheduledDateTime,
+        durationMinutes: exam.duration_minutes,
+        readiness: exam.readiness_score,
+        status: exam.status as MockExamStatus,
+        deliveryMode: exam.delivery_mode,
+        teachers: exam.teachers.map(t => ({
+          id: t.id,
+          name: t.name,
+          role: t.role
+        })),
+        studentCohorts: exam.schools.map(s => s.id),
+        studentCount: exam.registered_students_count,
+        flaggedStudents: exam.flagged_students_count,
+        aiProctoringEnabled: exam.ai_proctoring_enabled,
+        releaseAnalyticsToStudents: exam.release_analytics,
+        allowRetakes: exam.allow_retakes,
+        notes: exam.notes || undefined
+      };
+    });
   }, [mockExams]);
 
   const filteredExams = useMemo(() => {
     const searchTerm = filters.search.trim().toLowerCase();
 
-    return mockExams.filter(exam => {
+    return transformedExams.filter(exam => {
       if (searchTerm) {
         const composite = [
           exam.title,
@@ -411,7 +377,10 @@ export default function EntityMockExamsPage() {
         return false;
       }
 
-      if (filters.grades.length && !exam.gradeBands.some(grade => filters.grades.includes(grade))) {
+      if (filters.grades.length && !exam.gradeBands.some(grade => {
+        const gradeLevel = gradeLevels.find(gl => gl.name === grade);
+        return gradeLevel && filters.grades.includes(gradeLevel.id);
+      })) {
         return false;
       }
 
@@ -433,7 +402,7 @@ export default function EntityMockExamsPage() {
 
       return true;
     });
-  }, [filters, mockExams]);
+  }, [filters, transformedExams, gradeLevels]);
 
   const validateForm = () => {
     const nextErrors: FormErrors = {};
@@ -469,57 +438,20 @@ export default function EntityMockExamsPage() {
   const resetFormState = () => {
     setFormState(initialCreateFormState);
     setFormErrors({});
+    setSelectedDataStructure('');
   };
 
-  const handleCreateMockExam = () => {
-    if (!validateForm()) {
-      return;
-    }
 
-    const totalStudents = formState.studentCohorts.reduce((sum, cohortId) => {
-      return sum + (cohortLookup[cohortId]?.studentCount ?? 0);
-    }, 0);
-
-    const teacherEntries: MockExamTeacher[] = formState.teachers.map(teacherId => {
-      const teacherInfo = teacherDirectory.find(item => item.id === teacherId);
-      return {
-        id: teacherId,
-        name: teacherInfo?.label?.split(' — ')[0] ?? teacherId,
-        role: teacherInfo?.role ?? 'Teacher'
-      };
-    });
-
-    const newExam: MockExam = {
-      id: crypto.randomUUID(),
-      title: formState.title.trim(),
-      board: formState.board,
-      program: formState.program,
-      subject: formState.subject,
-      paper: formState.paper,
-      gradeBands: formState.gradeBands,
-      sections: formState.sections,
-      examWindow: formState.examWindow,
-      scheduledStart: new Date(formState.scheduledStart).toISOString(),
-      durationMinutes: Number.parseInt(formState.durationMinutes, 10) || 120,
-      readiness: 55,
-      status: 'planned',
-      deliveryMode: formState.deliveryMode,
-      teachers: teacherEntries,
-      studentCohorts: formState.studentCohorts,
-      studentCount: totalStudents,
-      flaggedStudents: 0,
-      aiProctoringEnabled: formState.aiProctoringEnabled,
-      releaseAnalyticsToStudents: formState.releaseAnalyticsToStudents,
-      allowRetakes: formState.allowRetakes,
-      notes: formState.notes.trim() || undefined
-    };
-
-    setMockExams(prev => [newExam, ...prev]);
-    setIsCreatePanelOpen(false);
-    resetFormState();
-  };
-
-  const userContext = getUserContext();
+  if (isLoadingExams) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-12 flex flex-col items-center justify-center gap-4">
+          <Loader2 className="w-12 h-12 text-[#8CC63F] animate-spin" />
+          <p className="text-gray-600 dark:text-gray-300">Loading mock exams...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -585,9 +517,9 @@ export default function EntityMockExamsPage() {
             <CalendarDays className="w-4 h-4 text-[#8CC63F]" />
             Upcoming mocks
           </div>
-          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{stats.upcoming}</div>
+          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{displayStats.upcoming}</div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {stats.total} total mock{stats.total === 1 ? '' : 's'} across the entity
+            {displayStats.total} total mock{displayStats.total === 1 ? '' : 's'} across the entity
           </p>
         </div>
 
@@ -596,9 +528,9 @@ export default function EntityMockExamsPage() {
             <Users className="w-4 h-4 text-[#8CC63F]" />
             Learners impacted
           </div>
-          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{stats.totalStudents}</div>
+          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{displayStats.totalStudents}</div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {stats.flaggedStudents} flagged for intervention support
+            {displayStats.flaggedStudents} flagged for intervention support
           </p>
         </div>
 
@@ -608,10 +540,10 @@ export default function EntityMockExamsPage() {
             Readiness average
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-semibold text-gray-900 dark:text-white">{stats.averageReadiness}%</span>
+            <span className="text-3xl font-semibold text-gray-900 dark:text-white">{displayStats.averageReadiness}%</span>
             <span className="text-xs text-gray-500 dark:text-gray-400 pb-1">entity-wide</span>
           </div>
-          <ProgressBar value={stats.averageReadiness} />
+          <ProgressBar value={displayStats.averageReadiness} />
         </div>
 
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3">
@@ -619,7 +551,7 @@ export default function EntityMockExamsPage() {
             <Sparkles className="w-4 h-4 text-[#8CC63F]" />
             Digital oversight
           </div>
-          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{stats.aiEnabled}</div>
+          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{displayStats.aiEnabled}</div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Mocks with AI proctoring or live analytics enabled
           </p>
@@ -947,30 +879,26 @@ export default function EntityMockExamsPage() {
                 onChange={event => setFormState(prev => ({ ...prev, title: event.target.value }))}
               />
             </FormField>
-            <FormField id="mock-program" label="Programme" required>
+            <FormField id="mock-data-structure" label="Programme / Board / Subject" required error={formErrors.subject}>
               <Select
-                id="mock-program"
-                value={formState.program}
-                onChange={value => setFormState(prev => ({ ...prev, program: value }))}
-                options={programOptions}
-                usePortal={false}
-              />
-            </FormField>
-            <FormField id="mock-board" label="Exam board" required>
-              <Select
-                id="mock-board"
-                value={formState.board}
-                onChange={value => setFormState(prev => ({ ...prev, board: value }))}
-                options={boardOptions}
-                usePortal={false}
-              />
-            </FormField>
-            <FormField id="mock-subject" label="Subject" required error={formErrors.subject}>
-              <Select
-                id="mock-subject"
-                value={formState.subject}
-                onChange={value => setFormState(prev => ({ ...prev, subject: value }))}
-                options={subjectOptions}
+                id="mock-data-structure"
+                value={selectedDataStructure}
+                onChange={value => {
+                  setSelectedDataStructure(value);
+                  const ds = dataStructures.find(d => d.id === value);
+                  if (ds) {
+                    setFormState(prev => ({
+                      ...prev,
+                      program: ds.program_name,
+                      board: ds.provider_name,
+                      subject: ds.subject_name
+                    }));
+                  }
+                }}
+                options={dataStructures.map(ds => ({
+                  value: ds.id,
+                  label: `${ds.provider_name} - ${ds.program_name} - ${ds.subject_name}`
+                }))}
                 usePortal={false}
               />
             </FormField>
@@ -1055,11 +983,11 @@ export default function EntityMockExamsPage() {
               <p className="text-xs text-red-500">{formErrors.teachers}</p>
             )}
             <SearchableMultiSelect
-              label="Learner cohorts"
-              options={studentCohorts.map(cohort => ({ label: cohort.label, value: cohort.id }))}
-              selectedValues={formState.studentCohorts}
-              onChange={values => setFormState(prev => ({ ...prev, studentCohorts: values }))}
-              placeholder="Select cohorts impacted"
+              label="Class sections"
+              options={sectionOptions}
+              selectedValues={formState.sections}
+              onChange={values => setFormState(prev => ({ ...prev, sections: values }))}
+              placeholder="Select class sections"
               className="green-theme"
               usePortal={false}
             />
@@ -1174,7 +1102,7 @@ export default function EntityMockExamsPage() {
                   </div>
                   <ProgressBar value={selectedExam.readiness} />
                   <div className="text-xs text-amber-600 dark:text-amber-400">
-                    {selectedExam.flaggedStudents} students flagged for intervention across cohorts {selectedExam.studentCohorts.map(cohortId => cohortLookup[cohortId]?.label.split('(')[0]?.trim()).join(', ')}
+                    {selectedExam.flaggedStudents} students flagged for intervention
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     Analytics shared with learners: {selectedExam.releaseAnalyticsToStudents ? 'Yes' : 'No'}
