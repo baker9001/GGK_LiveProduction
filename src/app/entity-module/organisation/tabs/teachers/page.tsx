@@ -16,7 +16,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, Search, Filter, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, CreditCard as Edit2, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3x3, Layers, Shield, Hash, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
+import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, Search, Filter, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, CreditCard as Edit2, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3X3 as GridIcon, List, Layers, Shield, Hash, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useUser } from '../../../../../contexts/UserContext';
@@ -323,6 +323,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterSpecialization, setFilterSpecialization] = useState<string>('all');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
   // Form states
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -464,6 +465,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const canCreateTeacher = can('create_teacher');
   const canModifyTeacher = can('modify_teacher');
   const canDeleteTeacher = can('delete_teacher');
+
+  useEffect(() => {
+    if (viewMode !== 'list' && selectedTeachers.length > 0) {
+      setSelectedTeachers([]);
+    }
+  }, [viewMode, selectedTeachers]);
 
   // ===== DATA FETCHING =====
   
@@ -1943,14 +1950,226 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       total: teachers.length,
       active: teachers.filter(t => t.is_active).length,
       inactive: teachers.filter(t => !t.is_active).length,
-      withSpecialization: teachers.filter(t => 
+      withSpecialization: teachers.filter(t =>
         t.specialization && t.specialization.length > 0
       ).length,
-      withGrades: teachers.filter(t => 
+      withGrades: teachers.filter(t =>
         t.grade_levels && t.grade_levels.length > 0
       ).length
     };
   }, [teachers]);
+
+  const getInitials = (name?: string) => {
+    if (!name) {
+      return 'T';
+    }
+
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return 'T';
+    }
+
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  };
+
+  const renderTeacherCard = (teacher: TeacherData) => {
+    const gradeCount = teacher.grade_levels?.length ?? 0;
+    const sectionCount = teacher.sections?.length ?? 0;
+    const programCount = teacher.programs?.length ?? 0;
+    const subjectCount = teacher.subjects?.length ?? 0;
+    const schoolDisplay = teacher.schools?.[0]?.name || teacher.school_name || 'No School Assigned';
+    const additionalSchools = Math.max((teacher.schools?.length ?? 0) - 1, 0);
+    const primaryBranch = teacher.branches?.[0]?.name ||
+      (teacher.branch_name && teacher.branch_name !== 'No Branch Assigned' ? teacher.branch_name : '');
+    const additionalBranches = Math.max((teacher.branches?.length ?? 0) - 1, 0);
+    const email = teacher.email || teacher.user_data?.email;
+    const phone = teacher.phone;
+    const initials = getInitials(teacher.name);
+
+    const formatCount = (count: number, singular: string) => {
+      if (count <= 0) {
+        return `No ${singular.toLowerCase()}${singular.endsWith('s') ? '' : 's'}`;
+      }
+
+      return `${count} ${singular}${count > 1 ? 's' : ''}`;
+    };
+
+    return (
+      <div
+        key={teacher.id}
+        className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+      >
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-[#8CC63F]/20 text-[#6FA128] font-semibold flex items-center justify-center uppercase">
+                {initials}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {teacher.name || 'Unnamed Teacher'}
+                </h3>
+                {email && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <Mail className="w-3 h-3" />
+                    {email}
+                  </p>
+                )}
+                {teacher.teacher_code && (
+                  <p className="mt-1">
+                    <span className="text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+                      {teacher.teacher_code}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <StatusBadge
+              status={teacher.is_active ? 'active' : 'inactive'}
+              variant={teacher.is_active ? 'success' : 'warning'}
+            />
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-start gap-2">
+              <Layers className="w-4 h-4 text-[#8CC63F] mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Grades</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {formatCount(gradeCount, 'Grade')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <GridIcon className="w-4 h-4 text-[#8CC63F] mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Sections</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {formatCount(sectionCount, 'Section')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Award className="w-4 h-4 text-[#8CC63F] mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Programs</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {formatCount(programCount, 'Program')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <BookOpen className="w-4 h-4 text-[#8CC63F] mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Subjects</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {formatCount(subjectCount, 'Subject')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex items-start gap-2">
+              <School className="w-4 h-4 text-[#8CC63F] mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Primary School</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {schoolDisplay}
+                  {additionalSchools > 0 && (
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">+{additionalSchools} more</span>
+                  )}
+                </p>
+                {primaryBranch && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {primaryBranch}
+                    {additionalBranches > 0 && ` +${additionalBranches} more`}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {email && (
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <span className="truncate">{email}</span>
+                </div>
+              )}
+              {phone ? (
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  <span>{phone}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Phone className="w-4 h-4" />
+                  <span>No phone number</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900/40 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleViewTeacher(teacher)}
+            title="View Teacher Details"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="ml-1">View</span>
+          </Button>
+          {canModifyTeacher && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleOpenAssignmentModal(teacher)}
+                title="Manage Assignments"
+              >
+                <Link2 className="w-4 h-4" />
+                <span className="ml-1">Assignments</span>
+              </Button>
+              <QuickPasswordResetButton
+                teacherId={teacher.id}
+                teacherName={teacher.name || 'Teacher'}
+                teacherEmail={teacher.email || ''}
+                onReset={handleQuickPasswordReset}
+                disabled={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleEditTeacher(teacher)}
+                title="Edit Teacher"
+              >
+                <Edit2 className="w-4 h-4" />
+                <span className="ml-1">Edit</span>
+              </Button>
+            </>
+          )}
+          {canDeleteTeacher && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedTeacher(teacher);
+                setShowDeleteConfirmation(true);
+              }}
+              title="Delete Teacher"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="ml-1">Delete</span>
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // FIXED: Get selected items for display - handle multiple selections
   const getSelectedSchoolNames = () => {
@@ -2078,9 +2297,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         </div>
 
         {/* Search and Filters */}
-        <div className="flex flex-col lg:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <div className="relative">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center flex-1">
+            <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 value={searchTerm}
@@ -2090,36 +2309,67 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 aria-label="Search teachers"
               />
             </div>
-          </div>
-          
-          <div className="flex gap-2">
-            {availableSchools.length > 0 && (
+
+            <div className="flex flex-wrap gap-2">
+              {availableSchools.length > 0 && (
+                <Select
+                  value={filterSchool}
+                  onChange={(value) => setFilterSchool(value)}
+                  options={[
+                    { value: 'all', label: 'All Schools' },
+                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                  ]}
+                  className="w-48 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                  aria-label="Filter by school"
+                />
+              )}
+
               <Select
-                value={filterSchool}
-                onChange={(value) => setFilterSchool(value)}
+                value={filterStatus}
+                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
                 options={[
-                  { value: 'all', label: 'All Schools' },
-                  ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
                 ]}
-                className="w-48 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                aria-label="Filter by school"
+                className="w-32 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
+                aria-label="Filter by status"
               />
-            )}
-            
-            <Select
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              className="w-32 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-              aria-label="Filter by status"
-            />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'card'
+                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                title="Card View"
+                aria-pressed={viewMode === 'card'}
+              >
+                <GridIcon className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+                title="List View"
+                aria-pressed={viewMode === 'list'}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
 
             {canCreateTeacher && (
-              <Button 
+              <Button
                 onClick={handleCreateTeacher}
                 aria-label="Add new teacher"
                 variant="default"
@@ -2198,6 +2448,10 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 Add First Teacher
               </Button>
             )}
+          </div>
+        ) : viewMode === 'card' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredTeachers.map((teacher) => renderTeacherCard(teacher))}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -2284,7 +2538,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         )}
                         {teacher.sections && teacher.sections.length > 0 && (
                           <div className="flex items-center gap-1 text-xs">
-                            <Grid3x3 className="w-3 h-3 text-gray-400" />
+                            <GridIcon className="w-3 h-3 text-gray-400" />
                             <span className="text-gray-600 dark:text-gray-400">
                               {teacher.sections.length} Section{teacher.sections.length !== 1 ? 's' : ''}
                             </span>

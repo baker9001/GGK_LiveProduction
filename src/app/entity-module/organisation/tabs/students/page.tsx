@@ -24,7 +24,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User } from 'lucide-react';
+import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User, Grid3X3 as GridIcon, List } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
@@ -89,6 +89,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentData | null>(null);
 
@@ -349,11 +350,168 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
     };
   }, [students, availableGrades, availableSchools]);
 
+  const getInitials = (name?: string) => {
+    if (!name) {
+      return 'S';
+    }
+
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return 'S';
+    }
+
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  };
+
+  const renderStudentCard = (student: StudentData) => {
+    const initials = getInitials(student.name);
+    const grade = student.grade_level || 'Not assigned';
+    const section = student.section || 'Not assigned';
+    const school = student.school_name || 'No school assigned';
+    const branch = student.branch_name;
+    const admissionDate = student.admission_date ? new Date(student.admission_date).toLocaleDateString() : null;
+    const phone = (student as { phone?: string }).phone ||
+      student.user_data?.raw_user_meta_data?.phone ||
+      student.user_data?.raw_user_meta_data?.mobile || '';
+
+    return (
+      <div
+        key={student.id}
+        className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+      >
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 font-semibold flex items-center justify-center uppercase">
+                {initials}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {student.name || 'Unnamed Student'}
+                </h3>
+                {student.email && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <Mail className="w-3 h-3" />
+                    {student.email}
+                  </p>
+                )}
+                {student.student_code && (
+                  <p className="mt-1">
+                    <span className="text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+                      {student.student_code}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <StatusBadge
+              status={student.is_active ? 'active' : 'inactive'}
+              variant={student.is_active ? 'success' : 'warning'}
+            />
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-start gap-2">
+              <GraduationCap className="w-4 h-4 text-blue-500 mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Grade</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{grade}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <GridIcon className="w-4 h-4 text-blue-500 mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Section</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{section}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Home className="w-4 h-4 text-blue-500 mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">School</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{school}</p>
+                {branch && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{branch}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <Calendar className="w-4 h-4 text-blue-500 mt-0.5" />
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Admission</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-200">
+                  {admissionDate || 'Not recorded'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 text-sm text-gray-600 dark:text-gray-300">
+            {student.email ? (
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-gray-400" />
+                <span className="truncate">{student.email}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-gray-400">
+                <Mail className="w-4 h-4" />
+                <span>No email provided</span>
+              </div>
+            )}
+            {phone ? (
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-gray-400" />
+                <span>{phone}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-gray-400">
+                <Phone className="w-4 h-4" />
+                <span>No phone number</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900/40 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleViewStudent(student)}
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="ml-1">View</span>
+          </Button>
+          {canModifyStudent && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleEditStudent(student)}
+              title="Edit Student"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span className="ml-1">Edit</span>
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Permission checks for actions
   const canCreateStudent = can('create_student');
   const canModifyStudent = can('modify_student');
   const canDeleteStudent = can('delete_student');
   const canExportData = can('export_data');
+
+  React.useEffect(() => {
+    if (viewMode !== 'list' && selectedStudents.length > 0) {
+      setSelectedStudents([]);
+    }
+  }, [viewMode, selectedStudents]);
 
   // Handle student creation
   const handleCreateStudent = () => {
@@ -706,9 +864,9 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       {activeTab === 'list' && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           {/* Filters */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center flex-1">
+              <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   value={searchTerm}
@@ -717,48 +875,86 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   className="pl-10"
                 />
               </div>
-            </div>
-            
-            <div className="flex gap-4">
-              {availableGrades.length > 0 && (
+
+              <div className="flex flex-wrap gap-2">
+                {availableGrades.length > 0 && (
+                  <Select
+                    value={filterGrade}
+                    onChange={(value) => setFilterGrade(value)}
+                    options={[
+                      { value: 'all', label: 'All Grades' },
+                      ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
+                    ]}
+                    className="w-32"
+                  />
+                )}
+
+                {availableSchools.length > 0 && (
+                  <Select
+                    value={filterSchool}
+                    onChange={(value) => setFilterSchool(value)}
+                    options={[
+                      { value: 'all', label: 'All Schools' },
+                      ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                    ]}
+                    className="w-48"
+                  />
+                )}
+
                 <Select
-                  value={filterGrade}
-                  onChange={(value) => setFilterGrade(value)}
+                  value={filterStatus}
+                  onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
                   options={[
-                    { value: 'all', label: 'All Grades' },
-                    ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
+                    { value: 'all', label: 'All Status' },
+                    { value: 'active', label: 'Active Only' },
+                    { value: 'inactive', label: 'Inactive Only' }
                   ]}
                   className="w-32"
                 />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('card')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'card'
+                      ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="Card View"
+                  aria-pressed={viewMode === 'card'}
+                >
+                  <GridIcon className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="List View"
+                  aria-pressed={viewMode === 'list'}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+
+              {canCreateStudent && (
+                <Button onClick={handleCreateStudent}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Student
+                </Button>
               )}
-              
-              {availableSchools.length > 0 && (
-                <Select
-                  value={filterSchool}
-                  onChange={(value) => setFilterSchool(value)}
-                  options={[
-                    { value: 'all', label: 'All Schools' },
-                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
-                  ]}
-                  className="w-48"
-                />
-              )}
-              
-              <Select
-                value={filterStatus}
-                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'active', label: 'Active Only' },
-                  { value: 'inactive', label: 'Inactive Only' }
-                ]}
-                className="w-32"
-              />
             </div>
           </div>
 
           {/* Bulk Actions */}
-          {selectedStudents.length > 0 && (
+          {viewMode === 'list' && selectedStudents.length > 0 && (
             <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -835,6 +1031,10 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   </p>
                 </>
               )}
+            </div>
+          ) : viewMode === 'card' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredStudents.map((student) => renderStudentCard(student))}
             </div>
           ) : (
             <div className="overflow-x-auto">
