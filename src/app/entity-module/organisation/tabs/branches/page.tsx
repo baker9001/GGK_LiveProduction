@@ -12,12 +12,7 @@
 'use client';
 
 import React, { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react';
-import { 
-  MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
-  Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
-  XCircle, AlertTriangle, School, Hash, Navigation, Home, Info,
-  Lock, Shield, Loader2, Grid3X3, List
-} from 'lucide-react';
+import { MapPin, Plus, CreditCard as Edit2, Trash2, Search, Filter, Building, Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, XCircle, AlertTriangle, School, Hash, Navigation, Home, Info, Lock, Shield, Loader2, Grid3x3 as Grid3X3, List } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
