@@ -201,11 +201,33 @@ export class MockExamService {
   }
 
   /**
+   * Get region for entity/company
+   */
+  static async getRegionForEntity(companyId: string): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select('region_id')
+        .eq('id', companyId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data?.region_id || null;
+    } catch (error) {
+      console.error('Error fetching entity region:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get available data structures (exam board/programme/subject combinations)
+   * Filtered by entity's region to prevent duplicates
    */
   static async getAvailableDataStructures(companyId: string): Promise<DataStructureOption[]> {
     try {
-      const { data, error } = await supabase
+      const regionId = await this.getRegionForEntity(companyId);
+
+      let query = supabase
         .from('data_structures')
         .select(`
           id,
@@ -220,19 +242,33 @@ export class MockExamService {
         `)
         .eq('status', 'active');
 
+      if (regionId) {
+        query = query.eq('region_id', regionId);
+      }
+
+      const { data, error } = await query.order('provider_id, program_id, subject_id');
+
       if (error) throw error;
 
-      return (data || []).map((ds: any) => ({
-        id: ds.id,
-        provider_id: ds.provider_id,
-        provider_name: ds.providers?.name || 'Unknown',
-        program_id: ds.program_id,
-        program_name: ds.programs?.name || 'Unknown',
-        subject_id: ds.subject_id,
-        subject_name: ds.edu_subjects?.name || 'Unknown',
-        region_id: ds.region_id,
-        region_name: ds.regions?.name || 'Unknown'
-      }));
+      const uniqueDataStructures = new Map();
+      (data || []).forEach((ds: any) => {
+        const key = `${ds.provider_id}-${ds.program_id}-${ds.subject_id}`;
+        if (!uniqueDataStructures.has(key)) {
+          uniqueDataStructures.set(key, {
+            id: ds.id,
+            provider_id: ds.provider_id,
+            provider_name: ds.providers?.name || 'Unknown',
+            program_id: ds.program_id,
+            program_name: ds.programs?.name || 'Unknown',
+            subject_id: ds.subject_id,
+            subject_name: ds.edu_subjects?.name || 'Unknown',
+            region_id: ds.region_id,
+            region_name: ds.regions?.name || 'Unknown'
+          });
+        }
+      });
+
+      return Array.from(uniqueDataStructures.values());
     } catch (error) {
       console.error('Error fetching data structures:', error);
       throw error;
@@ -368,11 +404,11 @@ export class MockExamService {
   }
 
   /**
-   * Get teachers for schools
+   * Get teachers for schools, optionally filtered by subject
    */
-  static async getTeachersForSchools(schoolIds: string[]): Promise<Teacher[]> {
+  static async getTeachersForSchools(schoolIds: string[], subjectId?: string): Promise<Teacher[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('entity_user_schools')
         .select(`
           entity_user_id,
@@ -388,19 +424,51 @@ export class MockExamService {
         `)
         .in('school_id', schoolIds);
 
+      const { data, error } = await query;
+
       if (error) throw error;
 
-      return (data || [])
-        .filter((item: any) => item.entity_users?.admin_level !== 'branch_admin')
-        .map((item: any) => ({
-          id: item.entity_users?.id,
-          user_id: item.entity_users?.user_id,
-          name: item.entity_users?.users?.raw_user_meta_data?.name ||
-                item.entity_users?.users?.email?.split('@')[0] ||
-                'Unknown',
-          email: item.entity_users?.users?.email || '',
-          role: item.entity_users?.admin_level || 'teacher'
-        }));
+      let filteredData = (data || [])
+        .filter((item: any) => item.entity_users?.admin_level !== 'branch_admin');
+
+      if (subjectId) {
+        const entityUserIds = filteredData.map((item: any) => item.entity_users?.id).filter(Boolean);
+
+        if (entityUserIds.length > 0) {
+          const { data: teacherSubjects, error: tsError } = await supabase
+            .from('teacher_subjects')
+            .select('entity_user_id')
+            .in('entity_user_id', entityUserIds)
+            .eq('subject_id', subjectId);
+
+          if (tsError) {
+            console.error('Error fetching teacher subjects:', tsError);
+          } else if (teacherSubjects) {
+            const qualifiedTeacherIds = new Set(teacherSubjects.map(ts => ts.entity_user_id));
+            filteredData = filteredData.filter((item: any) =>
+              qualifiedTeacherIds.has(item.entity_users?.id)
+            );
+          }
+        }
+      }
+
+      const uniqueTeachers = new Map();
+      filteredData.forEach((item: any) => {
+        const teacherId = item.entity_users?.id;
+        if (teacherId && !uniqueTeachers.has(teacherId)) {
+          uniqueTeachers.set(teacherId, {
+            id: teacherId,
+            user_id: item.entity_users?.user_id,
+            name: item.entity_users?.users?.raw_user_meta_data?.name ||
+                  item.entity_users?.users?.email?.split('@')[0] ||
+                  'Unknown',
+            email: item.entity_users?.users?.email || '',
+            role: item.entity_users?.admin_level || 'teacher'
+          });
+        }
+      });
+
+      return Array.from(uniqueTeachers.values());
     } catch (error) {
       console.error('Error fetching teachers:', error);
       throw error;
