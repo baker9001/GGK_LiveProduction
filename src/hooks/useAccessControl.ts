@@ -579,6 +579,8 @@ export function useAccessControl(): UseAccessControlResult {
       'delete_sub_admin': ['entity_admin'].includes(userScope.adminLevel || ''),
       'delete_school_admin': ['entity_admin', 'sub_entity_admin'].includes(userScope.adminLevel || ''),
       'delete_branch_admin': ['entity_admin', 'sub_entity_admin', 'school_admin'].includes(userScope.adminLevel || ''),
+      'delete_teacher': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
+      'delete_student': ['entity_admin', 'sub_entity_admin', 'school_admin', 'branch_admin'].includes(userScope.adminLevel || ''),
       
       // View permissions
       'view_all_users': true,
