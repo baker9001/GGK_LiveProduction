@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit, Trash2, MoreVertical } from 'lucide-react';
+import { Eye, CreditCard as Edit, Trash2, MoreVertical } from 'lucide-react';
 
 interface ActionButtonsProps {
   onView?: () => void;

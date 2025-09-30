@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { Grid3x3, List, Eye, Edit, Trash2 } from 'lucide-react';
+import { Grid3x3, List, Eye, CreditCard as Edit, Trash2 } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
 import { DataTable } from './DataTable';
