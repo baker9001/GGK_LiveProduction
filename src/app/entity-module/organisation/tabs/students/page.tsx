@@ -69,6 +69,29 @@ export interface StudentsTabProps {
 
 type StudentsTabKey = 'overview' | 'list' | 'analytics';
 
+interface FeatureCardProps {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  color: string;
+}
+
+function FeatureCard({ icon: Icon, title, description, color }: FeatureCardProps) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+      <div className={`w-10 h-10 bg-${color}-100 dark:bg-${color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
+        <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
+      </div>
+      <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
+        {title}
+      </h4>
+      <p className="text-xs text-gray-600 dark:text-gray-400">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export default function StudentsTab({ companyId, refreshData }: StudentsTabProps) {
   const { user } = useUser();
   const {
@@ -938,6 +961,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             </div>
           </TabsContent>
         </Tabs>
+      </div>
 
       {/* Development Status */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
@@ -1019,29 +1043,6 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
           company_id: editingStudent.company_id
         } : undefined}
       />
-    </div>
-  );
-}
-
-interface FeatureCardProps {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  color: string;
-}
-
-function FeatureCard({ icon: Icon, title, description, color }: FeatureCardProps) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-      <div className={`w-10 h-10 bg-${color}-100 dark:bg-${color}-900/30 rounded-lg flex items-center justify-center mb-3`}>
-        <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
-      </div>
-      <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">
-        {title}
-      </h4>
-      <p className="text-xs text-gray-600 dark:text-gray-400">
-        {description}
-      </p>
     </div>
   );
 }
