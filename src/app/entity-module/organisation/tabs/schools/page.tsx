@@ -11,7 +11,7 @@
 
 'use client';
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Plus, Search, Edit2, Trash2, Building2, Users, MapPin,
@@ -122,7 +122,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     
     // Confirmation dialog state
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-    const [schoolToDelete, setSchoolToDelete] = useState<SchoolData | null>(null);
+    const [deleteContext, setDeleteContext] = useState<{ ids: string[]; names: string[] } | null>(null);
+    const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+    const selectAllRef = useRef<HTMLInputElement>(null);
 
     // ACCESS CHECK: Block entry if user cannot view this tab
     useEffect(() => {
@@ -547,27 +549,28 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
 
     // Delete school mutation
     const deleteSchoolMutation = useMutation(
-      async (id: string) => {
+      async (ids: string[]) => {
         const { error } = await supabase
           .from('schools')
           .delete()
-          .eq('id', id);
-        
+          .in('id', ids);
+
         if (error) throw error;
-        return id;
+        return ids;
       },
       {
-        onSuccess: () => {
-          toast.success('School deleted successfully');
+        onSuccess: (_data, ids) => {
+          toast.success(ids.length > 1 ? 'Schools deleted successfully' : 'School deleted successfully');
           queryClient.invalidateQueries(['schools-tab']);
           setShowDeleteConfirmation(false);
-          setSchoolToDelete(null);
+          setDeleteContext(null);
+          setSelectedSchools([]);
           if (refreshData) refreshData();
         },
         onError: (error: any) => {
           toast.error(error.message || 'Failed to delete school');
           setShowDeleteConfirmation(false);
-          setSchoolToDelete(null);
+          setDeleteContext(null);
         }
       }
     );
@@ -691,19 +694,32 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
 
     // Handle delete confirmation
     const handleDeleteClick = useCallback((school: SchoolData) => {
-      setSchoolToDelete(school);
+      setDeleteContext({ ids: [school.id], names: [school.name] });
       setShowDeleteConfirmation(true);
     }, []);
 
+    const handleBulkDelete = useCallback(() => {
+      if (selectedSchools.length === 0) return;
+
+      const selected = schools.filter(school => selectedSchools.includes(school.id));
+      if (selected.length === 0) return;
+
+      setDeleteContext({
+        ids: selected.map(school => school.id),
+        names: selected.map(school => school.name)
+      });
+      setShowDeleteConfirmation(true);
+    }, [schools, selectedSchools]);
+
     const handleConfirmDelete = useCallback(() => {
-      if (schoolToDelete) {
-        deleteSchoolMutation.mutate(schoolToDelete.id);
+      if (deleteContext) {
+        deleteSchoolMutation.mutate(deleteContext.ids);
       }
-    }, [schoolToDelete, deleteSchoolMutation]);
+    }, [deleteContext, deleteSchoolMutation]);
 
     const handleCancelDelete = useCallback(() => {
       setShowDeleteConfirmation(false);
-      setSchoolToDelete(null);
+      setDeleteContext(null);
     }, []);
 
     // Filter schools based on search and status
@@ -716,6 +732,33 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       });
     }, [schools, searchTerm, filterStatus]);
 
+    const isAllSelected = viewMode === 'list' &&
+      displayedSchools.length > 0 &&
+      displayedSchools.every(school => selectedSchools.includes(school.id));
+
+    useEffect(() => {
+      if (viewMode !== 'list') {
+        if (selectedSchools.length > 0) {
+          setSelectedSchools([]);
+        }
+        return;
+      }
+
+      setSelectedSchools(prev => {
+        const filtered = prev.filter(id => displayedSchools.some(school => school.id === id));
+        if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) {
+          return prev;
+        }
+        return filtered;
+      });
+    }, [displayedSchools, viewMode, selectedSchools.length]);
+
+    useEffect(() => {
+      if (!selectAllRef.current) return;
+
+      selectAllRef.current.indeterminate = viewMode === 'list' && selectedSchools.length > 0 && !isAllSelected;
+    }, [selectedSchools, isAllSelected, viewMode]);
+
     // Calculate stats
     const stats = useMemo(() => ({
       total: schools.length,
@@ -727,6 +770,14 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     // Get user context for display
     const userContext = getUserContext();
     const adminLevelDisplay = userContext?.adminLevel?.replace('_', ' ');
+    const deleteCount = deleteContext?.ids.length ?? 0;
+    const deleteTitle = deleteCount > 1 ? 'Delete Schools' : 'Delete School';
+    const deleteNamesPreview = deleteContext ? deleteContext.names.slice(0, 3).join(', ') : '';
+    const deleteMessage = deleteCount === 1
+      ? `Are you sure you want to delete "${deleteContext?.names[0]}"? This action cannot be undone and will also delete all associated branches.`
+      : deleteCount > 1
+        ? `Are you sure you want to delete ${deleteCount} schools? This action cannot be undone and will also delete all associated branches.${deleteNamesPreview ? ` Selected: ${deleteNamesPreview}${deleteCount > 3 ? '…' : ''}` : ''}`
+        : '';
 
     // Loading state
     if (isLoading || isAccessControlLoading) {
@@ -1120,10 +1171,46 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         ) : (
           /* List View */
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {selectedSchools.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700" role="toolbar" aria-label="Bulk actions">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {selectedSchools.length} selected
+                </span>
+                <div className="flex gap-2">
+                  {can('delete_school') && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleBulkDelete}
+                      disabled={deleteSchoolMutation.isLoading || deleteSchoolMutation.isPending}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                   <tr>
+                    <th className="px-6 py-4 text-left">
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSchools(displayedSchools.map(school => school.id));
+                          } else {
+                            setSelectedSchools([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                        aria-label="Select all schools"
+                      />
+                    </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">School</th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Code</th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
@@ -1137,7 +1224,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {displayedSchools.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center">
+                      <td colSpan={9} className="px-6 py-12 text-center">
                         <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                         <p className="text-gray-600 dark:text-gray-400">
                           {searchTerm || filterStatus !== 'all'
@@ -1153,6 +1240,21 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
 
                       return (
                         <tr key={school.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedSchools.includes(school.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedSchools(prev => (prev.includes(school.id) ? prev : [...prev, school.id]));
+                                } else {
+                                  setSelectedSchools(prev => prev.filter(id => id !== school.id));
+                                }
+                              }}
+                              className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                              aria-label={`Select ${school.name}`}
+                            />
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {/* ENHANCED LOGO IN LIST VIEW */}
@@ -1285,9 +1387,9 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
         {/* Delete Confirmation Dialog */}
         <ConfirmationDialog
           isOpen={showDeleteConfirmation}
-          title="Delete School"
-          message={`Are you sure you want to delete "${schoolToDelete?.name}"? This action cannot be undone and will also delete all associated branches.`}
-          confirmText="Delete School"
+          title={deleteTitle}
+          message={deleteMessage}
+          confirmText={deleteCount > 1 ? 'Delete Schools' : 'Delete School'}
           cancelText="Cancel"
           confirmVariant="destructive"
           onConfirm={handleConfirmDelete}
