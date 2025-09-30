@@ -441,6 +441,56 @@ export default function EntityMockExamsPage() {
     setSelectedDataStructure('');
   };
 
+  const handleCreateMockExam = async () => {
+    if (!validateForm() || !companyId) {
+      return;
+    }
+
+    const scheduledDateTime = new Date(formState.scheduledStart);
+    const schoolIdsFromSections = Array.from(
+      new Set(classSections
+        .filter(cs => formState.sections.includes(cs.id))
+        .map(cs => cs.school_id))
+    );
+
+    const paperNumber = formState.paper.match(/\d+/);
+
+    try {
+      await createMockExam.mutateAsync({
+        title: formState.title.trim(),
+        companyId,
+        dataStructureId: selectedDataStructure,
+        paperType: formState.paper,
+        paperNumber: paperNumber ? parseInt(paperNumber[0]) : undefined,
+        scheduledDate: scheduledDateTime.toISOString().split('T')[0],
+        scheduledTime: scheduledDateTime.toTimeString().split(' ')[0],
+        durationMinutes: Number.parseInt(formState.durationMinutes, 10) || 120,
+        deliveryMode: formState.deliveryMode,
+        examWindow: formState.examWindow,
+        readinessScore: 55,
+        aiProctoringEnabled: formState.aiProctoringEnabled,
+        releaseAnalytics: formState.releaseAnalyticsToStudents,
+        allowRetakes: formState.allowRetakes,
+        notes: formState.notes.trim() || undefined,
+        schoolIds: schoolIdsFromSections,
+        gradeLevelIds: formState.gradeBands,
+        sectionIds: formState.sections,
+        teacherIds: formState.teachers.map(teacherId => ({
+          entityUserId: teacherId,
+          role: 'lead_teacher',
+          schoolId: schoolIdsFromSections[0]
+        }))
+      });
+
+      toast.success('Mock exam created successfully');
+      setIsCreatePanelOpen(false);
+      resetFormState();
+      refetchExams();
+    } catch (error) {
+      console.error('Error creating mock exam:', error);
+      toast.error('Failed to create mock exam. Please try again.');
+    }
+  };
 
   if (isLoadingExams) {
     return (

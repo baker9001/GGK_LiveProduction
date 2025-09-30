@@ -117,7 +117,7 @@ export class MockExamService {
             programs!data_structures_program_id_fkey (name),
             edu_subjects!data_structures_subject_id_fkey (name)
           ),
-          mock_exam_schools!inner (
+          mock_exam_schools (
             school_id,
             schools!mock_exam_schools_school_id_fkey (id, name)
           ),
@@ -137,7 +137,7 @@ export class MockExamService {
             )
           ),
           mock_exam_students (count),
-          mock_exam_results!inner (flagged_for_intervention)
+          mock_exam_results (flagged_for_intervention)
         `)
         .eq('company_id', companyId)
         .order('scheduled_date', { ascending: false });
