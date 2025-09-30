@@ -11,7 +11,7 @@
 
 'use client';
 
-import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, memo, useCallback, useMemo, useRef } from 'react';
 import { 
   MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
   Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
@@ -103,6 +103,14 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   // Get user context early for company ID
   const userContext = getUserContext();
+  const deleteCount = deleteContext?.ids.length ?? 0;
+  const deleteTitle = deleteCount > 1 ? 'Delete Branches' : 'Delete Branch';
+  const deleteNamesPreview = deleteContext ? deleteContext.names.slice(0, 3).join(', ') : '';
+  const deleteMessage = deleteCount === 1
+    ? `Are you sure you want to delete "${deleteContext?.names[0]}"? This action cannot be undone.`
+    : deleteCount > 1
+      ? `Are you sure you want to delete ${deleteCount} branches? This action cannot be undone.${deleteNamesPreview ? ` Selected: ${deleteNamesPreview}${deleteCount > 3 ? '…' : ''}` : ''}`
+      : '';
   
   // AUTO-SELECT USER'S COMPANY
   const companyId = useMemo(() => {
@@ -140,7 +148,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   
   // Confirmation dialog state
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [branchToDelete, setBranchToDelete] = useState<BranchData | null>(null);
+  const [deleteContext, setDeleteContext] = useState<{ ids: string[]; names: string[] } | null>(null);
+  const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   // ACCESS CHECK: Block entry if user cannot view this tab
   useEffect(() => {
@@ -516,26 +526,29 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   // Delete branch mutation
   const deleteBranchMutation = useMutation(
-    async (id: string) => {
+    async (ids: string[]) => {
       const { error } = await supabase
         .from('branches')
         .delete()
-        .eq('id', id);
-      
+        .in('id', ids);
+
       if (error) throw error;
-      return id;
+      return ids;
     },
     {
-      onSuccess: () => {
-        toast.success('Branch deleted successfully');
+      onSuccess: (_data, ids) => {
+        toast.success(ids.length > 1 ? 'Branches deleted successfully' : 'Branch deleted successfully');
         queryClient.invalidateQueries(['branches-tab']);
         setShowDeleteConfirmation(false);
-        setBranchToDelete(null);
+        setDeleteContext(null);
+        setSelectedBranches([]);
         if (refreshData) refreshData();
       },
       onError: (error: any) => {
         console.error('Error deleting branch:', error);
         toast.error(error.message || 'Failed to delete branch');
+        setShowDeleteConfirmation(false);
+        setDeleteContext(null);
       }
     }
   );
@@ -630,19 +643,32 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
 
   // Handle delete confirmation
   const handleDeleteClick = useCallback((branch: BranchData) => {
-    setBranchToDelete(branch);
+    setDeleteContext({ ids: [branch.id], names: [branch.name] });
     setShowDeleteConfirmation(true);
   }, []);
 
+  const handleBulkDelete = useCallback(() => {
+    if (selectedBranches.length === 0) return;
+
+    const selected = filteredBranches.filter(branch => selectedBranches.includes(branch.id));
+    if (selected.length === 0) return;
+
+    setDeleteContext({
+      ids: selected.map(branch => branch.id),
+      names: selected.map(branch => branch.name)
+    });
+    setShowDeleteConfirmation(true);
+  }, [filteredBranches, selectedBranches]);
+
   const handleConfirmDelete = useCallback(() => {
-    if (branchToDelete) {
-      deleteBranchMutation.mutate(branchToDelete.id);
+    if (deleteContext) {
+      deleteBranchMutation.mutate(deleteContext.ids);
     }
-  }, [branchToDelete, deleteBranchMutation]);
+  }, [deleteContext, deleteBranchMutation]);
 
   const handleCancelDelete = useCallback(() => {
     setShowDeleteConfirmation(false);
-    setBranchToDelete(null);
+    setDeleteContext(null);
   }, []);
 
   // Filter branches based on search, status, and school
@@ -655,6 +681,33 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       return matchesSearch && matchesStatus && matchesSchool;
     });
   }, [branches, searchTerm, filterStatus, filterSchool]);
+
+  const isAllSelected = viewMode === 'list' &&
+    filteredBranches.length > 0 &&
+    filteredBranches.every(branch => selectedBranches.includes(branch.id));
+
+  useEffect(() => {
+    if (viewMode !== 'list') {
+      if (selectedBranches.length > 0) {
+        setSelectedBranches([]);
+      }
+      return;
+    }
+
+    setSelectedBranches(prev => {
+      const filtered = prev.filter(id => filteredBranches.some(branch => branch.id === id));
+      if (filtered.length === prev.length && filtered.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return filtered;
+    });
+  }, [filteredBranches, viewMode, selectedBranches.length]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+
+    selectAllRef.current.indeterminate = viewMode === 'list' && selectedBranches.length > 0 && !isAllSelected;
+  }, [selectedBranches, isAllSelected, viewMode]);
 
   // Calculate stats
   const stats = useMemo(() => ({
@@ -1085,10 +1138,44 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       ) : (
         /* List View */
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {selectedBranches.length > 0 && (
+            <div className="flex items-center justify-between px-6 py-3 bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700" role="toolbar" aria-label="Bulk actions">
+              <span className="text-sm text-gray-700 dark:text-gray-300">{selectedBranches.length} selected</span>
+              <div className="flex gap-2">
+                {can('delete_branch') && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleBulkDelete}
+                    disabled={deleteBranchMutation.isLoading || deleteBranchMutation.isPending}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                 <tr>
+                  <th className="px-6 py-4 text-left">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedBranches(filteredBranches.map(branch => branch.id));
+                        } else {
+                          setSelectedBranches([]);
+                        }
+                      }}
+                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                      aria-label="Select all branches"
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Branch</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Code</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">School</th>
@@ -1102,11 +1189,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredBranches.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center">
+                    <td colSpan={9} className="px-6 py-12 text-center">
                       <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                       <p className="text-gray-600 dark:text-gray-400">
-                        {searchTerm || filterStatus !== 'all' || filterSchool !== 'all' 
-                          ? 'No branches match your filters' 
+                        {searchTerm || filterStatus !== 'all' || filterSchool !== 'all'
+                          ? 'No branches match your filters'
                           : 'No branches found'}
                       </p>
                     </td>
@@ -1115,9 +1202,24 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                   filteredBranches.map((branch) => {
                     const logoUrl = getBranchLogoUrl(branch.logo);
                     const canEdit = can('modify_branch') && !branch.readOnly;
-                    
+
                     return (
                       <tr key={branch.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedBranches.includes(branch.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedBranches(prev => (prev.includes(branch.id) ? prev : [...prev, branch.id]));
+                              } else {
+                                setSelectedBranches(prev => prev.filter(id => id !== branch.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                            aria-label={`Select ${branch.name}`}
+                          />
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {/* ENHANCED LOGO IN LIST VIEW */}
@@ -1256,9 +1358,9 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={showDeleteConfirmation}
-        title="Delete Branch"
-        message={`Are you sure you want to delete "${branchToDelete?.name}"? This action cannot be undone.`}
-        confirmText="Delete Branch"
+        title={deleteTitle}
+        message={deleteMessage}
+        confirmText={deleteCount > 1 ? 'Delete Branches' : 'Delete Branch'}
         cancelText="Cancel"
         confirmVariant="destructive"
         onConfirm={handleConfirmDelete}
