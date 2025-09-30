@@ -95,6 +95,7 @@ interface CreateMockExamFormState {
   program: string;
   subject: string;
   paper: string;
+  schools: string[];
   gradeBands: string[];
   sections: string[];
   examWindow: string;
@@ -102,14 +103,16 @@ interface CreateMockExamFormState {
   durationMinutes: string;
   deliveryMode: MockExamMode;
   teachers: string[];
-  studentCohorts: string[];
   aiProctoringEnabled: boolean;
   releaseAnalyticsToStudents: boolean;
   allowRetakes: boolean;
   notes: string;
 }
 
-type FormErrors = Partial<Record<keyof CreateMockExamFormState, string>>;
+type FormErrors = Partial<Record<keyof CreateMockExamFormState, string>> & {
+  schools?: string;
+  sections?: string;
+};
 
 
 const paperOptions = [
@@ -162,6 +165,7 @@ const initialCreateFormState: CreateMockExamFormState = {
   program: '',
   subject: '',
   paper: paperOptions[0]?.value ?? '',
+  schools: [],
   gradeBands: [],
   sections: [],
   examWindow: 'Term 2',
@@ -169,7 +173,6 @@ const initialCreateFormState: CreateMockExamFormState = {
   durationMinutes: '120',
   deliveryMode: 'In-person',
   teachers: [],
-  studentCohorts: [],
   aiProctoringEnabled: true,
   releaseAnalyticsToStudents: true,
   allowRetakes: false,
@@ -222,8 +225,9 @@ export default function EntityMockExamsPage() {
   const { data: stats } = useMockExamStats(companyId, assignedSchoolIds);
   const { data: dataStructures = [] } = useDataStructures(companyId);
   const { data: schools = [] } = useSchools(companyId);
-  const { data: gradeLevels = [] } = useGradeLevels(assignedSchoolIds || []);
-  const { data: classSections = [] } = useClassSections(assignedSchoolIds || []);
+  const selectedSchoolIds = formState.schools.length > 0 ? formState.schools : (assignedSchoolIds || []);
+  const { data: gradeLevels = [] } = useGradeLevels(selectedSchoolIds);
+  const { data: classSections = [] } = useClassSections(selectedSchoolIds, formState.gradeBands);
   const { data: teachers = [] } = useTeachers(assignedSchoolIds || []);
   const createMockExam = useCreateMockExam();
 
@@ -415,6 +419,10 @@ export default function EntityMockExamsPage() {
       nextErrors.subject = 'Select the subject that the mock aligns with.';
     }
 
+    if (formState.schools.length === 0) {
+      nextErrors.schools = 'Select at least one school or branch.';
+    }
+
     if (formState.gradeBands.length === 0) {
       nextErrors.gradeBands = 'Select at least one grade or year group.';
     }
@@ -427,8 +435,8 @@ export default function EntityMockExamsPage() {
       nextErrors.teachers = 'Nominate at least one lead teacher.';
     }
 
-    if (formState.studentCohorts.length === 0) {
-      nextErrors.studentCohorts = 'Select the cohort(s) who will sit this mock.';
+    if (formState.sections.length === 0) {
+      nextErrors.sections = 'Select at least one class section.';
     }
 
     setFormErrors(nextErrors);
@@ -447,12 +455,6 @@ export default function EntityMockExamsPage() {
     }
 
     const scheduledDateTime = new Date(formState.scheduledStart);
-    const schoolIdsFromSections = Array.from(
-      new Set(classSections
-        .filter(cs => formState.sections.includes(cs.id))
-        .map(cs => cs.school_id))
-    );
-
     const paperNumber = formState.paper.match(/\d+/);
 
     try {
@@ -472,13 +474,13 @@ export default function EntityMockExamsPage() {
         releaseAnalytics: formState.releaseAnalyticsToStudents,
         allowRetakes: formState.allowRetakes,
         notes: formState.notes.trim() || undefined,
-        schoolIds: schoolIdsFromSections,
+        schoolIds: formState.schools,
         gradeLevelIds: formState.gradeBands,
         sectionIds: formState.sections,
         teacherIds: formState.teachers.map(teacherId => ({
           entityUserId: teacherId,
           role: 'lead_teacher',
-          schoolId: schoolIdsFromSections[0]
+          schoolId: formState.schools[0]
         }))
       });
 
@@ -961,27 +963,78 @@ export default function EntityMockExamsPage() {
                 usePortal={false}
               />
             </FormField>
-            <SearchableMultiSelect
-              label="Year groups"
-              options={gradeOptions.map(option => ({ label: option.label, value: option.value }))}
-              selectedValues={formState.gradeBands}
-              onChange={values => setFormState(prev => ({ ...prev, gradeBands: values }))}
-              placeholder="Select year groups"
-              className="green-theme"
-              usePortal={false}
-            />
-            {formErrors.gradeBands && (
-              <p className="text-xs text-red-500">{formErrors.gradeBands}</p>
-            )}
-            <SearchableMultiSelect
-              label="Class sections"
-              options={sectionOptions.map(option => ({ label: option.label, value: option.value }))}
-              selectedValues={formState.sections}
-              onChange={values => setFormState(prev => ({ ...prev, sections: values }))}
-              placeholder="Optional — choose sections"
-              className="green-theme"
-              usePortal={false}
-            />
+            <div className="space-y-2">
+              <SearchableMultiSelect
+                label="Schools / Branches"
+                options={schools.map(school => ({ label: `${school.name} (${school.student_count} students)`, value: school.id }))}
+                selectedValues={formState.schools}
+                onChange={values => {
+                  setFormState(prev => ({
+                    ...prev,
+                    schools: values,
+                    gradeBands: [],
+                    sections: []
+                  }));
+                }}
+                placeholder="Select schools or branches"
+                className="green-theme"
+                usePortal={false}
+              />
+              {formErrors.schools && (
+                <p className="text-xs text-red-500">{formErrors.schools}</p>
+              )}
+              {formState.schools.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Select schools first to determine available year groups and sections
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <SearchableMultiSelect
+                label="Year groups"
+                options={gradeOptions.map(option => ({ label: option.label, value: option.value }))}
+                selectedValues={formState.gradeBands}
+                onChange={values => {
+                  setFormState(prev => ({
+                    ...prev,
+                    gradeBands: values,
+                    sections: []
+                  }));
+                }}
+                placeholder="Select year groups"
+                className="green-theme"
+                usePortal={false}
+                disabled={formState.schools.length === 0}
+              />
+              {formErrors.gradeBands && (
+                <p className="text-xs text-red-500">{formErrors.gradeBands}</p>
+              )}
+              {formState.schools.length > 0 && formState.gradeBands.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Year groups linked to selected school{formState.schools.length > 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <SearchableMultiSelect
+                label="Class sections"
+                options={sectionOptions.map(option => ({ label: option.label, value: option.value }))}
+                selectedValues={formState.sections}
+                onChange={values => setFormState(prev => ({ ...prev, sections: values }))}
+                placeholder="Select class sections"
+                className="green-theme"
+                usePortal={false}
+                disabled={formState.gradeBands.length === 0}
+              />
+              {formErrors.sections && (
+                <p className="text-xs text-red-500">{formErrors.sections}</p>
+              )}
+              {formState.gradeBands.length > 0 && formState.sections.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Sections filtered by selected schools and year groups
+                </p>
+              )}
+            </div>
             <FormField id="mock-window" label="Term / window" required>
               <Select
                 id="mock-window"
@@ -1031,18 +1084,6 @@ export default function EntityMockExamsPage() {
             />
             {formErrors.teachers && (
               <p className="text-xs text-red-500">{formErrors.teachers}</p>
-            )}
-            <SearchableMultiSelect
-              label="Class sections"
-              options={sectionOptions}
-              selectedValues={formState.sections}
-              onChange={values => setFormState(prev => ({ ...prev, sections: values }))}
-              placeholder="Select class sections"
-              className="green-theme"
-              usePortal={false}
-            />
-            {formErrors.studentCohorts && (
-              <p className="text-xs text-red-500">{formErrors.studentCohorts}</p>
             )}
             <div className="space-y-4">
               <ToggleSwitch
