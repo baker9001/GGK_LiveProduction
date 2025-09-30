@@ -3487,8 +3487,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirmation && selectedTeacher && (
         <ConfirmationDialog
-          open={showDeleteConfirmation}
-          onClose={() => {
+          isOpen={showDeleteConfirmation}
+          onCancel={() => {
             setShowDeleteConfirmation(false);
             setSelectedTeacher(null);
           }}

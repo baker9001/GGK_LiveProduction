@@ -322,17 +322,6 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
         )}
       </div>
 
-      {/* Debug info for troubleshooting (remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded">
-          <p>Debug Info:</p>
-          <p>isEntityAdmin: {isEntityAdmin ? 'true' : 'false'}</p>
-          <p>isSubEntityAdmin: {isSubEntityAdmin ? 'true' : 'false'}</p>
-          <p>isSchoolAdmin: {isSchoolAdmin ? 'true' : 'false'}</p>
-          <p>canCreateAdmin: {canCreateAdmin ? 'true' : 'false'}</p>
-        </div>
-      )}
-
       {/* View Mode Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
