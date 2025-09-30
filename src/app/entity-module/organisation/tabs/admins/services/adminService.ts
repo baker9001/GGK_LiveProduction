@@ -388,7 +388,7 @@ export const adminService = {
       }
 
       if (validatedPayload.phone !== undefined) {
-        updateData.phone = validatedPayload.phone;
+        updateData.phone = validatedPayload.phone && validatedPayload.phone.trim() !== '' ? validatedPayload.phone.trim() : null;
       }
 
       if (validatedPayload.admin_level !== undefined) {
@@ -432,18 +432,43 @@ export const adminService = {
         }
       }
 
-      // Update email in users table if changed
-      if (validatedPayload.email && validatedPayload.email !== existingAdmin.email && existingAdmin.user_id) {
-        const { error: userUpdateError } = await supabase
-          .from('users')
-          .update({ 
-            email: validatedPayload.email,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingAdmin.user_id);
+      // Update email and phone in users table if changed
+      if (existingAdmin.user_id) {
+        const userTableUpdates: any = {
+          updated_at: new Date().toISOString()
+        };
 
-        if (userUpdateError) {
-          console.error('Failed to update email in users table:', userUpdateError);
+        let shouldUpdateUsers = false;
+
+        if (validatedPayload.email && validatedPayload.email !== existingAdmin.email) {
+          userTableUpdates.email = validatedPayload.email;
+          shouldUpdateUsers = true;
+        }
+
+        // Update phone in user metadata
+        if (validatedPayload.phone !== undefined) {
+          const { data: currentUserData } = await supabase
+            .from('users')
+            .select('raw_user_meta_data')
+            .eq('id', existingAdmin.user_id)
+            .maybeSingle();
+
+          userTableUpdates.raw_user_meta_data = {
+            ...(currentUserData?.raw_user_meta_data || {}),
+            phone: validatedPayload.phone && validatedPayload.phone.trim() !== '' ? validatedPayload.phone.trim() : null
+          };
+          shouldUpdateUsers = true;
+        }
+
+        if (shouldUpdateUsers) {
+          const { error: userUpdateError } = await supabase
+            .from('users')
+            .update(userTableUpdates)
+            .eq('id', existingAdmin.user_id);
+
+          if (userUpdateError) {
+            console.error('Failed to update users table:', userUpdateError);
+          }
         }
       }
 

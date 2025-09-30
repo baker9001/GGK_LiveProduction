@@ -1113,18 +1113,40 @@ export const userCreationService = {
   /**
    * Update student data
    */
-  async updateStudent(userId: string, payload: Partial<StudentUserPayload & { name?: string; is_active?: boolean }>): Promise<void> {
+  async updateStudent(userId: string, payload: Partial<StudentUserPayload & { name?: string; is_active?: boolean; phone?: string }>): Promise<void> {
     try {
-      // Update users table if name, email, or is_active changed
+      // Fetch current user metadata
+      const { data: currentUser } = await supabase
+        .from('users')
+        .select('raw_user_meta_data')
+        .eq('id', userId)
+        .maybeSingle();
+
+      // Update users table if name, email, phone, or is_active changed
       const userUpdates: any = {
         updated_at: new Date().toISOString()
       };
 
+      // Prepare metadata updates
+      const metadataUpdates: any = {
+        ...(currentUser?.raw_user_meta_data || {})
+      };
+
+      let metadataChanged = false;
+
       if (payload.name !== undefined) {
-        userUpdates.raw_user_meta_data = {
-          name: payload.name,
-          updated_at: new Date().toISOString()
-        };
+        metadataUpdates.name = payload.name;
+        metadataChanged = true;
+      }
+
+      if (payload.phone !== undefined) {
+        metadataUpdates.phone = payload.phone && payload.phone.trim() !== '' ? payload.phone.trim() : null;
+        metadataChanged = true;
+      }
+
+      if (metadataChanged) {
+        metadataUpdates.updated_at = new Date().toISOString();
+        userUpdates.raw_user_meta_data = metadataUpdates;
       }
 
       if (payload.email !== undefined) {

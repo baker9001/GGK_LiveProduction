@@ -16,7 +16,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, Search, Filter, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, CreditCard as Edit, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3x3, Layers, Shield, Hash, Eye as EyeIcon, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
+import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, Search, Filter, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, Edit2, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3x3, Layers, Shield, Hash, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useUser } from '../../../../../contexts/UserContext';
@@ -1393,7 +1393,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       }
       
       if (data.phone !== undefined) {
-        teacherUpdates.phone = data.phone ? data.phone.toString() : null;
+        teacherUpdates.phone = data.phone && data.phone.trim() !== '' ? data.phone.toString().trim() : null;
       }
       
       const { error: teacherError } = await supabase
@@ -1422,7 +1422,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
         if (!userUpdates.raw_user_meta_data) {
           userUpdates.raw_user_meta_data = { ...teacher.user_data?.raw_user_meta_data };
         }
-        userUpdates.raw_user_meta_data.phone = data.phone;
+        userUpdates.raw_user_meta_data.phone = data.phone && data.phone.trim() !== '' ? data.phone.trim() : null;
       }
       
       if (data.is_active !== undefined && data.is_active !== teacher.is_active) {
@@ -2397,7 +2397,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                               onClick={() => handleEditTeacher(teacher)}
                               title="Edit Teacher"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </Button>
                           </>
                         )}
@@ -3206,7 +3206,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           handleEditTeacher(viewingTeacher);
                         }}
                       >
-                        <Edit className="w-4 h-4 mr-2" />
+                        <Edit2 className="w-4 h-4 mr-2" />
                         Edit Details
                       </Button>
                       <Button
