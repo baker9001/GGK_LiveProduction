@@ -107,20 +107,17 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // AUTO-SELECT USER'S COMPANY
   const companyId = useMemo(() => {
     if (userContext?.companyId) {
-      console.log('Using company ID from user context:', userContext.companyId);
       return userContext.companyId;
     }
-    
+
     if (user?.company_id) {
-      console.log('Using company ID from user object:', user.company_id);
       return user.company_id;
     }
-    
+
     if (propCompanyId) {
-      console.log('Using company ID from prop:', propCompanyId);
       return propCompanyId;
     }
-    
+
     console.error('No company ID found in user context, user object, or props');
     return null;
   }, [userContext, user, propCompanyId]);
