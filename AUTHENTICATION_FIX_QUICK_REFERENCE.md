@@ -1,35 +1,50 @@
 # Authentication Fix - Quick Reference Guide
 
+## CRITICAL UPDATE - SECOND FIX APPLIED
+
+**Date:** October 1, 2025, 8:57 PM
+**Status:** ✅ COMPLETELY FIXED
+
 ## What Was Fixed?
 
-Users couldn't login because RLS policies on the `users` table blocked access during authentication. We added self-access policies to fix this.
+### First Attempt (FAILED)
+Users couldn't login because RLS policies on the `users` table blocked access during authentication. We added self-access policies, but this FAILED due to duplicate policies.
+
+### Second Fix (SUCCESS)
+**Root Cause:** Multiple duplicate policies were created, causing PostgreSQL errors and blocking all queries.
+
+**Solution:** Dropped ALL policies on users table and recreated them correctly with proper logic.
 
 ---
 
 ## The Solution (In Simple Terms)
 
-**Before:** Only system admins could read the users table → Nobody could login ❌
+**Before First Fix:** Only system admins could read the users table → Nobody could login ❌
 
-**After:** Users can read their own record → Everyone can login ✅
+**After First Fix:** Duplicate policies caused conflicts → Still nobody could login ❌
+
+**After Second Fix:** Clean policies, authenticated users can query users table → Everyone can login ✅
 
 ---
 
 ## What Changed?
 
-### 4 New Migration Files Added:
+### Critical Migration Applied:
 
-1. **`20251001202954_fix_users_table_rls_for_authentication.sql`**
-   - Users can view their own record
-   - Users can update their login timestamps
+**`20251001205713_cleanup_duplicate_users_policies_and_fix_login.sql`**
+- Dropped ALL existing policies on users table (removed duplicates)
+- Created 5 essential policies:
+  1. Authenticated users can view users table (for login lookup)
+  2. Users can view their own record by ID
+  3. Users can update their own record
+  4. Service role has full access
+  5. Auth triggers can update users
 
-2. **`20251001203030_fix_admin_users_table_rls_for_authentication.sql`**
-   - Admin users can view their own admin record
-
-3. **`20251001203100_fix_entity_users_table_rls_for_authentication.sql`**
-   - Entity users can view their own entity record
-
-4. **`20251001203130_fix_roles_permissions_rls_for_authentication.sql`**
-   - Users can view their own role and permissions
+### Previous Migrations (Superseded):
+1. `20251001202954_fix_users_table_rls_for_authentication.sql` - Had duplicate
+2. `20251001203133_fix_users_table_rls_for_authentication.sql` - Was duplicate
+3. `20251001204848_fix_users_rls_email_lookup.sql` - Had duplicate
+4. `20251001205004_fix_users_rls_email_lookup.sql` - Was duplicate
 
 ---
 
