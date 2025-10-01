@@ -126,10 +126,6 @@ export class EntityLicenseService {
           assigned_by,
           expires_at,
           is_active,
-          status,
-          activated_on,
-          valid_from_snapshot,
-          valid_to_snapshot,
           students!inner (
             id,
             student_code,
@@ -149,7 +145,7 @@ export class EntityLicenseService {
           )
         `)
         .eq('license_id', licenseId)
-        .in('status', ['ASSIGNED_PENDING_ACTIVATION', 'CONSUMED_ACTIVATED']);
+        .eq('is_active', true);
 
       const { data, error } = await query;
 
@@ -187,10 +183,10 @@ export class EntityLicenseService {
           assigned_by: assignment.assigned_by,
           expires_at: assignment.expires_at,
           is_active: assignment.is_active,
-          status: assignment.status,
-          activated_on: assignment.activated_on,
-          valid_from_snapshot: assignment.valid_from_snapshot,
-          valid_to_snapshot: assignment.valid_to_snapshot
+          status: assignment.is_active ? 'CONSUMED_ACTIVATED' : 'REVOKED',
+          activated_on: assignment.is_active ? assignment.assigned_at : undefined,
+          valid_from_snapshot: assignment.assigned_at,
+          valid_to_snapshot: assignment.expires_at
         };
       });
 
