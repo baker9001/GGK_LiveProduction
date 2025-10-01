@@ -14,11 +14,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Users, 
-  UserPlus, 
-  UserMinus, 
-  Search, 
+import {
+  Users,
+  UserPlus,
+  UserMinus,
+  Search,
   Filter,
   CheckCircle,
   XCircle,
@@ -28,7 +28,8 @@ import {
   MapPin,
   Mail,
   Hash,
-  Calendar
+  Calendar,
+  Info
 } from 'lucide-react';
 import { SlideInForm } from '../shared/SlideInForm';
 import { SearchableMultiSelect } from '../shared/SearchableMultiSelect';
@@ -41,6 +42,7 @@ import { toast } from '../shared/Toast';
 import { useAccessControl } from '../../hooks/useAccessControl';
 import { useUser } from '../../contexts/UserContext';
 import { EntityLicenseService, type EntityLicense, type StudentLicenseAssignment } from '../../services/entityLicenseService';
+import { supabase } from '../../lib/supabase';
 
 interface LicenseAssignmentModalProps {
   isOpen: boolean;
@@ -304,6 +306,47 @@ export function LicenseAssignmentModal({
     revokeMutation.mutate(studentsToRevoke);
   };
 
+  // Helper function to get status badge styling
+  const getStatusBadge = (status: string, expiresAt: string) => {
+    const expiryDate = new Date(expiresAt);
+    const isExpired = expiryDate < new Date();
+
+    if (isExpired) {
+      return {
+        color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700',
+        icon: XCircle,
+        text: 'Expired'
+      };
+    }
+
+    switch (status) {
+      case 'ASSIGNED_PENDING_ACTIVATION':
+        return {
+          color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+          icon: Clock,
+          text: 'Pending Activation'
+        };
+      case 'CONSUMED_ACTIVATED':
+        return {
+          color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
+          icon: CheckCircle,
+          text: 'Activated'
+        };
+      case 'REVOKED':
+        return {
+          color: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
+          icon: XCircle,
+          text: 'Revoked'
+        };
+      default:
+        return {
+          color: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
+          icon: AlertTriangle,
+          text: status
+        };
+    }
+  };
+
   // Columns for assigned students table
   const assignedStudentsColumns = [
     {
@@ -334,6 +377,20 @@ export function LicenseAssignmentModal({
           {row.student_code || 'N/A'}
         </span>
       )
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row: StudentLicenseAssignment) => {
+        const badge = getStatusBadge(row.status, row.expires_at);
+        const Icon = badge.icon;
+        return (
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${badge.color}`}>
+            <Icon className="w-3.5 h-3.5" />
+            {badge.text}
+          </div>
+        );
+      }
     },
     {
       id: 'location',
@@ -592,6 +649,44 @@ export function LicenseAssignmentModal({
           {/* Manage Assigned Students Tab */}
           {activeTab === 'manage' && (
             <div className="space-y-4">
+              {/* Status Legend */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  Status Legend
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                      <Clock className="w-3 h-3" />
+                      <span className="font-medium">Pending</span>
+                    </div>
+                    <span className="text-gray-600 dark:text-gray-400">Awaiting activation</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700">
+                      <CheckCircle className="w-3 h-3" />
+                      <span className="font-medium">Activated</span>
+                    </div>
+                    <span className="text-gray-600 dark:text-gray-400">In use</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700">
+                      <XCircle className="w-3 h-3" />
+                      <span className="font-medium">Expired</span>
+                    </div>
+                    <span className="text-gray-600 dark:text-gray-400">Past validity</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700">
+                      <XCircle className="w-3 h-3" />
+                      <span className="font-medium">Revoked</span>
+                    </div>
+                    <span className="text-gray-600 dark:text-gray-400">Removed</span>
+                  </div>
+                </div>
+              </div>
+
               {!canRevokeLicense && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
                   <div className="flex items-center">

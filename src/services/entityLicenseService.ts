@@ -49,6 +49,10 @@ export interface StudentLicenseAssignment {
   assigned_by: string;
   expires_at: string;
   is_active: boolean;
+  status: string;
+  activated_on?: string;
+  valid_from_snapshot: string;
+  valid_to_snapshot: string;
 }
 
 export interface LicenseAssignmentFilters {
@@ -107,6 +111,12 @@ export class EntityLicenseService {
     scopeFilters: { school_ids?: string[]; branch_ids?: string[] }
   ): Promise<StudentLicenseAssignment[]> {
     try {
+      console.log('Fetching students for license:', {
+        licenseId,
+        companyId,
+        scopeFilters
+      });
+
       let query = supabase
         .from('student_licenses')
         .select(`
@@ -116,12 +126,17 @@ export class EntityLicenseService {
           assigned_by,
           expires_at,
           is_active,
-          students!student_licenses_student_id_fkey (
+          status,
+          activated_on,
+          valid_from_snapshot,
+          valid_to_snapshot,
+          students!inner (
             id,
             student_code,
             school_id,
             branch_id,
-            users!students_user_id_fkey (
+            company_id,
+            users!inner (
               email,
               raw_user_meta_data
             ),
@@ -134,27 +149,54 @@ export class EntityLicenseService {
           )
         `)
         .eq('license_id', licenseId)
-        .eq('is_active', true);
+        .in('status', ['ASSIGNED_PENDING_ACTIVATION', 'CONSUMED_ACTIVATED']);
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      console.log('Query result:', {
+        success: !error,
+        recordCount: data?.length || 0,
+        error: error?.message
+      });
 
-      return (data || []).map((assignment: any) => ({
-        id: assignment.id,
-        student_id: assignment.student_id,
-        student_name: assignment.students?.users?.raw_user_meta_data?.name || 
-                     assignment.students?.users?.email?.split('@')[0] || 
-                     'Unknown Student',
-        student_code: assignment.students?.student_code || '',
-        student_email: assignment.students?.users?.email || '',
-        school_name: assignment.students?.schools?.name || 'No School',
-        branch_name: assignment.students?.branches?.name,
-        assigned_at: assignment.assigned_at,
-        assigned_by: assignment.assigned_by,
-        expires_at: assignment.expires_at,
-        is_active: assignment.is_active
-      }));
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No student licenses found for license_id:', licenseId);
+        return [];
+      }
+
+      const mappedData = (data || []).map((assignment: any) => {
+        const student = assignment.students;
+        const user = student?.users;
+
+        return {
+          id: assignment.id,
+          student_id: assignment.student_id,
+          student_name: user?.raw_user_meta_data?.name ||
+                       user?.email?.split('@')[0] ||
+                       'Unknown Student',
+          student_code: student?.student_code || '',
+          student_email: user?.email || '',
+          school_name: student?.schools?.name || 'No School',
+          branch_name: student?.branches?.name,
+          assigned_at: assignment.assigned_at,
+          assigned_by: assignment.assigned_by,
+          expires_at: assignment.expires_at,
+          is_active: assignment.is_active,
+          status: assignment.status,
+          activated_on: assignment.activated_on,
+          valid_from_snapshot: assignment.valid_from_snapshot,
+          valid_to_snapshot: assignment.valid_to_snapshot
+        };
+      });
+
+      console.log('Mapped student licenses:', mappedData.length);
+      return mappedData;
+
     } catch (error) {
       console.error('Error fetching students for license:', error);
       throw error;
@@ -247,11 +289,13 @@ export class EntityLicenseService {
     successful: number;
     failed: number;
     errors: string[];
+    assignmentIds: string[];
   }> {
     const results = {
       successful: 0,
       failed: 0,
-      errors: [] as string[]
+      errors: [] as string[],
+      assignmentIds: [] as string[]
     };
 
     for (const studentId of studentIds) {
@@ -259,6 +303,16 @@ export class EntityLicenseService {
         const result = await this.assignLicenseToStudent(licenseId, studentId, assignedBy);
         if (result.success) {
           results.successful++;
+          if (result.assignment_id) {
+            results.assignmentIds.push(result.assignment_id);
+          }
+
+          // Send notification email asynchronously (don't wait for it)
+          if (result.assignment_id) {
+            this.sendLicenseNotification(result.assignment_id, 'assignment').catch(err => {
+              console.warn('Failed to send license notification:', err);
+            });
+          }
         } else {
           results.failed++;
           results.errors.push(`Student ${studentId}: ${result.error || result.message}`);
@@ -270,6 +324,77 @@ export class EntityLicenseService {
     }
 
     return results;
+  }
+
+  /**
+   * Activate a student license
+   */
+  static async activateStudentLicense(
+    licenseId: string,
+    studentId?: string
+  ): Promise<{ success: boolean; message: string; error?: string; activated_on?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('activate_student_license', {
+        p_license_id: licenseId,
+        p_student_id: studentId || null
+      });
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error('Error activating student license:', error);
+      return {
+        success: false,
+        message: 'Failed to activate license',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Send license notification email
+   */
+  static async sendLicenseNotification(
+    studentLicenseId: string,
+    notificationType: 'assignment' | 'expiry_warning' | 'activation_reminder'
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/send-license-notification`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            student_license_id: studentLicenseId,
+            notification_type: notificationType,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send notification');
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message
+      };
+    } catch (error) {
+      console.error('Error sending license notification:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   /**
