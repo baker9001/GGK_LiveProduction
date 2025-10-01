@@ -117,7 +117,7 @@ export class EntityLicenseService {
         scopeFilters
       });
 
-      let query = supabase
+      const { data: studentLicenses, error } = await supabase
         .from('student_licenses')
         .select(`
           id,
@@ -125,33 +125,14 @@ export class EntityLicenseService {
           assigned_at,
           assigned_by,
           expires_at,
-          is_active,
-          students!inner (
-            id,
-            student_code,
-            school_id,
-            branch_id,
-            company_id,
-            users!inner (
-              email,
-              raw_user_meta_data
-            ),
-            schools (
-              name
-            ),
-            branches (
-              name
-            )
-          )
+          is_active
         `)
         .eq('license_id', licenseId)
         .eq('is_active', true);
 
-      const { data, error } = await query;
-
       console.log('Query result:', {
         success: !error,
-        recordCount: data?.length || 0,
+        recordCount: studentLicenses?.length || 0,
         error: error?.message
       });
 
@@ -160,14 +141,52 @@ export class EntityLicenseService {
         throw error;
       }
 
-      if (!data || data.length === 0) {
+      if (!studentLicenses || studentLicenses.length === 0) {
         console.warn('No student licenses found for license_id:', licenseId);
         return [];
       }
 
-      const mappedData = (data || []).map((assignment: any) => {
-        const student = assignment.students;
-        const user = student?.users;
+      const studentIds = studentLicenses.map(sl => sl.student_id);
+
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select(`
+          id,
+          user_id,
+          student_code,
+          school_id,
+          branch_id,
+          schools (
+            name
+          ),
+          branches (
+            name
+          )
+        `)
+        .in('id', studentIds);
+
+      if (studentsError) {
+        console.error('Error fetching students:', studentsError);
+        throw studentsError;
+      }
+
+      const userIds = (students || []).map(s => s.user_id).filter(Boolean);
+
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, raw_user_meta_data')
+        .in('id', userIds);
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+      }
+
+      const userMap = new Map((users || []).map(u => [u.id, u]));
+      const studentMap = new Map((students || []).map(s => [s.id, s]));
+
+      const mappedData = studentLicenses.map((assignment: any) => {
+        const student = studentMap.get(assignment.student_id);
+        const user = student?.user_id ? userMap.get(student.user_id) : null;
 
         return {
           id: assignment.id,
