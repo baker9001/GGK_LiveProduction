@@ -152,7 +152,8 @@ export default function SignInPage() {
       let userRole: UserRole = 'VIEWER';
       
       // Fetch additional user data
-      const { data: userDataFetch } = await supabase
+      console.log('[Auth] Fetching user data from users table');
+      const { data: userDataFetch, error: userFetchError } = await supabase
         .from('users')
         .select(`
           id,
@@ -163,6 +164,13 @@ export default function SignInPage() {
         `)
         .eq('email', normalizedEmail)
         .maybeSingle();
+
+      if (userFetchError) {
+        console.error('[Auth] Error fetching user data:', userFetchError);
+        setError('Failed to retrieve user information. Please try again.');
+        setLoading(false);
+        return;
+      }
       
       if (userDataFetch) {
         // Check if account is active
@@ -251,7 +259,8 @@ export default function SignInPage() {
       }
       
       // Update last login
-      await supabase
+      console.log('[Auth] Updating last login timestamp');
+      const { error: updateError } = await supabase
         .from('users')
         .update({
           last_login_at: new Date().toISOString(),
@@ -259,6 +268,11 @@ export default function SignInPage() {
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
+
+      if (updateError) {
+        console.warn('[Auth] Failed to update login timestamp (non-critical):', updateError);
+        // Don't fail login just because timestamp update failed
+      }
       
       // Create authenticated user
       const authenticatedUser: User = {

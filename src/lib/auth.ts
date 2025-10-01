@@ -67,13 +67,17 @@ export function generateAuthToken(user: User, rememberMe: boolean = false): stri
 export function setAuthenticatedUser(user: User): void {
   // Check if remember me is enabled
   const rememberMe = localStorage.getItem(REMEMBER_SESSION_KEY) === 'true';
-  
+
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
   const token = generateAuthToken(user, rememberMe);
   localStorage.setItem(AUTH_TOKEN_KEY, token);
-  
-  console.log(`Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
-  
+
+  // CRITICAL FIX: Record login time to prevent session monitoring from interfering
+  lastLoginTime = Date.now();
+
+  console.log(`[Auth] Session created with ${rememberMe ? '30-day' : '24-hour'} expiration`);
+  console.log(`[Auth] Login time recorded: ${new Date(lastLoginTime).toISOString()}`);
+
   // SECURITY: Dispatch auth change event
   dispatchAuthChange();
 }
@@ -341,55 +345,64 @@ function isPublicPage(): boolean {
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isMonitoringActive = false;
 let isRedirecting = false;
+let lastLoginTime: number = 0;
 
 export function startSessionMonitoring(): void {
   // Prevent multiple intervals
   if (sessionCheckInterval) {
     clearInterval(sessionCheckInterval);
   }
-  
+
   // Reset flags
   isRedirecting = false;
-  
+
   // Don't start monitoring immediately - wait for app to initialize
+  // CRITICAL FIX: Increased delay to 10 seconds to prevent interference with login flow
   setTimeout(() => {
     isMonitoringActive = true;
-    
+
     sessionCheckInterval = setInterval(() => {
       // Skip if not monitoring or already redirecting
       if (!isMonitoringActive || isRedirecting) return;
-      
+
+      // CRITICAL FIX: Don't monitor if user just logged in (within last 30 seconds)
+      const timeSinceLogin = Date.now() - lastLoginTime;
+      if (timeSinceLogin < 30000) {
+        console.log('[SessionMonitoring] Skipping check - user just logged in');
+        return;
+      }
+
       // Get current path
       const currentPath = window.location.pathname;
-      
+
       // Skip monitoring for public pages AND signin page
       if (isPublicPage() || currentPath === '/signin' || currentPath.startsWith('/signin')) {
         return;
       }
-      
+
       const user = getAuthenticatedUser();
       if (!user) {
         // Session expired or no user
-        console.log('Session expired. Redirecting to login.');
-        
+        console.log('[SessionMonitoring] Session expired. Redirecting to login.');
+
         // Set flags to prevent loops
         isMonitoringActive = false;
         isRedirecting = true;
-        
+
         // Stop the interval
         if (sessionCheckInterval) {
           clearInterval(sessionCheckInterval);
           sessionCheckInterval = null;
         }
-        
+
         // Use replace to prevent back button issues
         window.location.replace('/signin');
       } else if (isSessionExpiringSoon()) {
         // Optional: Show warning to user
-        console.warn('Session expiring soon. Consider extending.');
+        console.warn('[SessionMonitoring] Session expiring soon. Consider extending.');
       }
     }, 60000); // Check every minute
-  }, 2000); // Wait 2 seconds before starting monitoring
+  }, 10000); // CRITICAL FIX: Wait 10 seconds before starting monitoring (was 2 seconds)
 }
 
 export function stopSessionMonitoring(): void {
@@ -414,17 +427,20 @@ export function setupSessionRefresh(): void {
 // Initialize on app start - but with delay
 if (typeof window !== 'undefined') {
   // Wait for app to fully load before starting session management
+  // CRITICAL FIX: Increased delay to prevent interference with initial auth state
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      setupSessionRefresh();
-      startSessionMonitoring();
+      setTimeout(() => {
+        setupSessionRefresh();
+        startSessionMonitoring();
+      }, 5000); // CRITICAL FIX: Wait 5 seconds after DOM load
     });
   } else {
     // DOM already loaded
     setTimeout(() => {
       setupSessionRefresh();
       startSessionMonitoring();
-    }, 1000);
+    }, 5000); // CRITICAL FIX: Wait 5 seconds (was 1 second)
   }
 }
 
