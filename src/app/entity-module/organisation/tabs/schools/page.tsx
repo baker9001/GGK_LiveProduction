@@ -14,14 +14,14 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Plus, Search, Edit2, Trash2, Building2, Users, MapPin,
-  Filter, X, AlertTriangle, Shield, Lock, Loader2,
+  Plus, Edit2, Trash2, Building2, Users, MapPin,
+  X, AlertTriangle, Shield, Lock, Loader2,
   CheckCircle2, XCircle, Info, School, Hash, Grid3X3, List
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/shared/Button';
-import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
+import { FilterCard } from '@/components/shared/FilterCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
@@ -119,6 +119,11 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
     const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+
+    const handleClearFilters = useCallback(() => {
+      setSearchTerm('');
+      setFilterStatus('all');
+    }, []);
     
     // Confirmation dialog state
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -835,30 +840,38 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     // ===== MAIN RENDER =====
     return (
       <div className="space-y-4">
-        {/* Header & Search */}
+        <FilterCard
+          title="Filters"
+          onApply={() => {}}
+          onClear={handleClearFilters}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FilterCard.Search
+              id="schools-search"
+              label="Search"
+              value={searchTerm}
+              onSearch={setSearchTerm}
+              placeholder="Search schools..."
+            />
+
+            <FilterCard.Dropdown
+              id="schools-status"
+              label="Status"
+              value={filterStatus}
+              onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' }
+              ]}
+              placeholder="All status"
+            />
+          </div>
+        </FilterCard>
+
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4 flex-1">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search schools..."
-                  className="pl-10"
-                />
-              </div>
-              <Select
-                value={filterStatus}
-                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-                className="w-32"
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' }
-                ]}
-              />
-              {/* View Mode Toggle - Moved to Right */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
               <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('card')}

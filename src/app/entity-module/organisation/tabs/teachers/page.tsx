@@ -16,7 +16,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, Search, Filter, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, CreditCard as Edit2, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3x3, Layers, Shield, Hash, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
+import { Users, Award, Calendar, BookOpen, Clock, Briefcase, Plus, AlertTriangle, Info, CheckCircle2, Loader2, UserCheck, GraduationCap, CreditCard as Edit2, Eye, MoreVertical, Mail, Phone, MapPin, Download, Upload, Key, Copy, RefreshCw, Trash2, UserX, FileText, ChevronDown, X, User, Building2, School, Grid3x3, List, Layers, Shield, Hash, EyeOff, CheckCircle, XCircle, Send, Link2, BookOpenCheck, Award as AwardIcon, ChevronRight, ChevronLeft, Check, ArrowRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useUser } from '../../../../../contexts/UserContext';
@@ -28,6 +28,7 @@ import { toast } from '../../../../../components/shared/Toast';
 import { SlideInForm } from '../../../../../components/shared/SlideInForm';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
+import { FilterCard } from '@/components/shared/FilterCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
 import { PhoneInput } from '../../../../../components/shared/PhoneInput';
 import { ToggleSwitch } from '../../../../../components/shared/ToggleSwitch';
@@ -322,7 +323,21 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterSpecialization, setFilterSpecialization] = useState<string>('all');
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setFilterSchool('all');
+    setFilterSpecialization('all');
+  }, []);
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+
+  const handleViewModeChange = (mode: 'card' | 'list') => {
+    setViewMode(mode);
+    if (mode === 'card') {
+      setSelectedTeachers([]);
+    }
+  };
   
   // Form states
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -1937,6 +1952,18 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     });
   }, [teachers, searchTerm, filterStatus, filterSchool, filterSpecialization]);
 
+  const specializationOptions = useMemo(() => {
+    const options = new Set<string>();
+    teachers.forEach(teacher => {
+      teacher.specialization?.forEach(spec => {
+        if (spec) {
+          options.add(spec);
+        }
+      });
+    });
+    return Array.from(options).sort((a, b) => a.localeCompare(b));
+  }, [teachers]);
+
   // ===== STATISTICS =====
   const summaryStats = useMemo(() => {
     return {
@@ -2077,62 +2104,110 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           </div>
         </div>
 
-        {/* Search and Filters */}
-        <div className="flex flex-col lg:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search teachers by name, email, or code..."
-                className="pl-10 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                aria-label="Search teachers"
-              />
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('card')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'card'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="Card view"
+                  aria-pressed={viewMode === 'card'}
+                >
+                  <Grid3x3 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('list')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                  title="List view"
+                  aria-pressed={viewMode === 'list'}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              {canCreateTeacher && (
+                <Button
+                  onClick={handleCreateTeacher}
+                  aria-label="Add new teacher"
+                  variant="default"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Teacher
+                </Button>
+              )}
             </div>
           </div>
-          
-          <div className="flex gap-2">
-            {availableSchools.length > 0 && (
-              <Select
-                value={filterSchool}
-                onChange={(value) => setFilterSchool(value)}
-                options={[
-                  { value: 'all', label: 'All Schools' },
-                  ...availableSchools.map(s => ({ value: s.id, label: s.name }))
-                ]}
-                className="w-48 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                aria-label="Filter by school"
-              />
-            )}
-            
-            <Select
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-              className="w-32 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-              aria-label="Filter by status"
-            />
 
-            {canCreateTeacher && (
-              <Button 
-                onClick={handleCreateTeacher}
-                aria-label="Add new teacher"
-                variant="default"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Teacher
-              </Button>
-            )}
-          </div>
+          <FilterCard
+            title="Filters"
+            onApply={() => {}}
+            onClear={handleClearFilters}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FilterCard.Search
+                id="teachers-search"
+                label="Search"
+                value={searchTerm}
+                onSearch={setSearchTerm}
+                placeholder="Search teachers by name, email, or code..."
+              />
+
+              {availableSchools.length > 0 && (
+                <FilterCard.Dropdown
+                  id="teachers-school"
+                  label="School"
+                  value={filterSchool}
+                  onFilterChange={(value) => setFilterSchool(value || 'all')}
+                  options={[
+                    { value: 'all', label: 'All Schools' },
+                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
+                  ]}
+                  placeholder="All schools"
+                />
+              )}
+
+              <FilterCard.Dropdown
+                id="teachers-status"
+                label="Status"
+                value={filterStatus}
+                onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' }
+                ]}
+                placeholder="All status"
+              />
+
+              {specializationOptions.length > 0 && (
+                <FilterCard.Dropdown
+                  id="teachers-specialization"
+                  label="Specialization"
+                  value={filterSpecialization}
+                  onFilterChange={(value) => setFilterSpecialization(value || 'all')}
+                  options={[{ value: 'all', label: 'All Specializations' }, ...specializationOptions.map(spec => ({ value: spec, label: spec }))]}
+                  placeholder="All specializations"
+                />
+              )}
+            </div>
+          </FilterCard>
         </div>
 
         {/* Bulk Actions Bar */}
-        {selectedTeachers.length > 0 && (canModifyTeacher || canDeleteTeacher) && (
+        {viewMode === 'list' && selectedTeachers.length > 0 && (canModifyTeacher || canDeleteTeacher) && (
           <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border" role="toolbar" aria-label="Bulk actions">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -2174,7 +2249,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
           </div>
         )}
 
-        {/* Teachers Table */}
+        {/* Teachers Results */}
         {isLoadingTeachers ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
@@ -2185,12 +2260,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             <GraduationCap className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <h3 className="text-lg font-medium mb-2">No Teachers Found</h3>
             <p className="text-sm mb-4">
-              {teachers.length === 0 
-                ? "No teachers have been added yet." 
+              {teachers.length === 0
+                ? "No teachers have been added yet."
                 : "No teachers match your filters."}
             </p>
             {canCreateTeacher && teachers.length === 0 && (
-              <Button 
+              <Button
                 onClick={handleCreateTeacher}
                 variant="default"
               >
@@ -2198,6 +2273,201 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 Add First Teacher
               </Button>
             )}
+          </div>
+        ) : viewMode === 'card' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredTeachers.map((teacher) => {
+              const specializationPreview = teacher.specialization?.slice(0, 2) || [];
+              const specializationOverflow = (teacher.specialization?.length || 0) - specializationPreview.length;
+
+              return (
+                <div
+                  key={teacher.id}
+                  className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300"
+                >
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-[#8CC63F]/15 flex items-center justify-center text-[#8CC63F]">
+                          <GraduationCap className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+                            {teacher.name || 'Unnamed Teacher'}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {teacher.email && (
+                              <span className="flex items-center gap-1">
+                                <Mail className="w-3.5 h-3.5" />
+                                {teacher.email}
+                              </span>
+                            )}
+                            {teacher.phone && (
+                              <span className="flex items-center gap-1">
+                                <Phone className="w-3.5 h-3.5" />
+                                {teacher.phone}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                              {teacher.teacher_code}
+                            </span>
+                            {specializationPreview.map((spec) => (
+                              <span key={spec} className="px-2 py-1 bg-[#8CC63F]/10 text-[#7AB532] text-xs rounded border border-[#8CC63F]/30">
+                                {spec}
+                              </span>
+                            ))}
+                            {specializationOverflow > 0 && (
+                              <span className="text-xs text-gray-500">+{specializationOverflow}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={teacher.is_active ? 'active' : 'inactive'}
+                        variant={teacher.is_active ? 'success' : 'warning'}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-300">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-gray-400" />
+                          <span>
+                            {teacher.grade_levels?.length
+                              ? `${teacher.grade_levels.length} Grade${teacher.grade_levels.length !== 1 ? 's' : ''}`
+                              : 'No grades assigned'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Grid3x3 className="w-4 h-4 text-gray-400" />
+                          <span>
+                            {teacher.sections?.length
+                              ? `${teacher.sections.length} Section${teacher.sections.length !== 1 ? 's' : ''}`
+                              : 'No sections assigned'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {teacher.programs && teacher.programs.length > 0 ? (
+                            <>
+                              {teacher.programs.slice(0, 2).map((prog) => (
+                                <span key={prog.id} className="px-2 py-1 bg-[#8CC63F]/10 text-[#7AB532] text-xs rounded border border-[#8CC63F]/30">
+                                  {prog.name}
+                                </span>
+                              ))}
+                              {teacher.programs.length > 2 && (
+                                <span className="text-xs text-gray-500">+{teacher.programs.length - 2}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-xs">No programs assigned</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {teacher.subjects && teacher.subjects.length > 0 ? (
+                            <>
+                              {teacher.subjects.slice(0, 2).map((subj) => (
+                                <span key={subj.id} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">
+                                  {subj.name}
+                                </span>
+                              ))}
+                              {teacher.subjects.length > 2 && (
+                                <span className="text-xs text-gray-500">+{teacher.subjects.length - 2}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-xs">No subjects assigned</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {teacher.schools && teacher.schools.length > 0 ? (
+                            <>
+                              <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs">
+                                <School className="w-3 h-3" />
+                                {teacher.schools[0].name}
+                                {teacher.schools.length > 1 && ` +${teacher.schools.length - 1}`}
+                              </span>
+                              {teacher.branches && teacher.branches.length > 0 && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs">
+                                  <MapPin className="w-3 h-3" />
+                                  {teacher.branches[0].name}
+                                  {teacher.branches.length > 1 && ` +${teacher.branches.length - 1}`}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-xs">No school assignment</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {teacher.hire_date
+                          ? `Hired ${new Date(teacher.hire_date).toLocaleDateString()}`
+                          : 'Hire date not provided'}
+                      </span>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label={`Actions for ${teacher.name || 'teacher'}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewTeacher(teacher)}
+                          title="View Teacher Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {canModifyTeacher && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenAssignmentModal(teacher)}
+                              title="Manage Assignments"
+                            >
+                              <Link2 className="w-4 h-4" />
+                            </Button>
+                            <QuickPasswordResetButton
+                              teacherId={teacher.id}
+                              teacherName={teacher.name || 'Teacher'}
+                              teacherEmail={teacher.email || ''}
+                              onReset={handleQuickPasswordReset}
+                              disabled={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleEditTeacher(teacher)}
+                              title="Edit Teacher"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                        {canDeleteTeacher && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedTeacher(teacher);
+                              setShowDeleteConfirmation(true);
+                            }}
+                            title="Delete Teacher"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -2233,8 +2503,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </thead>
               <tbody>
                 {filteredTeachers.map((teacher) => (
-                  <tr 
-                    key={teacher.id} 
+                  <tr
+                    key={teacher.id}
                     className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   >
                     <td className="p-3">
@@ -2290,7 +2560,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             </span>
                           </div>
                         )}
-                        {(!teacher.grade_levels || teacher.grade_levels.length === 0) && 
+                        {(!teacher.grade_levels || teacher.grade_levels.length === 0) &&
                          (!teacher.sections || teacher.sections.length === 0) && (
                           <span className="text-gray-400 text-xs">Not assigned</span>
                         )}
@@ -2300,7 +2570,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       <div className="space-y-1">
                         {teacher.programs && teacher.programs.length > 0 && (
                           <div className="flex items-center gap-1">
-                            {teacher.programs.slice(0, 2).map((prog, idx) => (
+                            {teacher.programs.slice(0, 2).map((prog) => (
                               <span key={prog.id} className="px-2 py-1 bg-[#8CC63F]/10 text-[#7AB532] text-xs rounded border border-[#8CC63F]/30">
                                 {prog.name}
                               </span>
@@ -2312,7 +2582,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         )}
                         {teacher.subjects && teacher.subjects.length > 0 && (
                           <div className="flex items-center gap-1">
-                            {teacher.subjects.slice(0, 2).map((subj, idx) => (
+                            {teacher.subjects.slice(0, 2).map((subj) => (
                               <span key={subj.id} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">
                                 {subj.name}
                               </span>
@@ -2322,7 +2592,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                             )}
                           </div>
                         )}
-                        {(!teacher.programs || teacher.programs.length === 0) && 
+                        {(!teacher.programs || teacher.programs.length === 0) &&
                          (!teacher.subjects || teacher.subjects.length === 0) && (
                           <span className="text-gray-400 text-xs">No programs/subjects</span>
                         )}
@@ -2330,18 +2600,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     </td>
                     <td className="p-3">
                       <div className="text-sm">
-                        {/* FIXED: Show multiple schools/branches if assigned */}
                         {teacher.schools && teacher.schools.length > 0 ? (
                           <div>
                             <div className="text-gray-700 dark:text-gray-300">
-                              {teacher.schools.length === 1 
-                                ? teacher.schools[0].name 
+                              {teacher.schools.length === 1
+                                ? teacher.schools[0].name
                                 : `${teacher.schools[0].name} +${teacher.schools.length - 1}`}
                             </div>
                             {teacher.branches && teacher.branches.length > 0 && (
                               <div className="text-xs text-gray-500">
-                                {teacher.branches.length === 1 
-                                  ? teacher.branches[0].name 
+                                {teacher.branches.length === 1
+                                  ? teacher.branches[0].name
                                   : `${teacher.branches[0].name} +${teacher.branches.length - 1}`}
                               </div>
                             )}
@@ -2366,8 +2635,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     </td>
                     <td className="p-3">
                       <div className="flex gap-1" role="group" aria-label={`Actions for ${teacher.name}`}>
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => handleViewTeacher(teacher)}
                           title="View Teacher Details"
@@ -2376,8 +2645,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         </Button>
                         {canModifyTeacher && (
                           <>
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => handleOpenAssignmentModal(teacher)}
                               title="Manage Assignments"
@@ -2391,8 +2660,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                               onReset={handleQuickPasswordReset}
                               disabled={createTeacherMutation.isLoading || updateTeacherMutation.isLoading}
                             />
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => handleEditTeacher(teacher)}
                               title="Edit Teacher"
@@ -2402,8 +2671,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           </>
                         )}
                         {canDeleteTeacher && (
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => {
                               setSelectedTeacher(teacher);

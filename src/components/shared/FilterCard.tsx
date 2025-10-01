@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { Button } from './Button';
+import { FormField, Input } from './FormField';
 import { cn } from '../../lib/utils';
 
 interface FilterOption {
@@ -19,7 +20,8 @@ interface FilterDropdownProps {
   label: string;
   options: FilterOption[];
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  onFilterChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
 }
@@ -30,6 +32,7 @@ function FilterDropdown({
   options,
   value,
   onChange,
+  onFilterChange,
   placeholder = 'Select...',
   disabled = false
 }: FilterDropdownProps) {
@@ -49,6 +52,11 @@ function FilterDropdown({
   );
   
   const selectedOption = options.find(option => option.value === value);
+
+  const handleValueChange = (nextValue: string) => {
+    onChange?.(nextValue);
+    onFilterChange?.(nextValue);
+  };
 
   // Update dropdown position
   const updatePosition = () => {
@@ -195,7 +203,7 @@ function FilterDropdown({
                       : 'text-gray-900 dark:text-white'
                   )}
                   onClick={() => {
-                    onChange(option.value);
+                    handleValueChange(option.value);
                     setIsOpen(false);
                     setSearchTerm('');
                   }}
@@ -247,7 +255,7 @@ function FilterDropdown({
                 className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onChange('');
+                  handleValueChange('');
                 }}
               >
                 <X className="h-4 w-4" />
@@ -267,6 +275,40 @@ function FilterDropdown({
   );
 }
 
+interface FilterSearchProps {
+  id: string;
+  value: string;
+  onSearch: (value: string) => void;
+  label?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+}
+
+function FilterSearch({
+  id,
+  value,
+  onSearch,
+  label = 'Search',
+  placeholder = 'Search...',
+  autoFocus = false
+}: FilterSearchProps) {
+  return (
+    <FormField id={id} label={label}>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+        <Input
+          id={id}
+          value={value}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          className="pl-10"
+        />
+      </div>
+    </FormField>
+  );
+}
+
 interface FilterCardProps {
   title?: string;
   onApply: () => void;
@@ -275,15 +317,15 @@ interface FilterCardProps {
   className?: string;
 }
 
-export function FilterCard({
+const FilterCardBase: React.FC<FilterCardProps> = ({
   title = 'Filter',
   onApply,
   onClear,
   children,
   className,
-}: FilterCardProps) {
+}) => {
   const [collapsed, setCollapsed] = useState(true);
-  
+
   const handleClear = () => {
     if (typeof onClear === 'function') {
       onClear();
@@ -317,7 +359,7 @@ export function FilterCard({
           <div className="space-y-4">
             {children}
           </div>
-          
+
           {/* Actions */}
           <div className="mt-6 flex items-center justify-end">
             <Button
@@ -333,7 +375,14 @@ export function FilterCard({
       )}
     </div>
   );
-}
+};
 
-// Export the dropdown component separately
-FilterCard.Dropdown = FilterDropdown;
+type FilterCardComponent = React.FC<FilterCardProps> & {
+  Dropdown: typeof FilterDropdown;
+  Search: typeof FilterSearch;
+};
+
+export const FilterCard: FilterCardComponent = Object.assign(FilterCardBase, {
+  Dropdown: FilterDropdown,
+  Search: FilterSearch,
+});

@@ -19,14 +19,17 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Filter,
+  Download,
   Eye,
+  Loader2,
+  Grid3X3,
+  List,
   Crown,
   Shield,
   School,
@@ -34,6 +37,7 @@ import {
   User,
   Mail,
   Calendar,
+  Clock,
   CheckCircle,
   XCircle,
   AlertTriangle,
@@ -128,11 +132,19 @@ export function AdminListTable({
 
   // Selection state for bulk operations
   const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   // Confirmation dialog state
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [adminsToDelete, setAdminsToDelete] = useState<EntityUser[]>([]);
   const [deleteAction, setDeleteAction] = useState<'delete' | 'restore'>('delete');
+
+  const handleViewModeChange = (mode: 'card' | 'list') => {
+    setViewMode(mode);
+    if (mode === 'card') {
+      setSelectedAdmins([]);
+    }
+  };
 
   // Fetch administrators with React Query - WITH SCOPE FILTERING
   const { 
@@ -921,13 +933,42 @@ export function AdminListTable({
       </FilterCard>
 
       {/* Actions Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* Empty left side - Add Administrator button moved to parent component */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('card')}
+              className={cn(
+                'p-2 rounded-md transition-colors',
+                viewMode === 'card'
+                  ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              )}
+              title="Card view"
+              aria-pressed={viewMode === 'card'}
+            >
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('list')}
+              className={cn(
+                'p-2 rounded-md transition-colors',
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-gray-600 text-[#8CC63F] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              )}
+              title="List view"
+              aria-pressed={viewMode === 'list'}
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {selectedAdmins.length > 0 && (
+          {viewMode === 'list' && selectedAdmins.length > 0 && (
             <Button
               variant="destructive"
               leftIcon={<Trash2 className="h-4 w-4" />}
@@ -936,7 +977,7 @@ export function AdminListTable({
               Bulk Action ({selectedAdmins.length})
             </Button>
           )}
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -948,39 +989,180 @@ export function AdminListTable({
         </div>
       </div>
 
-      {/* Data Table */}
-      <DataTable
-        columns={columns}
-        data={filteredAdmins}
-        keyField="id"
-        loading={isLoading}
-        isFetching={isFetching}
-        onEdit={handleEditAdmin}
-        onDelete={handleDeleteAdmin}
-        renderActions={renderRowActions}
-        onSelectionChange={handleSelectionChange}
-        pagination={{
-          page: page,
-          rowsPerPage: rowsPerPage,
-          totalCount: admins?.total || 0,
-          totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
-          goToPage: setPage,
-          nextPage: () => setPage(prev => Math.min(prev + 1, Math.ceil((admins?.total || 0) / rowsPerPage))),
-          previousPage: () => setPage(prev => Math.max(prev - 1, 1)),
-          changeRowsPerPage: (rows: number) => {
-            setRowsPerPage(rows);
-            setPage(1);
-          },
-          ariaLabel: "Administrators pagination"
-        }}
-        emptyMessage={
-          isSchoolAdmin 
-            ? "No branch administrators found in your assigned schools"
-            : "No administrators found"
-        }
-        caption="List of administrators with their roles and permissions"
-        ariaLabel="Administrators data table"
-      />
+      {/* Data presentation */}
+      {viewMode === 'list' ? (
+        <DataTable
+          columns={columns}
+          data={filteredAdmins}
+          keyField="id"
+          loading={isLoading}
+          isFetching={isFetching}
+          onEdit={handleEditAdmin}
+          onDelete={handleDeleteAdmin}
+          renderActions={renderRowActions}
+          onSelectionChange={handleSelectionChange}
+          pagination={{
+            page: page,
+            rowsPerPage: rowsPerPage,
+            totalCount: admins?.total || 0,
+            totalPages: Math.ceil((admins?.total || 0) / rowsPerPage),
+            goToPage: setPage,
+            nextPage: () => setPage(prev => Math.min(prev + 1, Math.ceil((admins?.total || 0) / rowsPerPage))),
+            previousPage: () => setPage(prev => Math.max(prev - 1, 1)),
+            changeRowsPerPage: (rows: number) => {
+              setRowsPerPage(rows);
+              setPage(1);
+            },
+            ariaLabel: "Administrators pagination"
+          }}
+          emptyMessage={
+            isSchoolAdmin
+              ? "No branch administrators found in your assigned schools"
+              : "No administrators found"
+          }
+          caption="List of administrators with their roles and permissions"
+          ariaLabel="Administrators data table"
+        />
+      ) : isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Loading administrators...</span>
+        </div>
+      ) : !filteredAdmins.length ? (
+        <div className="text-center p-8 text-gray-500 dark:text-gray-400">
+          <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+          <h3 className="text-lg font-medium mb-2">No Administrators Found</h3>
+          <p className="text-sm">
+            {isSchoolAdmin
+              ? 'No branch administrators found in your assigned schools.'
+              : 'Try adjusting your filters or create a new administrator.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredAdmins.map((admin) => {
+            const config = getAdminLevelConfig(admin.admin_level);
+            const canInteract = canInteractWithAdmin(admin);
+            const isSelf = admin.user_id === user?.id || admin.id === user?.id;
+            const hasScopeAssignments = Boolean(admin.assigned_schools?.length || admin.assigned_branches?.length);
+
+            return (
+              <div
+                key={admin.id}
+                className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 overflow-hidden"
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={cn(
+                          'w-14 h-14 rounded-xl flex items-center justify-center text-lg font-semibold text-white shadow-md',
+                          admin.is_active
+                            ? 'bg-gradient-to-br from-blue-500 to-blue-600'
+                            : 'bg-gray-400 dark:bg-gray-600'
+                        )}
+                      >
+                        {getInitials(admin.name, admin.email)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+                          {getDisplayName(admin.name, admin.email)}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                          <Mail className="h-3.5 w-3.5" />
+                          {admin.email || 'No email provided'}
+                        </p>
+                        <div className="mt-2">
+                          <span className={cn('inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border', config.color)}>
+                            {config.icon}
+                            {config.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <StatusBadge status={admin.is_active ? 'active' : 'inactive'} size="sm" />
+                  </div>
+
+                  <div className="mt-4 space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <span>Created {new Date(admin.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-gray-400" />
+                      <span>
+                        Last login {admin.last_sign_in_at ? new Date(admin.last_sign_in_at).toLocaleDateString() : 'Never'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {admin.assigned_schools?.length ? (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs">
+                          <School className="h-3 w-3" />
+                          {admin.assigned_schools.length} School{admin.assigned_schools.length !== 1 ? 's' : ''}
+                        </span>
+                      ) : null}
+                      {admin.assigned_branches?.length ? (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs">
+                          <MapPin className="h-3 w-3" />
+                          {admin.assigned_branches.length} Branch{admin.assigned_branches.length !== 1 ? 'es' : ''}
+                        </span>
+                      ) : null}
+                      {!hasScopeAssignments && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {admin.admin_level === 'entity_admin' || admin.admin_level === 'sub_entity_admin'
+                            ? 'Full access'
+                            : 'No scope assigned'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      ID: <span className="font-mono">{admin.id.slice(0, 8)}…</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {onViewDetails && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onViewDetails(admin)}
+                        >
+                          View
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditAdmin(admin)}
+                        disabled={!canInteract}
+                        title={!canInteract ? "You don't have permission to edit this admin level" : undefined}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteAdmin([admin])}
+                        disabled={admin.is_active && isSelf}
+                        title={admin.is_active && isSelf ? 'You cannot deactivate your own account for security reasons' : undefined}
+                        className={cn(
+                          'border',
+                          admin.is_active
+                            ? 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20'
+                            : 'border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20'
+                        )}
+                      >
+                        {admin.is_active ? 'Deactivate' : 'Restore'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog

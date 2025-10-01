@@ -23,14 +23,14 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User, Grid3X3, List } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
 import { useAccessControl } from '../../../../../hooks/useAccessControl';
 import { useUser } from '../../../../../contexts/UserContext';
 import { Button } from '../../../../../components/shared/Button';
-import { FormField, Input, Select } from '../../../../../components/shared/FormField';
+import { FilterCard } from '@/components/shared/FilterCard';
 import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { toast } from '../../../../../components/shared/Toast';
 import StudentForm from '../../../../../components/forms/StudentForm';
@@ -88,7 +88,21 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm('');
+    setFilterGrade('all');
+    setFilterSchool('all');
+    setFilterStatus('all');
+  }, []);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+
+  const handleViewModeChange = (mode: 'card' | 'list') => {
+    setViewMode(mode);
+    if (mode === 'card') {
+      setSelectedStudents([]);
+    }
+  };
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentData | null>(null);
 
@@ -704,91 +718,133 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       )}
 
       {activeTab === 'list' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          {/* Filters */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search students by name, email, or student code..."
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-4">
+        <div className="space-y-4">
+          <FilterCard
+            title="Filters"
+            onApply={() => {}}
+            onClear={handleClearFilters}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <FilterCard.Search
+                id="students-search"
+                label="Search"
+                value={searchTerm}
+                onSearch={setSearchTerm}
+                placeholder="Search students by name, email, or student code..."
+              />
+
               {availableGrades.length > 0 && (
-                <Select
+                <FilterCard.Dropdown
+                  id="students-grade"
+                  label="Grade"
                   value={filterGrade}
-                  onChange={(value) => setFilterGrade(value)}
+                  onFilterChange={(value) => setFilterGrade(value || 'all')}
                   options={[
                     { value: 'all', label: 'All Grades' },
-                    ...availableGrades.map(grade => ({ value: grade, label: `Grade ${grade}` }))
+                    ...availableGrades.map(grade => ({ value: String(grade), label: `Grade ${grade}` }))
                   ]}
-                  className="w-32"
+                  placeholder="All grades"
                 />
               )}
-              
+
               {availableSchools.length > 0 && (
-                <Select
+                <FilterCard.Dropdown
+                  id="students-school"
+                  label="School"
                   value={filterSchool}
-                  onChange={(value) => setFilterSchool(value)}
+                  onFilterChange={(value) => setFilterSchool(value || 'all')}
                   options={[
                     { value: 'all', label: 'All Schools' },
                     ...availableSchools.map(s => ({ value: s.id, label: s.name }))
                   ]}
-                  className="w-48"
+                  placeholder="All schools"
                 />
               )}
-              
-              <Select
+
+              <FilterCard.Dropdown
+                id="students-status"
+                label="Status"
                 value={filterStatus}
-                onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+                onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
                 options={[
                   { value: 'all', label: 'All Status' },
                   { value: 'active', label: 'Active Only' },
                   { value: 'inactive', label: 'Inactive Only' }
                 ]}
-                className="w-32"
+                placeholder="All status"
               />
             </div>
-          </div>
+          </FilterCard>
 
-          {/* Bulk Actions */}
-          {selectedStudents.length > 0 && (
-            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
-                </span>
-                <div className="flex gap-2">
-                  {canModifyStudent && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')}>
-                        <UserCheck className="w-4 h-4 mr-1" />
-                        Activate
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('transfer')}>
-                        <MapPin className="w-4 h-4 mr-1" />
-                        Transfer
-                      </Button>
-                    </>
-                  )}
-                  {canExportData && (
-                    <Button size="sm" variant="outline" onClick={() => handleBulkAction('export')}>
-                      <FileText className="w-4 h-4 mr-1" />
-                      Export
-                    </Button>
-                  )}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => handleViewModeChange('card')}
+                    className={`p-2 rounded-md transition-colors ${
+                      viewMode === 'card'
+                        ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                    title="Card view"
+                    aria-pressed={viewMode === 'card'}
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewModeChange('list')}
+                    className={`p-2 rounded-md transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                    }`}
+                    title="List view"
+                    aria-pressed={viewMode === 'list'}
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {filteredStudents.length.toLocaleString()} student{filteredStudents.length === 1 ? '' : 's'} found
+              </div>
             </div>
-          )}
 
-          {/* Students Table */}
+            {/* Bulk Actions */}
+            {viewMode === 'list' && selectedStudents.length > 0 && (
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {selectedStudents.length} student{selectedStudents.length !== 1 ? 's' : ''} selected
+                  </span>
+                  <div className="flex gap-2">
+                    {canModifyStudent && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => handleBulkAction('activate')}>
+                          <UserCheck className="w-4 h-4 mr-1" />
+                          Activate
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleBulkAction('transfer')}>
+                          <MapPin className="w-4 h-4 mr-1" />
+                          Transfer
+                        </Button>
+                      </>
+                    )}
+                    {canExportData && (
+                      <Button size="sm" variant="outline" onClick={() => handleBulkAction('export')}>
+                        <FileText className="w-4 h-4 mr-1" />
+                        Export
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* Students Results */}
           {isLoadingStudents ? (
             <div className="flex items-center justify-center p-8">
               <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -815,8 +871,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                 <>
                   <h3 className="text-lg font-medium mb-2">No Students Found</h3>
                   <p className="text-sm mb-4">
-                    {!canAccessAll 
-                      ? "No students found within your assigned scope." 
+                    {!canAccessAll
+                      ? "No students found within your assigned scope."
                       : "No students have been added to this organization yet."
                     }
                   </p>
@@ -835,6 +891,102 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   </p>
                 </>
               )}
+            </div>
+          ) : viewMode === 'card' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredStudents.map((student) => (
+                <div
+                  key={student.id}
+                  className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300"
+                >
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-300">
+                          <User className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+                            {student.name || 'Unnamed Student'}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {student.email && (
+                              <span className="flex items-center gap-1">
+                                <Mail className="w-3.5 h-3.5" />
+                                {student.email}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                              {student.student_code || 'N/A'}
+                            </span>
+                            {student.grade_level && (
+                              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                                Grade {student.grade_level}
+                              </span>
+                            )}
+                            {student.section && (
+                              <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs rounded-full">
+                                Section {student.section}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={student.is_active ? 'active' : 'inactive'}
+                        variant={student.is_active ? 'success' : 'warning'}
+                      />
+                    </div>
+
+                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                      <div className="flex items-center gap-2">
+                        <Home className="w-4 h-4 text-gray-400" />
+                        <span>{student.school_name || 'No school assigned'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span>{student.branch_name || 'No branch assigned'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span>
+                          Enrolled {student.admission_date
+                            ? new Date(student.admission_date).toLocaleDateString()
+                            : 'Date not provided'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Created {new Date(student.created_at).toLocaleDateString()}
+                      </span>
+                      <div className="flex gap-2" role="group" aria-label={`Actions for ${student.name || 'student'}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewStudent(student)}
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {canModifyStudent && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditStudent(student)}
+                            title="Edit Student"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -869,8 +1021,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                 </thead>
                 <tbody>
                   {filteredStudents.map((student) => (
-                    <tr 
-                      key={student.id} 
+                    <tr
+                      key={student.id}
                       className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                     >
                       <td className="p-3">
@@ -931,8 +1083,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                       </td>
                       <td className="p-3">
                         <div className="flex gap-1">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => handleViewStudent(student)}
                             title="View Details"
@@ -940,8 +1092,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                             <Eye className="w-4 h-4" />
                           </Button>
                           {canModifyStudent && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => handleEditStudent(student)}
                               title="Edit Student"
@@ -958,6 +1110,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
             </div>
           )}
         </div>
+      </div>
       )}
 
       {activeTab === 'analytics' && (

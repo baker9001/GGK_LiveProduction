@@ -12,8 +12,8 @@
 'use client';
 
 import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
-import { 
-  MapPin, Plus, Edit2, Trash2, Search, Filter, Building,
+import {
+  MapPin, Plus, Edit2, Trash2, Building,
   Users, Clock, Calendar, Phone, Mail, User, CheckCircle2, 
   XCircle, AlertTriangle, School, Hash, Navigation, Home, Info,
   Lock, Shield, Loader2, Grid3X3, List
@@ -24,8 +24,8 @@ import { toast } from 'react-hot-toast';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { SlideInForm } from '@/components/shared/SlideInForm';
-import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { Button } from '@/components/shared/Button';
+import { FilterCard } from '@/components/shared/FilterCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
@@ -137,6 +137,12 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm('');
+    setFilterStatus('all');
+    setFilterSchool('all');
+  }, []);
   
   // Confirmation dialog state
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -777,39 +783,50 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   // ===== MAIN RENDER =====
   return (
     <div className="space-y-4">
-      {/* Header & Search */}
+      <FilterCard
+        title="Filters"
+        onApply={() => {}}
+        onClear={handleClearFilters}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <FilterCard.Search
+            id="branches-search"
+            label="Search"
+            value={searchTerm}
+            onSearch={setSearchTerm}
+            placeholder="Search branches..."
+          />
+
+          <FilterCard.Dropdown
+            id="branches-school"
+            label="School"
+            value={filterSchool}
+            onFilterChange={(value) => setFilterSchool(value || 'all')}
+            options={[
+              { value: 'all', label: 'All Schools' },
+              ...schools.map(s => ({ value: s.id, label: s.name }))
+            ]}
+            placeholder="All schools"
+          />
+
+          <FilterCard.Dropdown
+            id="branches-status"
+            label="Status"
+            value={filterStatus}
+            onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' }
+            ]}
+            placeholder="All status"
+          />
+        </div>
+      </FilterCard>
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search branches..."
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={filterSchool}
-              onChange={(value) => setFilterSchool(value)}
-              className="w-48"
-              options={[
-                { value: 'all', label: 'All Schools' },
-                ...schools.map(s => ({ value: s.id, label: s.name }))
-              ]}
-            />
-            <Select
-              value={filterStatus}
-              onChange={(value) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
-              className="w-32"
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
-            />
-            {/* View Mode Toggle - Moved to Right */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
             <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('card')}
