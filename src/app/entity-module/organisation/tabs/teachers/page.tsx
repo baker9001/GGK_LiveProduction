@@ -319,16 +319,52 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   } = useAccessControl();
 
   // ===== STATE MANAGEMENT =====
+  type StatusFilter = 'all' | 'active' | 'inactive';
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
   const [filterSpecialization, setFilterSpecialization] = useState<string>('all');
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
+
+  const handleStatusChange = useCallback((value: string) => {
+    setFilterStatus((value as StatusFilter) || 'all');
+  }, []);
+
+  const handleSchoolChange = useCallback((value: string) => {
+    setFilterSchool(value || 'all');
+  }, []);
+
+  const handleSpecializationChange = useCallback((value: string) => {
+    setFilterSpecialization(value || 'all');
+  }, []);
+
   const handleClearFilters = useCallback(() => {
     setSearchTerm('');
     setFilterStatus('all');
     setFilterSchool('all');
     setFilterSpecialization('all');
   }, []);
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+    ],
+    [],
+  );
+
+  const schoolFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Schools' },
+      ...availableSchools.map((school) => ({ value: school.id, label: school.name })),
+    ],
+    [availableSchools],
+  );
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
@@ -1964,6 +2000,14 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
     return Array.from(options).sort((a, b) => a.localeCompare(b));
   }, [teachers]);
 
+  const specializationFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Specializations' },
+      ...specializationOptions.map((spec) => ({ value: spec, label: spec })),
+    ],
+    [specializationOptions],
+  );
+
   // ===== STATISTICS =====
   const summaryStats = useMemo(() => {
     return {
@@ -2153,15 +2197,15 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
 
           <FilterCard
             title="Filters"
-            onApply={() => {}}
             onClear={handleClearFilters}
+            defaultExpanded
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <FilterCard.Search
                 id="teachers-search"
                 label="Search"
                 value={searchTerm}
-                onSearch={setSearchTerm}
+                onSearch={handleSearchChange}
                 placeholder="Search teachers by name, email, or code..."
               />
 
@@ -2170,11 +2214,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   id="teachers-school"
                   label="School"
                   value={filterSchool}
-                  onFilterChange={(value) => setFilterSchool(value || 'all')}
-                  options={[
-                    { value: 'all', label: 'All Schools' },
-                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
-                  ]}
+                  onFilterChange={handleSchoolChange}
+                  options={schoolFilterOptions}
                   placeholder="All schools"
                 />
               )}
@@ -2183,12 +2224,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 id="teachers-status"
                 label="Status"
                 value={filterStatus}
-                onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' }
-                ]}
+                onFilterChange={handleStatusChange}
+                options={statusFilterOptions}
                 placeholder="All status"
               />
 
@@ -2197,8 +2234,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   id="teachers-specialization"
                   label="Specialization"
                   value={filterSpecialization}
-                  onFilterChange={(value) => setFilterSpecialization(value || 'all')}
-                  options={[{ value: 'all', label: 'All Specializations' }, ...specializationOptions.map(spec => ({ value: spec, label: spec }))]}
+                  onFilterChange={handleSpecializationChange}
+                  options={specializationFilterOptions}
                   placeholder="All specializations"
                 />
               )}

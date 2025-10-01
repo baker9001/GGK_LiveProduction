@@ -113,17 +113,36 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     const [formData, setFormData] = useState<any>({});
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const [activeTab, setActiveTab] = useState<'basic' | 'additional' | 'contact'>('basic');
+    type StatusFilter = 'all' | 'active' | 'inactive';
+
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+    const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
     const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false);
     const [branchesToDeactivate, setBranchesToDeactivate] = useState<any[]>([]);
     const [tabErrors, setTabErrors] = useState({ basic: false, additional: false, contact: false });
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
+    const handleSearchChange = useCallback((value: string) => {
+      setSearchTerm(value);
+    }, []);
+
+    const handleStatusChange = useCallback((value: string) => {
+      setFilterStatus((value as StatusFilter) || 'all');
+    }, []);
+
     const handleClearFilters = useCallback(() => {
       setSearchTerm('');
       setFilterStatus('all');
     }, []);
+
+    const statusFilterOptions = useMemo(
+      () => [
+        { value: 'all', label: 'All Status' },
+        { value: 'active', label: 'Active' },
+        { value: 'inactive', label: 'Inactive' },
+      ],
+      [],
+    );
     
     // Confirmation dialog state
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -842,15 +861,15 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       <div className="space-y-4">
         <FilterCard
           title="Filters"
-          onApply={() => {}}
           onClear={handleClearFilters}
+          defaultExpanded
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FilterCard.Search
               id="schools-search"
               label="Search"
               value={searchTerm}
-              onSearch={setSearchTerm}
+              onSearch={handleSearchChange}
               placeholder="Search schools..."
             />
 
@@ -858,12 +877,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
               id="schools-status"
               label="Status"
               value={filterStatus}
-              onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
-              options={[
-                { value: 'all', label: 'All Status' },
-                { value: 'active', label: 'Active' },
-                { value: 'inactive', label: 'Inactive' }
-              ]}
+              onFilterChange={handleStatusChange}
+              options={statusFilterOptions}
               placeholder="All status"
             />
           </div>

@@ -311,10 +311,11 @@ function FilterSearch({
 
 interface FilterCardProps {
   title?: string;
-  onApply: () => void;
-  onClear: () => void;
+  onApply?: () => void;
+  onClear?: () => void;
   children: React.ReactNode;
   className?: string;
+  defaultExpanded?: boolean;
 }
 
 const FilterCardBase: React.FC<FilterCardProps> = ({
@@ -323,16 +324,13 @@ const FilterCardBase: React.FC<FilterCardProps> = ({
   onClear,
   children,
   className,
+  defaultExpanded = true,
 }) => {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!defaultExpanded);
 
   const handleClear = () => {
-    if (typeof onClear === 'function') {
-      onClear();
-    }
-    if (typeof onApply === 'function') {
-      onApply();
-    }
+    onClear?.();
+    onApply?.();
   };
   
   return (

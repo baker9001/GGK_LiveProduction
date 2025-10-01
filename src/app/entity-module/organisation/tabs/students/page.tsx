@@ -83,11 +83,30 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   } = useAccessControl();
 
   // Local state
+  type StatusFilter = 'all' | 'active' | 'inactive';
+
   const [activeTab, setActiveTab] = useState<'overview' | 'list' | 'analytics'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSchool, setFilterSchool] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
+
+  const handleGradeChange = useCallback((value: string) => {
+    setFilterGrade(value || 'all');
+  }, []);
+
+  const handleSchoolChange = useCallback((value: string) => {
+    setFilterSchool(value || 'all');
+  }, []);
+
+  const handleStatusChange = useCallback((value: string) => {
+    setFilterStatus((value as StatusFilter) || 'all');
+  }, []);
+
   const handleClearFilters = useCallback(() => {
     setSearchTerm('');
     setFilterGrade('all');
@@ -321,6 +340,36 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       .sort();
     return grades;
   }, [students]);
+
+  const gradeFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Grades' },
+      ...availableGrades.map((grade) => ({
+        value: grade,
+        label: grade?.toLowerCase().startsWith('grade ')
+          ? grade
+          : `Grade ${grade}`,
+      })),
+    ],
+    [availableGrades],
+  );
+
+  const schoolFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Schools' },
+      ...availableSchools.map((school) => ({ value: school.id, label: school.name })),
+    ],
+    [availableSchools],
+  );
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Status' },
+      { value: 'active', label: 'Active' },
+      { value: 'inactive', label: 'Inactive' },
+    ],
+    [],
+  );
 
   // Apply client-side filtering
   const filteredStudents = useMemo(() => {
@@ -721,15 +770,15 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         <div className="space-y-4">
           <FilterCard
             title="Filters"
-            onApply={() => {}}
             onClear={handleClearFilters}
+            defaultExpanded
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <FilterCard.Search
                 id="students-search"
                 label="Search"
                 value={searchTerm}
-                onSearch={setSearchTerm}
+                onSearch={handleSearchChange}
                 placeholder="Search students by name, email, or student code..."
               />
 
@@ -738,11 +787,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   id="students-grade"
                   label="Grade"
                   value={filterGrade}
-                  onFilterChange={(value) => setFilterGrade(value || 'all')}
-                  options={[
-                    { value: 'all', label: 'All Grades' },
-                    ...availableGrades.map(grade => ({ value: String(grade), label: `Grade ${grade}` }))
-                  ]}
+                  onFilterChange={handleGradeChange}
+                  options={gradeFilterOptions}
                   placeholder="All grades"
                 />
               )}
@@ -752,11 +798,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   id="students-school"
                   label="School"
                   value={filterSchool}
-                  onFilterChange={(value) => setFilterSchool(value || 'all')}
-                  options={[
-                    { value: 'all', label: 'All Schools' },
-                    ...availableSchools.map(s => ({ value: s.id, label: s.name }))
-                  ]}
+                  onFilterChange={handleSchoolChange}
+                  options={schoolFilterOptions}
                   placeholder="All schools"
                 />
               )}
@@ -765,12 +808,8 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                 id="students-status"
                 label="Status"
                 value={filterStatus}
-                onFilterChange={(value) => setFilterStatus((value as 'all' | 'active' | 'inactive') || 'all')}
-                options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'active', label: 'Active Only' },
-                  { value: 'inactive', label: 'Inactive Only' }
-                ]}
+                onFilterChange={handleStatusChange}
+                options={statusFilterOptions}
                 placeholder="All status"
               />
             </div>
