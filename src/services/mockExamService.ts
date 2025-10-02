@@ -335,20 +335,26 @@ export class MockExamService {
           grade_level_id,
           grade_levels!grade_level_schools_grade_level_id_fkey (
             id,
-            name,
-            description
+            grade_name,
+            education_level
           )
         `)
         .in('school_id', schoolIds);
 
-      if (schoolError) throw schoolError;
+      if (schoolError) {
+        console.error('Error fetching grade_level_schools:', schoolError);
+        throw schoolError;
+      }
 
       const { data: branches, error: branchesError } = await supabase
         .from('branches')
         .select('id')
         .in('school_id', schoolIds);
 
-      if (branchesError) throw branchesError;
+      if (branchesError) {
+        console.error('Error fetching branches:', branchesError);
+        throw branchesError;
+      }
 
       const branchIds = (branches || []).map((b: any) => b.id);
 
@@ -360,13 +366,15 @@ export class MockExamService {
             grade_level_id,
             grade_levels!grade_level_branches_grade_level_id_fkey (
               id,
-              name,
-              description
+              grade_name,
+              education_level
             )
           `)
           .in('branch_id', branchIds);
 
-        if (branchError) throw branchError;
+        if (branchError) {
+          console.error('Error fetching grade_level_branches:', branchError);
+        }
         branchGradeLevels = data || [];
       }
 
@@ -376,8 +384,8 @@ export class MockExamService {
         if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
           uniqueGradeLevels.set(item.grade_levels.id, {
             id: item.grade_levels.id,
-            name: item.grade_levels.name,
-            description: item.grade_levels.description
+            name: item.grade_levels.grade_name,
+            description: item.grade_levels.education_level
           });
         }
       });
@@ -386,8 +394,8 @@ export class MockExamService {
         if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
           uniqueGradeLevels.set(item.grade_levels.id, {
             id: item.grade_levels.id,
-            name: item.grade_levels.name,
-            description: item.grade_levels.description
+            name: item.grade_levels.grade_name,
+            description: item.grade_levels.education_level
           });
         }
       });
@@ -407,32 +415,59 @@ export class MockExamService {
     gradeLevelIds?: string[]
   ): Promise<ClassSection[]> {
     try {
+      // First, get grade levels for the selected schools to filter sections
+      let gradeLevelIdsForSchools: string[] = [];
+
+      const { data: gradeLevelSchools, error: glsError } = await supabase
+        .from('grade_level_schools')
+        .select('grade_level_id')
+        .in('school_id', schoolIds);
+
+      if (glsError) {
+        console.error('Error fetching grade_level_schools for sections:', glsError);
+        throw glsError;
+      }
+
+      gradeLevelIdsForSchools = (gradeLevelSchools || []).map((gls: any) => gls.grade_level_id);
+
+      // If specific grade levels are requested, use those; otherwise use all for the schools
+      const targetGradeLevelIds = gradeLevelIds && gradeLevelIds.length > 0
+        ? gradeLevelIds
+        : gradeLevelIdsForSchools;
+
+      if (targetGradeLevelIds.length === 0) {
+        return [];
+      }
+
       let query = supabase
         .from('class_sections')
         .select(`
           id,
-          name,
+          section_name,
           grade_level_id,
-          school_id,
-          grade_levels!class_sections_grade_level_id_fkey (name),
+          grade_levels!class_sections_grade_level_id_fkey (
+            id,
+            grade_name,
+            school_id
+          ),
           students (count)
         `)
-        .in('school_id', schoolIds);
-
-      if (gradeLevelIds && gradeLevelIds.length > 0) {
-        query = query.in('grade_level_id', gradeLevelIds);
-      }
+        .in('grade_level_id', targetGradeLevelIds)
+        .eq('status', 'active');
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching class sections:', error);
+        throw error;
+      }
 
       return (data || []).map((section: any) => ({
         id: section.id,
-        name: section.name,
+        name: section.section_name,
         grade_level_id: section.grade_level_id,
-        grade_level_name: section.grade_levels?.name || 'Unknown',
-        school_id: section.school_id,
+        grade_level_name: section.grade_levels?.grade_name || 'Unknown',
+        school_id: section.grade_levels?.school_id || null,
         student_count: section.students?.[0]?.count || 0
       }));
     } catch (error) {
