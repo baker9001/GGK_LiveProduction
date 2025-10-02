@@ -18,7 +18,11 @@ import {
   Search,
   Sparkles,
   Users,
-  Loader2
+  Loader2,
+  Edit,
+  ChevronDown,
+  Clock,
+  History
 } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
@@ -31,7 +35,10 @@ import {
   useGradeLevels,
   useClassSections,
   useTeachers,
-  useCreateMockExam
+  useCreateMockExam,
+  useUpdateMockExamStatus,
+  useMockExamById,
+  useStatusHistory
 } from '../../../hooks/useMockExams';
 import toast from 'react-hot-toast';
 import { Button } from '../../../components/shared/Button';
@@ -49,7 +56,7 @@ interface MockExamTeacher {
   role: string;
 }
 
-type MockExamStatus = 'planned' | 'scheduled' | 'in_progress' | 'grading' | 'completed' | 'cancelled';
+type MockExamStatus = 'draft' | 'planned' | 'scheduled' | 'materials_ready' | 'in_progress' | 'grading' | 'moderation' | 'analytics_released' | 'completed' | 'cancelled';
 
 type MockExamMode = 'In-person' | 'Digital (exam hall)' | 'Remote proctored';
 
@@ -141,12 +148,16 @@ const deliveryModeOptions: { value: MockExamMode; label: string }[] = [
 ];
 
 const statusOptions = [
-  { value: 'planned', label: 'Planned' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'grading', label: 'Grading' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' }
+  { value: 'draft', label: 'Draft', color: 'gray' },
+  { value: 'planned', label: 'Planned', color: 'blue' },
+  { value: 'scheduled', label: 'Scheduled', color: 'cyan' },
+  { value: 'materials_ready', label: 'Materials Ready', color: 'purple' },
+  { value: 'in_progress', label: 'In Progress', color: 'amber' },
+  { value: 'grading', label: 'Grading', color: 'orange' },
+  { value: 'moderation', label: 'Moderation', color: 'indigo' },
+  { value: 'analytics_released', label: 'Analytics Released', color: 'teal' },
+  { value: 'completed', label: 'Completed', color: 'green' },
+  { value: 'cancelled', label: 'Cancelled', color: 'red' }
 ];
 
 
@@ -193,18 +204,8 @@ function formatDuration(minutes: number) {
 }
 
 function getStatusLabel(status: MockExamStatus) {
-  switch (status) {
-    case 'planned':
-      return 'Planned';
-    case 'scheduled':
-      return 'Scheduled';
-    case 'in_review':
-      return 'In review';
-    case 'completed':
-      return 'Completed';
-    default:
-      return status;
-  }
+  const option = statusOptions.find(s => s.value === status);
+  return option?.label || status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 export default function EntityMockExamsPage() {
@@ -224,10 +225,14 @@ export default function EntityMockExamsPage() {
 
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [selectedExam, setSelectedExam] = useState<MockExam | null>(null);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreateMockExamFormState>(initialCreateFormState);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
+  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const [showStatusHistory, setShowStatusHistory] = useState(false);
 
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
     companyId,
@@ -252,6 +257,8 @@ export default function EntityMockExamsPage() {
     formState.subjectId || undefined
   );
   const createMockExam = useCreateMockExam();
+  const updateStatus = useUpdateMockExamStatus();
+  const { data: statusHistory = [] } = useStatusHistory(selectedExam?.id);
 
   const programOptions = useMemo(() => {
     const uniquePrograms = new Set(dataStructures.map(ds => ds.program_name));
@@ -487,6 +494,20 @@ export default function EntityMockExamsPage() {
     }
   }, [formState.gradeBands.length]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (statusMenuOpen && !target.closest('.relative')) {
+        setStatusMenuOpen(null);
+      }
+    };
+
+    if (statusMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [statusMenuOpen]);
+
   const validateForm = () => {
     const nextErrors: FormErrors = {};
 
@@ -522,6 +543,122 @@ export default function EntityMockExamsPage() {
     setFormState(initialCreateFormState);
     setFormErrors({});
     setSelectedDataStructure('');
+  };
+
+  const handleStatusChange = async (examId: string, newStatus: string) => {
+    try {
+      await updateStatus.mutateAsync({ examId, newStatus });
+      toast.success(`Mock exam status updated to ${statusOptions.find(s => s.value === newStatus)?.label}`);
+      setStatusMenuOpen(null);
+      refetchExams();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status. Please try again.');
+    }
+  };
+
+  const handleEditExam = (exam: MockExam) => {
+    setEditingExamId(exam.id);
+    setSelectedExam(exam);
+    setIsEditPanelOpen(true);
+    // You can populate form with exam data here if needed
+  };
+
+  const handleExportSchedule = () => {
+    try {
+      // Create a simple CSV export of the schedule
+      const headers = ['Title', 'Status', 'Date', 'Time', 'Duration', 'Board', 'Subject', 'Students'];
+      const rows = filteredExams.map(exam => [
+        exam.title,
+        getStatusLabel(exam.status),
+        dayjs(exam.scheduledStart).format('DD/MM/YYYY'),
+        dayjs(exam.scheduledStart).format('HH:mm'),
+        formatDuration(exam.durationMinutes),
+        exam.board,
+        exam.subject,
+        exam.studentCount.toString()
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mock-exam-schedule-${dayjs().format('YYYY-MM-DD')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Schedule exported successfully');
+    } catch (error) {
+      console.error('Error exporting schedule:', error);
+      toast.error('Failed to export schedule');
+    }
+  };
+
+  const handleDownloadBriefingPack = (exam: MockExam) => {
+    try {
+      // Create a simple text briefing pack
+      const briefing = `
+MOCK EXAM BRIEFING PACK
+========================
+
+Exam Title: ${exam.title}
+Status: ${getStatusLabel(exam.status)}
+Date: ${dayjs(exam.scheduledStart).format('dddd, DD MMMM YYYY')}
+Time: ${dayjs(exam.scheduledStart).format('HH:mm')}
+Duration: ${formatDuration(exam.durationMinutes)}
+
+Programme & Board:
+- Programme: ${exam.program}
+- Exam Board: ${exam.board}
+- Subject: ${exam.subject}
+- Paper: ${exam.paper}
+
+Delivery Mode: ${exam.deliveryMode}
+Exam Window: ${exam.examWindow}
+
+Teaching Team:
+${exam.teachers.map(t => `- ${t.name} (${t.role})`).join('\n')}
+
+Year Groups:
+${exam.gradeBands.map(g => `- ${g}`).join('\n')}
+
+Learner Impact:
+- Total Students: ${exam.studentCount}
+- Readiness Score: ${exam.readiness}%
+- Flagged for Mentoring: ${exam.flaggedStudents}
+
+Settings:
+- AI Proctoring: ${exam.aiProctoringEnabled ? 'Enabled' : 'Disabled'}
+- Release Analytics: ${exam.releaseAnalyticsToStudents ? 'Yes' : 'No'}
+- Allow Retakes: ${exam.allowRetakes ? 'Yes' : 'No'}
+
+${exam.notes ? `Notes:\n${exam.notes}` : ''}
+
+Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
+`;
+
+      const blob = new Blob([briefing], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `briefing-pack-${exam.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Briefing pack downloaded');
+    } catch (error) {
+      console.error('Error downloading briefing pack:', error);
+      toast.error('Failed to download briefing pack');
+    }
   };
 
   const handleCreateMockExam = async () => {
@@ -622,9 +759,7 @@ export default function EntityMockExamsPage() {
             <Button
               variant="outline"
               leftIcon={<Download className="h-4 w-4" />}
-              onClick={() => {
-                console.info('[Mock Exams] Export plan clicked');
-              }}
+              onClick={handleExportSchedule}
             >
               Export schedule
             </Button>
@@ -926,6 +1061,41 @@ export default function EntityMockExamsPage() {
                     </td>
                     <td className="px-6 py-4 align-top text-right">
                       <div className="flex flex-col items-end gap-2">
+                        <div className="relative">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<ChevronDown className="w-3.5 h-3.5" />}
+                            onClick={() => setStatusMenuOpen(statusMenuOpen === exam.id ? null : exam.id)}
+                          >
+                            Change Status
+                          </Button>
+                          {statusMenuOpen === exam.id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                              {statusOptions.map(option => (
+                                <button
+                                  key={option.value}
+                                  onClick={() => handleStatusChange(exam.id, option.value)}
+                                  disabled={option.value === exam.status}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                                    option.value === exam.status ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : ''
+                                  } ${option.value === exam.status ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                >
+                                  {option.label}
+                                  {option.value === exam.status && ' (Current)'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<Edit className="w-3.5 h-3.5" />}
+                          onClick={() => handleEditExam(exam)}
+                        >
+                          Edit
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -938,9 +1108,7 @@ export default function EntityMockExamsPage() {
                           variant="outline"
                           size="sm"
                           leftIcon={<Download className="w-3.5 h-3.5" />}
-                          onClick={() => {
-                            console.info('[Mock Exams] Download briefing for', exam.id);
-                          }}
+                          onClick={() => handleDownloadBriefingPack(exam)}
                         >
                           Briefing pack
                         </Button>
@@ -1356,6 +1524,54 @@ export default function EntityMockExamsPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-300">{selectedExam.notes}</p>
               </div>
             )}
+
+            <div className="p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <History className="w-4 h-4 text-[#8CC63F]" />
+                  Status History
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowStatusHistory(!showStatusHistory)}
+                >
+                  {showStatusHistory ? 'Hide' : 'Show'}
+                </Button>
+              </div>
+              {showStatusHistory && statusHistory.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {statusHistory.map((record: any, index: number) => (
+                    <div key={record.id} className="flex items-start gap-3 p-2 rounded bg-gray-50 dark:bg-gray-900/40 text-xs">
+                      <Clock className="w-3.5 h-3.5 text-gray-400 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          {record.oldStatus && (
+                            <>
+                              <span className="font-medium text-gray-700 dark:text-gray-200">
+                                {statusOptions.find(s => s.value === record.oldStatus)?.label || record.oldStatus}
+                              </span>
+                              <span className="text-gray-400">→</span>
+                            </>
+                          )}
+                          <span className="font-medium text-[#8CC63F]">
+                            {statusOptions.find(s => s.value === record.newStatus)?.label || record.newStatus}
+                          </span>
+                        </div>
+                        <div className="text-gray-500 dark:text-gray-400 mt-1">
+                          {dayjs(record.createdAt).format('DD MMM YYYY, HH:mm')} • {record.changedBy}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showStatusHistory && statusHistory.length === 0 && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                  No status changes recorded
+                </p>
+              )}
+            </div>
           </div>
         )}
       </SlideInForm>

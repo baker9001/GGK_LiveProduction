@@ -146,6 +146,44 @@ export function useTeachers(schoolIds?: string[], subjectId?: string) {
   });
 }
 
+export function useUpdateMockExamStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ examId, newStatus }: { examId: string; newStatus: string }) => {
+      return MockExamService.updateMockExamStatus(examId, newStatus);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mockExams'] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStats'] });
+    },
+  });
+}
+
+export function useMockExamById(examId?: string) {
+  return useQuery({
+    queryKey: ['mockExam', examId],
+    queryFn: async () => {
+      if (!examId) return null;
+      return MockExamService.getMockExamById(examId);
+    },
+    enabled: !!examId,
+    staleTime: 30000,
+  });
+}
+
+export function useStatusHistory(examId?: string) {
+  return useQuery({
+    queryKey: ['mockExamStatusHistory', examId],
+    queryFn: async () => {
+      if (!examId) return [];
+      return MockExamService.getStatusHistory(examId);
+    },
+    enabled: !!examId,
+    staleTime: 30000,
+  });
+}
+
 export function useCreateMockExam() {
   const queryClient = useQueryClient();
 

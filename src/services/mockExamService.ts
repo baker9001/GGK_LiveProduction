@@ -184,12 +184,17 @@ export class MockExamService {
           name: g.grade_levels?.grade_name
         })) || [],
         sections: [],
-        teachers: exam.mock_exam_teachers?.map((t: any) => ({
-          id: t.entity_users?.id,
-          name: t.entity_users?.users?.raw_user_meta_data?.name || t.entity_users?.users?.email,
-          role: t.role,
-          email: t.entity_users?.users?.email
-        })) || [],
+        teachers: exam.mock_exam_teachers?.map((t: any) => {
+          const userName = t.entity_users?.users?.raw_user_meta_data?.name ||
+                          t.entity_users?.users?.email?.split('@')[0] ||
+                          'Unknown Teacher';
+          return {
+            id: t.entity_users?.id,
+            name: userName,
+            role: t.role || 'teacher',
+            email: t.entity_users?.users?.email || ''
+          };
+        }).filter((t: any) => t.id) || [],
         registered_students_count: exam.mock_exam_students?.length || 0,
         flagged_students_count: exam.mock_exam_results?.filter((r: any) => r.flagged_for_intervention).length || 0,
         created_at: exam.created_at
@@ -580,6 +585,180 @@ export class MockExamService {
     } catch (error) {
       console.error('Error fetching student count:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Update mock exam status
+   */
+  static async updateMockExamStatus(
+    examId: string,
+    newStatus: string,
+    reason?: string
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('mock_exams')
+        .update({ status: newStatus })
+        .eq('id', examId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating mock exam status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock exam by ID
+   */
+  static async getMockExamById(examId: string): Promise<MockExam | null> {
+    try {
+      const { data, error } = await supabase
+        .from('mock_exams')
+        .select(`
+          id,
+          company_id,
+          title,
+          status,
+          data_structure_id,
+          paper_type,
+          paper_number,
+          scheduled_date,
+          scheduled_time,
+          duration_minutes,
+          delivery_mode,
+          exam_window,
+          total_marks,
+          readiness_score,
+          ai_proctoring_enabled,
+          release_analytics,
+          allow_retakes,
+          notes,
+          created_at,
+          data_structures!mock_exams_data_structure_id_fkey (
+            providers!data_structures_provider_id_fkey (name),
+            programs!data_structures_program_id_fkey (name),
+            edu_subjects!data_structures_subject_id_fkey (name)
+          ),
+          mock_exam_schools (
+            school_id,
+            schools!mock_exam_schools_school_id_fkey (id, name)
+          ),
+          mock_exam_branches (
+            branch_id,
+            branches!mock_exam_branches_branch_id_fkey (id, name)
+          ),
+          mock_exam_grade_levels (
+            grade_level_id,
+            grade_levels!mock_exam_grade_levels_grade_level_id_fkey (id, grade_name)
+          ),
+          mock_exam_sections (
+            class_section_id
+          ),
+          mock_exam_teachers (
+            role,
+            entity_users!mock_exam_teachers_entity_user_id_fkey (
+              id,
+              users!entity_users_user_id_fkey (email, raw_user_meta_data)
+            )
+          )
+        `)
+        .eq('id', examId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      return {
+        id: data.id,
+        company_id: data.company_id,
+        title: data.title,
+        status: data.status as any,
+        exam_board: data.data_structures?.providers?.name || 'Unknown',
+        programme: data.data_structures?.programs?.name || 'Unknown',
+        subject: data.data_structures?.edu_subjects?.name || 'Unknown',
+        paper_type: data.paper_type || '',
+        paper_number: data.paper_number,
+        scheduled_date: data.scheduled_date,
+        scheduled_time: data.scheduled_time,
+        duration_minutes: data.duration_minutes,
+        delivery_mode: data.delivery_mode,
+        exam_window: data.exam_window,
+        total_marks: data.total_marks,
+        readiness_score: data.readiness_score,
+        ai_proctoring_enabled: data.ai_proctoring_enabled,
+        release_analytics: data.release_analytics,
+        allow_retakes: data.allow_retakes,
+        notes: data.notes,
+        schools: data.mock_exam_schools?.map((s: any) => ({
+          id: s.schools?.id,
+          name: s.schools?.name
+        })) || [],
+        branches: data.mock_exam_branches?.map((b: any) => ({
+          id: b.branches?.id,
+          name: b.branches?.name
+        })) || [],
+        grade_levels: data.mock_exam_grade_levels?.map((g: any) => ({
+          id: g.grade_levels?.id,
+          name: g.grade_levels?.grade_name
+        })) || [],
+        sections: [],
+        teachers: data.mock_exam_teachers?.map((t: any) => {
+          const userName = t.entity_users?.users?.raw_user_meta_data?.name ||
+                          t.entity_users?.users?.email?.split('@')[0] ||
+                          'Unknown Teacher';
+          return {
+            id: t.entity_users?.id,
+            name: userName,
+            role: t.role || 'teacher',
+            email: t.entity_users?.users?.email || ''
+          };
+        }).filter((t: any) => t.id) || [],
+        registered_students_count: 0,
+        flagged_students_count: 0,
+        created_at: data.created_at
+      };
+    } catch (error) {
+      console.error('Error fetching mock exam by ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get status history for a mock exam
+   */
+  static async getStatusHistory(examId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('mock_exam_status_history')
+        .select(`
+          id,
+          old_status,
+          new_status,
+          change_reason,
+          created_at,
+          users!mock_exam_status_history_changed_by_fkey (
+            email,
+            raw_user_meta_data
+          )
+        `)
+        .eq('mock_exam_id', examId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map((record: any) => ({
+        id: record.id,
+        oldStatus: record.old_status,
+        newStatus: record.new_status,
+        changeReason: record.change_reason,
+        createdAt: record.created_at,
+        changedBy: record.users?.raw_user_meta_data?.name || record.users?.email || 'Unknown'
+      }));
+    } catch (error) {
+      console.error('Error fetching status history:', error);
+      return [];
     }
   }
 
