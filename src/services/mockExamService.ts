@@ -127,7 +127,7 @@ export class MockExamService {
           ),
           mock_exam_grade_levels (
             grade_level_id,
-            grade_levels!mock_exam_grade_levels_grade_level_id_fkey (id, name)
+            grade_levels!mock_exam_grade_levels_grade_level_id_fkey (id, grade_name)
           ),
           mock_exam_teachers (
             role,
@@ -181,7 +181,7 @@ export class MockExamService {
         })) || [],
         grade_levels: exam.mock_exam_grade_levels?.map((g: any) => ({
           id: g.grade_levels?.id,
-          name: g.grade_levels?.name
+          name: g.grade_levels?.grade_name
         })) || [],
         sections: [],
         teachers: exam.mock_exam_teachers?.map((t: any) => ({
@@ -449,8 +449,7 @@ export class MockExamService {
             id,
             grade_name,
             school_id
-          ),
-          students (count)
+          )
         `)
         .in('grade_level_id', targetGradeLevelIds)
         .eq('status', 'active');
@@ -462,13 +461,33 @@ export class MockExamService {
         throw error;
       }
 
+      // Get student counts separately since there's no direct FK relationship
+      const sectionIds = (data || []).map((s: any) => s.id);
+      let studentCounts: Record<string, number> = {};
+
+      if (sectionIds.length > 0) {
+        const { data: countData } = await supabase
+          .from('students')
+          .select('class_section_id', { count: 'exact', head: false })
+          .in('class_section_id', sectionIds)
+          .eq('is_active', true);
+
+        // Count students per section
+        (countData || []).forEach((student: any) => {
+          const sectionId = student.class_section_id;
+          if (sectionId) {
+            studentCounts[sectionId] = (studentCounts[sectionId] || 0) + 1;
+          }
+        });
+      }
+
       return (data || []).map((section: any) => ({
         id: section.id,
         name: section.section_name,
         grade_level_id: section.grade_level_id,
         grade_level_name: section.grade_levels?.grade_name || 'Unknown',
         school_id: section.grade_levels?.school_id || null,
-        student_count: section.students?.[0]?.count || 0
+        student_count: studentCounts[section.id] || 0
       }));
     } catch (error) {
       console.error('Error fetching class sections:', error);
