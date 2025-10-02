@@ -87,33 +87,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // Add retry logic for WebContainer environments
     const maxRetries = 3;
     let lastError;
-    
+
     for (let i = 0; i < maxRetries; i++) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
-        
+
         const response = await fetch(url, {
           ...options,
           signal: options.signal || controller.signal,
           // Add CORS mode for WebContainer
           mode: 'cors',
-          credentials: 'omit',
+          // CRITICAL FIX: Change from 'omit' to 'same-origin' to include auth cookies
+          credentials: 'same-origin',
         });
-        
+
         clearTimeout(timeoutId);
         return response;
       } catch (error) {
         lastError = error;
         console.warn(`Fetch attempt ${i + 1} failed:`, error);
-        
+
         // If it's a network error, wait before retrying
         if (i < maxRetries - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
         }
       }
     }
-    
+
     throw lastError;
   },
   // Add realtime configuration
@@ -167,26 +168,50 @@ export async function checkSupabaseConnection(): Promise<{ connected: boolean; e
 // Helper function to handle Supabase errors with better context
 export const handleSupabaseError = (error: any, context?: string) => {
   const errorMessage = error?.message || 'An error occurred while connecting to the database';
-  
+  const errorCode = error?.code || '';
+  const errorDetails = error?.details || '';
+
+  // CRITICAL: Check for RLS policy violations
+  if (errorCode === 'PGRST301' || errorMessage.includes('row-level security') ||
+      errorMessage.includes('policy') || errorCode === '42501') {
+    console.error(`🔒 RLS Policy Violation${context ? ` in ${context}` : ''}:`);
+    console.error('Error:', errorMessage);
+    console.error('Code:', errorCode);
+    console.error('Details:', errorDetails);
+    console.error('DIAGNOSIS: User may not have proper authentication or permissions.');
+    console.error('ACTION REQUIRED: Check if user is logged in with Supabase auth and has required role.');
+
+    throw new Error('Access denied. Please ensure you are logged in with proper permissions.');
+  }
+
+  // Check for authentication errors
+  if (errorCode === 'PGRST000' || errorMessage.includes('JWT') ||
+      errorMessage.includes('authentication')) {
+    console.error(`🔐 Authentication Error${context ? ` in ${context}` : ''}:`, errorMessage);
+    console.error('DIAGNOSIS: No valid authentication session found.');
+
+    throw new Error('Authentication required. Please sign in to continue.');
+  }
+
   // Check for Supabase backend errors
-  if (errorMessage.includes('Database error granting user') || 
+  if (errorMessage.includes('Database error granting user') ||
       errorMessage.includes('unexpected_failure')) {
     console.error(`🔧 Supabase Backend Error${context ? ` in ${context}` : ''}:`, errorMessage);
     console.error('This is a Supabase service issue. Check Supabase dashboard for service status.');
-    
+
     throw new Error('Authentication service is temporarily unavailable. Please try again in a few moments.');
   }
-  
+
   // Check for common WebContainer issues
   if (errorMessage.includes('Failed to fetch') || errorMessage.includes('TypeError')) {
     console.error(`🔌 Connection Error${context ? ` in ${context}` : ''}:`, errorMessage);
     console.error('This might be a WebContainer/StackBlitz network issue.');
     console.error('Try: 1) Refreshing the page, 2) Checking your internet connection, 3) Verifying Supabase URL');
-    
+
     // Return a user-friendly error
     throw new Error('Unable to connect to the database. Please check your connection and try again.');
   }
-  
+
   console.error(`Supabase error${context ? ` in ${context}` : ''}:`, error);
   throw new Error(errorMessage);
 };
@@ -208,11 +233,56 @@ export async function supabaseQuery<T>(
   }
 }
 
+// Helper function to sync Supabase auth session with local storage
+export async function syncSupabaseAuth(): Promise<boolean> {
+  try {
+    // Check if we have a Supabase session
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      console.log('✅ Supabase session exists:', session.user.id);
+      return true;
+    }
+
+    // No Supabase session, check if we have local auth
+    const localAuthStr = localStorage.getItem('ggk_authenticated_user');
+    if (!localAuthStr) {
+      console.log('ℹ️ No local auth found');
+      return false;
+    }
+
+    const localAuth = JSON.parse(localAuthStr);
+    console.log('🔄 Found local auth, user:', localAuth.email, 'ID:', localAuth.id);
+
+    // For system admins, we need to get or create a Supabase auth session
+    // Check if user exists in auth.users
+    const { data: authUser, error: authCheckError } = await supabase.auth.getUser();
+
+    if (authCheckError || !authUser?.user) {
+      console.warn('⚠️ No Supabase auth session found. User needs to sign in through Supabase auth.');
+      return false;
+    }
+
+    console.log('✅ Supabase auth user found:', authUser.user.id);
+    return true;
+  } catch (error) {
+    console.error('❌ Error syncing Supabase auth:', error);
+    return false;
+  }
+}
+
 // Initialize connection check on load (development only)
 if (import.meta.env.DEV) {
   checkSupabaseConnection().then(({ connected }) => {
     if (!connected) {
       console.warn('⚠️ Initial Supabase connection failed. Will retry on first query.');
+    } else {
+      // Check auth sync
+      syncSupabaseAuth().then((synced) => {
+        if (!synced) {
+          console.warn('⚠️ Auth session not synced. Some queries may fail due to RLS policies.');
+        }
+      });
     }
   });
 }

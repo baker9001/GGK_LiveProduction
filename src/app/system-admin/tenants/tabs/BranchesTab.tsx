@@ -19,6 +19,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ImageOff } from 'lucide-react';
 import { supabase } from '../../../../lib/supabase';
 import { DataTable } from '@/components/shared/DataTable';
@@ -100,10 +101,8 @@ interface FormState extends BranchAdditional {
 }
 
 export default function BranchesTab() {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -196,10 +195,85 @@ export default function BranchesTab() {
     }
   };
 
-  const fetchBranches = React.useCallback(async () => {
-    try {
-      setLoading(true);
+  // Fetch companies with React Query
+  const { data: companies = [] } = useQuery<Company[]>(
+    ['companies-for-branches'],
+    async () => {
+      const { data, error } = await supabase
+        .from('companies')
+        .select(`
+          *,
+          regions (name)
+        `)
+        .eq('status', 'active')
+        .order('name');
 
+      if (error) {
+        console.error('Error fetching companies:', error);
+        throw error;
+      }
+
+      return data.map(company => ({
+        ...company,
+        region_name: company.regions?.name ?? 'Unknown Region'
+      }));
+    },
+    {
+      staleTime: 10 * 60 * 1000,
+      onError: (error) => {
+        console.error('Error fetching companies:', error);
+        toast.error('Failed to fetch companies');
+      }
+    }
+  );
+
+  // Fetch schools based on selected companies with React Query
+  const { data: schools = [] } = useQuery<School[]>(
+    ['schools-for-branches', filters.company_ids],
+    async () => {
+      if (filters.company_ids.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('schools')
+        .select(`
+          *,
+          companies (name)
+        `)
+        .in('company_id', filters.company_ids)
+        .eq('status', 'active')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching schools:', error);
+        throw error;
+      }
+
+      return data.map(school => ({
+        ...school,
+        company_name: school.companies?.name ?? 'Unknown Company'
+      }));
+    },
+    {
+      enabled: filters.company_ids.length > 0,
+      staleTime: 5 * 60 * 1000,
+      onError: (error) => {
+        console.error('Error fetching schools:', error);
+        toast.error('Failed to fetch schools');
+      }
+    }
+  );
+
+  // Fetch branches with React Query
+  const {
+    data: branches = [],
+    isLoading,
+    isFetching,
+    error: branchesError
+  } = useQuery<Branch[]>(
+    ['branches', filters],
+    async () => {
       let query = supabase
         .from('branches')
         .select(`
@@ -232,18 +306,17 @@ export default function BranchesTab() {
           .from('schools')
           .select('id')
           .in('company_id', filters.company_ids);
-        
+
         if (schoolsError) throw schoolsError;
         const schoolIds = schoolsData.map(school => school.id);
-        
+
         if (schoolIds.length > 0) {
-          finalSchoolIds = finalSchoolIds.length > 0 
+          finalSchoolIds = finalSchoolIds.length > 0
             ? finalSchoolIds.filter(id => schoolIds.includes(id))
             : schoolIds;
         } else {
           // No schools found for selected companies, return empty result
-          setBranches([]);
-          return;
+          return [];
         }
       }
 
@@ -257,37 +330,29 @@ export default function BranchesTab() {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching branches:', error);
+        throw error;
+      }
 
-      const formattedData = data.map(branch => ({
-        ...branch, // Basic branch data
+      return data.map(branch => ({
+        ...branch,
         school_name: branch.schools?.name ?? 'Unknown School',
         company_name: branch.schools?.companies?.name ?? 'Unknown Company',
         region_name: branch.schools?.companies?.regions?.name ?? 'Unknown Region',
-        additional: branch.additional // Include additional data
+        additional: branch.additional
       }));
-
-      setBranches(formattedData);
-    } catch (error) {
-      console.error('Error fetching branches:', error);
-      toast.error('Failed to fetch branches');
-    } finally {
-      setLoading(false);
+    },
+    {
+      keepPreviousData: true,
+      staleTime: 5 * 60 * 1000,
+      refetchInterval: 30 * 1000,
+      onError: (error) => {
+        console.error('Error fetching branches:', error);
+        toast.error('Failed to fetch branches');
+      }
     }
-  }, [filters]);
-
-  useEffect(() => {
-    fetchBranches();
-    fetchCompanies();
-  }, [fetchBranches]);
-
-  useEffect(() => {
-    if (filters.company_ids.length > 0) {
-      fetchSchools(filters.company_ids);
-    } else {
-      setSchools([]);
-    }
-  }, [filters.company_ids]);
+  );
 
   useEffect(() => {
     if (editingBranch) {
@@ -353,8 +418,8 @@ export default function BranchesTab() {
           branch_id: editingBranch.id
         });
 
-        // Fetch schools for this company to populate the school dropdown
-        await fetchSchools([schoolData.company_id]);
+        // Set filters to trigger school fetching
+        setFilters(prev => ({ ...prev, company_ids: [schoolData.company_id] }));
       }
     } catch (error) {
       console.error('Error populating form for edit:', error);
@@ -388,59 +453,7 @@ export default function BranchesTab() {
       branch_id: '',
       logo: ''
     });
-    setSchools([]);
     setActiveTab('basic'); // Reset to basic tab
-  };
-
-  const fetchCompanies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('companies')
-        .select(`
-          *,
-          regions (name)
-        `)
-        .eq('status', 'active')
-        .order('name');
-
-      if (error) throw error;
-
-      const formattedData = data.map(company => ({
-        ...company,
-        region_name: company.regions?.name ?? 'Unknown Region'
-      }));
-
-      setCompanies(formattedData);
-    } catch (error) {
-      console.error('Error fetching companies:', error);
-      toast.error('Failed to fetch companies');
-    }
-  };
-
-  const fetchSchools = async (companyIds: string[]) => {
-    try {
-      const { data, error } = await supabase
-        .from('schools')
-        .select(`
-          *,
-          companies (name)
-        `)
-        .in('company_id', companyIds)
-        .eq('status', 'active')
-        .order('name');
-
-      if (error) throw error;
-
-      const formattedData = data.map(school => ({
-        ...school,
-        company_name: school.companies?.name ?? 'Unknown Company'
-      }));
-
-      setSchools(formattedData);
-    } catch (error) {
-      console.error('Error fetching schools:', error);
-      toast.error('Failed to fetch schools');
-    }
   };
 
   const handleDelete = async (branches: Branch[]) => {
@@ -463,8 +476,8 @@ export default function BranchesTab() {
         .in('id', branches.map(b => b.id));
 
       if (error) throw error;
-      
-      await fetchBranches();
+
+      queryClient.invalidateQueries(['branches']);
       toast.success('Branch(es) deleted successfully');
     } catch (error) {
       console.error('Error deleting branches:', error);
@@ -473,16 +486,17 @@ export default function BranchesTab() {
   };
 
   const handleCompanyChange = (companyId: string) => {
-    setFormState(prev => ({ 
-      ...prev, 
+    setFormState(prev => ({
+      ...prev,
       company_id: companyId,
       school_id: '' // Reset school when company changes
     }));
-    
+
+    // Update filters to trigger school fetching via React Query
     if (companyId) {
-      fetchSchools([companyId]);
+      setFilters(prev => ({ ...prev, company_ids: [companyId] }));
     } else {
-      setSchools([]);
+      setFilters(prev => ({ ...prev, company_ids: [] }));
     }
   };
 
@@ -591,15 +605,15 @@ export default function BranchesTab() {
         toast.success(`Branch ${editingBranch ? 'updated' : 'created'} successfully`);
       }
 
-      // Refresh the branches list
-      await fetchBranches();
-      
+      // Refresh the branches list using React Query
+      queryClient.invalidateQueries(['branches']);
+
       // Close the form and reset state
       setIsFormOpen(false);
       setEditingBranch(null);
       resetFormState();
       setFormErrors({});
-      
+
     } catch (error) {
       console.error('Error saving branch:', error);
       setFormErrors({
@@ -707,7 +721,7 @@ export default function BranchesTab() {
 
       <FilterCard
         title="Filters"
-        onApply={fetchBranches}
+        onApply={() => {}} // No need for explicit apply with React Query
         onClear={() => {
           setFilters({
             search: '',
@@ -773,7 +787,8 @@ export default function BranchesTab() {
         keyField="id"
         caption="List of branches with their school associations and status"
         ariaLabel="Branches data table"
-        loading={loading}
+        loading={isLoading}
+        isFetching={isFetching}
         onEdit={(branch) => {
           setEditingBranch(branch);
           setIsFormOpen(true);
