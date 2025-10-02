@@ -276,53 +276,88 @@ export function useCreateMockExam() {
       }
 
       if (data.teacherIds.length > 0) {
+        // The teacher IDs coming in are actually from the teachers table
+        // We need to get the user_id from teachers, then find the entity_user_id
         const teacherIdsList = data.teacherIds.map(t => t.entityUserId);
 
+        console.log('Teacher IDs to assign:', teacherIdsList);
+
+        // Get teacher records to find user_ids
         const { data: teachers, error: fetchTeachersError } = await supabase
           .from('teachers')
           .select('id, user_id')
           .in('id', teacherIdsList);
 
-        if (fetchTeachersError) throw fetchTeachersError;
-
-        if (!teachers || teachers.length === 0) {
-          throw new Error('Could not find teacher records');
+        if (fetchTeachersError) {
+          console.error('Error fetching teachers:', fetchTeachersError);
+          throw new Error('Failed to fetch teacher records');
         }
 
+        console.log('Found teachers:', teachers);
+
+        if (!teachers || teachers.length === 0) {
+          console.warn('No teacher records found for IDs:', teacherIdsList);
+          throw new Error('Could not find teacher records. Please ensure teachers are properly assigned to the selected schools.');
+        }
+
+        // Get entity_users for these user_ids
+        const userIds = teachers.map(t => t.user_id);
         const { data: entityUsers, error: entityUsersError } = await supabase
           .from('entity_users')
           .select('id, user_id')
-          .in('user_id', teachers.map(t => t.user_id));
+          .in('user_id', userIds);
 
-        if (entityUsersError) throw entityUsersError;
+        if (entityUsersError) {
+          console.error('Error fetching entity users:', entityUsersError);
+          throw new Error('Failed to fetch entity user records');
+        }
 
+        console.log('Found entity users:', entityUsers);
+
+        // Create a map of user_id -> entity_user_id
         const userIdToEntityUserId = new Map(
           (entityUsers || []).map((eu: any) => [eu.user_id, eu.id])
         );
 
+        // Build teacher assignments
         const teacherAssignments = data.teacherIds
           .map((teacher) => {
             const teacherRecord = teachers.find(t => t.id === teacher.entityUserId);
-            if (!teacherRecord) return null;
+            if (!teacherRecord) {
+              console.warn('Teacher record not found for ID:', teacher.entityUserId);
+              return null;
+            }
 
             const entityUserId = userIdToEntityUserId.get(teacherRecord.user_id);
-            if (!entityUserId) return null;
+            if (!entityUserId) {
+              console.warn('Entity user not found for teacher:', teacherRecord);
+              return null;
+            }
 
             return {
               mock_exam_id: mockExam.id,
               entity_user_id: entityUserId,
-              role: teacher.role,
+              role: teacher.role || 'lead_teacher',
               school_id: teacher.schoolId,
             };
           })
           .filter(Boolean);
+
+        console.log('Teacher assignments to insert:', teacherAssignments);
 
         if (teacherAssignments.length > 0) {
           const { error: teachersError } = await supabase
             .from('mock_exam_teachers')
             .insert(teacherAssignments);
 
-          if (teachersError) throw teachersError;
+          if (teachersError) {
+            console.error('Error inserting teacher assignments:', teachersError);
+            throw new Error(`Failed to assign teachers: ${teachersError.message}`);
+          }
+
+          console.log('Successfully assigned teachers');
+        } else {
+          console.warn('No valid teacher assignments created');
         }
       }
 

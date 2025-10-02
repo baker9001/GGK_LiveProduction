@@ -599,13 +599,19 @@ export class MockExamService {
     try {
       const { error } = await supabase
         .from('mock_exams')
-        .update({ status: newStatus })
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', examId);
 
-      if (error) throw error;
-    } catch (error) {
+      if (error) {
+        console.error('Supabase error updating status:', error);
+        throw new Error(error.message || 'Failed to update mock exam status');
+      }
+    } catch (error: any) {
       console.error('Error updating mock exam status:', error);
-      throw error;
+      throw new Error(error?.message || 'Failed to update mock exam status');
     }
   }
 

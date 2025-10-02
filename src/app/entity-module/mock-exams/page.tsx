@@ -551,17 +551,56 @@ export default function EntityMockExamsPage() {
       toast.success(`Mock exam status updated to ${statusOptions.find(s => s.value === newStatus)?.label}`);
       setStatusMenuOpen(null);
       refetchExams();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating status:', error);
-      toast.error('Failed to update status. Please try again.');
+      const errorMessage = error?.message || 'Failed to update status. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
   const handleEditExam = (exam: MockExam) => {
     setEditingExamId(exam.id);
     setSelectedExam(exam);
+
+    // Populate form with existing exam data
+    const scheduledDateTime = exam.scheduledTime
+      ? `${exam.scheduledStart.split('T')[0]}T${exam.scheduledTime}`
+      : exam.scheduledStart;
+
+    // Find the data structure ID
+    const dataStructure = dataStructures.find(ds =>
+      ds.provider_name === exam.board &&
+      ds.program_name === exam.program &&
+      ds.subject_name === exam.subject
+    );
+
+    setFormState({
+      title: exam.title,
+      board: exam.board,
+      program: exam.program,
+      subject: exam.subject,
+      subjectId: dataStructure?.subject_id || '',
+      paper: exam.paper,
+      schools: exam.studentCohorts,
+      branches: exam.branches?.map(b => b.id) || [],
+      gradeBands: exam.gradeLevels?.map(g => g.id) || [],
+      sections: exam.sections?.map(s => s.id) || [],
+      examWindow: exam.examWindow,
+      scheduledStart: scheduledDateTime.substring(0, 16), // Format for datetime-local input
+      durationMinutes: exam.durationMinutes.toString(),
+      deliveryMode: exam.deliveryMode,
+      teachers: exam.teachers.map(t => t.id),
+      aiProctoringEnabled: exam.aiProctoringEnabled,
+      releaseAnalyticsToStudents: exam.releaseAnalyticsToStudents,
+      allowRetakes: exam.allowRetakes,
+      notes: exam.notes || ''
+    });
+
+    if (dataStructure) {
+      setSelectedDataStructure(dataStructure.id);
+    }
+
     setIsEditPanelOpen(true);
-    // You can populate form with exam data here if needed
   };
 
   const handleExportSchedule = () => {
@@ -1144,14 +1183,16 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
       </div>
 
       <SlideInForm
-        title="Create mock exam"
-        isOpen={isCreatePanelOpen}
+        title={editingExamId ? "Edit mock exam" : "Create mock exam"}
+        isOpen={isCreatePanelOpen || isEditPanelOpen}
         onClose={() => {
           setIsCreatePanelOpen(false);
+          setIsEditPanelOpen(false);
+          setEditingExamId(null);
           resetFormState();
         }}
         onSave={handleCreateMockExam}
-        saveButtonText="Add to plan"
+        saveButtonText={editingExamId ? "Update exam" : "Add to plan"}
         footerContent={(
           <Button
             variant="ghost"
