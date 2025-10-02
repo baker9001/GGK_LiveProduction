@@ -514,10 +514,6 @@ export default function EntityMockExamsPage() {
       nextErrors.teachers = 'Nominate at least one lead teacher.';
     }
 
-    if (formState.sections.length === 0) {
-      nextErrors.sections = 'Select at least one class section.';
-    }
-
     setFormErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -1140,7 +1136,7 @@ export default function EntityMockExamsPage() {
             </div>
             <div className="space-y-2">
               <SearchableMultiSelect
-                label="Class sections"
+                label="Class sections (optional)"
                 options={sectionOptions.map(option => ({ label: option.label, value: option.value }))}
                 selectedValues={formState.sections}
                 onChange={values => setFormState(prev => ({ ...prev, sections: values }))}
@@ -1149,9 +1145,6 @@ export default function EntityMockExamsPage() {
                 usePortal={false}
                 disabled={formState.gradeBands.length === 0}
               />
-              {formErrors.sections && (
-                <p className="text-xs text-red-500">{formErrors.sections}</p>
-              )}
               {formState.gradeBands.length > 0 && formState.sections.length === 0 && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Sections filtered by selected schools and year groups
