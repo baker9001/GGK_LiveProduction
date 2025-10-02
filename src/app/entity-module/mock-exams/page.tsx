@@ -542,9 +542,7 @@ export default function EntityMockExamsPage() {
     setSelectedExam(exam);
 
     // Populate form with existing exam data
-    const scheduledDateTime = exam.scheduledTime
-      ? `${exam.scheduledStart.split('T')[0]}T${exam.scheduledTime}`
-      : exam.scheduledStart;
+    const scheduledDateTime = exam.scheduledStart ? dayjs(exam.scheduledStart).format('YYYY-MM-DDTHH:mm') : '';
 
     // Find the data structure ID
     const dataStructure = dataStructures.find(ds =>
@@ -560,15 +558,15 @@ export default function EntityMockExamsPage() {
       subject: exam.subject,
       subjectId: dataStructure?.subject_id || '',
       paper: exam.paper,
-      schools: exam.studentCohorts,
-      branches: exam.branches?.map(b => b.id) || [],
-      gradeBands: exam.gradeLevels?.map(g => g.id) || [],
-      sections: exam.sections?.map(s => s.id) || [],
+      schools: exam.studentCohorts || [],
+      branches: [],
+      gradeBands: exam.gradeBands || [],
+      sections: exam.sections || [],
       examWindow: exam.examWindow,
-      scheduledStart: scheduledDateTime.substring(0, 16), // Format for datetime-local input
+      scheduledStart: scheduledDateTime,
       durationMinutes: exam.durationMinutes.toString(),
       deliveryMode: exam.deliveryMode,
-      teachers: exam.teachers.map(t => t.id),
+      teachers: exam.teachers?.map(t => t.id) || [],
       aiProctoringEnabled: exam.aiProctoringEnabled,
       releaseAnalyticsToStudents: exam.releaseAnalyticsToStudents,
       allowRetakes: exam.allowRetakes,
