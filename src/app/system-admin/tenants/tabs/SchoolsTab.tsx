@@ -172,13 +172,28 @@ export default function SchoolsTab() {
   );
 
   // Fetch schools with React Query
-  const { 
-    data: schools = [], 
-    isLoading, 
-    isFetching 
+  const {
+    data: schools = [],
+    isLoading,
+    isFetching
   } = useQuery<School[]>(
     ['schools', filters],
     async () => {
+      console.log('=== SCHOOLS QUERY DEBUG START ===');
+
+      // Check authentication status
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Auth session exists:', !!session);
+      console.log('Auth user ID:', session?.user?.id);
+
+      // Check if user is admin
+      if (session?.user?.id) {
+        const { data: adminCheck, error: adminCheckError } = await supabase
+          .rpc('is_admin_user', { user_id: session.user.id });
+        console.log('Is admin user:', adminCheck);
+        if (adminCheckError) console.error('Admin check error:', adminCheckError);
+      }
+
       let query = supabase
         .from('schools')
         .select(`
@@ -206,9 +221,21 @@ export default function SchoolsTab() {
         query = query.in('status', filters.status);
       }
 
+      console.log('Executing schools query...');
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ SCHOOLS QUERY ERROR:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ Schools query successful. Count:', data?.length || 0);
 
       // Fetch related data separately
       const companyIds = [...new Set(data.map(item => item.company_id))];
@@ -301,12 +328,30 @@ export default function SchoolsTab() {
           class_sections_count: classSectionsCount.count || 0
         };
       }));
-      
+
+      console.log('=== SCHOOLS QUERY DEBUG END ===');
       return enhancedSchools;
     },
     {
       keepPreviousData: true,
       staleTime: 5 * 60 * 1000, // 5 minutes
+      onError: (error: any) => {
+        console.error('❌ SCHOOLS QUERY FAILED:', error);
+        const errorMessage = error?.message || 'Unknown error';
+        const errorCode = error?.code || 'N/A';
+        const errorDetails = error?.details || 'No details available';
+
+        console.error('Full error object:', JSON.stringify(error, null, 2));
+
+        let userMessage = 'Failed to fetch schools';
+        if (errorCode === 'PGRST301' || errorMessage.includes('policy')) {
+          userMessage = 'Access denied. Please ensure you have proper permissions.';
+        } else if (errorCode === '42501') {
+          userMessage = 'Permission denied. Contact your administrator.';
+        }
+
+        toast.error(`${userMessage} (Code: ${errorCode})`);
+      }
     }
   );
 

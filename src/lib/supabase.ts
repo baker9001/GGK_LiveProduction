@@ -98,8 +98,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           signal: options.signal || controller.signal,
           // Add CORS mode for WebContainer
           mode: 'cors',
-          // CRITICAL FIX: Change from 'omit' to 'same-origin' to include auth cookies
-          credentials: 'same-origin',
+          // CRITICAL FIX: Use 'include' to ensure auth cookies and headers are sent
+          // Changed from 'same-origin' to 'include' for cross-origin auth
+          credentials: 'include',
         });
 
         clearTimeout(timeoutId);

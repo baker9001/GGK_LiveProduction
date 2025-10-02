@@ -274,6 +274,21 @@ export default function BranchesTab() {
   } = useQuery<Branch[]>(
     ['branches', filters],
     async () => {
+      console.log('=== BRANCHES QUERY DEBUG START ===');
+
+      // Check authentication status
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Auth session exists:', !!session);
+      console.log('Auth user ID:', session?.user?.id);
+
+      // Check if user is admin
+      if (session?.user?.id) {
+        const { data: adminCheck, error: adminCheckError } = await supabase
+          .rpc('is_admin_user', { user_id: session.user.id });
+        console.log('Is admin user:', adminCheck);
+        if (adminCheckError) console.error('Admin check error:', adminCheckError);
+      }
+
       let query = supabase
         .from('branches')
         .select(`
@@ -302,12 +317,22 @@ export default function BranchesTab() {
 
       // If companies are selected, we need to filter by schools that belong to those companies
       if (filters.company_ids.length > 0) {
+        console.log('Fetching schools for companies:', filters.company_ids);
         const { data: schoolsData, error: schoolsError } = await supabase
           .from('schools')
           .select('id')
           .in('company_id', filters.company_ids);
 
-        if (schoolsError) throw schoolsError;
+        if (schoolsError) {
+          console.error('Error fetching schools for filter:', schoolsError);
+          console.error('Error details:', {
+            message: schoolsError.message,
+            details: schoolsError.details,
+            hint: schoolsError.hint,
+            code: schoolsError.code
+          });
+          throw schoolsError;
+        }
         const schoolIds = schoolsData.map(school => school.id);
 
         if (schoolIds.length > 0) {
@@ -316,6 +341,7 @@ export default function BranchesTab() {
             : schoolIds;
         } else {
           // No schools found for selected companies, return empty result
+          console.log('No schools found for selected companies');
           return [];
         }
       }
@@ -328,12 +354,22 @@ export default function BranchesTab() {
         query = query.in('status', filters.status);
       }
 
+      console.log('Executing branches query...');
       const { data, error } = await query;
 
       if (error) {
-        console.error('Error fetching branches:', error);
+        console.error('❌ BRANCHES QUERY ERROR:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         throw error;
       }
+
+      console.log('✅ Branches query successful. Count:', data?.length || 0);
+      console.log('=== BRANCHES QUERY DEBUG END ===');
 
       return data.map(branch => ({
         ...branch,
@@ -347,9 +383,22 @@ export default function BranchesTab() {
       keepPreviousData: true,
       staleTime: 5 * 60 * 1000,
       refetchInterval: 30 * 1000,
-      onError: (error) => {
-        console.error('Error fetching branches:', error);
-        toast.error('Failed to fetch branches');
+      onError: (error: any) => {
+        console.error('❌ BRANCHES QUERY FAILED:', error);
+        const errorMessage = error?.message || 'Unknown error';
+        const errorCode = error?.code || 'N/A';
+        const errorDetails = error?.details || 'No details available';
+
+        console.error('Full error object:', JSON.stringify(error, null, 2));
+
+        let userMessage = 'Failed to fetch branches';
+        if (errorCode === 'PGRST301' || errorMessage.includes('policy')) {
+          userMessage = 'Access denied. Please ensure you have proper permissions.';
+        } else if (errorCode === '42501') {
+          userMessage = 'Permission denied. Contact your administrator.';
+        }
+
+        toast.error(`${userMessage} (Code: ${errorCode})`);
       }
     }
   );
