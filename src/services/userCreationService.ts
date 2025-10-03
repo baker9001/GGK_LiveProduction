@@ -1074,10 +1074,14 @@ export const userCreationService = {
       console.log('📧 Sending reset email to:', userData.email);
       
       // Send password reset email
+      const resetRedirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/reset-password`
+        : 'https://ggknowledge.com/reset-password';
+
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         userData.email,
         {
-          redirectTo: `${window.location.origin}/auth/reset-password`
+          redirectTo: resetRedirectUrl
         }
       );
       
