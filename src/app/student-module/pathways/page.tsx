@@ -68,10 +68,14 @@ function resolveLicenseStatus(row: StudentLicenseSubjectRow): {
   }
 
   // Determine status based on license status
-  switch (licenseStatus) {
-    case 'CONSUMED_ACTIVATED':
+  // Handle both uppercase with underscores AND lowercase status values
+  const normalizedStatus = licenseStatus?.toLowerCase();
+  switch (normalizedStatus) {
+    case 'consumed_activated':
+    case 'active':
       return { status: 'active', priority: STATUS_PRIORITY.CONSUMED_ACTIVATED };
-    case 'ASSIGNED_PENDING_ACTIVATION':
+    case 'assigned_pending_activation':
+    case 'pending':
       return { status: 'pending', priority: STATUS_PRIORITY.ASSIGNED_PENDING_ACTIVATION };
     default:
       return { status: 'expired', priority: STATUS_PRIORITY.REVOKED };
@@ -112,7 +116,7 @@ function SubjectLogo({ logoUrl, subjectName }: { logoUrl: string | null; subject
       <img
         src={logoUrl}
         alt={`${subjectName} logo`}
-        className="h-14 w-14 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+        className="h-14 w-14 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
       />
     );
   }
@@ -125,7 +129,7 @@ function SubjectLogo({ logoUrl, subjectName }: { logoUrl: string | null; subject
     .toUpperCase();
 
   return (
-    <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center text-lg font-semibold border border-emerald-200 dark:border-emerald-800">
+    <div className="h-14 w-14 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center text-lg font-semibold border border-emerald-200 dark:border-emerald-800">
       {initials || <BookOpen className="h-6 w-6" />}
     </div>
   );
