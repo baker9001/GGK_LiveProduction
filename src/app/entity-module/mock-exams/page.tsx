@@ -963,7 +963,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -992,7 +992,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
 
                 return (
                   <tr key={exam.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-white">{exam.title}</span>
@@ -1009,7 +1009,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
                         <div className="font-medium">{exam.program}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">{exam.board}</div>
@@ -1019,7 +1019,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
                           {exam.gradeBands.map(grade => (
@@ -1031,7 +1031,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         <p className="text-xs text-gray-500 dark:text-gray-400">{sectionsSummary}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                         {exam.teachers.slice(0, 2).map(teacher => (
                           <div key={teacher.id} className="flex items-center gap-2">
@@ -1049,7 +1049,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-[#8CC63F]" />
@@ -1061,7 +1061,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                         <div className="font-medium">
                           {dayjs(exam.scheduledStart).format('DD MMM YYYY, HH:mm')}
@@ -1075,7 +1075,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top">
+                    <td className="px-6 py-6 align-top">
                       <div className="flex items-center justify-end gap-2">
                         <ButtonGroup>
                           <IconButton
@@ -1149,6 +1149,9 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           </table>
         </div>
       </div>
+
+      {/* Extra spacing to ensure last row is fully visible with edit button */}
+      <div className="h-24"></div>
 
       <div className="bg-gradient-to-r from-[#8CC63F]/10 via-white to-[#7AB635]/10 dark:from-[#8CC63F]/10 dark:via-gray-900 dark:to-[#7AB635]/10 border border-[#8CC63F]/20 rounded-xl p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
