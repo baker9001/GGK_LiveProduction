@@ -2,28 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Edit3,
-  Eye,
-  FileText,
-  Filter,
-  GripVertical,
-  Info,
-  Layers,
-  Loader2,
-  Minus,
-  Plus,
-  Sparkles,
-  Trash2,
-  Users,
-  X,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, ClipboardList, CreditCard as Edit3, Eye, FileText, Filter, GripVertical, Info, Layers, Loader2, Minus, Plus, Sparkles, Trash2, Users, X, XCircle } from 'lucide-react';
 import { Button, IconButton } from '../../../../components/shared/Button';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
