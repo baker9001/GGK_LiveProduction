@@ -121,7 +121,7 @@ const DEFAULT_INSTRUCTION_AUDIENCES: MockExamInstructionRecord['audience'][] = [
 const MAX_CUSTOM_QUESTION_MARKS = 100;
 
 function getQuestionPreview(question: QuestionBankItem): string {
-  const base = question.question_text || question.question_description || 'Question';
+  const base = question.question_description || 'Question';
   const truncated = base.length > 90 ? `${base.slice(0, 90)}…` : base;
   const marks = question.marks ? `${question.marks} mark${question.marks === 1 ? '' : 's'}` : 'Unscored';
   const prefix = question.question_number ? `Q${question.question_number}` : 'Question';

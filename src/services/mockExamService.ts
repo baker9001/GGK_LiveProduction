@@ -140,7 +140,6 @@ export interface MockExamQuestionSelectionRecord {
 export interface QuestionBankItem {
   id: string;
   question_number: number | null;
-  question_text: string | null;
   question_description: string | null;
   type: string | null;
   marks: number | null;
@@ -928,7 +927,6 @@ export class MockExamService {
             questions_master_admin!mock_exam_questions_question_id_fkey (
               id,
               question_number,
-              question_text,
               question_description,
               type,
               marks,
@@ -960,7 +958,6 @@ export class MockExamService {
         .select(`
           id,
           question_number,
-          question_text,
           question_description,
           type,
           marks,
@@ -1021,7 +1018,6 @@ export class MockExamService {
           ? {
               id: record.questions_master_admin.id,
               question_number: record.questions_master_admin.question_number ?? null,
-              question_text: record.questions_master_admin.question_text ?? null,
               question_description: record.questions_master_admin.question_description ?? null,
               type: record.questions_master_admin.type ?? null,
               marks: record.questions_master_admin.marks !== null && record.questions_master_admin.marks !== undefined
@@ -1035,7 +1031,6 @@ export class MockExamService {
       const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => ({
         id: item.id,
         question_number: item.question_number ?? null,
-        question_text: item.question_text ?? null,
         question_description: item.question_description ?? null,
         type: item.type ?? null,
         marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
