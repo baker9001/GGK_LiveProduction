@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit, ChevronDown, Clock, History } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit, ChevronDown, Clock, History, RefreshCw, Eye } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -1081,7 +1081,8 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                           <Button
                             variant="outline"
                             size="sm"
-                            leftIcon={<ChevronDown className="w-3.5 h-3.5" />}
+                            leftIcon={<RefreshCw className="w-4 h-4" />}
+                            rightIcon={<ChevronDown className="w-3.5 h-3.5" />}
                             onClick={() => setStatusMenuOpen(statusMenuOpen === exam.id ? null : exam.id)}
                           >
                             Change Status
@@ -1107,7 +1108,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         <Button
                           variant="outline"
                           size="sm"
-                          leftIcon={<Edit className="w-3.5 h-3.5" />}
+                          leftIcon={<Edit className="w-4 h-4" />}
                           onClick={() => handleEditExam(exam)}
                         >
                           Edit
@@ -1115,18 +1116,18 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         <Button
                           variant="ghost"
                           size="sm"
-                          leftIcon={<Filter className="w-3.5 h-3.5" />}
+                          leftIcon={<Eye className="w-4 h-4" />}
                           onClick={() => setSelectedExam(exam)}
                         >
-                          View detail
+                          View Detail
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          leftIcon={<Download className="w-3.5 h-3.5" />}
+                          leftIcon={<Download className="w-4 h-4" />}
                           onClick={() => handleDownloadBriefingPack(exam)}
                         >
-                          Briefing pack
+                          Briefing Pack
                         </Button>
                       </div>
                     </td>
@@ -1462,10 +1463,10 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           <Button
             variant="outline"
             size="sm"
-            leftIcon={<Download className="w-3.5 h-3.5" />}
+            leftIcon={<Download className="w-4 h-4" />}
             onClick={() => console.info('[Mock Exams] Download analytics for', selectedExam.id)}
           >
-            Export analytics
+            Export Analytics
           </Button>
         ) : undefined}
         width="xl"
@@ -1474,7 +1475,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Programme overview</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Programme Overview</h4>
                 <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-[#8CC63F]" />
@@ -1502,7 +1503,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Teaching team</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Teaching Team</h4>
                 <div className="space-y-3">
                   {selectedExam.teachers.map(teacher => (
                     <div key={teacher.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700">
@@ -1516,7 +1517,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                 </div>
               </div>
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Learner readiness</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Learner Readiness</h4>
                 <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-300">Students sitting</span>
@@ -1524,7 +1525,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                   </div>
                   <ProgressBar value={selectedExam.readiness} />
                   <div className="text-xs text-amber-600 dark:text-amber-400">
-                    {selectedExam.flaggedStudents} students flagged for intervention
+                    {selectedExam.flaggedStudents} Students Flagged for Intervention
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
                     Analytics shared with learners: {selectedExam.releaseAnalyticsToStudents ? 'Yes' : 'No'}
@@ -1538,7 +1539,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
 
             {selectedExam.notes && (
               <div className="p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Briefing notes</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Briefing Notes</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300">{selectedExam.notes}</p>
               </div>
             )}
