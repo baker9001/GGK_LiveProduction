@@ -30,51 +30,61 @@ export function Tooltip({
   // Calculate tooltip position
   const updatePosition = () => {
     if (!triggerRef.current || !tooltipRef.current) return;
-    
+
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
-    
+
     let top = 0;
     let left = 0;
-    
+
+    // getBoundingClientRect() returns position relative to viewport
+    // We need to add scroll position to get absolute position
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
     switch (position) {
       case 'top':
-        top = triggerRect.top - tooltipRect.height - 8;
-        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        top = triggerRect.top + scrollTop - tooltipRect.height - 8;
+        left = triggerRect.left + scrollLeft + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'bottom':
-        top = triggerRect.bottom + 8;
-        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        top = triggerRect.bottom + scrollTop + 8;
+        left = triggerRect.left + scrollLeft + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'left':
-        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.left - tooltipRect.width - 8;
+        top = triggerRect.top + scrollTop + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        left = triggerRect.left + scrollLeft - tooltipRect.width - 8;
         break;
       case 'right':
-        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.right + 8;
+        top = triggerRect.top + scrollTop + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        left = triggerRect.right + scrollLeft + 8;
         break;
     }
-    
-    // Adjust for window boundaries
+
+    // Adjust for window boundaries (viewport coordinates)
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
-    
-    // Prevent tooltip from going off-screen
-    if (left < 10) left = 10;
-    if (left + tooltipRect.width > windowWidth - 10) {
-      left = windowWidth - tooltipRect.width - 10;
+    const viewportTop = triggerRect.top;
+    const viewportLeft = triggerRect.left;
+
+    // Check if tooltip would go off-screen and adjust
+    const tooltipViewportLeft = left - scrollLeft;
+    const tooltipViewportTop = top - scrollTop;
+
+    if (tooltipViewportLeft < 10) {
+      left = scrollLeft + 10;
     }
-    
-    if (top < 10) top = 10;
-    if (top + tooltipRect.height > windowHeight - 10) {
-      top = windowHeight - tooltipRect.height - 10;
+    if (tooltipViewportLeft + tooltipRect.width > windowWidth - 10) {
+      left = scrollLeft + windowWidth - tooltipRect.width - 10;
     }
-    
-    // Add scroll position
-    top += window.scrollY;
-    left += window.scrollX;
-    
+
+    if (tooltipViewportTop < 10) {
+      top = scrollTop + 10;
+    }
+    if (tooltipViewportTop + tooltipRect.height > windowHeight - 10) {
+      top = scrollTop + windowHeight - tooltipRect.height - 10;
+    }
+
     setTooltipPosition({ top, left });
   };
   
@@ -83,11 +93,9 @@ export function Tooltip({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    
+
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
-      // Update position after a small delay to ensure tooltip is rendered
-      setTimeout(updatePosition, 0);
     }, delay);
   };
   
@@ -101,15 +109,20 @@ export function Tooltip({
     setIsVisible(false);
   };
   
-  // Update position on scroll or resize
+  // Update position when tooltip becomes visible and on scroll/resize
   useEffect(() => {
     if (isVisible) {
+      // Update position immediately when tooltip becomes visible
+      requestAnimationFrame(() => {
+        updatePosition();
+      });
+
       const handleScroll = () => updatePosition();
       const handleResize = () => updatePosition();
-      
+
       window.addEventListener('scroll', handleScroll, true);
       window.addEventListener('resize', handleResize);
-      
+
       return () => {
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
