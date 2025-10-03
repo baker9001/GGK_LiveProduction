@@ -785,9 +785,27 @@ export function StatusTransitionWizard({
   };
 
   const buildPayload = (): StageTransitionPayload | null => {
-    if (!wizardData?.exam) return null;
+    // Defensive checks with detailed logging
+    if (!wizardData) {
+      console.error('[Wizard] Payload build failed: wizardData is null/undefined');
+      return null;
+    }
+
+    if (!wizardData.exam) {
+      console.error('[Wizard] Payload build failed: wizardData.exam is null/undefined', { wizardData });
+      return null;
+    }
+
     const definition = stageDefinitionMap.get(activeStage);
-    if (!definition) return null;
+    if (!definition) {
+      console.error('[Wizard] Payload build failed: No stage definition found', {
+        activeStage,
+        availableStages: Array.from(stageDefinitionMap.keys())
+      });
+      return null;
+    }
+
+    console.log('[Wizard] Building payload for stage:', activeStage, { examId, currentStatus });
 
     const rawValues = { ...(stageFormState[activeStage] || {}) };
     let notesValue: string | null | undefined = undefined;
@@ -881,15 +899,36 @@ export function StatusTransitionWizard({
   };
 
   const handleSubmit = async () => {
+    // Prevent submission while data is loading
+    if (isLoading || isFetching) {
+      toast.error('Wizard data is still loading. Please wait...');
+      return;
+    }
+
+    // Ensure wizard data is loaded
+    if (!wizardData) {
+      toast.error('Failed to load exam data. Please close and reopen the wizard.');
+      return;
+    }
+
+    if (!wizardData.exam) {
+      toast.error('Exam data is incomplete. Please check your permissions and try again.');
+      console.error('[Wizard] Submit blocked: exam data missing', { examId, wizardData });
+      return;
+    }
+
     if (!validateStage()) {
       return;
     }
 
     const payload = buildPayload();
     if (!payload) {
-      toast.error('Unable to build status update payload.');
+      toast.error('Unable to build status update payload. Check console for details.');
+      console.error('[Wizard] Payload building failed. Check logs above for specific reason.');
       return;
     }
+
+    console.log('[Wizard] Submitting payload:', payload);
 
     try {
       await transitionMutation.mutateAsync(payload);
@@ -897,9 +936,19 @@ export function StatusTransitionWizard({
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Failed to transition status', error);
-      const message = error?.message || 'Unable to update status. Please try again.';
-      toast.error(message);
+      console.error('[Wizard] Failed to transition status:', error);
+
+      // Check for specific error types
+      if (error?.message?.includes('permission') || error?.message?.includes('policy')) {
+        toast.error('Permission denied. You may not have access to modify this exam.');
+      } else if (error?.message?.includes('network') || error?.code === 'PGRST301') {
+        toast.error('Network error. Please check your connection and try again.');
+      } else if (error?.message?.includes('validation')) {
+        toast.error('Validation failed. Please check all required fields.');
+      } else {
+        const message = error?.message || 'Unable to update status. Please try again.';
+        toast.error(message);
+      }
     }
   };
 
@@ -1009,7 +1058,17 @@ export function StatusTransitionWizard({
             {isLoading || isFetching ? (
               <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
                 <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
-                <p>Loading status data…</p>
+                <p>Loading exam data…</p>
+                <p className="text-xs text-gray-400">Please wait while we fetch the wizard context</p>
+              </div>
+            ) : !wizardData?.exam ? (
+              <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
+                <AlertTriangle className="h-12 w-12 text-red-500" />
+                <p className="font-semibold text-gray-900 dark:text-white">Failed to Load Exam Data</p>
+                <p className="text-sm text-center max-w-md">Unable to retrieve exam information. This may be due to permissions or a network issue.</p>
+                <Button variant="default" onClick={() => {
+                  window.location.reload();
+                }} className="mt-4">Reload Page</Button>
               </div>
             ) : (
               <div className="space-y-6">
@@ -1312,10 +1371,10 @@ export function StatusTransitionWizard({
                     <Button
                       variant="default"
                       onClick={handleSubmit}
-                      disabled={transitionMutation.isPending}
+                      disabled={transitionMutation.isPending || isLoading || isFetching || !wizardData?.exam}
                       leftIcon={<ArrowRight className="h-4 w-4" />}
                     >
-                      {transitionMutation.isPending ? 'Updating…' : activeStage === currentStatus ? 'Save stage data' : 'Confirm transition'}
+                      {transitionMutation.isPending ? 'Updating…' : (isLoading || isFetching) ? 'Loading…' : activeStage === currentStatus ? 'Save stage data' : 'Confirm transition'}
                     </Button>
                   </div>
                 </div>

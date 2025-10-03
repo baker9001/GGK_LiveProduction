@@ -857,6 +857,8 @@ export class MockExamService {
    */
   static async getStatusWizardContext(examId: string): Promise<MockExamStatusWizardContext | null> {
     try {
+      console.log('[MockExamService] Fetching wizard context for exam:', examId);
+
       const { data: examData, error: examError } = await supabase
         .from('mock_exams')
         .select(`
@@ -877,8 +879,22 @@ export class MockExamService {
         .eq('id', examId)
         .single();
 
-      if (examError) throw examError;
-      if (!examData) return null;
+      if (examError) {
+        console.error('[MockExamService] Error fetching exam data:', examError);
+        if (examError.code === 'PGRST116') {
+          throw new Error('Exam not found. It may have been deleted.');
+        } else if (examError.message?.includes('policy')) {
+          throw new Error('Permission denied. You do not have access to this exam.');
+        }
+        throw examError;
+      }
+
+      if (!examData) {
+        console.warn('[MockExamService] No exam data returned for ID:', examId);
+        return null;
+      }
+
+      console.log('[MockExamService] Exam data fetched successfully:', examData.title);
 
       const [stageProgressRes, instructionsRes, questionSelectionsRes] = await Promise.all([
         supabase
@@ -919,9 +935,18 @@ export class MockExamService {
           .order('sequence', { ascending: true })
       ]);
 
-      if (stageProgressRes.error) throw stageProgressRes.error;
-      if (instructionsRes.error) throw instructionsRes.error;
-      if (questionSelectionsRes.error) throw questionSelectionsRes.error;
+      if (stageProgressRes.error) {
+        console.error('[MockExamService] Error fetching stage progress:', stageProgressRes.error);
+        throw new Error('Failed to load stage progress data: ' + stageProgressRes.error.message);
+      }
+      if (instructionsRes.error) {
+        console.error('[MockExamService] Error fetching instructions:', instructionsRes.error);
+        throw new Error('Failed to load instructions data: ' + instructionsRes.error.message);
+      }
+      if (questionSelectionsRes.error) {
+        console.error('[MockExamService] Error fetching question selections:', questionSelectionsRes.error);
+        throw new Error('Failed to load question selections: ' + questionSelectionsRes.error.message);
+      }
 
       const subjectId = examData.data_structures?.subject_id || null;
       const dataStructureId = examData.data_structure_id || null;
@@ -948,7 +973,11 @@ export class MockExamService {
       }
 
       const { data: questionBankData, error: questionBankError } = await questionBankQuery.order('question_number', { ascending: true });
-      if (questionBankError) throw questionBankError;
+      if (questionBankError) {
+        console.error('[MockExamService] Error fetching question bank:', questionBankError);
+        // Don't throw error for question bank - it's optional
+        console.warn('[MockExamService] Continuing without question bank data');
+      }
 
       const stageProgress: MockExamStageProgressRecord[] = (stageProgressRes.data || []).map((record: any) => ({
         id: record.id,
@@ -1009,7 +1038,7 @@ export class MockExamService {
         status: item.status ?? null,
       }));
 
-      return {
+      const context = {
         exam: {
           id: examData.id,
           title: examData.title,
@@ -1028,9 +1057,24 @@ export class MockExamService {
         questionSelections,
         questionBank,
       };
-    } catch (error) {
-      console.error('Error fetching mock exam status wizard context:', error);
-      throw error;
+
+      console.log('[MockExamService] Wizard context built successfully:', {
+        examId: context.exam.id,
+        title: context.exam.title,
+        stageProgressCount: stageProgress.length,
+        instructionsCount: instructions.length,
+        questionSelectionsCount: questionSelections.length,
+        questionBankCount: questionBank.length
+      });
+
+      return context;
+    } catch (error: any) {
+      console.error('[MockExamService] Fatal error in getStatusWizardContext:', error);
+      // Re-throw with more context
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to load wizard context: ' + (error?.message || 'Unknown error'));
     }
   }
 

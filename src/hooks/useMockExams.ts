@@ -167,10 +167,23 @@ export function useMockExamStatusWizard(examId?: string) {
     queryKey: ['mockExamStatusWizard', examId],
     queryFn: async () => {
       if (!examId) return null;
-      return MockExamService.getStatusWizardContext(examId);
+      console.log('[useMockExamStatusWizard] Fetching wizard data for exam:', examId);
+      try {
+        const data = await MockExamService.getStatusWizardContext(examId);
+        console.log('[useMockExamStatusWizard] Successfully fetched wizard data');
+        return data;
+      } catch (error: any) {
+        console.error('[useMockExamStatusWizard] Query failed:', error);
+        throw error;
+      }
     },
     enabled: !!examId,
     staleTime: 30000,
+    retry: 2, // Retry failed requests twice
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    onError: (error: any) => {
+      console.error('[useMockExamStatusWizard] Final error after retries:', error);
+    },
   });
 }
 
