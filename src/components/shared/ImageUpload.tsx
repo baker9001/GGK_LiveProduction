@@ -224,12 +224,12 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
   };
 
   // Generate public URL with proper handling
-  const getPublicUrl = (path: string | null) => {
+  const generateDisplayUrl = (path: string | null) => {
     if (!path) return null;
     return getPublicUrl(bucket, path);
   };
 
-  const displayUrl = publicUrl || getPublicUrl(value);
+  const displayUrl = publicUrl || generateDisplayUrl(value);
   const hasAuth = isAuthenticated || isPublicBucket;
 
   // Show auth warning if not authenticated and not a public bucket
