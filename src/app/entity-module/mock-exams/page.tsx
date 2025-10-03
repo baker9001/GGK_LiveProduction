@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit, ChevronDown, Clock, History, RefreshCw, Eye } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -20,7 +20,7 @@ import {
   useStatusHistory
 } from '../../../hooks/useMockExams';
 import toast from 'react-hot-toast';
-import { Button } from '../../../components/shared/Button';
+import { Button, IconButton, ButtonGroup } from '../../../components/shared/Button';
 import { StatusBadge } from '../../../components/shared/StatusBadge';
 import { FilterCard } from '../../../components/shared/FilterCard';
 import { SlideInForm } from '../../../components/shared/SlideInForm';
@@ -1075,60 +1075,71 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 align-top text-right">
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="relative">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<RefreshCw className="w-4 h-4" />}
-                            rightIcon={<ChevronDown className="w-3.5 h-3.5" />}
-                            onClick={() => setStatusMenuOpen(statusMenuOpen === exam.id ? null : exam.id)}
+                    <td className="px-6 py-4 align-top">
+                      <div className="flex items-center justify-end gap-2">
+                        <ButtonGroup>
+                          <IconButton
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setSelectedExam(exam)}
+                            aria-label="View exam details"
+                            tooltip="View details"
                           >
-                            Change Status
-                          </Button>
+                            <Eye className="w-4 h-4" />
+                          </IconButton>
+                          <IconButton
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleEditExam(exam)}
+                            aria-label="Edit exam"
+                            tooltip="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </IconButton>
+                          <IconButton
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleDownloadBriefingPack(exam)}
+                            aria-label="Download briefing pack"
+                            tooltip="Download briefing pack"
+                          >
+                            <Download className="w-4 h-4" />
+                          </IconButton>
+                        </ButtonGroup>
+                        <div className="relative">
+                          <IconButton
+                            variant="outline"
+                            size="icon-sm"
+                            onClick={() => setStatusMenuOpen(statusMenuOpen === exam.id ? null : exam.id)}
+                            aria-label="Change status"
+                            tooltip="Change status"
+                            className="relative"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                            <ChevronDown className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 bg-white dark:bg-gray-800 rounded-full" />
+                          </IconButton>
                           {statusMenuOpen === exam.id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
-                              {statusOptions.map(option => (
-                                <button
-                                  key={option.value}
-                                  onClick={() => handleStatusChange(exam.id, option.value)}
-                                  disabled={option.value === exam.status}
-                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                                    option.value === exam.status ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : ''
-                                  } ${option.value === exam.status ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                >
-                                  {option.label}
-                                  {option.value === exam.status && ' (Current)'}
-                                </button>
-                              ))}
+                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                              <div className="py-1">
+                                {statusOptions.map(option => (
+                                  <button
+                                    key={option.value}
+                                    onClick={() => handleStatusChange(exam.id, option.value)}
+                                    disabled={option.value === exam.status}
+                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                                      option.value === exam.status ? 'bg-gray-50 dark:bg-gray-700/50 font-semibold text-[#8CC63F]' : 'text-gray-700 dark:text-gray-300'
+                                    } ${option.value === exam.status ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                  >
+                                    <span>{option.label}</span>
+                                    {option.value === exam.status && (
+                                      <CheckCircle2 className="w-4 h-4 text-[#8CC63F]" />
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<Edit className="w-4 h-4" />}
-                          onClick={() => handleEditExam(exam)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={<Eye className="w-4 h-4" />}
-                          onClick={() => setSelectedExam(exam)}
-                        >
-                          View Detail
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          leftIcon={<Download className="w-4 h-4" />}
-                          onClick={() => handleDownloadBriefingPack(exam)}
-                        >
-                          Briefing Pack
-                        </Button>
                       </div>
                     </td>
                   </tr>
