@@ -24,6 +24,7 @@ import { Button, IconButton } from '../../../../components/shared/Button';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
+import { CollapsibleSection } from '../../../../components/shared/CollapsibleSection';
 import {
   useMockExamStatusTransition,
   useMockExamStatusWizard,
@@ -113,9 +114,7 @@ const ALLOWED_TRANSITIONS: Record<MockExamStatus, MockExamStatus[]> = {
 
 const DEFAULT_INSTRUCTION_AUDIENCES: MockExamInstructionRecord['audience'][] = [
   'students',
-  'invigilators',
   'markers',
-  'teachers',
 ];
 
 const MAX_CUSTOM_QUESTION_MARKS = 100;
@@ -453,6 +452,8 @@ export function StatusTransitionWizard({
   const [questionState, setQuestionState] = useState<QuestionSelectionFormState[]>([]);
   const [selectedBankQuestionIds, setSelectedBankQuestionIds] = useState<string[]>([]);
   const [removedQuestionIds, setRemovedQuestionIds] = useState<string[]>([]);
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(true);
+  const [isQuestionsExpanded, setIsQuestionsExpanded] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -1011,7 +1012,7 @@ export function StatusTransitionWizard({
           </div>
         </div>
         <div className="flex max-h-[70vh] flex-col gap-0 lg:flex-row">
-          <aside className="w-full border-b border-gray-200 bg-gray-50/60 p-4 dark:border-gray-800 dark:bg-gray-900/60 lg:w-72 lg:border-b-0 lg:border-r">
+          <aside className="w-full border-b border-gray-200 bg-gray-50/60 p-4 dark:border-gray-800 dark:bg-gray-900/60 lg:w-72 lg:border-b-0 lg:border-r lg:max-h-[70vh] lg:overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             <div className="space-y-3">
               {STAGE_DEFINITIONS.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]).map(stage => {
                 const stageProgress = stageProgressMap.get(stage.status);
@@ -1064,7 +1065,7 @@ export function StatusTransitionWizard({
               })}
             </div>
           </aside>
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 max-h-[70vh] overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             {isLoading || isFetching ? (
               <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
                 <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
@@ -1159,17 +1160,17 @@ export function StatusTransitionWizard({
                 )}
 
                 {definition?.showInstructionsSetup && (
-                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                  <CollapsibleSection
+                    id="exam-instructions"
+                    title="Exam Instructions"
+                    isOpen={isInstructionsExpanded}
+                    onToggle={() => setIsInstructionsExpanded(!isInstructionsExpanded)}
+                    className="shadow-sm"
+                  >
                     <div className="mb-4 flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300">
-                          Exam instructions
-                        </h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Provide tailored briefings for candidates, invigilators, and marking teams. These will feed into the
-                          generated briefing packs.
-                        </p>
-                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Provide tailored briefings for students and marking teams.
+                      </p>
                       <Button variant="outline" size="sm" onClick={handleAddInstruction} leftIcon={<Plus className="h-4 w-4" />}>
                         Add audience
                       </Button>
@@ -1185,9 +1186,7 @@ export function StatusTransitionWizard({
                               value={instruction.audience}
                               options={[
                                 { value: 'students', label: 'Students' },
-                                { value: 'invigilators', label: 'Invigilators' },
                                 { value: 'markers', label: 'Markers' },
-                                { value: 'teachers', label: 'Teachers' },
                                 { value: 'admins', label: 'Admins' },
                                 { value: 'other', label: 'Other' },
                               ]}
@@ -1214,21 +1213,21 @@ export function StatusTransitionWizard({
                     {errorsForStage.instructions && (
                       <p className="mt-2 text-sm text-red-500">{errorsForStage.instructions}</p>
                     )}
-                  </div>
+                  </CollapsibleSection>
                 )}
 
                 {definition?.showQuestionSelection && (
-                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                  <CollapsibleSection
+                    id="question-selection"
+                    title="Question Selection"
+                    isOpen={isQuestionsExpanded}
+                    onToggle={() => setIsQuestionsExpanded(!isQuestionsExpanded)}
+                    className="shadow-sm"
+                  >
                     <div className="mb-4 flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300">
-                          Question selection
-                        </h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Curate questions from the IGCSE master bank or draft bespoke items. Selected questions will be
-                          version-controlled for this mock.
-                        </p>
-                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Curate questions from the master bank or draft bespoke items.
+                      </p>
                       <div className="flex items-center gap-3">
                         <Button variant="ghost" size="sm" onClick={handleAddCustomQuestion} leftIcon={<Plus className="h-4 w-4" />}>
                           Add custom question
@@ -1360,7 +1359,7 @@ export function StatusTransitionWizard({
                     {errorsForStage.questionSelections && (
                       <p className="mt-2 text-sm text-red-500">{errorsForStage.questionSelections}</p>
                     )}
-                  </div>
+                  </CollapsibleSection>
                 )}
 
                 <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900 md:flex-row md:items-center md:justify-between">
