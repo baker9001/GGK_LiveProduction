@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
