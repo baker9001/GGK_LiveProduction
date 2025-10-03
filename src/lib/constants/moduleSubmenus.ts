@@ -167,31 +167,31 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'student-module'
   },
   {
-    id: 'student-enrollment',
-    label: 'Student Enrollment',
-    path: '/app/student-module/enrollment',
-    icon: 'UserPlus',
-    moduleKey: 'student-module'
-  },
-  {
-    id: 'academic-tracking',
-    label: 'Academic Tracking',
-    path: '/app/student-module/academic-tracking',
-    icon: 'BookOpen',
+    id: 'learning-pathway',
+    label: 'Learning Pathway',
+    path: '/app/student-module/pathways',
+    icon: 'Route',
     moduleKey: 'student-module'
   },
   {
     id: 'student-performance',
-    label: 'Performance Analytics',
+    label: 'Performance',
     path: '/app/student-module/performance',
     icon: 'TrendingUp',
     moduleKey: 'student-module'
   },
   {
-    id: 'learning-pathways',
-    label: 'Learning Pathways',
-    path: '/app/student-module/pathways',
-    icon: 'Route',
+    id: 'student-assignment',
+    label: 'Assignment',
+    path: '/app/student-module/assignment',
+    icon: 'ClipboardList',
+    moduleKey: 'student-module'
+  },
+  {
+    id: 'student-practice',
+    label: 'Practice',
+    path: '/app/student-module/practice',
+    icon: 'Target',
     moduleKey: 'student-module'
   },
 
