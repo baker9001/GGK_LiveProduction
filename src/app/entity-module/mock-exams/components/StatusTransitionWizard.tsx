@@ -8,7 +8,10 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Edit3,
+  Eye,
   FileText,
+  Filter,
   GripVertical,
   Info,
   Layers,
@@ -19,6 +22,7 @@ import {
   Trash2,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
 import { Button, IconButton } from '../../../../components/shared/Button';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
@@ -29,6 +33,8 @@ import {
   useMockExamStatusTransition,
   useMockExamStatusWizard,
 } from '../../../../hooks/useMockExams';
+import { QuestionPreviewModal } from './QuestionPreviewModal';
+import { CustomQuestionBuilderModal, CustomQuestionData } from './CustomQuestionBuilderModal';
 import type {
   MockExamInstructionRecord,
   MockExamLifecycleStatus,
@@ -454,6 +460,19 @@ export function StatusTransitionWizard({
   const [removedQuestionIds, setRemovedQuestionIds] = useState<string[]>([]);
   const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(true);
   const [isQuestionsExpanded, setIsQuestionsExpanded] = useState(true);
+  const [questionFilters, setQuestionFilters] = useState<{
+    years: string[];
+    topics: string[];
+    subtopics: string[];
+  }>({
+    years: [],
+    topics: [],
+    subtopics: [],
+  });
+  const [previewQuestion, setPreviewQuestion] = useState<QuestionBankItem | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
+  const [editingCustomQuestionIndex, setEditingCustomQuestionIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -569,11 +588,67 @@ export function StatusTransitionWizard({
 
   const questionOptions = useMemo(() => {
     if (!wizardData?.questionBank) return [];
-    return wizardData.questionBank.map(option => ({
+
+    let filteredQuestions = wizardData.questionBank;
+
+    if (questionFilters.years.length > 0) {
+      filteredQuestions = filteredQuestions.filter(q =>
+        q.exam_year && questionFilters.years.includes(q.exam_year.toString())
+      );
+    }
+
+    if (questionFilters.topics.length > 0) {
+      filteredQuestions = filteredQuestions.filter(q =>
+        q.topic_name && questionFilters.topics.includes(q.topic_name)
+      );
+    }
+
+    if (questionFilters.subtopics.length > 0) {
+      filteredQuestions = filteredQuestions.filter(q =>
+        q.subtopic_name && questionFilters.subtopics.includes(q.subtopic_name)
+      );
+    }
+
+    return filteredQuestions.map(option => ({
       value: option.id,
       label: getQuestionPreview(option),
     }));
+  }, [wizardData?.questionBank, questionFilters]);
+
+  const availableYears = useMemo(() => {
+    if (!wizardData?.questionBank) return [];
+    const years = new Set<string>();
+    wizardData.questionBank.forEach(q => {
+      if (q.exam_year) years.add(q.exam_year.toString());
+    });
+    return Array.from(years).sort().reverse().map(year => ({ value: year, label: year }));
   }, [wizardData?.questionBank]);
+
+  const availableTopics = useMemo(() => {
+    if (!wizardData?.questionBank) return [];
+    const topics = new Set<string>();
+    wizardData.questionBank.forEach(q => {
+      if (q.topic_name) topics.add(q.topic_name);
+    });
+    return Array.from(topics).sort().map(topic => ({ value: topic, label: topic }));
+  }, [wizardData?.questionBank]);
+
+  const availableSubtopics = useMemo(() => {
+    if (!wizardData?.questionBank) return [];
+    let filteredQuestions = wizardData.questionBank;
+
+    if (questionFilters.topics.length > 0) {
+      filteredQuestions = filteredQuestions.filter(q =>
+        q.topic_name && questionFilters.topics.includes(q.topic_name)
+      );
+    }
+
+    const subtopics = new Set<string>();
+    filteredQuestions.forEach(q => {
+      if (q.subtopic_name) subtopics.add(q.subtopic_name);
+    });
+    return Array.from(subtopics).sort().map(subtopic => ({ value: subtopic, label: subtopic }));
+  }, [wizardData?.questionBank, questionFilters.topics]);
 
   const handleStageFieldChange = (status: MockExamStatus, key: string, value: any) => {
     setStageFormState(prev => ({
@@ -704,24 +779,42 @@ export function StatusTransitionWizard({
   };
 
   const handleAddCustomQuestion = () => {
-    setQuestionState(prev => {
-      const nextSequence = prev.reduce((max, item) => Math.max(max, item.sequence), 0) + 1;
-      return normaliseSequences([
-        ...prev,
-        {
-          sourceType: 'custom',
-          customQuestion: {
-            prompt: '',
-            type: 'descriptive',
-            answer: '',
-            guidance: '',
+    setEditingCustomQuestionIndex(null);
+    setIsCustomBuilderOpen(true);
+  };
+
+  const handleSaveCustomQuestion = (questionData: CustomQuestionData) => {
+    if (editingCustomQuestionIndex !== null) {
+      setQuestionState(prev => {
+        const next = [...prev];
+        next[editingCustomQuestionIndex] = {
+          ...next[editingCustomQuestionIndex],
+          customQuestion: questionData,
+          marks: questionData.marks ?? null,
+        };
+        return normaliseSequences(next);
+      });
+    } else {
+      setQuestionState(prev => {
+        const nextSequence = prev.reduce((max, item) => Math.max(max, item.sequence), 0) + 1;
+        return normaliseSequences([
+          ...prev,
+          {
+            sourceType: 'custom',
+            customQuestion: questionData,
+            marks: questionData.marks ?? null,
+            sequence: nextSequence,
+            isOptional: false,
           },
-          marks: null,
-          sequence: nextSequence,
-          isOptional: false,
-        },
-      ]);
-    });
+        ]);
+      });
+    }
+    setEditingCustomQuestionIndex(null);
+  };
+
+  const handleEditCustomQuestion = (index: number) => {
+    setEditingCustomQuestionIndex(index);
+    setIsCustomBuilderOpen(true);
   };
 
   const handleReorderQuestion = (index: number, direction: 'up' | 'down') => {
@@ -776,6 +869,15 @@ export function StatusTransitionWizard({
       if (validSelections.length === 0) {
         errors.questionSelections = 'Select questions or add a custom item.';
       }
+
+      questionState.forEach((selection, index) => {
+        if (selection.sourceType === 'custom') {
+          const prompt = selection.customQuestion?.prompt || selection.customQuestion?.question || selection.customQuestion?.text;
+          if (!prompt || String(prompt).trim().length === 0) {
+            errors[`customQuestion_${index}`] = `Custom question ${index + 1} is incomplete. Please complete or remove it.`;
+          }
+        }
+      });
     }
 
     if (Object.keys(errors).length > 0) {
@@ -973,7 +1075,7 @@ export function StatusTransitionWizard({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 py-6 overflow-y-auto">
-      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6">
+      <div className="w-full max-w-7xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6">
         <div className="flex items-start justify-between border-b border-gray-200 p-6 dark:border-gray-800">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Change mock exam status</h2>
@@ -1011,8 +1113,8 @@ export function StatusTransitionWizard({
             </IconButton>
           </div>
         </div>
-        <div className="flex max-h-[70vh] flex-col gap-0 lg:flex-row">
-          <aside className="w-full border-b border-gray-200 bg-gray-50/60 p-4 dark:border-gray-800 dark:bg-gray-900/60 lg:w-72 lg:border-b-0 lg:border-r lg:max-h-[70vh] lg:overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <div className="flex max-h-[80vh] flex-col gap-0 lg:flex-row">
+          <aside className="w-full border-b border-gray-200 bg-gray-50/60 p-4 dark:border-gray-800 dark:bg-gray-900/60 lg:w-80 lg:border-b-0 lg:border-r lg:max-h-[80vh] lg:overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             <div className="space-y-3">
               {STAGE_DEFINITIONS.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]).map(stage => {
                 const stageProgress = stageProgressMap.get(stage.status);
@@ -1065,7 +1167,7 @@ export function StatusTransitionWizard({
               })}
             </div>
           </aside>
-          <main className="flex-1 max-h-[70vh] overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+          <main className="flex-1 max-h-[80vh] overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             {isLoading || isFetching ? (
               <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
                 <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
@@ -1167,13 +1269,10 @@ export function StatusTransitionWizard({
                     onToggle={() => setIsInstructionsExpanded(!isInstructionsExpanded)}
                     className="shadow-sm"
                   >
-                    <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className="mb-4">
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Provide tailored briefings for students and marking teams.
                       </p>
-                      <Button variant="outline" size="sm" onClick={handleAddInstruction} leftIcon={<Plus className="h-4 w-4" />}>
-                        Add audience
-                      </Button>
                     </div>
                     <div className="space-y-4">
                       {instructionsState.map((instruction, index) => (
@@ -1187,8 +1286,6 @@ export function StatusTransitionWizard({
                               options={[
                                 { value: 'students', label: 'Students' },
                                 { value: 'markers', label: 'Markers' },
-                                { value: 'admins', label: 'Admins' },
-                                { value: 'other', label: 'Other' },
                               ]}
                               onChange={value => handleInstructionChange(index, { audience: value as InstructionFormState['audience'] })}
                             />
@@ -1234,6 +1331,49 @@ export function StatusTransitionWizard({
                         </Button>
                       </div>
                     </div>
+
+                    <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-900/50">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                          <Filter className="h-4 w-4" />
+                          <span>Filter Questions</span>
+                        </div>
+                        {(questionFilters.years.length > 0 || questionFilters.topics.length > 0 || questionFilters.subtopics.length > 0) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setQuestionFilters({ years: [], topics: [], subtopics: [] })}
+                            leftIcon={<XCircle className="h-4 w-4" />}
+                          >
+                            Clear filters
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <SearchableMultiSelect
+                          label="Years"
+                          options={availableYears}
+                          selectedValues={questionFilters.years}
+                          onChange={(values) => setQuestionFilters(prev => ({ ...prev, years: values }))}
+                          placeholder="Filter by year"
+                        />
+                        <SearchableMultiSelect
+                          label="Topics"
+                          options={availableTopics}
+                          selectedValues={questionFilters.topics}
+                          onChange={(values) => setQuestionFilters(prev => ({ ...prev, topics: values, subtopics: [] }))}
+                          placeholder="Filter by topic"
+                        />
+                        <SearchableMultiSelect
+                          label="Sub Topics"
+                          options={availableSubtopics}
+                          selectedValues={questionFilters.subtopics}
+                          onChange={(values) => setQuestionFilters(prev => ({ ...prev, subtopics: values }))}
+                          placeholder="Filter by subtopic"
+                        />
+                      </div>
+                    </div>
+
                     <div className="mb-4">
                       <SearchableMultiSelect
                         label="Add bank questions"
@@ -1263,6 +1403,29 @@ export function StatusTransitionWizard({
                                 <span>{isCustom ? 'Custom question' : optionDetails ? getQuestionPreview(optionDetails) : 'Bank question'}</span>
                               </div>
                               <div className="flex items-center gap-2">
+                                {!isCustom && optionDetails && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => {
+                                      setPreviewQuestion(optionDetails);
+                                      setIsPreviewOpen(true);
+                                    }}
+                                    aria-label="Preview question"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {isCustom && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => handleEditCustomQuestion(index)}
+                                    aria-label="Edit custom question"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
@@ -1322,34 +1485,34 @@ export function StatusTransitionWizard({
                                 />
                               </div>
                             </div>
-                            {isCustom && (
-                              <div className="mt-4 space-y-3">
-                                <FormField id={`custom-prompt-${index}`} label="Question prompt" required>
-                                  <Textarea
-                                    rows={4}
-                                    value={question.customQuestion?.prompt ?? ''}
-                                    onChange={event => handleQuestionFieldChange(index, {
-                                      customQuestion: {
-                                        ...question.customQuestion,
-                                        prompt: event.target.value,
-                                      },
-                                    })}
-                                    placeholder="Enter the question stem, including any diagrams or context references."
-                                  />
-                                </FormField>
-                                <FormField id={`custom-answer-${index}`} label="Expected answer / mark scheme">
-                                  <Textarea
-                                    rows={3}
-                                    value={question.customQuestion?.answer ?? ''}
-                                    onChange={event => handleQuestionFieldChange(index, {
-                                      customQuestion: {
-                                        ...question.customQuestion,
-                                        answer: event.target.value,
-                                      },
-                                    })}
-                                    placeholder="Provide indicative answers, acceptable alternatives, or marking notes."
-                                  />
-                                </FormField>
+                            {isCustom && question.customQuestion && (
+                              <div className="mt-4 space-y-2 rounded-lg bg-gray-50 p-4 dark:bg-gray-900/50">
+                                <div className="text-sm">
+                                  <span className="font-semibold text-gray-700 dark:text-gray-200">Type: </span>
+                                  <span className="text-gray-600 dark:text-gray-300">
+                                    {question.customQuestion.questionType === 'mcq' ? 'Multiple Choice' :
+                                     question.customQuestion.questionType === 'true_false' ? 'True/False' :
+                                     question.customQuestion.questionType === 'short_answer' ? 'Short Answer' :
+                                     question.customQuestion.questionType === 'long_answer' ? 'Long Answer' :
+                                     'Calculation'}
+                                  </span>
+                                </div>
+                                {question.customQuestion.prompt && (
+                                  <div className="text-sm">
+                                    <span className="font-semibold text-gray-700 dark:text-gray-200">Prompt: </span>
+                                    <span className="text-gray-600 dark:text-gray-300">
+                                      {question.customQuestion.prompt.length > 100
+                                        ? `${question.customQuestion.prompt.slice(0, 100)}...`
+                                        : question.customQuestion.prompt}
+                                    </span>
+                                  </div>
+                                )}
+                                {(question.customQuestion.questionType === 'mcq' || question.customQuestion.questionType === 'true_false') && question.customQuestion.options && (
+                                  <div className="text-sm">
+                                    <span className="font-semibold text-gray-700 dark:text-gray-200">Options: </span>
+                                    <span className="text-gray-600 dark:text-gray-300">{question.customQuestion.options.length} options</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1392,6 +1555,29 @@ export function StatusTransitionWizard({
           </main>
         </div>
       </div>
+
+      <QuestionPreviewModal
+        question={previewQuestion}
+        isOpen={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setPreviewQuestion(null);
+        }}
+      />
+
+      <CustomQuestionBuilderModal
+        isOpen={isCustomBuilderOpen}
+        onClose={() => {
+          setIsCustomBuilderOpen(false);
+          setEditingCustomQuestionIndex(null);
+        }}
+        onSave={handleSaveCustomQuestion}
+        initialData={
+          editingCustomQuestionIndex !== null
+            ? (questionState[editingCustomQuestionIndex]?.customQuestion as CustomQuestionData)
+            : undefined
+        }
+      />
     </div>
   );
 }
