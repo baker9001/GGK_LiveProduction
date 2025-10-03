@@ -877,21 +877,25 @@ export class MockExamService {
           )
         `)
         .eq('id', examId)
-        .single();
+        .maybeSingle();
 
       if (examError) {
         console.error('[MockExamService] Error fetching exam data:', examError);
         if (examError.code === 'PGRST116') {
           throw new Error('Exam not found. It may have been deleted.');
-        } else if (examError.message?.includes('policy')) {
-          throw new Error('Permission denied. You do not have access to this exam.');
+        } else if (examError.code === 'PGRST301' || examError.message?.includes('JWT')) {
+          throw new Error('Authentication error. Please sign in again.');
+        } else if (examError.message?.includes('policy') || examError.message?.includes('permission')) {
+          throw new Error('Permission denied. You do not have access to this exam. Please contact your administrator.');
+        } else if (examError.message?.includes('network') || examError.message?.includes('fetch')) {
+          throw new Error('Network error. Please check your connection and try again.');
         }
-        throw examError;
+        throw new Error(`Failed to load exam data: ${examError.message || 'Unknown error'}`);
       }
 
       if (!examData) {
         console.warn('[MockExamService] No exam data returned for ID:', examId);
-        return null;
+        throw new Error('Exam not found or you do not have permission to access it.');
       }
 
       console.log('[MockExamService] Exam data fetched successfully:', examData.title);
