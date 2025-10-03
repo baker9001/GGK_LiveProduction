@@ -5,7 +5,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { X, Eye, AlertTriangle, Clock } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { isInTestMode, exitTestMode, getTestModeUser, getRealAdminUser } from '../../lib/auth';
+import { isInTestMode, exitTestMode, getTestModeUser, getRealAdminUser, getTestModeMetadata, isTestModeExpired, logImpersonationActivity } from '../../lib/auth';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { toast } from '../shared/Toast';
 
@@ -54,16 +54,23 @@ export function TestModeBar() {
     }
     
     const checkExpiration = () => {
-      const expirationTime = localStorage.getItem('test_mode_expiration');
-      if (!expirationTime) {
-        // No expiration set, set it to 5 minutes from now
-        const newExpiration = Date.now() + (5 * 60 * 1000);
-        localStorage.setItem('test_mode_expiration', newExpiration.toString());
-        setTimeRemaining(5 * 60); // 5 minutes in seconds
+      // Check if test mode has expired using metadata
+      if (isTestModeExpired()) {
+        toast.error('Test mode session expired');
+        logImpersonationActivity('end', adminUser?.id || '', testUser?.id || '', 'Session expired');
+        handleForceExit();
         return;
       }
-      
-      const timeLeft = Math.max(0, Math.floor((parseInt(expirationTime) - Date.now()) / 1000));
+
+      const metadata = getTestModeMetadata();
+      if (!metadata || !metadata.expirationTime) {
+        // No expiration set, exit for safety
+        console.error('[TestModeBar] No expiration metadata found');
+        handleForceExit();
+        return;
+      }
+
+      const timeLeft = Math.max(0, Math.floor((metadata.expirationTime - Date.now()) / 1000));
       setTimeRemaining(timeLeft);
       
       // Show warning when 1 minute remaining
@@ -106,10 +113,18 @@ export function TestModeBar() {
     setShowExitConfirm(true);
   };
   
-  const handleConfirmExit = () => {
+  const handleConfirmExit = async () => {
+    // Log the end of test mode
+    await logImpersonationActivity(
+      'end',
+      adminUser?.id || '',
+      testUser?.id || '',
+      'Manually exited by admin'
+    );
+
     exitTestMode();
     setShowExitConfirm(false);
-    toast.success('Test mode ended');
+    toast.success('Test mode ended - returning to admin dashboard');
     navigate('/app/system-admin/dashboard');
   };
   

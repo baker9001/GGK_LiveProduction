@@ -270,19 +270,57 @@ export function startTestMode(testUser: User): void {
     alert('Only Super Admins can use test mode');
     return;
   }
-  
+
+  // Store test mode data
   localStorage.setItem(TEST_USER_KEY, JSON.stringify(testUser));
-  console.log('Test mode started for user:', testUser);
-  
-  // Redirect to appropriate module
-  const redirectPath = getRedirectPathForUser(testUser);
-  window.location.href = redirectPath;
+
+  // Store test mode metadata for audit
+  const testModeMetadata = {
+    realAdminId: currentUser.id,
+    realAdminEmail: currentUser.email,
+    testUserId: testUser.id,
+    testUserEmail: testUser.email,
+    testUserRole: testUser.role,
+    startTime: Date.now(),
+    expirationTime: Date.now() + (5 * 60 * 1000)
+  };
+  localStorage.setItem('test_mode_metadata', JSON.stringify(testModeMetadata));
+
+  console.log('[TestMode] Started for user:', testUser.email, '(', testUser.role, ')');
+  console.log('[TestMode] Real admin:', currentUser.email);
+
+  // Dispatch auth change event to trigger context refresh
+  dispatchAuthChange();
+
+  // Small delay to let contexts update
+  setTimeout(() => {
+    // Redirect to appropriate module
+    const redirectPath = getRedirectPathForUser(testUser);
+    window.location.href = redirectPath;
+  }, 100);
 }
 
 export function exitTestMode(): void {
+  const metadata = getTestModeMetadata();
+
   localStorage.removeItem(TEST_USER_KEY);
-  console.log('Test mode ended');
-  window.location.href = '/app/system-admin/dashboard';
+  localStorage.removeItem('test_mode_metadata');
+  localStorage.removeItem('test_mode_expiration');
+
+  console.log('[TestMode] Ended');
+  if (metadata) {
+    const duration = Math.round((Date.now() - metadata.startTime) / 1000);
+    console.log('[TestMode] Duration:', duration, 'seconds');
+    console.log('[TestMode] Test user:', metadata.testUserEmail);
+  }
+
+  // Dispatch auth change event to restore real admin context
+  dispatchAuthChange();
+
+  // Small delay to let contexts update
+  setTimeout(() => {
+    window.location.href = '/app/system-admin/dashboard';
+  }, 100);
 }
 
 export function isInTestMode(): boolean {
@@ -474,6 +512,34 @@ export function getRedirectPathForUser(user: User): string {
   return rolePathMap[user.role] || '/app/system-admin/dashboard';
 }
 
+// Get test mode metadata
+export function getTestModeMetadata(): {
+  realAdminId: string;
+  realAdminEmail: string;
+  testUserId: string;
+  testUserEmail: string;
+  testUserRole: string;
+  startTime: number;
+  expirationTime: number;
+} | null {
+  const metadataStr = localStorage.getItem('test_mode_metadata');
+  if (!metadataStr) return null;
+
+  try {
+    return JSON.parse(metadataStr);
+  } catch {
+    return null;
+  }
+}
+
+// Check if test mode has expired
+export function isTestModeExpired(): boolean {
+  const metadata = getTestModeMetadata();
+  if (!metadata) return false;
+
+  return Date.now() >= metadata.expirationTime;
+}
+
 // Log impersonation activity (for future use)
 export async function logImpersonationActivity(
   action: 'start' | 'end',
@@ -481,10 +547,19 @@ export async function logImpersonationActivity(
   targetUserId: string,
   reason?: string
 ): Promise<void> {
-  console.log(`Impersonation ${action}:`, {
+  const logEntry = {
+    action,
     adminId,
     targetUserId,
     reason,
     timestamp: new Date().toISOString()
-  });
+  };
+
+  console.log(`[TestMode] ${action}:`, logEntry);
+
+  // Store in local log
+  const logs = JSON.parse(localStorage.getItem('test_mode_logs') || '[]');
+  logs.push(logEntry);
+  // Keep only last 100 logs
+  localStorage.setItem('test_mode_logs', JSON.stringify(logs.slice(-100)));
 }

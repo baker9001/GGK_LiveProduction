@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
-import { clearAuthenticatedUser, getCurrentUser } from '../../lib/auth';
+import { clearAuthenticatedUser, getCurrentUser, isInTestMode, getRealAdminUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
 
@@ -86,8 +86,10 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
 
   // SECURITY: Get current user for validation
   const currentUser = getCurrentUser();
-  
-  // SECURITY: Validate module access on mount and when moduleKey changes
+  const inTestMode = isInTestMode();
+  const realAdmin = getRealAdminUser();
+
+  // SECURITY: Validate module access on mount, when moduleKey changes, or when test mode changes
   useEffect(() => {
     const validateModuleAccess = () => {
       if (!currentUser) {
@@ -104,28 +106,35 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
       };
 
       const allowedRoles = modulePermissions[moduleKey];
-      
+
       if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
-        console.error(`[Security Violation] AdminLayout: User ${currentUser.email} (${currentUser.role}) attempted unauthorized access to ${moduleKey}`);
-        
-        // Log security event
-        const securityEvent = {
-          type: 'UNAUTHORIZED_MODULE_ACCESS',
-          userId: currentUser.id,
-          userEmail: currentUser.email,
-          userRole: currentUser.role,
-          attemptedModule: moduleKey,
-          attemptedPath: location.pathname,
-          timestamp: new Date().toISOString()
-        };
-        
-        console.error('[SECURITY EVENT]', securityEvent);
-        
-        // Store violation for audit
-        const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
-        violations.push(securityEvent);
-        localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
-        
+        // Check if this is test mode - don't log as violation if SSA is testing
+        const isTestModeViolation = inTestMode && realAdmin?.role === 'SSA';
+
+        if (isTestModeViolation) {
+          console.log(`[TestMode] AdminLayout: SSA testing as ${currentUser.email} (${currentUser.role}) - access denied to ${moduleKey}`);
+        } else {
+          console.error(`[Security Violation] AdminLayout: User ${currentUser.email} (${currentUser.role}) attempted unauthorized access to ${moduleKey}`);
+
+          // Log security event only for real violations
+          const securityEvent = {
+            type: 'UNAUTHORIZED_MODULE_ACCESS',
+            userId: currentUser.id,
+            userEmail: currentUser.email,
+            userRole: currentUser.role,
+            attemptedModule: moduleKey,
+            attemptedPath: location.pathname,
+            timestamp: new Date().toISOString()
+          };
+
+          console.error('[SECURITY EVENT]', securityEvent);
+
+          // Store violation for audit
+          const violations = JSON.parse(localStorage.getItem('security_violations') || '[]');
+          violations.push(securityEvent);
+          localStorage.setItem('security_violations', JSON.stringify(violations.slice(-100)));
+        }
+
         // Redirect to appropriate module
         const redirectMap: Record<string, string> = {
           'ENTITY_ADMIN': '/app/entity-module/dashboard',
@@ -135,13 +144,27 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
           'SUPPORT': '/app/system-admin/dashboard',
           'VIEWER': '/app/system-admin/dashboard'
         };
-        
+
         navigate(redirectMap[currentUser.role] || '/signin', { replace: true });
       }
     };
 
     validateModuleAccess();
-  }, [currentUser, moduleKey, navigate, location.pathname]);
+
+    // Listen for test mode changes
+    const handleTestModeChange = () => {
+      console.log('[AdminLayout] Test mode changed, re-validating access');
+      validateModuleAccess();
+    };
+
+    window.addEventListener('test-mode-change', handleTestModeChange);
+    window.addEventListener('auth-change', handleTestModeChange);
+
+    return () => {
+      window.removeEventListener('test-mode-change', handleTestModeChange);
+      window.removeEventListener('auth-change', handleTestModeChange);
+    };
+  }, [currentUser, moduleKey, navigate, location.pathname, inTestMode, realAdmin]);
 
   // Get navigation items
   const navigationItems = getSubmenusForModule(moduleKey);

@@ -3,9 +3,9 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FlaskConical, Search, User, X, AlertTriangle, Clock } from 'lucide-react';
+import { FlaskConical, Search, User, X, AlertTriangle, Clock, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { startTestMode, mapUserTypeToRole, getRealAdminUser } from '../../lib/auth';
+import { startTestMode, mapUserTypeToRole, getRealAdminUser, logImpersonationActivity } from '../../lib/auth';
 import { Button } from '../shared/Button';
 import { toast } from '../shared/Toast';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
@@ -244,8 +244,24 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
 
   const handleConfirmTestMode = async () => {
     if (!confirmUser) return;
-    
+
     try {
+      // Validate user is not the same as the real admin
+      if (confirmUser.id === realAdmin?.id) {
+        toast.error('You cannot test as yourself');
+        setIsConfirmDialogOpen(false);
+        setConfirmUser(null);
+        return;
+      }
+
+      // Log the start of test mode
+      await logImpersonationActivity(
+        'start',
+        realAdmin?.id || '',
+        confirmUser.id,
+        `Testing as ${confirmUser.name} (${confirmUser.email})`
+      );
+
       let userRole = 'VIEWER';
       
       // Map user type to role

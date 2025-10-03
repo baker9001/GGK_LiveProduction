@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, checkSupabaseConnection } from '@/lib/supabase';
 import { useUser } from './UserContext';
+import { isInTestMode, getTestModeUser } from '@/lib/auth';
 import { permissionService } from '@/app/entity-module/organisation/tabs/admins/services/permissionService';
 import { AdminPermissions, AdminLevel } from '@/app/entity-module/organisation/tabs/admins/types/admin.types';
 
@@ -73,8 +74,16 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
     }
   }, []);
 
-  // Fetch user permissions with enhanced error handling
+  // Fetch user permissions with enhanced error handling and test mode support
   const fetchPermissions = useCallback(async () => {
+    // Check if in test mode
+    const inTestMode = isInTestMode();
+    const testUser = inTestMode ? getTestModeUser() : null;
+
+    if (inTestMode && testUser) {
+      console.log('[PermissionContext] Test mode active, fetching permissions for test user:', testUser.email);
+    }
+
     if (!user?.id || user.id === 'undefined' || user.id === 'null' || typeof user.id !== 'string' || user.id.trim() === '') {
       console.warn('[PermissionContext] Invalid user ID detected:', { userId: user?.id, userType: typeof user?.id });
       setPermissions(null);
@@ -111,11 +120,67 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
         return;
       }
       
-      // Get user's admin record with retry logic
+      // In test mode, fetch permissions for the test user's role
+      if (inTestMode && testUser) {
+        console.log('[PermissionContext] Fetching permissions for test user role:', testUser.role);
+
+        // For different user types, fetch from appropriate tables
+        if (testUser.userType === 'entity' || testUser.role === 'ENTITY_ADMIN') {
+          // Fetch entity admin permissions
+          const { data: entityAdmin } = await supabase
+            .from('entity_users')
+            .select('admin_level, permissions, is_active, company_id')
+            .eq('user_id', testUser.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (entityAdmin) {
+            const effectivePermissions = await permissionService.getEffectivePermissions(testUser.id);
+            setPermissions(effectivePermissions);
+            setAdminLevel(entityAdmin.admin_level);
+            console.log('[PermissionContext] Test mode permissions loaded for entity admin');
+          } else {
+            // Set default entity admin permissions
+            setPermissions(permissionService.getMinimalPermissions());
+            setAdminLevel('entity_admin');
+            console.log('[PermissionContext] Using minimal permissions for test entity user');
+          }
+        } else if (testUser.userType === 'teacher' || testUser.role === 'TEACHER') {
+          // Teachers have limited permissions
+          setPermissions({
+            users: { view_users: true },
+            schools: { view_schools: true },
+            branches: { view_branches: true },
+            students: { view_students: true, create_students: false, modify_students: false, delete_students: false }
+          } as AdminPermissions);
+          setAdminLevel(null);
+          console.log('[PermissionContext] Test mode permissions loaded for teacher');
+        } else if (testUser.userType === 'student' || testUser.role === 'STUDENT') {
+          // Students have very limited permissions
+          setPermissions({
+            users: { view_users: false },
+            schools: { view_schools: false },
+            branches: { view_branches: false },
+            students: { view_students: false, create_students: false, modify_students: false, delete_students: false }
+          } as AdminPermissions);
+          setAdminLevel(null);
+          console.log('[PermissionContext] Test mode permissions loaded for student');
+        } else {
+          // System admin or other - full permissions
+          setPermissions(permissionService.getMinimalPermissions());
+          setAdminLevel(null);
+          console.log('[PermissionContext] Test mode permissions loaded for admin');
+        }
+
+        setIsLoading(false);
+        return;
+      }
+
+      // Regular mode (not test mode) - Get user's admin record with retry logic
       let adminUser = null;
       let attempts = 0;
       const maxAttempts = 3;
-      
+
       while (attempts < maxAttempts && !adminUser) {
         try {
           const { data, error: adminError } = await supabase
@@ -124,17 +189,17 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
             .eq('user_id', user.id)
             .eq('is_active', true)
             .maybeSingle();
-          
+
           if (adminError && adminError.code !== 'PGRST116') {
             throw adminError;
           }
-          
+
           adminUser = data;
           break;
         } catch (err: any) {
           attempts++;
           console.warn(`Attempt ${attempts} failed:`, err);
-          
+
           if (attempts < maxAttempts) {
             // Wait before retrying (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
@@ -197,6 +262,15 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({
   // Initial fetch and subscription to changes
   useEffect(() => {
     fetchPermissions();
+
+    // Listen for test mode changes
+    const handleTestModeChange = () => {
+      console.log('[PermissionContext] Test mode changed, refreshing permissions');
+      fetchPermissions();
+    };
+
+    window.addEventListener('test-mode-change', handleTestModeChange);
+    window.addEventListener('auth-change', handleTestModeChange);
 
     // Only set up subscriptions if we have a user
     if (user?.id) {
