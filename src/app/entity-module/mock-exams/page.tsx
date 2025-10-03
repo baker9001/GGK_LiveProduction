@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -15,7 +15,6 @@ import {
   useClassSections,
   useTeachers,
   useCreateMockExam,
-  useUpdateMockExamStatus,
   useMockExamById,
   useStatusHistory
 } from '../../../hooks/useMockExams';
@@ -28,6 +27,8 @@ import { FormField, Input, Select, Textarea } from '../../../components/shared/F
 import { ToggleSwitch } from '../../../components/shared/ToggleSwitch';
 import { SearchableMultiSelect } from '../../../components/shared/SearchableMultiSelect';
 import { ProgressBar } from '../../../components/shared/ProgressBar';
+import { StatusTransitionWizard } from './components/StatusTransitionWizard';
+import type { MockExamLifecycleStatus } from '../../../services/mockExamService';
 
 interface MockExamTeacher {
   id: string;
@@ -35,7 +36,7 @@ interface MockExamTeacher {
   role: string;
 }
 
-type MockExamStatus = 'draft' | 'planned' | 'scheduled' | 'materials_ready' | 'in_progress' | 'grading' | 'moderation' | 'analytics_released' | 'completed' | 'cancelled';
+type MockExamStatus = MockExamLifecycleStatus;
 
 type MockExamMode = 'In-person' | 'Digital (exam hall)' | 'Remote proctored';
 
@@ -212,7 +213,7 @@ export default function EntityMockExamsPage() {
   const [formState, setFormState] = useState<CreateMockExamFormState>(initialCreateFormState);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
-  const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+  const [statusWizardExam, setStatusWizardExam] = useState<{ id: string; status: MockExamStatus } | null>(null);
   const [showStatusHistory, setShowStatusHistory] = useState(false);
 
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
@@ -238,7 +239,6 @@ export default function EntityMockExamsPage() {
     formState.subjectId || undefined
   );
   const createMockExam = useCreateMockExam();
-  const updateStatus = useUpdateMockExamStatus();
   const { data: statusHistory = [] } = useStatusHistory(selectedExam?.id);
 
   const programOptions = useMemo(() => {
@@ -528,20 +528,6 @@ export default function EntityMockExamsPage() {
     }
   }, [formState.gradeBands.length]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (statusMenuOpen && !target.closest('.relative')) {
-        setStatusMenuOpen(null);
-      }
-    };
-
-    if (statusMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [statusMenuOpen]);
-
   const validateForm = () => {
     const nextErrors: FormErrors = {};
 
@@ -577,19 +563,6 @@ export default function EntityMockExamsPage() {
     setFormState(initialCreateFormState);
     setFormErrors({});
     setSelectedDataStructure('');
-  };
-
-  const handleStatusChange = async (examId: string, newStatus: string) => {
-    try {
-      await updateStatus.mutateAsync({ examId, newStatus });
-      toast.success(`Mock exam status updated to ${statusOptions.find(s => s.value === newStatus)?.label}`);
-      setStatusMenuOpen(null);
-      await refetchExams();
-    } catch (error: any) {
-      console.error('Error updating status:', error);
-      const errorMessage = error?.message || 'Failed to update status. Please try again.';
-      toast.error(errorMessage);
-    }
   };
 
   const handleEditExam = (exam: MockExam) => {
@@ -1212,40 +1185,15 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                             <Download className="w-4 h-4" />
                           </IconButton>
                         </ButtonGroup>
-                        <div className="relative">
-                          <IconButton
-                            variant="outline"
-                            size="icon-sm"
-                            onClick={() => setStatusMenuOpen(statusMenuOpen === exam.id ? null : exam.id)}
-                            aria-label="Change status"
-                            tooltip="Change status"
-                            className="relative"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                            <ChevronDown className="w-2.5 h-2.5 absolute -bottom-0.5 -right-0.5 bg-white dark:bg-gray-800 rounded-full" />
-                          </IconButton>
-                          {statusMenuOpen === exam.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-                              <div className="py-1">
-                                {statusOptions.map(option => (
-                                  <button
-                                    key={option.value}
-                                    onClick={() => handleStatusChange(exam.id, option.value)}
-                                    disabled={option.value === exam.status}
-                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
-                                      option.value === exam.status ? 'bg-gray-50 dark:bg-gray-700/50 font-semibold text-[#8CC63F]' : 'text-gray-700 dark:text-gray-300'
-                                    } ${option.value === exam.status ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                  >
-                                    <span>{option.label}</span>
-                                    {option.value === exam.status && (
-                                      <CheckCircle2 className="w-4 h-4 text-[#8CC63F]" />
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <IconButton
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => setStatusWizardExam({ id: exam.id, status: exam.status })}
+                          aria-label="Change status"
+                          tooltip="Open status wizard"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </IconButton>
                       </div>
                     </td>
                   </tr>
@@ -1732,6 +1680,18 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           </div>
         )}
       </SlideInForm>
+
+      {statusWizardExam && (
+        <StatusTransitionWizard
+          examId={statusWizardExam.id}
+          currentStatus={statusWizardExam.status}
+          isOpen={true}
+          onClose={() => setStatusWizardExam(null)}
+          onSuccess={() => {
+            refetchExams();
+          }}
+        />
+      )}
     </div>
   );
 }
