@@ -120,10 +120,10 @@ const examWindowOptions = [
   { value: 'Trial Exams', label: 'Trial Exams' }
 ];
 
-const deliveryModeOptions: { value: MockExamMode; label: string }[] = [
+const deliveryModeOptions: { value: MockExamMode; label: string; disabled?: boolean; comingSoon?: boolean }[] = [
   { value: 'In-person', label: 'In-person' },
-  { value: 'Digital (exam hall)', label: 'Digital (exam hall)' },
-  { value: 'Remote proctored', label: 'Remote proctored' }
+  { value: 'Digital (exam hall)', label: 'Digital (exam hall)', disabled: true, comingSoon: true },
+  { value: 'Remote proctored', label: 'Remote proctored', disabled: true, comingSoon: true }
 ];
 
 const statusOptions = [
@@ -1432,24 +1432,42 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
               )}
             </div>
             <div className="space-y-4">
-              <ToggleSwitch
-                checked={formState.aiProctoringEnabled}
-                onChange={checked => setFormState(prev => ({ ...prev, aiProctoringEnabled: checked }))}
-                label="Enable AI proctoring"
-                description="Recommended for digital mocks or remote sittings. Provides live malpractice alerts."
-              />
-              <ToggleSwitch
-                checked={formState.releaseAnalyticsToStudents}
-                onChange={checked => setFormState(prev => ({ ...prev, releaseAnalyticsToStudents: checked }))}
-                label="Release analytics to learners"
-                description="Share examiner-style feedback and mark schemes instantly after moderation."
-              />
-              <ToggleSwitch
-                checked={formState.allowRetakes}
-                onChange={checked => setFormState(prev => ({ ...prev, allowRetakes: checked }))}
-                label="Allow supervised retakes"
-                description="Enable for targeted catch-up groups after first sitting."
-              />
+              <div className="relative">
+                <ToggleSwitch
+                  checked={formState.aiProctoringEnabled}
+                  onChange={checked => setFormState(prev => ({ ...prev, aiProctoringEnabled: checked }))}
+                  label="Enable AI proctoring"
+                  description="Recommended for digital mocks or remote sittings. Provides live malpractice alerts."
+                  disabled={true}
+                />
+                <span className="absolute top-0 right-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                  Coming Soon
+                </span>
+              </div>
+              <div className="relative">
+                <ToggleSwitch
+                  checked={formState.releaseAnalyticsToStudents}
+                  onChange={checked => setFormState(prev => ({ ...prev, releaseAnalyticsToStudents: checked }))}
+                  label="Release analytics to learners"
+                  description="Share examiner-style feedback and mark schemes instantly after moderation."
+                  disabled={true}
+                />
+                <span className="absolute top-0 right-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                  Coming Soon
+                </span>
+              </div>
+              <div className="relative">
+                <ToggleSwitch
+                  checked={formState.allowRetakes}
+                  onChange={checked => setFormState(prev => ({ ...prev, allowRetakes: checked }))}
+                  label="Allow supervised retakes"
+                  description="Enable for targeted catch-up groups after first sitting."
+                  disabled={true}
+                />
+                <span className="absolute top-0 right-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                  Coming Soon
+                </span>
+              </div>
             </div>
             <FormField id="mock-notes" label="Briefing notes">
               <Textarea

@@ -11,6 +11,8 @@ import { cn } from '../../lib/utils';
 interface SelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
+  comingSoon?: boolean;
 }
 
 interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
@@ -193,10 +195,12 @@ export function Select({
   };
 
   const handleSelect = (option: SelectOption) => {
+    if (option.disabled) return;
+
     setSelectedOption(option);
     setIsOpen(false);
     setSearchTerm('');
-    
+
     if (onChange) {
       onChange(option.value);
     }
@@ -275,28 +279,38 @@ export function Select({
                   type="button"
                   role="option"
                   aria-selected={value === option.value}
+                  disabled={option.disabled}
                   className={cn(
-                    'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                    value === option.value && (
-                      isGreenTheme 
-                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20' 
+                    'w-full px-4 py-2 text-left transition-colors relative',
+                    !option.disabled && 'hover:bg-gray-100 dark:hover:bg-gray-700',
+                    option.disabled && 'opacity-60 cursor-not-allowed',
+                    value === option.value && !option.disabled && (
+                      isGreenTheme
+                        ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20'
                         : 'bg-blue-50 dark:bg-blue-900/20'
                     )
                   )}
-                  onClick={() => handleSelect(option)}
+                  onClick={() => !option.disabled && handleSelect(option)}
                 >
                   {renderOption ? (
                     renderOption(option)
                   ) : (
-                    <span className={cn(
-                      value === option.value 
-                        ? isGreenTheme 
-                          ? "text-[#8CC63F] font-medium" 
-                          : "text-blue-600 dark:text-blue-400"
-                        : "text-gray-900 dark:text-white"
-                    )}>
-                      {option.label}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className={cn(
+                        value === option.value && !option.disabled
+                          ? isGreenTheme
+                            ? "text-[#8CC63F] font-medium"
+                            : "text-blue-600 dark:text-blue-400"
+                          : "text-gray-900 dark:text-white"
+                      )}>
+                        {option.label}
+                      </span>
+                      {option.comingSoon && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                          Coming Soon
+                        </span>
+                      )}
+                    </div>
                   )}
                 </button>
               ))}
