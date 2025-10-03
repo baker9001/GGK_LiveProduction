@@ -341,7 +341,7 @@ export default function LearningPathPage() {
       )}
 
       {!isLoading && !subjectsError && subjects.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {subjects.map(subject => {
             const validFrom = formatDate(subject.validFrom);
             const validTo = formatDate(subject.validTo);
