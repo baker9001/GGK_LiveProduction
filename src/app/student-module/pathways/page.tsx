@@ -7,13 +7,12 @@ import { getPublicUrl } from '../../../lib/storageHelpers';
 
 interface StudentLicenseSubjectRow {
   id: string;
-  status: string;
   assigned_at: string | null;
-  valid_from_snapshot: string | null;
-  valid_to_snapshot: string | null;
   expires_at: string | null;
+  is_active: boolean;
   licenses: {
     id: string;
+    status: string;
     data_structures: {
       id: string;
       edu_subjects: {
@@ -53,24 +52,23 @@ function resolveLicenseStatus(row: StudentLicenseSubjectRow): {
   priority: number;
 } {
   const now = new Date();
-  const validTo = row.valid_to_snapshot || row.expires_at;
-  const validFrom = row.valid_from_snapshot;
+  const licenseStatus = row.licenses?.status;
 
-  if (validTo) {
-    const parsedValidTo = new Date(validTo);
-    if (!Number.isNaN(parsedValidTo.getTime()) && parsedValidTo < now) {
+  // Check if student license is inactive
+  if (!row.is_active) {
+    return { status: 'expired', priority: 0 };
+  }
+
+  // Check expiration date
+  if (row.expires_at) {
+    const parsedExpiry = new Date(row.expires_at);
+    if (!Number.isNaN(parsedExpiry.getTime()) && parsedExpiry < now) {
       return { status: 'expired', priority: 0 };
     }
   }
 
-  if (validFrom) {
-    const parsedValidFrom = new Date(validFrom);
-    if (!Number.isNaN(parsedValidFrom.getTime()) && parsedValidFrom > now) {
-      return { status: 'pending', priority: 1 };
-    }
-  }
-
-  switch (row.status) {
+  // Determine status based on license status
+  switch (licenseStatus) {
     case 'CONSUMED_ACTIVATED':
       return { status: 'active', priority: STATUS_PRIORITY.CONSUMED_ACTIVATED };
     case 'ASSIGNED_PENDING_ACTIVATION':
@@ -200,13 +198,12 @@ export default function LearningPathPage() {
         .from('student_licenses')
         .select(`
           id,
-          status,
           assigned_at,
-          valid_from_snapshot,
-          valid_to_snapshot,
           expires_at,
+          is_active,
           licenses!inner (
             id,
+            status,
             data_structures!inner (
               id,
               edu_subjects!inner (id, name, logo_url),
@@ -217,7 +214,7 @@ export default function LearningPathPage() {
           )
         `)
         .eq('student_id', studentId)
-        .in('status', ['ASSIGNED_PENDING_ACTIVATION', 'CONSUMED_ACTIVATED'])
+        .eq('is_active', true)
         .order('assigned_at', { ascending: false });
 
       if (error) throw error;
@@ -241,10 +238,10 @@ export default function LearningPathPage() {
           regionName: dataStructure.regions?.name || 'Region not specified',
           logoUrl: getPublicUrl('subject-logos', subject.logo_url),
           status,
-          licenseStatus: row.status,
+          licenseStatus: row.licenses?.status || 'UNKNOWN',
           assignedAt: row.assigned_at,
-          validFrom: row.valid_from_snapshot || row.assigned_at,
-          validTo: row.valid_to_snapshot || row.expires_at,
+          validFrom: row.assigned_at,
+          validTo: row.expires_at,
           priority
         };
 
