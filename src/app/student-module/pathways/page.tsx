@@ -110,13 +110,13 @@ function LearningPathwayHeader() {
   );
 }
 
-function SubjectLogo({ logoUrl, subjectName }: { logoUrl: string | null; subjectName: string }) {
+function SubjectHeaderImage({ logoUrl, subjectName }: { logoUrl: string | null; subjectName: string }) {
   if (logoUrl) {
     return (
       <img
         src={logoUrl}
         alt={`${subjectName} logo`}
-        className="h-14 w-14 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+        className="w-full h-48 object-cover"
       />
     );
   }
@@ -129,8 +129,10 @@ function SubjectLogo({ logoUrl, subjectName }: { logoUrl: string | null; subject
     .toUpperCase();
 
   return (
-    <div className="h-14 w-14 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center text-lg font-semibold border border-emerald-200 dark:border-emerald-800">
-      {initials || <BookOpen className="h-6 w-6" />}
+    <div className="w-full h-48 bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center">
+      <div className="text-6xl font-bold">
+        {initials || <BookOpen className="h-20 w-20" />}
+      </div>
     </div>
   );
 }
@@ -347,41 +349,57 @@ export default function LearningPathPage() {
             return (
               <div
                 key={subject.subjectId}
-                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start gap-4 mb-4">
-                  <SubjectLogo logoUrl={subject.logoUrl} subjectName={subject.subjectName} />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {subject.subjectName}
-                      </h3>
-                      <SubjectStatusBadge status={subject.status} />
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {subject.programName}
-                    </p>
+                {/* Header Image with Badge Overlay */}
+                <div className="relative">
+                  <SubjectHeaderImage logoUrl={subject.logoUrl} subjectName={subject.subjectName} />
+                  <div className="absolute top-3 right-3">
+                    <SubjectStatusBadge status={subject.status} />
                   </div>
                 </div>
 
-                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-700 dark:text-gray-200">Provider</span>
-                    <span>{subject.providerName}</span>
+                {/* Card Content */}
+                <div className="p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    {subject.subjectName}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    {subject.programName}
+                  </p>
+
+                  {/* Feature Badges */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                      Past Papers
+                    </span>
+                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                      Video Solutions
+                    </span>
+                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                      Mock Exams
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-700 dark:text-gray-200">Region</span>
-                    <span>{subject.regionName}</span>
-                  </div>
-                  {(validFrom || validTo) && (
+
+                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-700 dark:text-gray-200">License</span>
-                      <span>
-                        {validFrom ? `From ${validFrom}` : 'Available'}
-                        {validTo ? ` • Until ${validTo}` : ''}
-                      </span>
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Provider</span>
+                      <span>{subject.providerName}</span>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Region</span>
+                      <span>{subject.regionName}</span>
+                    </div>
+                    {(validFrom || validTo) && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">License</span>
+                        <span>
+                          {validFrom ? `From ${validFrom}` : 'Available'}
+                          {validTo ? ` • Until ${validTo}` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
