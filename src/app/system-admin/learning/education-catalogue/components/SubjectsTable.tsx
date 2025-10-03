@@ -15,7 +15,11 @@ import { ImageUpload } from '../../../../../components/shared/ImageUpload';
 import { SearchableMultiSelect } from '../../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../../components/shared/Toast';
-import { getPublicUrl, deleteFileFromStorage } from '../../../../../lib/storageHelpers';
+import {
+  getPublicUrl,
+  deleteFileFromStorage,
+  deleteFileViaEdgeFunction,
+} from '../../../../../lib/storageHelpers';
 
 const subjectSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -164,11 +168,18 @@ export default function SubjectsTable() {
   // Delete subject mutation
   const deleteMutation = useMutation(
     async (subjects: Subject[]) => {
-      // Delete associated logo files from storage
+      // Delete associated logo files from storage using Edge Function
       for (const subject of subjects) {
         if (subject.logo_url) {
           try {
-            await deleteFileFromStorage('subject-logos', subject.logo_url);
+            // Try Edge Function first for secure deletion
+            const result = await deleteFileViaEdgeFunction('subject-logos', subject.logo_url);
+
+            if (!result.success) {
+              // Fallback to direct delete if Edge Function fails
+              console.warn('Edge Function delete failed, trying direct delete');
+              await deleteFileFromStorage('subject-logos', subject.logo_url);
+            }
           } catch (error) {
             console.warn('Failed to delete logo file:', error);
           }
