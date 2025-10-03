@@ -529,7 +529,7 @@ export default function EntityMockExamsPage() {
       await updateStatus.mutateAsync({ examId, newStatus });
       toast.success(`Mock exam status updated to ${statusOptions.find(s => s.value === newStatus)?.label}`);
       setStatusMenuOpen(null);
-      refetchExams();
+      await refetchExams();
     } catch (error: any) {
       console.error('Error updating status:', error);
       const errorMessage = error?.message || 'Failed to update status. Please try again.';
