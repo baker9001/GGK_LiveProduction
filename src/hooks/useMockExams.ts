@@ -1,7 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MockExamService } from '../services/mockExamService';
 import { supabase } from '../lib/supabase';
-import type { MockExam } from '../services/mockExamService';
+import type {
+  MockExam,
+  MockExamStatusWizardContext,
+  StageTransitionPayload,
+} from '../services/mockExamService';
 
 interface CreateMockExamData {
   title: string;
@@ -146,20 +150,6 @@ export function useTeachers(schoolIds?: string[], subjectId?: string) {
   });
 }
 
-export function useUpdateMockExamStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ examId, newStatus }: { examId: string; newStatus: string }) => {
-      return MockExamService.updateMockExamStatus(examId, newStatus);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mockExams'] });
-      queryClient.invalidateQueries({ queryKey: ['mockExamStats'] });
-    },
-  });
-}
-
 export function useMockExamById(examId?: string) {
   return useQuery({
     queryKey: ['mockExam', examId],
@@ -169,6 +159,35 @@ export function useMockExamById(examId?: string) {
     },
     enabled: !!examId,
     staleTime: 30000,
+  });
+}
+
+export function useMockExamStatusWizard(examId?: string) {
+  return useQuery<MockExamStatusWizardContext | null>({
+    queryKey: ['mockExamStatusWizard', examId],
+    queryFn: async () => {
+      if (!examId) return null;
+      return MockExamService.getStatusWizardContext(examId);
+    },
+    enabled: !!examId,
+    staleTime: 30000,
+  });
+}
+
+export function useMockExamStatusTransition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: StageTransitionPayload) => {
+      return MockExamService.transitionMockExamStatus(payload);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['mockExams'] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStats'] });
+      queryClient.invalidateQueries({ queryKey: ['mockExam', variables.examId] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStatusHistory', variables.examId] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStatusWizard', variables.examId] });
+    },
   });
 }
 
