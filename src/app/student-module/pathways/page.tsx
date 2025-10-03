@@ -263,6 +263,28 @@ export default function LearningPathPage() {
     }
   );
 
+  React.useEffect(() => {
+    if (subjectsError) {
+      // Surface Supabase errors in the console to aid future debugging (e.g. RLS or schema issues)
+      console.error('Failed to fetch student learning pathway subjects', subjectsError);
+    }
+  }, [subjectsError]);
+
+  const getErrorMessage = (error: unknown): string => {
+    if (typeof error === 'string' && error.trim()) {
+      return error;
+    }
+
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) {
+        return message;
+      }
+    }
+
+    return 'An unexpected error occurred. Please try again later.';
+  };
+
   const isLoading = isLoadingStudent || isLoadingSubjects;
 
   return (
@@ -299,7 +321,7 @@ export default function LearningPathPage() {
           <div>
             <p className="font-semibold">Unable to load your learning pathway</p>
             <p className="text-sm opacity-90">
-              {subjectsError instanceof Error ? subjectsError.message : 'An unexpected error occurred. Please try again later.'}
+              {getErrorMessage(subjectsError)}
             </p>
           </div>
         </div>
