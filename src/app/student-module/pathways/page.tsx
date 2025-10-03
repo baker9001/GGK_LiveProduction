@@ -349,7 +349,7 @@ export default function LearningPathPage() {
             return (
               <div
                 key={subject.subjectId}
-                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
               >
                 {/* Header Image with Badge Overlay */}
                 <div className="relative">
@@ -360,27 +360,27 @@ export default function LearningPathPage() {
                 </div>
 
                 {/* Card Content */}
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                <div className="p-5">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">
                     {subject.subjectName}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                     {subject.programName}
                   </p>
 
-                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-700 dark:text-gray-200">Provider</span>
-                      <span>{subject.providerName}</span>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Provider</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{subject.providerName}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-700 dark:text-gray-200">Region</span>
-                      <span>{subject.regionName}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Region</span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">{subject.regionName}</span>
                     </div>
                     {(validFrom || validTo) && (
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">License</span>
-                        <span>
+                      <div className="flex flex-col gap-1 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">License</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
                           {validFrom ? `From ${validFrom}` : 'Available'}
                           {validTo ? ` • Until ${validTo}` : ''}
                         </span>
