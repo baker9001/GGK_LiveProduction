@@ -7,11 +7,23 @@
 
 import { supabase } from '@/lib/supabase';
 
+export type MockExamLifecycleStatus =
+  | 'draft'
+  | 'planned'
+  | 'scheduled'
+  | 'materials_ready'
+  | 'in_progress'
+  | 'grading'
+  | 'moderation'
+  | 'analytics_released'
+  | 'completed'
+  | 'cancelled';
+
 export interface MockExam {
   id: string;
   company_id: string;
   title: string;
-  status: 'planned' | 'scheduled' | 'in_progress' | 'grading' | 'completed' | 'cancelled';
+  status: MockExamLifecycleStatus;
   exam_board: string;
   programme: string;
   subject: string;
@@ -78,6 +90,115 @@ export interface Teacher {
   name: string;
   email: string;
   role: string;
+}
+
+export interface MockExamStageProgressRecord {
+  id: string;
+  mock_exam_id: string;
+  stage: MockExamLifecycleStatus;
+  requirements: Record<string, any>;
+  completed: boolean;
+  completed_at: string | null;
+  completed_by: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface MockExamInstructionRecord {
+  id: string;
+  mock_exam_id: string;
+  audience: 'students' | 'invigilators' | 'markers' | 'teachers' | 'admins' | 'other';
+  instructions: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MockExamQuestionSelectionRecord {
+  id: string;
+  mock_exam_id: string;
+  source_type: 'bank' | 'custom';
+  question_id: string | null;
+  custom_question: Record<string, any> | null;
+  marks: number | null;
+  sequence: number;
+  is_optional: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  question_bank_item?: {
+    id: string;
+    question_number?: number | null;
+    question_text?: string | null;
+    question_description?: string | null;
+    type?: string | null;
+    marks?: number | null;
+    status?: string | null;
+  } | null;
+}
+
+export interface QuestionBankItem {
+  id: string;
+  question_number: number | null;
+  question_text: string | null;
+  question_description: string | null;
+  type: string | null;
+  marks: number | null;
+  status: string | null;
+}
+
+export interface MockExamStatusWizardContext {
+  exam: {
+    id: string;
+    title: string;
+    status: MockExamLifecycleStatus;
+    data_structure_id: string | null;
+    subject_id: string | null;
+    subject_name: string | null;
+    board_name: string | null;
+    programme_name: string | null;
+    scheduled_date: string | null;
+    scheduled_time: string | null;
+    duration_minutes: number | null;
+  };
+  stageProgress: MockExamStageProgressRecord[];
+  instructions: MockExamInstructionRecord[];
+  questionSelections: MockExamQuestionSelectionRecord[];
+  questionBank: QuestionBankItem[];
+}
+
+export interface SelectedQuestionSubmission {
+  id?: string;
+  sourceType: 'bank' | 'custom';
+  questionId?: string;
+  customQuestion?: Record<string, any> | null;
+  marks?: number | null;
+  sequence: number;
+  isOptional?: boolean;
+}
+
+export interface StageTransitionDataPayload {
+  formData?: Record<string, any>;
+  notes?: string | null;
+  completed?: boolean;
+  instructions?: Array<{
+    id?: string;
+    audience: MockExamInstructionRecord['audience'];
+    instructions: string;
+  }>;
+  removedInstructionIds?: string[];
+  questionSelections?: {
+    selectedQuestions: SelectedQuestionSubmission[];
+    removedQuestionIds?: string[];
+  };
+}
+
+export interface StageTransitionPayload {
+  examId: string;
+  currentStatus: MockExamLifecycleStatus;
+  targetStatus: MockExamLifecycleStatus;
+  reason?: string;
+  stageData?: StageTransitionDataPayload;
 }
 
 export class MockExamService {
@@ -727,6 +848,375 @@ export class MockExamService {
       };
     } catch (error) {
       console.error('Error fetching mock exam by ID:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get consolidated data required for the status transition wizard
+   */
+  static async getStatusWizardContext(examId: string): Promise<MockExamStatusWizardContext | null> {
+    try {
+      const { data: examData, error: examError } = await supabase
+        .from('mock_exams')
+        .select(`
+          id,
+          title,
+          status,
+          data_structure_id,
+          scheduled_date,
+          scheduled_time,
+          duration_minutes,
+          data_structures!mock_exams_data_structure_id_fkey (
+            subject_id,
+            edu_subjects!data_structures_subject_id_fkey (name),
+            programs!data_structures_program_id_fkey (name),
+            providers!data_structures_provider_id_fkey (name)
+          )
+        `)
+        .eq('id', examId)
+        .single();
+
+      if (examError) throw examError;
+      if (!examData) return null;
+
+      const [stageProgressRes, instructionsRes, questionSelectionsRes] = await Promise.all([
+        supabase
+          .from('mock_exam_stage_progress')
+          .select('*')
+          .eq('mock_exam_id', examId)
+          .order('stage', { ascending: true }),
+        supabase
+          .from('mock_exam_instructions')
+          .select('*')
+          .eq('mock_exam_id', examId)
+          .order('audience', { ascending: true }),
+        supabase
+          .from('mock_exam_questions')
+          .select(`
+            id,
+            mock_exam_id,
+            source_type,
+            question_id,
+            custom_question,
+            marks,
+            sequence,
+            is_optional,
+            created_by,
+            created_at,
+            updated_at,
+            questions_master_admin!mock_exam_questions_question_id_fkey (
+              id,
+              question_number,
+              question_text,
+              question_description,
+              type,
+              marks,
+              status
+            )
+          `)
+          .eq('mock_exam_id', examId)
+          .order('sequence', { ascending: true })
+      ]);
+
+      if (stageProgressRes.error) throw stageProgressRes.error;
+      if (instructionsRes.error) throw instructionsRes.error;
+      if (questionSelectionsRes.error) throw questionSelectionsRes.error;
+
+      const subjectId = examData.data_structures?.subject_id || null;
+      const dataStructureId = examData.data_structure_id || null;
+
+      let questionBankQuery = supabase
+        .from('questions_master_admin')
+        .select(`
+          id,
+          question_number,
+          question_text,
+          question_description,
+          type,
+          marks,
+          status,
+          data_structure_id,
+          subject_id
+        `)
+        .eq('status', 'active');
+
+      if (dataStructureId) {
+        questionBankQuery = questionBankQuery.eq('data_structure_id', dataStructureId);
+      } else if (subjectId) {
+        questionBankQuery = questionBankQuery.eq('subject_id', subjectId);
+      }
+
+      const { data: questionBankData, error: questionBankError } = await questionBankQuery.order('question_number', { ascending: true });
+      if (questionBankError) throw questionBankError;
+
+      const stageProgress: MockExamStageProgressRecord[] = (stageProgressRes.data || []).map((record: any) => ({
+        id: record.id,
+        mock_exam_id: record.mock_exam_id,
+        stage: record.stage,
+        requirements: record.requirements || {},
+        completed: record.completed ?? false,
+        completed_at: record.completed_at || null,
+        completed_by: record.completed_by || null,
+        notes: record.notes || null,
+        created_at: record.created_at,
+      }));
+
+      const instructions: MockExamInstructionRecord[] = (instructionsRes.data || []).map((record: any) => ({
+        id: record.id,
+        mock_exam_id: record.mock_exam_id,
+        audience: record.audience,
+        instructions: record.instructions,
+        created_by: record.created_by || null,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      }));
+
+      const questionSelections: MockExamQuestionSelectionRecord[] = (questionSelectionsRes.data || []).map((record: any) => ({
+        id: record.id,
+        mock_exam_id: record.mock_exam_id,
+        source_type: record.source_type,
+        question_id: record.question_id,
+        custom_question: record.custom_question,
+        marks: record.marks !== null && record.marks !== undefined ? Number(record.marks) : null,
+        sequence: record.sequence,
+        is_optional: record.is_optional ?? false,
+        created_by: record.created_by || null,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+        question_bank_item: record.questions_master_admin
+          ? {
+              id: record.questions_master_admin.id,
+              question_number: record.questions_master_admin.question_number ?? null,
+              question_text: record.questions_master_admin.question_text ?? null,
+              question_description: record.questions_master_admin.question_description ?? null,
+              type: record.questions_master_admin.type ?? null,
+              marks: record.questions_master_admin.marks !== null && record.questions_master_admin.marks !== undefined
+                ? Number(record.questions_master_admin.marks)
+                : null,
+              status: record.questions_master_admin.status ?? null,
+            }
+          : null,
+      }));
+
+      const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => ({
+        id: item.id,
+        question_number: item.question_number ?? null,
+        question_text: item.question_text ?? null,
+        question_description: item.question_description ?? null,
+        type: item.type ?? null,
+        marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
+        status: item.status ?? null,
+      }));
+
+      return {
+        exam: {
+          id: examData.id,
+          title: examData.title,
+          status: examData.status,
+          data_structure_id: examData.data_structure_id || null,
+          subject_id: subjectId,
+          subject_name: examData.data_structures?.edu_subjects?.name || null,
+          board_name: examData.data_structures?.providers?.name || null,
+          programme_name: examData.data_structures?.programs?.name || null,
+          scheduled_date: examData.scheduled_date || null,
+          scheduled_time: examData.scheduled_time || null,
+          duration_minutes: examData.duration_minutes ?? null,
+        },
+        stageProgress,
+        instructions,
+        questionSelections,
+        questionBank,
+      };
+    } catch (error) {
+      console.error('Error fetching mock exam status wizard context:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Persist status transition data, update related artefacts, and move the exam to a new status
+   */
+  static async transitionMockExamStatus(payload: StageTransitionPayload): Promise<void> {
+    const { examId, targetStatus, stageData, reason } = payload;
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      console.error('Error fetching authenticated user:', authError);
+      throw authError;
+    }
+
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const nowIso = new Date().toISOString();
+
+    try {
+      if (stageData) {
+        const { formData, notes, completed, instructions, removedInstructionIds, questionSelections } = stageData;
+
+        const stageProgressPayload: Record<string, any> = {
+          mock_exam_id: examId,
+          stage: targetStatus,
+          requirements: formData ?? {},
+        };
+
+        if (notes !== undefined) {
+          stageProgressPayload.notes = notes;
+        }
+
+        if (completed !== undefined) {
+          stageProgressPayload.completed = completed;
+          stageProgressPayload.completed_at = completed ? nowIso : null;
+          stageProgressPayload.completed_by = completed ? user.id : null;
+        }
+
+        if (Object.keys(stageProgressPayload.requirements).length > 0 || notes !== undefined || completed !== undefined) {
+          const { error: stageProgressError } = await supabase
+            .from('mock_exam_stage_progress')
+            .upsert(stageProgressPayload, { onConflict: 'mock_exam_id,stage' });
+
+          if (stageProgressError) throw stageProgressError;
+        }
+
+        if (instructions || (removedInstructionIds && removedInstructionIds.length > 0)) {
+          const instructionsToProcess = instructions?.filter(instr => instr.instructions.trim().length > 0) ?? [];
+          const explicitRemovals = removedInstructionIds ?? [];
+
+          const additionalRemovals: string[] = [];
+
+          for (const instruction of instructions || []) {
+            if ((!instruction.instructions || !instruction.instructions.trim()) && instruction.id) {
+              additionalRemovals.push(instruction.id);
+            }
+          }
+
+          const idsToRemove = [...new Set([...explicitRemovals, ...additionalRemovals])];
+
+          if (idsToRemove.length > 0) {
+            const { error: deleteInstructionsError } = await supabase
+              .from('mock_exam_instructions')
+              .delete()
+              .in('id', idsToRemove);
+
+            if (deleteInstructionsError) throw deleteInstructionsError;
+          }
+
+          for (const instruction of instructionsToProcess) {
+            if (instruction.id) {
+              const { error: updateInstructionError } = await supabase
+                .from('mock_exam_instructions')
+                .update({
+                  audience: instruction.audience,
+                  instructions: instruction.instructions,
+                  updated_at: nowIso,
+                })
+                .eq('id', instruction.id);
+
+              if (updateInstructionError) throw updateInstructionError;
+            } else {
+              const { error: insertInstructionError } = await supabase
+                .from('mock_exam_instructions')
+                .insert({
+                  mock_exam_id: examId,
+                  audience: instruction.audience,
+                  instructions: instruction.instructions,
+                  created_by: user.id,
+                });
+
+              if (insertInstructionError) throw insertInstructionError;
+            }
+          }
+        }
+
+        if (questionSelections) {
+          const { selectedQuestions = [], removedQuestionIds = [] } = questionSelections;
+
+          if (removedQuestionIds && removedQuestionIds.length > 0) {
+            const { error: deleteSelectionError } = await supabase
+              .from('mock_exam_questions')
+              .delete()
+              .in('id', removedQuestionIds);
+
+            if (deleteSelectionError) throw deleteSelectionError;
+          }
+
+          for (const selection of selectedQuestions) {
+            const basePayload: Record<string, any> = {
+              mock_exam_id: examId,
+              source_type: selection.sourceType,
+              question_id: selection.sourceType === 'bank' ? selection.questionId ?? null : null,
+              custom_question: selection.sourceType === 'custom' ? selection.customQuestion ?? {} : null,
+              marks: selection.marks !== undefined && selection.marks !== null ? Number(selection.marks) : null,
+              sequence: selection.sequence,
+              is_optional: selection.isOptional ?? false,
+            };
+
+            if (selection.id) {
+              const { error: updateSelectionError } = await supabase
+                .from('mock_exam_questions')
+                .update({
+                  ...basePayload,
+                  updated_at: nowIso,
+                })
+                .eq('id', selection.id);
+
+              if (updateSelectionError) throw updateSelectionError;
+            } else {
+              const { error: insertSelectionError } = await supabase
+                .from('mock_exam_questions')
+                .insert({
+                  ...basePayload,
+                  created_by: user.id,
+                });
+
+              if (insertSelectionError) throw insertSelectionError;
+            }
+          }
+        }
+      }
+
+      const { error: updateStatusError } = await supabase
+        .from('mock_exams')
+        .update({
+          status: targetStatus,
+          updated_at: nowIso,
+        })
+        .eq('id', examId);
+
+      if (updateStatusError) throw updateStatusError;
+
+      if (reason) {
+        const { data: latestHistory, error: historyFetchError } = await supabase
+          .from('mock_exam_status_history')
+          .select('id')
+          .eq('mock_exam_id', examId)
+          .eq('new_status', targetStatus)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (historyFetchError) {
+          throw historyFetchError;
+        }
+
+        const historyRecordId = latestHistory?.[0]?.id;
+
+        if (historyRecordId) {
+          const { error: updateHistoryError } = await supabase
+            .from('mock_exam_status_history')
+            .update({ change_reason: reason })
+            .eq('id', historyRecordId);
+
+          if (updateHistoryError) throw updateHistoryError;
+        }
+      }
+    } catch (error) {
+      console.error('Error transitioning mock exam status:', error);
       throw error;
     }
   }
