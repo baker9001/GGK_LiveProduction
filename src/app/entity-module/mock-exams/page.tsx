@@ -168,8 +168,8 @@ const initialCreateFormState: CreateMockExamFormState = {
   durationMinutes: '120',
   deliveryMode: 'In-person',
   teachers: [],
-  aiProctoringEnabled: true,
-  releaseAnalyticsToStudents: true,
+  aiProctoringEnabled: false,
+  releaseAnalyticsToStudents: false,
   allowRetakes: false,
   notes: ''
 };
