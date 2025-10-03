@@ -116,7 +116,7 @@ function SubjectHeaderImage({ logoUrl, subjectName }: { logoUrl: string | null; 
       <img
         src={logoUrl}
         alt={`${subjectName} logo`}
-        className="w-full h-48 object-cover"
+        className="w-full aspect-square object-cover"
       />
     );
   }
@@ -129,7 +129,7 @@ function SubjectHeaderImage({ logoUrl, subjectName }: { logoUrl: string | null; 
     .toUpperCase();
 
   return (
-    <div className="w-full h-48 bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center">
+    <div className="w-full aspect-square bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center">
       <div className="text-6xl font-bold">
         {initials || <BookOpen className="h-20 w-20" />}
       </div>
@@ -341,7 +341,7 @@ export default function LearningPathPage() {
       )}
 
       {!isLoading && !subjectsError && subjects.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {subjects.map(subject => {
             const validFrom = formatDate(subject.validFrom);
             const validTo = formatDate(subject.validTo);
@@ -367,19 +367,6 @@ export default function LearningPathPage() {
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                     {subject.programName}
                   </p>
-
-                  {/* Feature Badges */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                      Past Papers
-                    </span>
-                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                      Video Solutions
-                    </span>
-                    <span className="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
-                      Mock Exams
-                    </span>
-                  </div>
 
                   <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
                     <div className="flex items-center justify-between">
