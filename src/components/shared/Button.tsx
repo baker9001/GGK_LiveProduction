@@ -167,7 +167,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className
         )}
         disabled={isDisabled}
-        title={!tooltip ? undefined : tooltip}
         aria-busy={loading}
         aria-disabled={isDisabled}
         {...props}
