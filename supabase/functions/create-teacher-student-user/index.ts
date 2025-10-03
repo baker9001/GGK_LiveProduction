@@ -267,7 +267,7 @@ serve(async (req) => {
           body.email,
           {
             data: userMetadata,
-            redirectTo: body.redirect_to || `${Deno.env.get('PUBLIC_SITE_URL')}/auth/set-password`
+            redirectTo: body.redirect_to || `${Deno.env.get('PUBLIC_SITE_URL')}/reset-password`
           }
         )
 

@@ -599,7 +599,7 @@ export const userCreationService = {
               company_name: await this.getCompanyName(payload.company_id),
               phone: payload.phone,
               password: payload.password, // Include if provided
-              redirect_to: `${window.location.origin}/auth/callback`,
+              redirect_to: `${window.location.origin}/reset-password`,
               send_invitation: payload.send_invitation !== false && !payload.password,
               created_by: currentUser?.email
             })
@@ -641,7 +641,7 @@ export const userCreationService = {
             company_name: await this.getCompanyName(payload.company_id),
             phone: payload.phone,
             user_metadata: userMetadata,
-            redirect_to: `${window.location.origin}/auth/callback`,
+            redirect_to: `${window.location.origin}/reset-password`,
             send_invitation: payload.send_invitation !== false && !payload.password,
             created_by: currentUser?.email
           };
