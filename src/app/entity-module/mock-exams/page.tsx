@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, ChevronDown, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -203,6 +203,8 @@ export default function EntityMockExamsPage() {
   const assignedBranchIds = userContext?.assignedBranchIds;
 
   const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [sortField, setSortField] = useState<'title' | 'status' | 'scheduledStart' | 'studentCount'>('status');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [selectedExam, setSelectedExam] = useState<MockExam | null>(null);
@@ -377,10 +379,35 @@ export default function EntityMockExamsPage() {
     });
   }, [mockExams]);
 
+  // Status order for sorting (workflow progression)
+  const statusOrder: Record<MockExamStatus, number> = {
+    draft: 1,
+    planned: 2,
+    scheduled: 3,
+    materials_ready: 4,
+    in_progress: 5,
+    grading: 6,
+    moderation: 7,
+    analytics_released: 8,
+    completed: 9,
+    cancelled: 10
+  };
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      // Toggle direction if clicking same field
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New field, default to ascending
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   const filteredExams = useMemo(() => {
     const searchTerm = filters.search.trim().toLowerCase();
 
-    return transformedExams.filter(exam => {
+    const filtered = transformedExams.filter(exam => {
       if (searchTerm) {
         const composite = [
           exam.title,
@@ -437,7 +464,35 @@ export default function EntityMockExamsPage() {
 
       return true;
     });
-  }, [filters, transformedExams, gradeLevels]);
+
+    // Sort the filtered results
+    const sorted = [...filtered].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'status':
+          comparison = statusOrder[a.status] - statusOrder[b.status];
+          // Secondary sort by scheduled date within same status
+          if (comparison === 0) {
+            comparison = new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime();
+          }
+          break;
+        case 'scheduledStart':
+          comparison = new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime();
+          break;
+        case 'studentCount':
+          comparison = a.studentCount - b.studentCount;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [filters, transformedExams, gradeLevels, sortField, sortDirection]);
 
   useEffect(() => {
     if (selectedDataStructure) {
@@ -967,12 +1022,63 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                <th scope="col" className="px-6 py-3">Mock exam</th>
+                <th scope="col" className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('status')}
+                    className="flex items-center gap-1 hover:text-[#8CC63F] transition-colors group"
+                    title="Sort by status workflow"
+                  >
+                    Mock exam
+                    {sortField === 'status' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                    )}
+                  </button>
+                </th>
                 <th scope="col" className="px-6 py-3">Programme &amp; board</th>
                 <th scope="col" className="px-6 py-3">Year groups</th>
                 <th scope="col" className="px-6 py-3">Teaching team</th>
-                <th scope="col" className="px-6 py-3">Learner impact</th>
-                <th scope="col" className="px-6 py-3">Schedule</th>
+                <th scope="col" className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('studentCount')}
+                    className="flex items-center gap-1 hover:text-[#8CC63F] transition-colors group"
+                    title="Sort by number of students"
+                  >
+                    Learner impact
+                    {sortField === 'studentCount' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                    )}
+                  </button>
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  <button
+                    onClick={() => handleSort('scheduledStart')}
+                    className="flex items-center gap-1 hover:text-[#8CC63F] transition-colors group"
+                    title="Sort by scheduled date"
+                  >
+                    Schedule
+                    {sortField === 'scheduledStart' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-[#8CC63F]" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-50 transition-opacity" />
+                    )}
+                  </button>
+                </th>
                 <th scope="col" className="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
