@@ -34,55 +34,57 @@ export function Tooltip({
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
+    // If tooltip hasn't been rendered yet (height is 0), skip position update
+    // It will be recalculated in the next frame
+    if (tooltipRect.height === 0 || tooltipRect.width === 0) {
+      return;
+    }
+
     let top = 0;
     let left = 0;
 
-    // getBoundingClientRect() returns position relative to viewport
-    // We need to add scroll position to get absolute position
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    // Since we're using position: fixed, we work with viewport coordinates
+    // getBoundingClientRect() gives us viewport-relative positions
+    const gap = 8; // Gap between tooltip and trigger
 
     switch (position) {
       case 'top':
-        top = triggerRect.top + scrollTop - tooltipRect.height - 8;
-        left = triggerRect.left + scrollLeft + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        top = triggerRect.top - tooltipRect.height - gap;
+        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'bottom':
-        top = triggerRect.bottom + scrollTop + 8;
-        left = triggerRect.left + scrollLeft + (triggerRect.width / 2) - (tooltipRect.width / 2);
+        top = triggerRect.bottom + gap;
+        left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
         break;
       case 'left':
-        top = triggerRect.top + scrollTop + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.left + scrollLeft - tooltipRect.width - 8;
+        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        left = triggerRect.left - tooltipRect.width - gap;
         break;
       case 'right':
-        top = triggerRect.top + scrollTop + (triggerRect.height / 2) - (tooltipRect.height / 2);
-        left = triggerRect.right + scrollLeft + 8;
+        top = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+        left = triggerRect.right + gap;
         break;
     }
 
-    // Adjust for window boundaries (viewport coordinates)
+    // Adjust for window boundaries (keep tooltip in viewport)
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
-    const viewportTop = triggerRect.top;
-    const viewportLeft = triggerRect.left;
+    const padding = 10;
 
-    // Check if tooltip would go off-screen and adjust
-    const tooltipViewportLeft = left - scrollLeft;
-    const tooltipViewportTop = top - scrollTop;
-
-    if (tooltipViewportLeft < 10) {
-      left = scrollLeft + 10;
+    // Horizontal boundary checks
+    if (left < padding) {
+      left = padding;
     }
-    if (tooltipViewportLeft + tooltipRect.width > windowWidth - 10) {
-      left = scrollLeft + windowWidth - tooltipRect.width - 10;
+    if (left + tooltipRect.width > windowWidth - padding) {
+      left = windowWidth - tooltipRect.width - padding;
     }
 
-    if (tooltipViewportTop < 10) {
-      top = scrollTop + 10;
+    // Vertical boundary checks
+    if (top < padding) {
+      top = padding;
     }
-    if (tooltipViewportTop + tooltipRect.height > windowHeight - 10) {
-      top = scrollTop + windowHeight - tooltipRect.height - 10;
+    if (top + tooltipRect.height > windowHeight - padding) {
+      top = windowHeight - tooltipRect.height - padding;
     }
 
     setTooltipPosition({ top, left });
