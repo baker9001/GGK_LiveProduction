@@ -825,8 +825,14 @@ export default function UsersTab() {
         userType: 'system'
       };
 
-      startTestMode(testUser);
-      toast.success(`Starting test mode as ${testUser.name}`);
+      const redirectPath = startTestMode(testUser);
+
+      if (redirectPath) {
+        toast.success(`Starting test mode as ${testUser.name}`);
+        navigate(redirectPath, { replace: true });
+      } else {
+        toast.error('Failed to start test mode');
+      }
     } catch (error) {
       console.error('Error starting test mode:', error);
       toast.error('Failed to start test mode');

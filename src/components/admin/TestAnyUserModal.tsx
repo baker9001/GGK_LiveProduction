@@ -2,6 +2,7 @@
 // Enhanced version with confirmation dialog and 5-minute timeout
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FlaskConical, Search, User, X, AlertTriangle, Clock, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -25,11 +26,12 @@ interface UserData {
 }
 
 export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserType, setSelectedUserType] = useState<string>('all');
   const [confirmUser, setConfirmUser] = useState<UserData | null>(null);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  
+
   const realAdmin = getRealAdminUser();
   const isSSA = realAdmin?.role === 'SSA';
 
@@ -263,7 +265,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
       );
 
       let userRole = 'VIEWER';
-      
+
       // Map user type to role
       if (confirmUser.user_type === 'admin') {
         // For admin users, the type contains the role name
@@ -281,7 +283,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
       } else if (confirmUser.user_type === 'entity') {
         userRole = 'ENTITY_ADMIN';
       }
-      
+
       const testUser = {
         id: confirmUser.id,
         name: confirmUser.name || confirmUser.email,
@@ -289,17 +291,29 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
         role: userRole as any,
         userType: confirmUser.user_type
       };
-      
+
       // Set test mode with expiration (5 minutes from now)
       const expirationTime = Date.now() + (5 * 60 * 1000); // 5 minutes
       localStorage.setItem('test_mode_expiration', expirationTime.toString());
-      
-      startTestMode(testUser);
-      
-      toast.success(`Starting test mode as ${testUser.name}. Session will expire in 5 minutes.`);
-      onClose();
-      setIsConfirmDialogOpen(false);
-      setConfirmUser(null);
+
+      // Start test mode and get redirect path
+      const redirectPath = startTestMode(testUser);
+
+      if (redirectPath) {
+        // Close modal and dialogs first
+        onClose();
+        setIsConfirmDialogOpen(false);
+        setConfirmUser(null);
+
+        // Show success message
+        toast.success(`Starting test mode as ${testUser.name}. Session will expire in 5 minutes.`);
+
+        // Use React Router navigation instead of window.location
+        // This keeps navigation within React's control and prevents race conditions
+        navigate(redirectPath, { replace: true });
+      } else {
+        toast.error('Failed to start test mode');
+      }
     } catch (error) {
       console.error('Error starting test mode:', error);
       toast.error('Failed to start test mode');
