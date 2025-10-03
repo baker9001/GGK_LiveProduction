@@ -458,7 +458,17 @@ export function StatusTransitionWizard({
     if (isOpen) {
       setActiveStage(currentStatus);
       setStageErrors({});
+      // Disable body scroll when modal opens
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Re-enable body scroll when modal closes
+      document.body.style.overflow = '';
     }
+
+    // Cleanup function to ensure scroll is re-enabled
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen, currentStatus]);
 
   useEffect(() => {
@@ -961,8 +971,8 @@ export function StatusTransitionWizard({
   const exam = wizardData?.exam;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 py-6 overflow-y-auto">
+      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6">
         <div className="flex items-start justify-between border-b border-gray-200 p-6 dark:border-gray-800">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Change mock exam status</h2>

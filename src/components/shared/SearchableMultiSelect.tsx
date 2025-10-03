@@ -269,7 +269,7 @@ export function SearchableMultiSelect({
     const dropdownContent = (
       <div
         ref={dropdownRef}
-        className="z-50 rounded-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/20 overflow-hidden bg-white dark:bg-gray-800"
+        className="z-[150] rounded-md border border-gray-200 dark:border-gray-600 shadow-lg dark:shadow-gray-900/20 overflow-hidden bg-white dark:bg-gray-800"
         style={usePortal ? {
           position: 'absolute',
           top: `${position.top}px`,
@@ -277,7 +277,8 @@ export function SearchableMultiSelect({
           width: `${position.width}px`,
           maxHeight: '400px',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          zIndex: 150
         } : {
           position: 'absolute',
           top: '100%',
@@ -286,7 +287,7 @@ export function SearchableMultiSelect({
           maxHeight: '300px',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 50,
+          zIndex: 150,
           marginTop: '4px'
         }}
         onKeyDown={handleKeyDown}
