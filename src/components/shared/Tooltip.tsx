@@ -112,9 +112,20 @@ export function Tooltip({
   // Update position when tooltip becomes visible and on scroll/resize
   useEffect(() => {
     if (isVisible) {
-      // Update position immediately when tooltip becomes visible
-      requestAnimationFrame(() => {
+      // Update position multiple times to ensure accurate positioning
+      // First update
+      const update1 = requestAnimationFrame(() => {
         updatePosition();
+        // Second update after tooltip is rendered with content
+        const update2 = requestAnimationFrame(() => {
+          updatePosition();
+          // Third update to catch any remaining layout shifts
+          const update3 = setTimeout(() => {
+            updatePosition();
+          }, 10);
+          return () => clearTimeout(update3);
+        });
+        return () => cancelAnimationFrame(update2);
       });
 
       const handleScroll = () => updatePosition();
@@ -124,11 +135,12 @@ export function Tooltip({
       window.addEventListener('resize', handleResize);
 
       return () => {
+        cancelAnimationFrame(update1);
         window.removeEventListener('scroll', handleScroll, true);
         window.removeEventListener('resize', handleResize);
       };
     }
-  }, [isVisible]);
+  }, [isVisible, position]);
   
   // Clean up timeout on unmount
   useEffect(() => {
