@@ -264,7 +264,7 @@ export function validateDeactivationRequest(targetUserId: string): {
 }
 
 // Test mode functions
-export function startTestMode(testUser: User): string | null {
+export function startTestMode(testUser: User, skipAuthDispatch: boolean = false): string | null {
   const currentUser = getAuthenticatedUser();
   if (!currentUser || currentUser.role !== 'SSA') {
     alert('Only Super Admins can use test mode');
@@ -289,12 +289,14 @@ export function startTestMode(testUser: User): string | null {
   console.log('[TestMode] Started for user:', testUser.email, '(', testUser.role, ')');
   console.log('[TestMode] Real admin:', currentUser.email);
 
-  // Get redirect path BEFORE dispatching auth change
+  // Get redirect path BEFORE any context updates
   const redirectPath = getRedirectPathForUser(testUser);
 
-  // Dispatch auth change event to trigger context refresh
-  // This will be handled by the caller after navigation is initiated
-  dispatchAuthChange();
+  // CRITICAL FIX: Only dispatch auth change if caller requests it
+  // This allows navigation to complete BEFORE contexts update
+  if (!skipAuthDispatch) {
+    dispatchAuthChange();
+  }
 
   // Return the redirect path for the caller to handle navigation
   return redirectPath;

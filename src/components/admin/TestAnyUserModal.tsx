@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FlaskConical, Search, User, X, AlertTriangle, Clock, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { startTestMode, mapUserTypeToRole, getRealAdminUser, logImpersonationActivity } from '../../lib/auth';
+import { startTestMode, mapUserTypeToRole, getRealAdminUser, logImpersonationActivity, dispatchAuthChange } from '../../lib/auth';
 import { Button } from '../shared/Button';
 import { toast } from '../shared/Toast';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
@@ -296,8 +296,9 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
       const expirationTime = Date.now() + (5 * 60 * 1000); // 5 minutes
       localStorage.setItem('test_mode_expiration', expirationTime.toString());
 
-      // Start test mode and get redirect path
-      const redirectPath = startTestMode(testUser);
+      // CRITICAL FIX: Start test mode but skip auth dispatch to prevent race condition
+      // The auth change will be dispatched AFTER navigation completes
+      const redirectPath = startTestMode(testUser, true);
 
       if (redirectPath) {
         // Close modal and dialogs first
@@ -308,9 +309,14 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
         // Show success message
         toast.success(`Starting test mode as ${testUser.name}. Session will expire in 5 minutes.`);
 
-        // Use React Router navigation instead of window.location
-        // This keeps navigation within React's control and prevents race conditions
+        // Navigate first using React Router
         navigate(redirectPath, { replace: true });
+
+        // CRITICAL: Dispatch auth change AFTER navigation to prevent context update before route change
+        // This ensures the new route is loaded before React re-evaluates the user context
+        setTimeout(() => {
+          dispatchAuthChange();
+        }, 50);
       } else {
         toast.error('Failed to start test mode');
       }

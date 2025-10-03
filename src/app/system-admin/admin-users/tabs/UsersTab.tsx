@@ -18,13 +18,14 @@ import { Button } from '../../../../components/shared/Button';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ConfirmationDialog } from '../../../../components/shared/ConfirmationDialog';
 import { toast } from '../../../../components/shared/Toast';
-import { 
-  startTestMode, 
-  isInTestMode, 
-  getRealAdminUser, 
+import {
+  startTestMode,
+  isInTestMode,
+  getRealAdminUser,
   mapUserTypeToRole,
   getAuthenticatedUser,
-  getAuthToken 
+  getAuthToken,
+  dispatchAuthChange
 } from '../../../../lib/auth';
 
 // ===== CONFIGURATION =====
@@ -825,11 +826,17 @@ export default function UsersTab() {
         userType: 'system'
       };
 
-      const redirectPath = startTestMode(testUser);
+      // CRITICAL FIX: Skip auth dispatch to prevent race condition
+      const redirectPath = startTestMode(testUser, true);
 
       if (redirectPath) {
         toast.success(`Starting test mode as ${testUser.name}`);
         navigate(redirectPath, { replace: true });
+
+        // Dispatch auth change AFTER navigation
+        setTimeout(() => {
+          dispatchAuthChange();
+        }, 50);
       } else {
         toast.error('Failed to start test mode');
       }
