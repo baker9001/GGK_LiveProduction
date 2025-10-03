@@ -1077,7 +1077,7 @@ export const userCreationService = {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         userData.email,
         {
-          redirectTo: `${window.location.origin}/auth/reset-password`
+          redirectTo: `${window.location.origin}/reset-password`
         }
       );
       

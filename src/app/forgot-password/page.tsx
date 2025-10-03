@@ -54,7 +54,11 @@ export default function ForgotPasswordPage() {
 
       // CRITICAL FIX: Use the EXACT redirect URL that's configured in Supabase
       // This MUST match one of your allowed redirect URLs exactly
-      const resetRedirectUrl = 'https://ggknowledge.com/auth/reset-password';
+      const siteUrl =
+        typeof window !== 'undefined'
+          ? window.location.origin
+          : import.meta.env.PUBLIC_SITE_URL || 'https://ggknowledge.com';
+      const resetRedirectUrl = `${siteUrl}/reset-password`;
       
       console.log('Sending reset email with redirect URL:', resetRedirectUrl);
       
@@ -128,7 +132,11 @@ export default function ForgotPasswordPage() {
 
     // TODO: Send email manually with your email service
     // For now, log the reset URL
-    console.log('Legacy reset URL:', `https://ggknowledge.com/auth/reset-password?token=${token}`);
+    const siteUrl =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : import.meta.env.PUBLIC_SITE_URL || 'https://ggknowledge.com';
+    console.log('Legacy reset URL:', `${siteUrl}/reset-password?token=${token}`);
     console.log('Send this to:', userEmail);
   };
 
