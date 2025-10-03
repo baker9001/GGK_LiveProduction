@@ -155,6 +155,7 @@ function App() {
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
               <Route path="/form-validation" element={<FormValidationPage />} />
               
               {/* PRESERVED: Password Change Route - Protected */}
