@@ -79,7 +79,7 @@ export async function getMaterialsForStudent(
         edu_units (id, name),
         edu_topics (id, name),
         edu_subtopics (id, name),
-        grade_levels (id, name)
+        grade_levels (id, grade_name)
       `)
       .eq('data_structures.edu_subjects.id', subjectId)
       .eq('status', 'active')
@@ -102,7 +102,11 @@ export async function getMaterialsForStudent(
         file_url: urlData.publicUrl,
         source_type: material.visibility_scope === 'global' ? 'global' : 'school',
         subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
-        subject_id: material.data_structures?.edu_subjects?.id || ''
+        subject_id: material.data_structures?.edu_subjects?.id || '',
+        grade_levels: material.grade_levels ? {
+          id: material.grade_levels.id,
+          name: material.grade_levels.grade_name
+        } : null
       };
     });
 
@@ -159,7 +163,7 @@ export async function getMaterialsForTeacher(
         edu_units (id, name),
         edu_topics (id, name),
         edu_subtopics (id, name),
-        grade_levels (id, name)
+        grade_levels (id, grade_name)
       `)
       .eq('school_id', schoolId)
       .eq('teacher_id', teacherId)
@@ -198,7 +202,11 @@ export async function getMaterialsForTeacher(
 
       return {
         ...material,
-        file_url: urlData.publicUrl
+        file_url: urlData.publicUrl,
+        grade_levels: material.grade_levels ? {
+          id: material.grade_levels.id,
+          name: material.grade_levels.grade_name
+        } : null
       };
     });
 

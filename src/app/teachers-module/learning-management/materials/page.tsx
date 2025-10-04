@@ -266,12 +266,19 @@ export default function TeacherMaterialsPage() {
     async () => {
       const { data, error } = await supabase
         .from('grade_levels')
-        .select('id, name')
+        .select('id, grade_name')
         .eq('status', 'active')
-        .order('name');
+        .order('grade_name');
 
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error('[Materials] Error fetching grade levels:', error);
+        throw error;
+      }
+      return data.map(g => ({ id: g.id, name: g.grade_name }));
+    },
+    {
+      retry: 1,
+      staleTime: 5 * 60 * 1000
     }
   );
 
