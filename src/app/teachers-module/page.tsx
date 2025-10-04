@@ -5,6 +5,9 @@ import { getCurrentUser } from '../../lib/auth';
 import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { GraduationCap, BookOpen, ClipboardList, User, BarChart3 } from 'lucide-react';
 import ProfilePage from './profile/page';
+import StudentsPage from './students/page';
+import LearningManagementPage from './learning-management/page';
+import StudyCalendarPage from './study-calendar/page';
 
 interface TeachersModulePageProps {
   moduleKey?: string;
@@ -149,6 +152,9 @@ export default function TeachersModulePage({ moduleKey }: TeachersModulePageProp
       <Routes>
         <Route path="/" element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="students" element={<StudentsPage />} />
+        <Route path="learning-management" element={<LearningManagementPage />} />
+        <Route path="study-calendar" element={<StudyCalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Routes>
     </AdminLayout>

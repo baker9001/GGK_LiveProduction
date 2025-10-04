@@ -204,23 +204,23 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'teachers-module'
   },
   {
-    id: 'staff-management',
-    label: 'Staff Management',
-    path: '/app/teachers-module/staff',
+    id: 'students',
+    label: 'Students',
+    path: '/app/teachers-module/students',
     icon: 'Users',
     moduleKey: 'teachers-module'
   },
   {
-    id: 'curriculum-management',
-    label: 'Curriculum Management',
-    path: '/app/teachers-module/curriculum',
+    id: 'learning-management',
+    label: 'Learning Management',
+    path: '/app/teachers-module/learning-management',
     icon: 'BookOpen',
     moduleKey: 'teachers-module'
   },
   {
-    id: 'schedule-management',
-    label: 'Schedule Management',
-    path: '/app/teachers-module/schedule',
+    id: 'study-calendar',
+    label: 'Study Calendar',
+    path: '/app/teachers-module/study-calendar',
     icon: 'Calendar',
     moduleKey: 'teachers-module'
   },
