@@ -141,20 +141,24 @@ function SubjectStatusBadge({ status }: { status: 'active' | 'pending' | 'expire
   const config = {
     active: {
       label: 'Active',
-      className: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800'
+      icon: '✓',
+      className: 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30'
     },
     pending: {
-      label: 'Activation Required',
-      className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 border-amber-200 dark:border-amber-800'
+      label: 'Activate Now',
+      icon: '⚡',
+      className: 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-amber-500/30 animate-pulse'
     },
     expired: {
       label: 'Expired',
-      className: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-200 border-rose-200 dark:border-rose-800'
+      icon: '✕',
+      className: 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
     }
   }[status];
 
   return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${config.className}`}>
+    <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm ${config.className}`}>
+      <span className="text-sm">{config.icon}</span>
       {config.label}
     </span>
   );
@@ -349,43 +353,95 @@ export default function LearningPathPage() {
             return (
               <div
                 key={subject.subjectId}
-                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+                className="group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-850 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer border border-gray-100 dark:border-gray-700/50 hover:border-[#8CC63F]/30 hover:-translate-y-2"
               >
-                {/* Header Image with Badge Overlay */}
-                <div className="relative">
+                {/* Gradient Accent Bar */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00BCD4] via-[#8CC63F] to-[#FF6B6B] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                {/* Header Image with Overlay */}
+                <div className="relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <SubjectHeaderImage logoUrl={subject.logoUrl} subjectName={subject.subjectName} />
-                  <div className="absolute top-3 right-3">
+
+                  {/* Floating Status Badge */}
+                  <div className="absolute top-3 right-3 z-20">
                     <SubjectStatusBadge status={subject.status} />
+                  </div>
+
+                  {/* Subject Title Overlay on Hover */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 z-20 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                    <h3 className="text-lg font-bold text-white drop-shadow-lg">
+                      {subject.subjectName}
+                    </h3>
                   </div>
                 </div>
 
                 {/* Card Content */}
-                <div className="p-5">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">
-                    {subject.subjectName}
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                    {subject.programName}
-                  </p>
+                <div className="p-6">
+                  {/* Title (visible when not hovering) */}
+                  <div className="group-hover:opacity-0 transition-opacity duration-300">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 truncate">
+                      {subject.subjectName}
+                    </h3>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="h-1 w-12 bg-gradient-to-r from-[#8CC63F] to-[#00BCD4] rounded-full" />
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                        {subject.programName}
+                      </p>
+                    </div>
+                  </div>
 
-                  <div className="space-y-3 text-sm">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Provider</span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{subject.providerName}</span>
+                  {/* Info Grid */}
+                  <div className="space-y-3.5">
+                    {/* Provider */}
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-100/50 dark:border-blue-800/30">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00BCD4] to-[#0097A7] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <BookOpen className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-0.5">Provider</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{subject.providerName}</p>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Region</span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{subject.regionName}</span>
+
+                    {/* Region */}
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-100/50 dark:border-emerald-800/30">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#8CC63F] to-[#7AB635] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-0.5">Region</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{subject.regionName}</p>
+                      </div>
                     </div>
+
+                    {/* License Period */}
                     {(validFrom || validTo) && (
-                      <div className="flex flex-col gap-1 pt-2 border-t border-gray-100 dark:border-gray-700">
-                        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">License</span>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {validFrom ? `From ${validFrom}` : 'Available'}
-                          {validTo ? ` • Until ${validTo}` : ''}
-                        </span>
+                      <div className="flex items-start gap-3 p-3 rounded-xl bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-100/50 dark:border-orange-800/30">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#FF6B6B] to-[#EE5A52] flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <CalendarCheck className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wide mb-0.5">License</p>
+                          <p className="text-xs font-semibold text-gray-900 dark:text-white leading-relaxed">
+                            {validFrom && <span className="block">{validFrom}</span>}
+                            {validTo && <span className="block text-gray-600 dark:text-gray-300">Until {validTo}</span>}
+                          </p>
+                        </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Action Hint on Hover */}
+                  <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="flex items-center justify-center gap-2 text-[#8CC63F] text-sm font-semibold">
+                      <span>Start Learning</span>
+                      <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               </div>
