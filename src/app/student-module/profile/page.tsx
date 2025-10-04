@@ -19,23 +19,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Camera,
-  CheckCircle2,
-  Clock,
-  Edit3,
-  GraduationCap,
-  Heart,
-  Lock,
-  Mail,
-  PenLine,
-  Phone,
-  ShieldCheck,
-  Smile,
-  Sparkles,
-  Wand2,
-  Calendar
-} from 'lucide-react';
+import { Camera, CheckCircle2, Clock, CreditCard as Edit3, GraduationCap, Heart, Lock, Mail, PenLine, Phone, ShieldCheck, Smile, Sparkles, Wand2, Calendar } from 'lucide-react';
 import { z } from 'zod';
 
 import { supabase } from '../../../lib/supabase';
