@@ -1318,6 +1318,3 @@ export default function StudentProfileSettingsPage() {
     </div>
   );
 }
-
-
-export default StudentProfileSettingsPage
