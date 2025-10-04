@@ -171,18 +171,21 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   // Get navigation items
   const navigationItems = getSubmenusForModule(moduleKey);
 
-  // Generate the profile path based on the current module
+  // Generate the profile path based on the user's role
   const getProfilePath = () => {
-    // Map module keys to their profile paths
+    if (!currentUser) return '/signin';
+
+    // Map user roles to their profile paths
     const profilePaths: Record<string, string> = {
-      'entity-module': '/app/entity-module/profile',
-      'system-admin': '/app/system-admin/profile',
-      'teacher-module': '/app/teacher-module/profile',
-      'student-module': '/app/student-module/profile',
-      // Add other modules as needed
+      'SSA': '/app/system-admin/profile',
+      'SUPPORT': '/app/system-admin/profile',
+      'VIEWER': '/app/system-admin/profile',
+      'ENTITY_ADMIN': '/app/entity-module/profile',
+      'TEACHER': '/app/teachers-module/profile',
+      'STUDENT': '/app/student-module/profile'
     };
-    
-    return profilePaths[moduleKey] || '/app/entity-module/profile'; // Default to entity module profile
+
+    return profilePaths[currentUser.role] || '/app/system-admin/profile';
   };
 
   // Handle dark mode
