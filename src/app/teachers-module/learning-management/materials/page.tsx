@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
-import { Plus, Upload, Download, Eye, Trash2, Edit2, FileText } from 'lucide-react';
+import { Plus, Upload, Download, Eye, Trash2, CreditCard as Edit2, FileText } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../lib/supabase';
 import { useUser } from '../../../../contexts/UserContext';
