@@ -167,13 +167,6 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'student-module'
   },
   {
-    id: 'student-profile',
-    label: 'My Profile',
-    path: '/app/student-module/profile',
-    icon: 'UserCircle',
-    moduleKey: 'student-module'
-  },
-  {
     id: 'learning-pathway',
     label: 'Learning Pathway',
     path: '/app/student-module/pathways',
@@ -208,13 +201,6 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     label: 'Dashboard',
     path: '/app/teachers-module/dashboard',
     icon: 'LayoutDashboard',
-    moduleKey: 'teachers-module'
-  },
-  {
-    id: 'teachers-profile',
-    label: 'My Profile',
-    path: '/app/teachers-module/profile',
-    icon: 'User',
     moduleKey: 'teachers-module'
   },
   {
