@@ -86,41 +86,120 @@ export default function TeacherMaterialsPage() {
     grade_ids: [] as string[]
   });
 
-  // Get teacher entity user ID and school
-  const { data: teacherInfo } = useQuery(
-    ['teacher-info', user?.id],
+  // Step 1: Get entity_user record for the logged-in teacher
+  const { data: entityUser, error: entityUserError, isLoading: isLoadingEntityUser } = useQuery(
+    ['entity-user', user?.id],
     async () => {
       if (!user?.id) return null;
 
+      console.log('[Materials] Fetching entity user for:', user.id);
+
       const { data, error } = await supabase
         .from('entity_users')
-        .select(`
-          id,
-          entity_user_schools!inner (
-            school_id,
-            schools (id, name)
-          )
-        `)
+        .select('id, user_id, is_active, admin_level')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Materials] Error fetching entity user:', error);
+        throw error;
+      }
 
-      return {
-        teacherId: data.id,
-        schoolId: data.entity_user_schools[0]?.school_id,
-        schoolName: data.entity_user_schools[0]?.schools?.name
-      };
+      if (!data) {
+        console.warn('[Materials] No entity user found for user:', user.id);
+        return null;
+      }
+
+      console.log('[Materials] Entity user found:', data.id);
+      return data;
     },
-    { enabled: !!user?.id }
+    {
+      enabled: !!user?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Entity user query failed:', error);
+      }
+    }
+  );
+
+  // Step 2: Get teacher's assigned school from entity_user_schools junction table
+  const { data: teacherInfo, error: teacherInfoError, isLoading: isLoadingTeacherInfo } = useQuery(
+    ['teacher-schools', entityUser?.id],
+    async () => {
+      if (!entityUser?.id) {
+        console.warn('[Materials] No entity user ID available');
+        return null;
+      }
+
+      console.log('[Materials] Fetching school assignments for entity user:', entityUser.id);
+
+      const { data, error } = await supabase
+        .from('entity_user_schools')
+        .select(`
+          school_id,
+          schools!entity_user_schools_school_id_fkey (
+            id,
+            name,
+            status
+          )
+        `)
+        .eq('entity_user_id', entityUser.id);
+
+      if (error) {
+        console.error('[Materials] Error fetching school assignments:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('[Materials] No school assignments found for entity user:', entityUser.id);
+        return null;
+      }
+
+      console.log('[Materials] School assignments found:', data.length);
+
+      // Prefer active schools, but fall back to first school if none are active
+      const activeSchool = data.find(s => s.schools?.status === 'active');
+      const selectedSchool = activeSchool || data[0];
+
+      if (!selectedSchool?.school_id) {
+        console.warn('[Materials] No valid school found in assignments');
+        return null;
+      }
+
+      const result = {
+        teacherId: entityUser.id,
+        schoolId: selectedSchool.school_id,
+        schoolName: selectedSchool.schools?.name || 'Unknown School'
+      };
+
+      console.log('[Materials] Teacher info resolved:', result);
+      return result;
+    },
+    {
+      enabled: !!entityUser?.id,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onError: (error: any) => {
+        console.error('[Materials] Teacher info query failed:', error);
+      }
+    }
   );
 
   // Fetch teacher's materials
-  const { data: materials = [], isLoading } = useQuery(
+  const { data: materials = [], isLoading: isLoadingMaterials, error: materialsError } = useQuery(
     ['teacher-materials', teacherInfo?.teacherId, teacherInfo?.schoolId, filters],
     async () => {
-      if (!teacherInfo?.teacherId || !teacherInfo?.schoolId) return [];
+      if (!teacherInfo?.teacherId || !teacherInfo?.schoolId) {
+        console.warn('[Materials] Cannot fetch materials - missing teacher info');
+        return [];
+      }
+
+      console.log('[Materials] Fetching materials for teacher:', teacherInfo.teacherId, 'school:', teacherInfo.schoolId);
+
       return getMaterialsForTeacher(
         teacherInfo.teacherId,
         teacherInfo.schoolId,
@@ -129,9 +208,30 @@ export default function TeacherMaterialsPage() {
     },
     {
       enabled: !!teacherInfo?.teacherId && !!teacherInfo?.schoolId,
-      staleTime: 2 * 60 * 1000
+      retry: 1,
+      staleTime: 2 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      onSuccess: (data) => {
+        console.log('[Materials] Materials fetched successfully:', data.length, 'items');
+      },
+      onError: (error: any) => {
+        console.error('[Materials] Failed to fetch materials:', error);
+      }
     }
   );
+
+  // Compute overall loading state
+  const isLoading = isLoadingEntityUser || isLoadingTeacherInfo || isLoadingMaterials;
+
+  // Compute error state
+  const hasError = entityUserError || teacherInfoError || materialsError;
+  const errorMessage = entityUserError
+    ? 'Failed to load your teacher profile. Please try refreshing the page.'
+    : teacherInfoError
+    ? 'Failed to load your school assignment. Please contact your administrator.'
+    : materialsError
+    ? 'Failed to load materials. Please try again.'
+    : null;
 
   // Fetch data structure options (subjects) for teacher's school
   const { data: dataStructureOptions = [] } = useQuery(
@@ -447,101 +547,157 @@ export default function TeacherMaterialsPage() {
         </p>
       </div>
 
-      <div className="flex justify-between items-center">
-        <div />
-        <Button
-          onClick={() => {
-            setEditingMaterial(null);
-            setFormState({
-              title: '',
-              description: '',
-              data_structure_id: '',
-              unit_id: '',
-              topic_id: '',
-              subtopic_id: '',
-              grade_id: '',
-              type: 'video',
-              status: 'active'
-            });
-            setIsFormOpen(true);
-          }}
-          leftIcon={<Plus className="h-4 w-4" />}
-        >
-          Upload Material
-        </Button>
-      </div>
-
-      <FilterCard
-        title="Filters"
-        onApply={() => {}}
-        onClear={() => {
-          setFilters({
-            search: '',
-            data_structure_ids: [],
-            types: [],
-            status: [],
-            grade_ids: []
-          });
-        }}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <FormField id="search" label="Search">
-            <Input
-              id="search"
-              placeholder="Search by title..."
-              value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            />
-          </FormField>
-
-          <SearchableMultiSelect
-            label="Subject"
-            options={dataStructureOptions.map(ds => ({
-              value: ds.id,
-              label: ds.subject_name || ds.name
-            }))}
-            selectedValues={filters.data_structure_ids}
-            onChange={(values) => setFilters({ ...filters, data_structure_ids: values })}
-            placeholder="Select subjects..."
-          />
-
-          <SearchableMultiSelect
-            label="Grade"
-            options={gradeLevels.map(g => ({
-              value: g.id,
-              label: g.name
-            }))}
-            selectedValues={filters.grade_ids}
-            onChange={(values) => setFilters({ ...filters, grade_ids: values })}
-            placeholder="Select grades..."
-          />
-
-          <SearchableMultiSelect
-            label="Type"
-            options={[
-              { value: 'video', label: 'Video' },
-              { value: 'ebook', label: 'E-book' },
-              { value: 'audio', label: 'Audio' },
-              { value: 'assignment', label: 'Assignment' }
-            ]}
-            selectedValues={filters.types}
-            onChange={(values) => setFilters({ ...filters, types: values })}
-            placeholder="Select types..."
-          />
+      {/* Error State */}
+      {hasError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error Loading Materials</h3>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
+              <button
+                onClick={() => {
+                  queryClient.invalidateQueries(['entity-user']);
+                  queryClient.invalidateQueries(['teacher-schools']);
+                  queryClient.invalidateQueries(['teacher-materials']);
+                }}
+                className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 hover:text-red-900 dark:hover:text-red-100 underline"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
         </div>
-      </FilterCard>
+      )}
 
-      <DataTable
-        data={materials}
-        columns={columns}
-        keyField="id"
-        caption="List of your uploaded learning materials"
-        ariaLabel="Teacher materials table"
-        loading={isLoading}
-        renderActions={renderActions}
-        onDelete={handleDelete}
-        emptyMessage="No materials uploaded yet. Click 'Upload Material' to get started."
-      />
+      {/* No School Assignment State */}
+      {!hasError && !isLoading && entityUser && !teacherInfo?.schoolId && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">No School Assignment</h3>
+              <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                You are not currently assigned to any school. Please contact your administrator to assign you to a school before uploading materials.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Only show controls when ready */}
+      {!hasError && teacherInfo?.schoolId && (
+        <div className="flex justify-between items-center">
+          <div />
+          <Button
+            onClick={() => {
+              setEditingMaterial(null);
+              setFormState({
+                title: '',
+                description: '',
+                data_structure_id: '',
+                unit_id: '',
+                topic_id: '',
+                subtopic_id: '',
+                grade_id: '',
+                type: 'video',
+                status: 'active'
+              });
+              setIsFormOpen(true);
+            }}
+            leftIcon={<Plus className="h-4 w-4" />}
+            disabled={isLoading}
+          >
+            Upload Material
+          </Button>
+        </div>
+      )}
+
+      {/* Only show filters and table when ready */}
+      {!hasError && teacherInfo?.schoolId && (
+        <>
+          <FilterCard
+            title="Filters"
+            onApply={() => {}}
+            onClear={() => {
+              setFilters({
+                search: '',
+                data_structure_ids: [],
+                types: [],
+                status: [],
+                grade_ids: []
+              });
+            }}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <FormField id="search" label="Search">
+                <Input
+                  id="search"
+                  placeholder="Search by title..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  disabled={isLoading}
+                />
+              </FormField>
+
+              <SearchableMultiSelect
+                label="Subject"
+                options={dataStructureOptions.map(ds => ({
+                  value: ds.id,
+                  label: ds.subject_name || ds.name
+                }))}
+                selectedValues={filters.data_structure_ids}
+                onChange={(values) => setFilters({ ...filters, data_structure_ids: values })}
+                placeholder="Select subjects..."
+              />
+
+              <SearchableMultiSelect
+                label="Grade"
+                options={gradeLevels.map(g => ({
+                  value: g.id,
+                  label: g.name
+                }))}
+                selectedValues={filters.grade_ids}
+                onChange={(values) => setFilters({ ...filters, grade_ids: values })}
+                placeholder="Select grades..."
+              />
+
+              <SearchableMultiSelect
+                label="Type"
+                options={[
+                  { value: 'video', label: 'Video' },
+                  { value: 'ebook', label: 'E-book' },
+                  { value: 'audio', label: 'Audio' },
+                  { value: 'assignment', label: 'Assignment' }
+                ]}
+                selectedValues={filters.types}
+                onChange={(values) => setFilters({ ...filters, types: values })}
+                placeholder="Select types..."
+              />
+            </div>
+          </FilterCard>
+
+          <DataTable
+            data={materials}
+            columns={columns}
+            keyField="id"
+            caption="List of your uploaded learning materials"
+            ariaLabel="Teacher materials table"
+            loading={isLoading}
+            renderActions={renderActions}
+            onDelete={handleDelete}
+            emptyMessage="No materials uploaded yet. Click 'Upload Material' to get started."
+          />
+        </>
+      )}
 
       {/* Upload/Edit Form */}
       <SlideInForm
