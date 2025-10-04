@@ -193,7 +193,7 @@ async function createAdminUser(data: {
         personal_message: data.personal_message,
         send_invitation: true,
         created_by: currentUser?.email,
-        redirect_to: `${window.location.origin}/admin/set-password`
+        redirect_to: `${window.location.origin}/reset-password`
       })
     });
 

@@ -21,7 +21,11 @@ interface CreateUserPayload {
   send_invitation?: boolean;
   personal_message?: string;
   created_by?: string;
+  redirect_to?: string;
 }
+
+const DEFAULT_RESET_REDIRECT_URL =
+  Deno.env.get('ADMIN_RESET_REDIRECT_URL') || 'https://ggknowledge.com/reset-password'
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -219,6 +223,8 @@ serve(async (req) => {
 
     // Step 4: Send invitation email if requested
     let invitationSent = false
+    const invitationRedirectUrl = body.redirect_to || DEFAULT_RESET_REDIRECT_URL
+
     if (body.send_invitation !== false) {
       try {
         const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
@@ -228,7 +234,7 @@ serve(async (req) => {
               ...userMetadata,
               personal_message: body.personal_message
             },
-            redirectTo: `${Deno.env.get('PUBLIC_SITE_URL') || 'http://localhost:3000'}/reset-password`
+            redirectTo: invitationRedirectUrl
           }
         )
 

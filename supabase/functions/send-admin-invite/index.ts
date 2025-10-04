@@ -11,6 +11,9 @@ const corsHeaders = {
   'Content-Type': 'application/json'
 }
 
+const DEFAULT_RESET_REDIRECT_URL =
+  Deno.env.get('ADMIN_RESET_REDIRECT_URL') || 'https://ggknowledge.com/reset-password'
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -44,7 +47,7 @@ serve(async (req) => {
       type: 'recovery',
       email: body.email,
       options: {
-        redirectTo: `${Deno.env.get('SITE_URL')}/set-password`
+        redirectTo: body.redirect_to || DEFAULT_RESET_REDIRECT_URL
       }
     })
 
