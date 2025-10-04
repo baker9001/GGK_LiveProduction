@@ -33,6 +33,7 @@ import {
   Calendar,
   Circle,
   ClipboardList,
+  UserCircle,
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -60,7 +61,8 @@ const iconMap: Record<string, LucideIcon> = {
   TrendingUp,
   Route,
   Calendar,
-  ClipboardList
+  ClipboardList,
+  UserCircle
 };
 
 interface AdminLayoutProps {

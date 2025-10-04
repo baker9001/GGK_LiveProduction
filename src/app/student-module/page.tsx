@@ -6,6 +6,7 @@ import { useModuleSecurity } from '../../hooks/useModuleSecurity';
 import { BookOpen, Award, Clock, TrendingUp, Key, Video } from 'lucide-react';
 import LicensesPage from './licenses/page';
 import LearningPathPage from './pathways/page';
+import StudentProfileSettingsPage from './profile/page';
 
 interface StudentModulePageProps {
   moduleKey?: string;
@@ -182,6 +183,7 @@ export default function StudentModulePage({ moduleKey }: StudentModulePageProps)
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="licenses" element={<LicensesPage />} />
         <Route path="pathways" element={<LearningPathPage />} />
+        <Route path="profile" element={<StudentProfileSettingsPage />} />
       </Routes>
     </AdminLayout>
   );
