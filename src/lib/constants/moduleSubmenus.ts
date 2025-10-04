@@ -211,13 +211,6 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     moduleKey: 'teachers-module'
   },
   {
-    id: 'teachers-profile',
-    label: 'My Profile',
-    path: '/app/teachers-module/profile',
-    icon: 'User',
-    moduleKey: 'teachers-module'
-  },
-  {
     id: 'staff-management',
     label: 'Staff Management',
     path: '/app/teachers-module/staff',

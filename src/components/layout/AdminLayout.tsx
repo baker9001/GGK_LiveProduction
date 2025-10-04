@@ -177,7 +177,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     const profilePaths: Record<string, string> = {
       'entity-module': '/app/entity-module/profile',
       'system-admin': '/app/system-admin/profile',
-      'teacher-module': '/app/teacher-module/profile',
+      'teachers-module': '/app/teachers-module/profile',
       'student-module': '/app/student-module/profile',
       // Add other modules as needed
     };
