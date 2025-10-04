@@ -11,8 +11,10 @@ const corsHeaders = {
   'Content-Type': 'application/json'
 }
 
+const PUBLIC_SITE_URL = Deno.env.get('PUBLIC_SITE_URL') || 'https://ggknowledge.com'
+
 const DEFAULT_RESET_REDIRECT_URL =
-  Deno.env.get('ADMIN_RESET_REDIRECT_URL') || 'https://ggknowledge.com/reset-password'
+  Deno.env.get('ADMIN_RESET_REDIRECT_URL') || `${PUBLIC_SITE_URL}/reset-password`
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -107,7 +109,7 @@ serve(async (req) => {
           type: 'signup',
           email: body.email.toLowerCase(),
           options: {
-            redirectTo: body.redirect_to || `${Deno.env.get('PUBLIC_SITE_URL')}/login`
+            redirectTo: body.redirect_to || `${PUBLIC_SITE_URL}/signin`
           }
         })
 
