@@ -186,7 +186,11 @@ export const uploadFileViaEdgeFunction = async (
 
     // Build Edge Function URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+
+    console.log('[Upload] Calling Edge Function:', edgeFunctionUrl);
+    console.log('[Upload] Auth token present:', !!authToken);
 
     // Create form data
     const formData = new FormData();
@@ -195,30 +199,54 @@ export const uploadFileViaEdgeFunction = async (
       formData.append('oldPath', oldPath);
     }
 
-    // Call Edge Function
+    // Call Edge Function with proper authentication headers
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'X-Auth-Token': authToken,
       },
       body: formData,
     });
 
-    const result = await response.json();
+    console.log('[Upload] Response status:', response.status, response.statusText);
 
-    if (!response.ok) {
+    let result;
+    try {
+      result = await response.json();
+      console.log('[Upload] Response data:', result);
+    } catch (parseError) {
+      console.error('[Upload] Failed to parse response:', parseError);
       return {
         success: false,
-        error: result.error || 'Upload failed',
+        error: `Server response error (${response.status}): ${response.statusText}`,
       };
     }
 
+    if (!response.ok) {
+      console.error('[Upload] Upload failed:', result);
+      return {
+        success: false,
+        error: result.error || result.message || `Upload failed with status ${response.status}`,
+      };
+    }
+
+    console.log('[Upload] Upload successful:', result.path);
     return {
       success: true,
       path: result.path,
     };
   } catch (error) {
-    console.error('Edge Function upload error:', error);
+    console.error('[Upload] Edge Function upload error:', error);
+
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return {
+        success: false,
+        error: 'Network error. Please check your internet connection and try again.',
+      };
+    }
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Upload failed',
@@ -266,12 +294,14 @@ export const deleteFileViaEdgeFunction = async (
 
     // Build Edge Function URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = `${supabaseUrl}/functions/v1/${functionName}`;
 
-    // Call Edge Function
+    // Call Edge Function with proper authentication headers
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'X-Auth-Token': authToken,
         'Content-Type': 'application/json',
       },
@@ -343,12 +373,14 @@ export const deleteMultipleFilesViaEdgeFunction = async (
 
     // Build Edge Function URL
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = `${supabaseUrl}/functions/v1/${functionName}`;
 
-    // Call Edge Function
+    // Call Edge Function with proper authentication headers
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'X-Auth-Token': authToken,
         'Content-Type': 'application/json',
       },

@@ -90,6 +90,15 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
     const oldPath = value;
     const isReplacement = !!oldPath;
 
+    console.log('[ImageUpload] Starting upload:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      bucket,
+      isReplacement,
+      oldPath,
+    });
+
     const loadingToastId = toast.loading(isReplacement ? 'Replacing image...' : 'Uploading image...');
 
     try {
@@ -97,6 +106,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
       // Validate file type
       if (!file.type.match(/^image\/(jpeg|png|jpg|svg\+xml)$/)) {
+        console.error('[ImageUpload] Invalid file type:', file.type);
         toast.dismiss(loadingToastId);
         toast.error("Please upload an image file (PNG, JPG, JPEG, or SVG)");
         return;
@@ -104,6 +114,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
 
       // Validate file size (2MB)
       if (file.size > 2 * 1024 * 1024) {
+        console.error('[ImageUpload] File too large:', file.size);
         toast.dismiss(loadingToastId);
         toast.error("File size must be less than 2MB");
         return;
@@ -120,17 +131,26 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
       toast.dismiss(loadingToastId);
 
       if (!result.success) {
+        console.error('[ImageUpload] Upload failed:', result.error);
+
         // Handle specific error cases
-        if (result.error?.includes('Authentication')) {
-          toast.error("Please log in to upload images.");
-        } else if (result.error?.includes('Access denied')) {
+        if (result.error?.includes('Authentication') || result.error?.includes('auth')) {
+          toast.error("Authentication error. Please log in again.");
+        } else if (result.error?.includes('Access denied') || result.error?.includes('privileges')) {
           toast.error("You don't have permission to upload images.");
         } else if (result.error?.includes('No Edge Function')) {
           // Fallback to direct upload for buckets without Edge Functions
           console.warn(`No Edge Function for ${bucket}, falling back to direct upload`);
           await handleDirectUpload(file, oldPath, isReplacement, loadingToastId);
           return;
+        } else if (result.error?.includes('Network error')) {
+          toast.error("Network error. Please check your connection.");
+        } else if (result.error?.includes('File size')) {
+          toast.error("File is too large. Maximum size is 2MB.");
+        } else if (result.error?.includes('file type') || result.error?.includes('Invalid file')) {
+          toast.error("Invalid file type. Please use PNG, JPG, JPEG, or SVG.");
         } else {
+          // Show the actual error message from the server
           toast.error(result.error || "Failed to upload image. Please try again.");
         }
         return;
