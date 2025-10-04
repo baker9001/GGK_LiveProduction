@@ -1316,7 +1316,7 @@ export const userCreationService = {
       const { error: inviteError } = await supabase.auth.resetPasswordForEmail(
         userData.email,
         {
-          redirectTo: `${window.location.origin}/auth/accept-invite`
+          redirectTo: `${window.location.origin}/reset-password`
         }
       );
 
