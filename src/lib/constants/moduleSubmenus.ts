@@ -215,7 +215,16 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
     label: 'Learning Management',
     path: '/app/teachers-module/learning-management',
     icon: 'BookOpen',
-    moduleKey: 'teachers-module'
+    moduleKey: 'teachers-module',
+    children: [
+      {
+        id: 'materials',
+        label: 'Materials',
+        path: '/app/teachers-module/learning-management/materials',
+        icon: 'FileText',
+        moduleKey: 'teachers-module'
+      }
+    ]
   },
   {
     id: 'study-calendar',

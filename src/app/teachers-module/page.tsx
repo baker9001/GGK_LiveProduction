@@ -8,6 +8,7 @@ import ProfilePage from './profile/page';
 import StudentsPage from './students/page';
 import LearningManagementPage from './learning-management/page';
 import StudyCalendarPage from './study-calendar/page';
+import TeacherMaterialsPage from './learning-management/materials/page';
 
 interface TeachersModulePageProps {
   moduleKey?: string;
@@ -154,6 +155,7 @@ export default function TeachersModulePage({ moduleKey }: TeachersModulePageProp
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="learning-management" element={<LearningManagementPage />} />
+        <Route path="learning-management/materials" element={<TeacherMaterialsPage />} />
         <Route path="study-calendar" element={<StudyCalendarPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Routes>

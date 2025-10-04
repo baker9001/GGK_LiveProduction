@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, BookOpen, CalendarCheck, Route } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
@@ -177,6 +178,7 @@ function formatDate(date: string | null | undefined): string | null {
 
 export default function LearningPathPage() {
   const { user } = useUser();
+  const navigate = useNavigate();
 
   const { data: studentId, isLoading: isLoadingStudent } = useQuery(
     ['student-id', user?.id],
@@ -350,9 +352,22 @@ export default function LearningPathPage() {
             const validFrom = formatDate(subject.validFrom);
             const validTo = formatDate(subject.validTo);
 
+            const handleCardClick = () => {
+              // Only navigate if license is active
+              if (subject.status === 'active') {
+                navigate(`/app/student-module/pathways/materials/${subject.subjectId}`, {
+                  state: {
+                    subjectName: subject.subjectName,
+                    subjectLogo: subject.logoUrl
+                  }
+                });
+              }
+            };
+
             return (
               <div
                 key={subject.subjectId}
+                onClick={handleCardClick}
                 className="group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-850 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 cursor-pointer border border-gray-100 dark:border-gray-700/50 hover:border-[#8CC63F]/30 hover:-translate-y-2"
               >
                 {/* Gradient Accent Bar */}
