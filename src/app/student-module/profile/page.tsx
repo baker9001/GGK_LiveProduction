@@ -68,7 +68,7 @@ interface StudentRecord {
   parent_contact?: string | null;
   parent_email?: string | null;
   emergency_contact?: StudentEmergencyContact | null;
-  program_id?: string | null;
+  enrolled_programs?: string[] | null;
   school_id?: string | null;
   branch_id?: string | null;
   is_active: boolean;
@@ -287,7 +287,7 @@ export default function StudentProfileSettingsPage() {
           parent_contact,
           parent_email,
           emergency_contact,
-          program_id,
+          enrolled_programs,
           school_id,
           branch_id,
           is_active,
@@ -301,11 +301,11 @@ export default function StudentProfileSettingsPage() {
       }
 
       let programName: string | null = null;
-      if (studentRow?.program_id) {
+      if (studentRow?.enrolled_programs && studentRow.enrolled_programs.length > 0) {
         const { data: programData } = await supabase
           .from('programs')
           .select('name')
-          .eq('id', studentRow.program_id)
+          .eq('id', studentRow.enrolled_programs[0])
           .maybeSingle();
         programName = programData?.name ?? null;
       }
