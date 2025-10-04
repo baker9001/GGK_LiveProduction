@@ -176,6 +176,8 @@ async function createAdminUser(data: {
     // Call enhanced Edge Function
     const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/create-admin-user-complete`;
     
+    const resetPasswordRedirectUrl = `${window.location.origin}/reset-password`
+
     const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
@@ -193,7 +195,7 @@ async function createAdminUser(data: {
         personal_message: data.personal_message,
         send_invitation: true,
         created_by: currentUser?.email,
-        redirect_to: `${window.location.origin}/reset-password`
+        redirect_to: resetPasswordRedirectUrl
       })
     });
 
