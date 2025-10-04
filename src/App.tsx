@@ -66,6 +66,7 @@ import CambridgeOLevelPage from './app/landing/cambridge-o-level/page';
 import PrivacyPage from './app/landing/privacy/page';
 import TermsPage from './app/landing/terms/page';
 import CookiesPage from './app/landing/cookies/page';
+import AuthCallbackPage from './app/auth/callback/page';
 
 // PRESERVED: Module access control wrapper
 function ModuleRoute({ 
@@ -156,6 +157,7 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/form-validation" element={<FormValidationPage />} />
               
               {/* PRESERVED: Password Change Route - Protected */}
