@@ -53,6 +53,7 @@ export default function ResetPasswordPage() {
   const [tokenValid, setTokenValid] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [linkType, setLinkType] = useState<string | null>(null);
   
   // Token storage
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export default function ResetPasswordPage() {
   const legacyToken = searchParams.get('token');
   
   const passwordStrength = calculatePasswordStrength(password);
+  const isInvitationLink = linkType !== null && linkType !== 'recovery';
 
   // CRITICAL: This effect MUST run first to capture tokens immediately
   useEffect(() => {
@@ -86,6 +88,7 @@ export default function ResetPasswordPage() {
         const type = hashParams.get('type');
         const errorCode = hashParams.get('error_code');
         const errorDesc = hashParams.get('error_description');
+        const validHashTypes = new Set(['recovery', 'invite', 'signup']);
 
         console.log('[ResetPassword] Hash params found:', {
           hasAccess: !!access,
@@ -97,18 +100,19 @@ export default function ResetPasswordPage() {
         // Check for errors
         if (errorCode || errorDesc) {
           console.error('[ResetPassword] Error in hash:', errorCode, errorDesc);
-          setError(errorDesc || 'Invalid or expired reset link');
+          setError(errorDesc || 'Invalid or expired access link');
           setTokenValid(false);
           setCheckingToken(false);
           return;
         }
 
-        // Handle recovery tokens
-        if (access && type === 'recovery') {
-          console.log('[ResetPassword] Recovery tokens found in hash');
+        // Handle recovery or invitation tokens
+        if (access && type && validHashTypes.has(type)) {
+          console.log('[ResetPassword] Valid tokens found in hash for type:', type);
           setAccessToken(access);
           setRefreshToken(refresh || '');
-          
+          setLinkType(type);
+
           try {
             // Set Supabase session
             console.log('[ResetPassword] Setting Supabase session...');
@@ -124,24 +128,26 @@ export default function ResetPasswordPage() {
               const { data: { user }, error: userError } = await supabase.auth.getUser(access);
               
               if (userError || !user) {
-                setError('Failed to verify reset link. The link may have expired.');
+                setError('Failed to verify access link. The link may have expired.');
                 setTokenValid(false);
                 setCheckingToken(false);
                 return;
               }
-              
+
               // User exists but session failed - still proceed
               console.log('[ResetPassword] User found despite session error:', user.id);
               setUserIdToProcess(user.id);
               setUserEmail(user.email || '');
               setTokenValid(true);
               setSessionReady(true);
+              setLinkType((current) => current || type);
             } else if (sessionData?.user) {
               console.log('[ResetPassword] Session established for:', sessionData.user.id);
               setUserIdToProcess(sessionData.user.id);
               setUserEmail(sessionData.user.email || '');
               setTokenValid(true);
               setSessionReady(true);
+              setLinkType((current) => current || type);
             } else {
               // Try to get user from session
               const { data: { user } } = await supabase.auth.getUser();
@@ -151,8 +157,9 @@ export default function ResetPasswordPage() {
                 setUserEmail(user.email || '');
                 setTokenValid(true);
                 setSessionReady(true);
+                setLinkType((current) => current || type);
               } else {
-                setError('Unable to verify user session. Please request a new reset link.');
+                setError('Unable to verify user session. Please request a new email link.');
                 setTokenValid(false);
               }
             }
@@ -160,10 +167,10 @@ export default function ResetPasswordPage() {
             // IMPORTANT: DO NOT clear hash here - we need it for the password update
             // Only clear it after successful password reset
             console.log('[ResetPassword] Preserving hash for password update');
-            
+
           } catch (err) {
             console.error('[ResetPassword] Error processing tokens:', err);
-            setError('Failed to process reset link. Please try again.');
+            setError('Failed to process access link. Please try again.');
             setTokenValid(false);
           } finally {
             setCheckingToken(false);
@@ -193,7 +200,7 @@ export default function ResetPasswordPage() {
 
       // No tokens found
       console.log('[ResetPassword] No tokens found');
-      setError('No reset token provided. Please use the link from your email.');
+      setError('No access token provided. Please use the link from your email.');
       setTokenValid(false);
       setCheckingToken(false);
     };
@@ -212,7 +219,7 @@ export default function ResetPasswordPage() {
         .single();
 
       if (error || !data) {
-        setError('Invalid or expired reset link. Please request a new one.');
+        setError('Invalid or expired access link. Please request a new one.');
         setTokenValid(false);
       } else {
         setLegacyTokenData(data);
@@ -221,7 +228,7 @@ export default function ResetPasswordPage() {
         setTokenValid(true);
       }
     } catch (err) {
-      setError('Failed to verify reset link');
+      setError('Failed to verify access link');
       setTokenValid(false);
     } finally {
       setCheckingToken(false);
@@ -283,7 +290,7 @@ export default function ResetPasswordPage() {
           
           // Handle specific errors
           if (updateError.message?.includes('not authenticated')) {
-            throw new Error('Session expired. Please request a new password reset link.');
+            throw new Error('Session expired. Please request a new email link.');
           } else if (updateError.message?.includes('same password')) {
             throw new Error('New password must be different from your current password.');
           } else {
@@ -376,15 +383,15 @@ export default function ResetPasswordPage() {
         // Clear URL for legacy tokens too
         window.history.replaceState(null, '', window.location.pathname);
       } else {
-        throw new Error('No valid session found. Please request a new reset link.');
+        throw new Error('No valid session found. Please request a new email link.');
       }
       
-      toast.success('Password reset successful!');
+      toast.success('Password updated successfully!');
       setSuccess(true);
-      
+
     } catch (err) {
       console.error('[ResetPassword] Error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reset password.');
+      setError(err instanceof Error ? err.message : 'Failed to update password.');
     } finally {
       setLoading(false);
     }
@@ -407,7 +414,7 @@ export default function ResetPasswordPage() {
         
         <div className="text-center relative z-10">
           <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F] mx-auto" />
-          <p className="mt-2 text-sm text-gray-300">Verifying reset link...</p>
+          <p className="mt-2 text-sm text-gray-300">Verifying secure link...</p>
         </div>
       </div>
     );
@@ -446,10 +453,10 @@ export default function ResetPasswordPage() {
                 <AlertCircle className="h-6 w-6 text-red-400" />
               </div>
               <h2 className="mt-4 text-lg font-semibold text-white">
-                Invalid or Expired Reset Link
+                Invalid or Expired Access Link
               </h2>
               <p className="mt-2 text-sm text-gray-300">
-                {error || 'Failed to verify reset link. The link may have expired. Please request a new one.'}
+                {error || 'Failed to verify access link. The link may have expired. Please request a new one.'}
               </p>
               
               <div className="mt-6 space-y-3">
@@ -458,7 +465,7 @@ export default function ResetPasswordPage() {
                   className="w-full justify-center bg-[#8CC63F] hover:bg-[#7AB635] text-white font-medium"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Request New Link
+                  Request New Email
                 </Button>
                 
                 <Button
@@ -519,10 +526,10 @@ export default function ResetPasswordPage() {
                 <CheckCircle className="h-6 w-6 text-green-400" />
               </div>
               <h2 className="mt-4 text-lg font-semibold text-white">
-                Password Reset Successful
+                Password Updated Successfully
               </h2>
               <p className="mt-2 text-sm text-gray-300">
-                Your password has been successfully reset. You can now sign in with your new password.
+                Your password has been successfully updated. You can now sign in with your new credentials.
               </p>
               
               <div className="mt-6">
@@ -567,11 +574,17 @@ export default function ResetPasswordPage() {
             </span>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
-            {isFirstLoginChange ? 'Change your password' : 'Reset your password'}
+            {isFirstLoginChange
+              ? 'Change your password'
+              : isInvitationLink
+              ? 'Set your password'
+              : 'Reset your password'}
           </h2>
           <p className="mt-2 text-sm text-gray-300">
-            {isFirstLoginChange 
-              ? 'Please set a new password for your account' 
+            {isFirstLoginChange
+              ? 'Please set a new password for your account'
+              : isInvitationLink
+              ? 'Create a strong password to activate your account'
               : 'Enter your new password below'}
           </p>
         </div>
@@ -588,7 +601,7 @@ export default function ResetPasswordPage() {
                       onClick={() => navigate('/forgot-password')}
                       className="mt-2 text-xs text-red-300 hover:text-white underline block"
                     >
-                      Request a new reset link
+                      Request a new email link
                     </button>
                   )}
                 </div>
@@ -709,10 +722,10 @@ export default function ResetPasswordPage() {
               {loading ? (
                 <>
                   <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                  Resetting password...
+                  {isInvitationLink ? 'Setting password...' : 'Resetting password...'}
                 </>
               ) : (
-                'Reset Password'
+                isInvitationLink ? 'Set Password' : 'Reset Password'
               )}
             </Button>
           </form>
