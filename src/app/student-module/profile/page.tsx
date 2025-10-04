@@ -19,13 +19,14 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Camera, CheckCircle2, Clock, CreditCard as Edit3, GraduationCap, Heart, Lock, Mail, PenLine, Phone, ShieldCheck, Smile, Sparkles, Wand2, Calendar } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, CreditCard as Edit3, GraduationCap, Heart, Lock, Mail, PenLine, Phone, ShieldCheck, Smile, Sparkles, Wand2, Calendar, Building2, MapPin, Unlock, X } from 'lucide-react';
 import { z } from 'zod';
 
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
 import { FormField, Input, Textarea } from '../../../components/shared/FormField';
+import { PhoneInput } from '../../../components/shared/PhoneInput';
 import { toast } from '../../../components/shared/Toast';
 import { getPublicUrl } from '../../../lib/storageHelpers';
 import { userCreationService } from '../../../services/userCreationService';
@@ -57,6 +58,9 @@ interface StudentRecord {
   branch_id?: string | null;
   is_active: boolean;
   updated_at?: string | null;
+  birthday?: string | null;
+  gender?: string | null;
+  phone?: string | null;
 }
 
 interface StudentProfileData {
@@ -127,29 +131,14 @@ const profileFormSchema = z.object({
     .or(z.literal('')),
   phone: z
     .string()
-    .regex(/^(\+?[0-9\s-]{7,20})?$/, 'Enter a valid phone number')
+    .min(1, 'Phone number is required')
+    .regex(/^\+\d{1,4}\s[0-9\s-]{4,20}$/, 'Enter a valid phone number with country code')
     .optional()
     .or(z.literal('')),
+  birthday: z.string().optional().or(z.literal('')),
+  gender: z.string().max(50, 'Gender value too long').optional().or(z.literal('')),
   gradeLevel: z.string().max(50, 'Grade level looks too long').optional().or(z.literal('')),
   section: z.string().max(50, 'Section name looks too long').optional().or(z.literal('')),
-  parentName: z.string().max(100, 'Parent name is too long').optional().or(z.literal('')),
-  parentContact: z
-    .string()
-    .max(40, 'Parent contact looks too long')
-    .optional()
-    .or(z.literal('')),
-  parentEmail: z.string().email('Please enter a valid parent email').optional().or(z.literal('')),
-  emergencyName: z.string().max(100, 'Emergency contact name too long').optional().or(z.literal('')),
-  emergencyPhone: z
-    .string()
-    .max(40, 'Emergency phone looks too long')
-    .optional()
-    .or(z.literal('')),
-  emergencyRelationship: z
-    .string()
-    .max(60, 'Relationship description too long')
-    .optional()
-    .or(z.literal('')),
   vibe: z.string().max(60, 'Keep your vibe under 60 characters').optional().or(z.literal('')),
   accentColor: z.enum(['emerald', 'violet', 'sky', 'sunset']).default('emerald')
 });
@@ -212,23 +201,23 @@ export default function StudentProfileSettingsPage() {
     phone: '',
     gradeLevel: '',
     section: '',
-    parentName: '',
-    parentContact: '',
-    parentEmail: '',
-    emergencyName: '',
-    emergencyPhone: '',
-    emergencyRelationship: '',
     vibe: '',
-    accentColor: 'emerald'
+    accentColor: 'emerald',
+    birthday: '',
+    gender: ''
   });
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
 
   const [emailDraft, setEmailDraft] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isAvatarHovered, setIsAvatarHovered] = useState(false);
 
   const passwordStrength = useMemo(() => evaluatePasswordStrength(newPassword), [newPassword]);
 
@@ -275,7 +264,10 @@ export default function StudentProfileSettingsPage() {
           school_id,
           branch_id,
           is_active,
-          updated_at
+          updated_at,
+          birthday,
+          gender,
+          phone
         `)
         .eq('user_id', user.id)
         .maybeSingle();
@@ -345,7 +337,6 @@ export default function StudentProfileSettingsPage() {
         display_name: sanitizeValue(values.displayName),
         pronouns: sanitizeValue(values.pronouns),
         bio: sanitizeValue(values.bio),
-        phone: sanitizeValue(values.phone),
         vibe: sanitizeValue(values.vibe),
         accent_color: values.accentColor,
         updated_at: new Date().toISOString()
@@ -364,21 +355,12 @@ export default function StudentProfileSettingsPage() {
       }
 
       if (profileData.student) {
-        const emergencyContact = {
-          name: sanitizeValue(values.emergencyName),
-          phone: sanitizeValue(values.emergencyPhone),
-          relationship: sanitizeValue(values.emergencyRelationship)
-        } satisfies StudentEmergencyContact;
-
         const { error: studentUpdateError } = await supabase
           .from('students')
           .update({
-            grade_level: sanitizeValue(values.gradeLevel),
-            section: sanitizeValue(values.section),
-            parent_name: sanitizeValue(values.parentName),
-            parent_contact: sanitizeValue(values.parentContact),
-            parent_email: sanitizeValue(values.parentEmail),
-            emergency_contact: emergencyContact,
+            phone: sanitizeValue(values.phone),
+            birthday: sanitizeValue(values.birthday),
+            gender: sanitizeValue(values.gender),
             updated_at: new Date().toISOString()
           })
           .eq('id', profileData.student.id);
@@ -482,19 +464,15 @@ export default function StudentProfileSettingsPage() {
       displayName: meta?.display_name || meta?.name || '',
       pronouns: meta?.pronouns || '',
       bio: meta?.bio || '',
-      phone: meta?.phone || '',
+      phone: profileData.student?.phone || '',
       gradeLevel: profileData.student?.grade_level || '',
       section: profileData.student?.section || '',
-      parentName: profileData.student?.parent_name || '',
-      parentContact: profileData.student?.parent_contact || '',
-      parentEmail: profileData.student?.parent_email || '',
-      emergencyName: profileData.student?.emergency_contact?.name || '',
-      emergencyPhone: profileData.student?.emergency_contact?.phone || '',
-      emergencyRelationship: profileData.student?.emergency_contact?.relationship || '',
       vibe: meta?.vibe || '',
       accentColor: (meta?.accent_color as string) && ACCENT_THEMES[meta?.accent_color]
         ? meta?.accent_color
-        : 'emerald'
+        : 'emerald',
+      birthday: profileData.student?.birthday || '',
+      gender: profileData.student?.gender || ''
     });
     setEmailDraft(profileData.user.email);
   }, [profileData]);
@@ -649,7 +627,13 @@ export default function StudentProfileSettingsPage() {
     updateEmailMutation.mutate(emailDraft.trim().toLowerCase());
   };
 
-  const handlePasswordUpdate = () => {
+  const handlePasswordUpdate = async () => {
+    if (!currentPassword) {
+      setPasswordError('Current password is required');
+      toast.error('Please enter your current password');
+      return;
+    }
+
     if (!newPassword || !confirmPassword) {
       toast.error('Enter and confirm your new password');
       return;
@@ -666,9 +650,46 @@ export default function StudentProfileSettingsPage() {
     }
 
     setIsChangingPassword(true);
-    changePasswordMutation.mutate(newPassword, {
-      onSettled: () => setIsChangingPassword(false)
-    });
+    setPasswordError(null);
+
+    try {
+      // Verify current password first
+      const bcrypt = await import('bcryptjs/dist/bcrypt.min');
+      const { data: userData } = await supabase
+        .from('users')
+        .select('password_hash')
+        .eq('id', user?.id)
+        .single();
+
+      if (!userData?.password_hash) {
+        throw new Error('Unable to verify current password');
+      }
+
+      const isValid = await bcrypt.compare(currentPassword, userData.password_hash);
+
+      if (!isValid) {
+        setPasswordError('Current password is incorrect');
+        toast.error('Current password is incorrect');
+        setIsChangingPassword(false);
+        return;
+      }
+
+      // If verification passes, proceed with password change
+      changePasswordMutation.mutate(newPassword, {
+        onSuccess: () => {
+          setCurrentPassword('');
+          setIsChangingPassword(false);
+        },
+        onError: () => {
+          setIsChangingPassword(false);
+        }
+      });
+    } catch (err: any) {
+      console.error('Password verification failed:', err);
+      setPasswordError(err?.message || 'Failed to verify password');
+      toast.error(err?.message || 'Failed to verify password');
+      setIsChangingPassword(false);
+    }
   };
 
   // -------------------------------------------------------------------------
@@ -735,7 +756,11 @@ export default function StudentProfileSettingsPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_transparent_60%)]" />
         <div className="relative p-8 md:p-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 text-white">
           <div className="flex items-start gap-6">
-            <div className={`relative w-24 h-24 md:w-28 md:h-28 rounded-3xl ring-4 ${accentTheme.ring} ring-offset-4 ring-offset-white/20 bg-white/20 backdrop-blur-sm flex items-center justify-center`}>
+            <div
+              className={`relative w-24 h-24 md:w-28 md:h-28 rounded-3xl ring-4 ${accentTheme.ring} ring-offset-4 ring-offset-white/20 bg-white/20 backdrop-blur-sm flex items-center justify-center group`}
+              onMouseEnter={() => setIsAvatarHovered(true)}
+              onMouseLeave={() => setIsAvatarHovered(false)}
+            >
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
@@ -747,19 +772,34 @@ export default function StudentProfileSettingsPage() {
                   {profileForm.displayName?.charAt(0)?.toUpperCase() || profileForm.name.charAt(0)?.toUpperCase() || 'S'}
                 </span>
               )}
-              <label className="absolute -bottom-3 -right-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarUpload}
-                />
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-white/90 text-gray-800 shadow-sm cursor-pointer">
-                  <Camera className="h-3.5 w-3.5" />
-                  Update
-                </span>
-              </label>
+
+              {/* Hover overlay with actions */}
+              {isAvatarHovered && (
+                <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center gap-2 animate-in fade-in duration-200">
+                  <label className="cursor-pointer">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <div className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-white/10 rounded-lg transition-colors">
+                      <Camera className="h-5 w-5 text-white" />
+                      <span className="text-xs font-medium text-white">Update</span>
+                    </div>
+                  </label>
+                  {avatarUrl && (
+                    <button
+                      onClick={handleAvatarRemove}
+                      className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-white/10 rounded-lg transition-colors"
+                    >
+                      <X className="h-5 w-5 text-white" />
+                      <span className="text-xs font-medium text-white">Remove</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -817,15 +857,6 @@ export default function StudentProfileSettingsPage() {
             </div>
           </div>
         </div>
-        {avatarUrl && (
-          <button
-            onClick={handleAvatarRemove}
-            className="absolute top-6 right-6 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white/20 text-white rounded-full backdrop-blur-md hover:bg-white/30"
-          >
-            <PenLine className="w-3.5 h-3.5" />
-            Remove pic
-          </button>
-        )}
       </div>
 
       {/* Main content grid */}
@@ -856,19 +887,15 @@ export default function StudentProfileSettingsPage() {
                             displayName: meta?.display_name || meta?.name || '',
                             pronouns: meta?.pronouns || '',
                             bio: meta?.bio || '',
-                            phone: meta?.phone || '',
+                            phone: profileData.student?.phone || '',
                             gradeLevel: profileData.student?.grade_level || '',
                             section: profileData.student?.section || '',
-                            parentName: profileData.student?.parent_name || '',
-                            parentContact: profileData.student?.parent_contact || '',
-                            parentEmail: profileData.student?.parent_email || '',
-                            emergencyName: profileData.student?.emergency_contact?.name || '',
-                            emergencyPhone: profileData.student?.emergency_contact?.phone || '',
-                            emergencyRelationship: profileData.student?.emergency_contact?.relationship || '',
                             vibe: meta?.vibe || '',
                             accentColor: (meta?.accent_color as string) && ACCENT_THEMES[meta?.accent_color]
                               ? meta?.accent_color
-                              : 'emerald'
+                              : 'emerald',
+                            birthday: profileData.student?.birthday || '',
+                            gender: profileData.student?.gender || ''
                           });
                         }
                       }}
@@ -943,33 +970,37 @@ export default function StudentProfileSettingsPage() {
               <div>
                 <div className="grid grid-cols-1 gap-4">
                   <FormField id="phone" label="Contact number" error={profileErrors.phone}>
-                    <Input
-                      id="phone"
+                    <PhoneInput
                       value={profileForm.phone}
-                      onChange={e => handleProfileChange('phone', e.target.value)}
+                      onChange={(value) => handleProfileChange('phone', value)}
                       disabled={!isEditingProfile}
-                      placeholder="Share a number if you want alerts"
-                      leftIcon={<Phone className="w-4 h-4 text-gray-400" />}
+                      placeholder="Your contact number"
                     />
                   </FormField>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField id="gradeLevel" label="Grade" error={profileErrors.gradeLevel}>
+                    <FormField id="birthday" label="Birthday" error={profileErrors.birthday}>
                       <Input
-                        id="gradeLevel"
-                        value={profileForm.gradeLevel}
-                        onChange={e => handleProfileChange('gradeLevel', e.target.value)}
+                        id="birthday"
+                        type="date"
+                        value={profileForm.birthday}
+                        onChange={e => handleProfileChange('birthday', e.target.value)}
                         disabled={!isEditingProfile}
-                        placeholder="Grade level"
+                        placeholder="Your date of birth"
                       />
                     </FormField>
-                    <FormField id="section" label="Class section" error={profileErrors.section}>
-                      <Input
-                        id="section"
-                        value={profileForm.section}
-                        onChange={e => handleProfileChange('section', e.target.value)}
+                    <FormField id="gender" label="Gender" error={profileErrors.gender}>
+                      <Select
+                        id="gender"
+                        value={profileForm.gender}
+                        onChange={e => handleProfileChange('gender', e.target.value)}
                         disabled={!isEditingProfile}
-                        placeholder="Section"
-                      />
+                      >
+                        <option value="">Prefer not to say</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                      </Select>
                     </FormField>
                   </div>
                   <FormField id="vibe" label="Current vibe" error={profileErrors.vibe}>
@@ -999,8 +1030,7 @@ export default function StudentProfileSettingsPage() {
                             style={{
                               backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`
                             }}
-                            onClick={() => isEditingProfile && handleProfileChange('accentColor', option.value)}
-                            disabled={!isEditingProfile}
+                            onClick={() => handleProfileChange('accentColor', option.value)}
                           >
                             <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient}`} />
                             <div className="relative">
@@ -1021,84 +1051,54 @@ export default function StudentProfileSettingsPage() {
               </div>
             </div>
           </div>
-
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Guardian & emergency contacts</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Trusted adults we can reach if there is important news about your learning journey.
-            </p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <FormField id="parentName" label="Guardian name" error={profileErrors.parentName}>
-                  <Input
-                    id="parentName"
-                    value={profileForm.parentName}
-                    onChange={e => handleProfileChange('parentName', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="Primary guardian name"
-                  />
-                </FormField>
-                <FormField id="parentContact" label="Guardian phone" error={profileErrors.parentContact}>
-                  <Input
-                    id="parentContact"
-                    value={profileForm.parentContact}
-                    onChange={e => handleProfileChange('parentContact', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="Phone number"
-                    leftIcon={<Phone className="w-4 h-4 text-gray-400" />}
-                  />
-                </FormField>
-                <FormField id="parentEmail" label="Guardian email" error={profileErrors.parentEmail}>
-                  <Input
-                    id="parentEmail"
-                    value={profileForm.parentEmail}
-                    onChange={e => handleProfileChange('parentEmail', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="Email address"
-                    leftIcon={<Mail className="w-4 h-4 text-gray-400" />}
-                  />
-                </FormField>
-              </div>
-              <div className="space-y-4">
-                <FormField id="emergencyName" label="Emergency contact" error={profileErrors.emergencyName}>
-                  <Input
-                    id="emergencyName"
-                    value={profileForm.emergencyName}
-                    onChange={e => handleProfileChange('emergencyName', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="Who should we call?"
-                  />
-                </FormField>
-                <FormField id="emergencyPhone" label="Emergency phone" error={profileErrors.emergencyPhone}>
-                  <Input
-                    id="emergencyPhone"
-                    value={profileForm.emergencyPhone}
-                    onChange={e => handleProfileChange('emergencyPhone', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="Phone number"
-                    leftIcon={<Phone className="w-4 h-4 text-gray-400" />}
-                  />
-                </FormField>
-                <FormField
-                  id="emergencyRelationship"
-                  label="Relationship"
-                  error={profileErrors.emergencyRelationship}
-                >
-                  <Input
-                    id="emergencyRelationship"
-                    value={profileForm.emergencyRelationship}
-                    onChange={e => handleProfileChange('emergencyRelationship', e.target.value)}
-                    disabled={!isEditingProfile}
-                    placeholder="e.g. Aunt, family friend"
-                  />
-                </FormField>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* My School Section */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">My School</h3>
+              <Building2 className="w-5 h-5 text-blue-500" />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              These details are managed by your school administration
+            </p>
+            <div className="space-y-3 text-sm">
+              {profileData.schoolName && (
+                <div className="flex items-start gap-3 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+                  <Building2 className="w-5 h-5 text-blue-500 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">School</p>
+                    <p className="text-gray-600 dark:text-gray-300">{profileData.schoolName}</p>
+                  </div>
+                </div>
+              )}
+              {profileData.branchName && (
+                <div className="flex items-start gap-3 p-3 rounded-2xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-900/40">
+                  <MapPin className="w-5 h-5 text-sky-500 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">Branch</p>
+                    <p className="text-gray-600 dark:text-gray-300">{profileData.branchName}</p>
+                  </div>
+                </div>
+              )}
+              {profileData.student?.grade_level && (
+                <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40">
+                  <GraduationCap className="w-5 h-5 text-emerald-500 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">Grade & Section</p>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {profileData.student.grade_level}
+                      {profileData.student.section && ` - ${profileData.student.section}`}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Account Insights */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Account insights</h3>
@@ -1110,13 +1110,6 @@ export default function StudentProfileSettingsPage() {
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-gray-100">Program</p>
                   <p>{profileData.programName || 'Program assignment coming soon'}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-900/40">
-                <GraduationCap className="w-5 h-5 text-sky-500 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">School & branch</p>
-                  <p>{profileData.schoolName || 'No school assigned'} · {profileData.branchName || 'Branch pending'}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40">
@@ -1138,69 +1131,162 @@ export default function StudentProfileSettingsPage() {
             </div>
 
             <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-semibold">
-                <Mail className="w-4 h-4" />
-                Email address
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-semibold">
+                  <Mail className="w-4 h-4" />
+                  Email address
+                  {!isEditingEmail && <Lock className="w-3 h-3 text-gray-400" />}
+                </div>
+                {!isEditingEmail && (
+                  <button
+                    onClick={() => setIsEditingEmail(true)}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    <Unlock className="w-3 h-3" />
+                    Edit
+                  </button>
+                )}
               </div>
               <Input
                 value={emailDraft}
                 onChange={e => setEmailDraft(e.target.value)}
                 placeholder="student@email.com"
+                disabled={!isEditingEmail}
               />
               {emailError && <p className="text-xs text-red-500">{emailError}</p>}
-              <Button
-                size="sm"
-                onClick={handleEmailUpdate}
-                loading={updateEmailMutation.isPending}
-                loadingText="Updating"
-              >
-                Update email
-              </Button>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                You may be asked to verify the new email before it becomes active.
-              </p>
+              {isEditingEmail && (
+                <>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleEmailUpdate}
+                      loading={updateEmailMutation.isPending}
+                      loadingText="Updating"
+                    >
+                      Update email
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setIsEditingEmail(false);
+                        setEmailDraft(profileData?.user.email || '');
+                        setEmailError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    You may be asked to verify the new email before it becomes active.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-semibold">
-                <Lock className="w-4 h-4" />
-                Change password
-              </div>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="New password"
-              />
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
-              />
-              <div className="space-y-2">
-                <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-2 ${passwordStrength.color}`}
-                    style={{ width: `${(passwordStrength.score + 1) * 20}%` }}
-                  />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-semibold">
+                  <Lock className="w-4 h-4" />
+                  Change password
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-semibold text-gray-700 dark:text-gray-200 mr-1">{passwordStrength.label}</span>
-                  {passwordStrength.description}
-                </div>
+                {!isChangingPassword && !currentPassword && (
+                  <button
+                    onClick={() => setIsChangingPassword(true)}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    <Unlock className="w-3 h-3" />
+                    Change
+                  </button>
+                )}
               </div>
-              <Button
-                size="sm"
-                onClick={handlePasswordUpdate}
-                loading={isChangingPassword || changePasswordMutation.isPending}
-                loadingText="Updating"
-              >
-                Save new password
-              </Button>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Use at least 8 characters with a mix of letters, numbers, and symbols.
-              </p>
+              {(isChangingPassword || currentPassword) ? (
+                <>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Current password (required for security)
+                      </label>
+                      <Input
+                        type="password"
+                        value={currentPassword}
+                        onChange={e => {
+                          setCurrentPassword(e.target.value);
+                          setPasswordError(null);
+                        }}
+                        placeholder="Enter current password"
+                      />
+                      {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        New password
+                      </label>
+                      <Input
+                        type="password"
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="New password"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Confirm new password
+                      </label>
+                      <Input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm password"
+                      />
+                    </div>
+                    {newPassword && (
+                      <div className="space-y-2">
+                        <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-2 ${passwordStrength.color}`}
+                            style={{ width: `${(passwordStrength.score + 1) * 20}%` }}
+                          />
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="font-semibold text-gray-700 dark:text-gray-200 mr-1">{passwordStrength.label}</span>
+                          {passwordStrength.description}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handlePasswordUpdate}
+                      loading={changePasswordMutation.isPending}
+                      loadingText="Updating"
+                    >
+                      Save new password
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setIsChangingPassword(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Use at least 8 characters with a mix of letters, numbers, and symbols.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Click "Change" to update your password securely.
+                </p>
+              )}
             </div>
           </div>
 
@@ -1232,3 +1318,6 @@ export default function StudentProfileSettingsPage() {
     </div>
   );
 }
+
+
+export default StudentProfileSettingsPage
