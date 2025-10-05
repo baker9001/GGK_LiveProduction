@@ -305,49 +305,95 @@ export default function StudentLearningMaterialsPage() {
           {filteredMaterials.map(material => (
             <div
               key={material.id}
-              className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all hover:shadow-lg ${
-                viewMode === 'list' ? 'flex items-center gap-4 p-4' : 'p-6'
+              className={`group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all hover:shadow-xl overflow-hidden ${
+                viewMode === 'list' ? 'flex items-center gap-4' : ''
               }`}
             >
-              {/* Icon/Thumbnail */}
-              <div
-                className={`${
-                  viewMode === 'grid'
-                    ? 'w-12 h-12 mb-4'
-                    : 'w-12 h-12 flex-shrink-0'
-                } rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400`}
-              >
-                <MaterialTypeIcon type={material.type} />
-              </div>
+              {/* Thumbnail/Icon Section */}
+              {viewMode === 'grid' ? (
+                <div className="relative aspect-video w-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 overflow-hidden">
+                  {material.type === 'video' && material.thumbnail_url ? (
+                    <>
+                      <img
+                        src={material.thumbnail_url}
+                        alt={material.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                          <Video className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                      </div>
+                      <div className="absolute top-3 right-3">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-black/60 text-white backdrop-blur-sm">
+                          Video
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-2xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                        <MaterialTypeIcon type={material.type} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-24 h-24 flex-shrink-0 ml-4 my-4 relative">
+                  {material.type === 'video' && material.thumbnail_url ? (
+                    <>
+                      <img
+                        src={material.thumbnail_url}
+                        alt={material.title}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg">
+                        <Video className="h-8 w-8 text-white" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      <MaterialTypeIcon type={material.type} />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Content */}
-              <div className={viewMode === 'list' ? 'flex-1 min-w-0' : ''}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2">
+              <div className={viewMode === 'list' ? 'flex-1 min-w-0 mr-4' : 'p-5'}>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     {material.title}
                   </h3>
-                  <SourceBadge sourceType={material.source_type} />
+                  {viewMode === 'grid' && <SourceBadge sourceType={material.source_type} />}
                 </div>
 
                 {material.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 leading-relaxed">
                     {material.description}
                   </p>
                 )}
 
-                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  <span className="capitalize">{material.type}</span>
-                  <span>•</span>
-                  <span>{formatFileSize(material.size)}</span>
-                  <span>•</span>
-                  <span>{new Date(material.created_at).toLocaleDateString()}</span>
+                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-700 font-medium">
+                    <MaterialTypeIcon type={material.type} />
+                    <span className="capitalize">{material.type}</span>
+                  </span>
+                  <span className="font-semibold">{formatFileSize(material.size)}</span>
+                  {viewMode === 'list' && (
+                    <>
+                      <span>•</span>
+                      <SourceBadge sourceType={material.source_type} />
+                    </>
+                  )}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handlePreview(material)}
-                    className={`${material.type === 'video' ? 'flex-1' : 'flex-1'} flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors`}
+                    className={`${material.type === 'video' ? 'flex-1' : 'flex-1'} flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md hover:shadow-lg transition-all transform group-hover:scale-[1.02]`}
                   >
                     <Eye className="h-4 w-4" />
                     {material.type === 'video' ? 'Stream Video' : 'Preview'}
@@ -356,7 +402,7 @@ export default function StudentLearningMaterialsPage() {
                   {material.type !== 'video' && (
                     <button
                       onClick={() => handleDownload(material)}
-                      className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="px-4 py-2.5 rounded-lg border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-all"
                       title="Download"
                     >
                       <Download className="h-4 w-4" />

@@ -20,6 +20,7 @@ export interface Material {
   visibility_scope: 'global' | 'school' | 'branch';
   grade_id: string | null;
   teacher_id: string | null;
+  thumbnail_url?: string | null;
   data_structure?: {
     id: string;
     regions: { name: string } | null;
@@ -66,6 +67,7 @@ export async function getMaterialsForStudent(
         status,
         created_at,
         created_by,
+        thumbnail_url,
         data_structures!inner (
           id,
           subject_id,
@@ -108,9 +110,19 @@ export async function getMaterialsForStudent(
         fileUrl = '';
       }
 
+      // Get thumbnail URL if exists
+      let thumbnailUrl = null;
+      if (material.thumbnail_url) {
+        const { data: thumbData } = supabase.storage
+          .from('thumbnails')
+          .getPublicUrl(material.thumbnail_url);
+        thumbnailUrl = thumbData.publicUrl;
+      }
+
       return {
         ...material,
         file_url: fileUrl,
+        thumbnail_url: thumbnailUrl,
         source_type: 'global', // Default to global since we removed visibility_scope column
         subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
         subject_id: material.data_structures?.edu_subjects?.id || '',
