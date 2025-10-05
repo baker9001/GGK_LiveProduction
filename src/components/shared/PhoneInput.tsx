@@ -124,19 +124,36 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Parse the initial value only once
+  // Parse the initial value on mount and when value changes from external source
   useEffect(() => {
-    if (value && !isInitialized) {
-      const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
-      if (match) {
-        setCountryCode(match[1]);
-        setPhoneNumber(match[2] || '');
-      } else if (value) {
-        setPhoneNumber(value);
+    if (!isInitialized) {
+      // First initialization
+      if (value) {
+        const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
+        if (match) {
+          setCountryCode(match[1]);
+          setPhoneNumber(match[2] || '');
+        } else if (value) {
+          setPhoneNumber(value);
+        }
       }
       setIsInitialized(true);
+    } else if (value !== `${countryCode} ${phoneNumber}`.trim()) {
+      // Value changed externally (e.g., form reset)
+      if (value) {
+        const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
+        if (match) {
+          setCountryCode(match[1]);
+          setPhoneNumber(match[2] || '');
+        } else {
+          setPhoneNumber(value);
+        }
+      } else {
+        // Value was cleared externally
+        setPhoneNumber('');
+      }
     }
-  }, [value, isInitialized]);
+  }, [value, isInitialized, countryCode, phoneNumber]);
 
   // Update parent only when local values change
   useEffect(() => {

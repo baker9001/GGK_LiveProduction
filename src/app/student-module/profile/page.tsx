@@ -76,6 +76,7 @@ interface StudentProfileData {
   student: StudentRecord | null;
   programName?: string | null;
   schoolName?: string | null;
+  schoolLogoUrl?: string | null;
   branchName?: string | null;
 }
 
@@ -327,13 +328,15 @@ export default function StudentProfileSettingsPage() {
       }
 
       let schoolName: string | null = null;
+      let schoolLogoUrl: string | null = null;
       if (studentRow?.school_id) {
         const { data: schoolData } = await supabase
           .from('schools')
-          .select('name')
+          .select('name, logo_url')
           .eq('id', studentRow.school_id)
           .maybeSingle();
         schoolName = schoolData?.name ?? null;
+        schoolLogoUrl = schoolData?.logo_url ?? null;
       }
 
       let branchName: string | null = null;
@@ -351,6 +354,7 @@ export default function StudentProfileSettingsPage() {
         student: studentRow ?? null,
         programName,
         schoolName,
+        schoolLogoUrl,
         branchName
       } satisfies StudentProfileData;
     },
@@ -1159,11 +1163,32 @@ export default function StudentProfileSettingsPage() {
             </p>
             <div className="space-y-3 text-sm">
               {profileData.schoolName && (
-                <div className="flex items-start gap-3 p-3 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
-                  <Building2 className="w-5 h-5 text-blue-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">School</p>
-                    <p className="text-gray-600 dark:text-gray-300">{profileData.schoolName}</p>
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+                  {profileData.schoolLogoUrl ? (
+                    <div className="flex-shrink-0">
+                      <img
+                        src={getPublicUrl('school-logos', profileData.schoolLogoUrl) || undefined}
+                        alt={`${profileData.schoolName} logo`}
+                        className="w-12 h-12 rounded-lg object-contain bg-white dark:bg-gray-800 p-1 border border-blue-200 dark:border-blue-800"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                      <div className="hidden w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 items-center justify-center">
+                        <Building2 className="w-6 h-6 text-blue-500" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
+                      <Building2 className="w-6 h-6 text-blue-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">School</p>
+                    <p className="text-gray-600 dark:text-gray-300 break-words">{profileData.schoolName}</p>
                   </div>
                 </div>
               )}
