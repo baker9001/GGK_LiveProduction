@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FormField, Input } from '../../../../../../components/shared/FormField';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
 import { FilterCard } from '../../../../../../components/shared/FilterCard';
@@ -13,8 +13,8 @@ interface FilterState {
 
 interface FilterSectionProps {
   providers: Array<{ id: string; name: string }>;
-  subjects: Array<{ id: string; name: string }>;
-  units: Array<{ id: string; name: string }>;
+  subjects: Array<{ id: string; name: string; provider_id?: string }>;
+  units: Array<{ id: string; name: string; subject_id?: string }>;
   searchTerm: string;
   filters: FilterState;
   resultCount?: number;
@@ -36,8 +36,32 @@ export function FilterSection({
 }: FilterSectionProps) {
   const handleFilterUpdate = (key: keyof FilterState, value: string[]) => {
     const newFilters = { ...filters, [key]: value };
+
+    // Cascade filter clearing when parent filter changes
+    if (key === 'provider_ids') {
+      // Clear subjects and units when provider changes
+      newFilters.subject_ids = [];
+      newFilters.unit_ids = [];
+    } else if (key === 'subject_ids') {
+      // Clear units when subject changes
+      newFilters.unit_ids = [];
+    }
+
     onFilterChange(newFilters);
   };
+
+  // Note: In the current schema, subjects and providers are related through data_structures
+  // For now, we show all subjects but disable until provider is selected
+  // A full implementation would require fetching data_structures to filter properly
+  const filteredSubjects = subjects;
+
+  // Filter units based on selected subjects
+  const filteredUnits = useMemo(() => {
+    if (filters.subject_ids.length === 0) return units;
+    return units.filter(unit =>
+      unit.subject_id && filters.subject_ids.includes(unit.subject_id)
+    );
+  }, [units, filters.subject_ids]);
 
   return (
     <FilterCard
@@ -67,7 +91,7 @@ export function FilterSection({
 
           <SearchableMultiSelect
             label="Subject"
-            options={subjects.map(s => ({ value: s.id, label: s.name }))}
+            options={filteredSubjects.map(s => ({ value: s.id, label: s.name }))}
             selectedValues={filters.subject_ids}
             onChange={(values) => handleFilterUpdate('subject_ids', values)}
             placeholder="Select subjects..."
@@ -75,10 +99,11 @@ export function FilterSection({
 
           <SearchableMultiSelect
             label="Unit"
-            options={units.map(u => ({ value: u.id, label: u.name }))}
+            options={filteredUnits.map(u => ({ value: u.id, label: u.name }))}
             selectedValues={filters.unit_ids}
             onChange={(values) => handleFilterUpdate('unit_ids', values)}
-            placeholder="Select units..."
+            placeholder={filters.subject_ids.length === 0 ? "Select subject first..." : "Select units..."}
+            disabled={filters.subject_ids.length === 0}
           />
 
           <SearchableMultiSelect

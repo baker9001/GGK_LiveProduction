@@ -14,6 +14,8 @@ import {
   Check,
   Star,
   Loader2,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { Button, IconButton } from './Button';
 import { FormField, Input, Select } from './FormField';
@@ -197,6 +199,32 @@ export function QuestionSelector({
       q.id === questionId ? { ...q, customMarks: marks } : q
     );
     onQuestionsChange(updated);
+  };
+
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newQuestions = [...selectedQuestions];
+    [newQuestions[index - 1], newQuestions[index]] = [newQuestions[index], newQuestions[index - 1]];
+
+    const resequenced = newQuestions.map((q, i) => ({
+      ...q,
+      sequence: i + 1,
+    }));
+
+    onQuestionsChange(resequenced);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === selectedQuestions.length - 1) return;
+    const newQuestions = [...selectedQuestions];
+    [newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]];
+
+    const resequenced = newQuestions.map((q, i) => ({
+      ...q,
+      sequence: i + 1,
+    }));
+
+    onQuestionsChange(resequenced);
   };
 
   const getDifficultyColor = (difficulty?: string) => {
@@ -400,18 +428,35 @@ export function QuestionSelector({
                     `}
                   >
                     <div className="flex items-start gap-3">
-                      <GripVertical className="w-5 h-5 text-gray-400 dark:text-gray-600 mt-1 flex-shrink-0 cursor-grab active:cursor-grabbing" />
+                      <div className="flex flex-col gap-1 pt-1">
+                        <IconButton
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleMoveUp(index)}
+                          disabled={index === 0}
+                          aria-label="Move up"
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronUp className={`w-4 h-4 ${index === 0 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400'}`} />
+                        </IconButton>
+                        <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-600 cursor-grab active:cursor-grabbing" />
+                        <IconButton
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleMoveDown(index)}
+                          disabled={index === selectedQuestions.length - 1}
+                          aria-label="Move down"
+                          className="h-6 w-6 p-0"
+                        >
+                          <ChevronDown className={`w-4 h-4 ${index === selectedQuestions.length - 1 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400'}`} />
+                        </IconButton>
+                      </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-medium text-[#8CC63F]">
-                            {question.sequence}.
+                            {index + 1}.
                           </span>
-                          {question.questionNumber && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              (Original Q{question.questionNumber})
-                            </span>
-                          )}
                           {question.isOptional && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
                               Optional
