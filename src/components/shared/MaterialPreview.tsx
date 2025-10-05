@@ -3,6 +3,7 @@ import { X, Download, ZoomIn, ZoomOut, RotateCw, ChevronLeft, ChevronRight, File
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
+import { ProtectedVideoPlayer } from './ProtectedVideoPlayer';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
@@ -14,6 +15,7 @@ interface MaterialPreviewProps {
   fileUrl: string;
   fileType: string;
   mimeType: string;
+  materialId?: string;
 }
 
 export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
@@ -22,7 +24,8 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
   title,
   fileUrl,
   fileType,
-  mimeType
+  mimeType,
+  materialId
 }) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -53,20 +56,23 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
   };
 
   const renderPreview = () => {
-    // Video files
+    // Video files - Use Protected Video Player
     if (fileType === 'video' || mimeType?.startsWith('video/')) {
+      if (!materialId) {
+        return (
+          <div className="flex items-center justify-center h-full bg-gray-900 text-white p-8">
+            <p className="text-red-400">Error: Material ID is required for secure video playback</p>
+          </div>
+        );
+      }
+
       return (
-        <div className="flex items-center justify-center h-full bg-black">
-          <video 
-            controls 
-            className="max-w-full max-h-full"
-            controlsList="nodownload"
-            autoPlay={false}
-          >
-            <source src={fileUrl} type={mimeType || 'video/mp4'} />
-            Your browser does not support video playback.
-          </video>
-        </div>
+        <ProtectedVideoPlayer
+          materialId={materialId}
+          title={title}
+          mimeType={mimeType}
+          className="h-full"
+        />
       );
     }
 
@@ -394,14 +400,17 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
             </h2>
           </div>
           <div className="flex items-center space-x-2 ml-4">
-            <a
-              href={fileUrl}
-              download
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              title="Download"
-            >
-              <Download className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-            </a>
+            {/* Only show download button for non-video materials */}
+            {fileType !== 'video' && !mimeType?.startsWith('video/') && (
+              <a
+                href={fileUrl}
+                download
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title="Download"
+              >
+                <Download className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              </a>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
