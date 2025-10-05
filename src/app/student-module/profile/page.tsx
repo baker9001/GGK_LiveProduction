@@ -280,8 +280,23 @@ export default function StudentProfileSettingsPage() {
         .maybeSingle();
 
       if (studentError) {
-        console.error('[StudentProfile] Student fetch error:', studentError);
-        throw new Error(`Failed to load student data: ${studentError.message}`);
+        console.error('[StudentProfile] Student fetch error:', {
+          error: studentError,
+          code: studentError.code,
+          message: studentError.message,
+          details: studentError.details,
+          hint: studentError.hint,
+          userId: user.id
+        });
+
+        // Provide more specific error messages
+        if (studentError.code === '42703') {
+          throw new Error('Database schema mismatch. Please contact support.');
+        } else if (studentError.message?.includes('permission denied')) {
+          throw new Error('Permission denied. Unable to access student profile.');
+        } else {
+          throw new Error(`Failed to load student data: ${studentError.message}`);
+        }
       }
 
       console.log('[StudentProfile] Student data loaded:', studentRow ? 'Found' : 'Not found');
@@ -377,7 +392,21 @@ export default function StudentProfileSettingsPage() {
           .eq('id', profileData.student.id);
 
         if (studentUpdateError) {
-          throw new Error(studentUpdateError.message);
+          console.error('[StudentProfile] Student update error:', {
+            error: studentUpdateError,
+            code: studentUpdateError.code,
+            message: studentUpdateError.message,
+            details: studentUpdateError.details,
+            studentId: profileData.student.id
+          });
+
+          if (studentUpdateError.code === '42703') {
+            throw new Error('Database schema issue. Please contact support.');
+          } else if (studentUpdateError.message?.includes('permission denied')) {
+            throw new Error('You do not have permission to update this profile.');
+          } else {
+            throw new Error(studentUpdateError.message);
+          }
         }
       }
     },
