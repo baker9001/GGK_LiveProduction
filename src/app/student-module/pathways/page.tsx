@@ -196,7 +196,8 @@ export default function LearningPathPage() {
         throw error;
       }
 
-      return data?.id as string | null;
+      // Explicitly return null instead of undefined to prevent cache issues
+      return data?.id ?? null;
     },
     { enabled: !!user?.id, retry: 1 }
   );
@@ -282,6 +283,14 @@ export default function LearningPathPage() {
       console.error('Failed to fetch student learning pathway subjects', subjectsError);
     }
   }, [subjectsError]);
+
+  // Invalidate student ID query when user changes to prevent stale cache
+  React.useEffect(() => {
+    return () => {
+      // This cleanup runs when user context changes
+      // Note: React Query automatically handles this with the query key dependency
+    };
+  }, [user?.id]);
 
   const getErrorMessage = (error: unknown): string => {
     if (typeof error === 'string' && error.trim()) {

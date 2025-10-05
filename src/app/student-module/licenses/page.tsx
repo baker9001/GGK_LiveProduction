@@ -53,10 +53,11 @@ export default function StudentLicensesPage() {
         .from('students')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      return data?.id;
+      // Explicitly return null instead of undefined to prevent cache issues
+      return data?.id ?? null;
     },
     { enabled: !!user?.id }
   );
