@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Copy, Save } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -29,7 +29,11 @@ import { SearchableMultiSelect } from '../../../components/shared/SearchableMult
 import { ProgressBar } from '../../../components/shared/ProgressBar';
 import { StatusTransitionWizard } from './components/StatusTransitionWizard';
 import { MockExamCreationWizard } from './components/MockExamCreationWizard';
+import { TemplateLibraryModal } from './components/TemplateLibraryModal';
+import { SaveTemplateModal } from './components/SaveTemplateModal';
 import type { MockExamLifecycleStatus } from '../../../services/mockExamService';
+import { useMockExamTemplates, usePopularTemplates, useRecentTemplates, useCreateTemplate, useCreateTemplateFromExam, useIncrementTemplateUsage } from '../../../hooks/useMockExamTemplates';
+import { MockExamTemplateService, type MockExamTemplate } from '../../../services/mockExamTemplateService';
 
 interface MockExamTeacher {
   id: string;
@@ -217,6 +221,9 @@ export default function EntityMockExamsPage() {
   const [statusWizardExam, setStatusWizardExam] = useState<{ id: string; status: MockExamStatus } | null>(null);
   const [showStatusHistory, setShowStatusHistory] = useState(false);
   const [useNewWizard, setUseNewWizard] = useState(true);
+  const [isTemplateLibraryOpen, setIsTemplateLibraryOpen] = useState(false);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [saveTemplateExam, setSaveTemplateExam] = useState<MockExam | null>(null);
 
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
     companyId,
@@ -242,6 +249,13 @@ export default function EntityMockExamsPage() {
   );
   const createMockExam = useCreateMockExam();
   const { data: statusHistory = [] } = useStatusHistory(selectedExam?.id);
+
+  const { data: templates = [], isLoading: isLoadingTemplates } = useMockExamTemplates(companyId);
+  const { data: popularTemplates = [] } = usePopularTemplates(companyId);
+  const { data: recentTemplates = [] } = useRecentTemplates(companyId);
+  const createTemplate = useCreateTemplate(companyId || '');
+  const createTemplateFromExam = useCreateTemplateFromExam();
+  const incrementTemplateUsage = useIncrementTemplateUsage();
 
   const programOptions = useMemo(() => {
     const uniquePrograms = new Set(dataStructures.map(ds => ds.program_name));
@@ -707,6 +721,70 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
     }
   };
 
+  const handleUseTemplate = (template: MockExamTemplate) => {
+    const appliedData = MockExamTemplateService.applyTemplate(template);
+
+    // Find data structure ID
+    const dataStructure = dataStructures.find(ds =>
+      ds.provider_name === appliedData.board &&
+      ds.program_name === appliedData.program &&
+      ds.subject_name === appliedData.subject
+    );
+
+    setFormState(appliedData);
+    if (dataStructure) {
+      setSelectedDataStructure(dataStructure.id);
+    }
+
+    // Increment usage count
+    incrementTemplateUsage.mutate(template.id);
+
+    setIsTemplateLibraryOpen(false);
+    setIsCreatePanelOpen(true);
+    toast.success(`Template "${template.name}" applied`);
+  };
+
+  const handleSaveAsTemplate = async (name: string, description: string, isShared: boolean) => {
+    if (!companyId) return;
+
+    const dataStructure = dataStructures.find(d => d.id === selectedDataStructure);
+
+    const templateData = {
+      program: dataStructure?.program_name,
+      board: dataStructure?.provider_name,
+      subject: dataStructure?.subject_name,
+      subjectId: dataStructure?.subject_id,
+      paper: formState.paper,
+      examWindow: formState.examWindow,
+      schoolIds: formState.schools,
+      branchIds: formState.branches,
+      gradeLevelIds: formState.gradeBands,
+      durationMinutes: Number.parseInt(formState.durationMinutes, 10),
+      deliveryMode: formState.deliveryMode,
+      aiProctoringEnabled: formState.aiProctoringEnabled,
+      releaseAnalyticsToStudents: formState.releaseAnalyticsToStudents,
+      allowRetakes: formState.allowRetakes,
+      titlePattern: formState.title,
+      notes: formState.notes,
+    };
+
+    await createTemplate.mutateAsync({
+      name,
+      description,
+      templateData,
+      isShared,
+    });
+  };
+
+  const handleSaveExamAsTemplate = async (exam: MockExam, name: string, description: string) => {
+    await createTemplateFromExam.mutateAsync({
+      examId: exam.id,
+      templateName: name,
+      templateDescription: description,
+    });
+    setSaveTemplateExam(null);
+  };
+
   const handleCreateMockExam = async (wizardData?: any) => {
     // Support both old form and new wizard
     const data = wizardData || formState;
@@ -815,6 +893,13 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="outline"
+              leftIcon={<Copy className="h-4 w-4" />}
+              onClick={() => setIsTemplateLibraryOpen(true)}
+            >
+              Browse Templates
+            </Button>
             <Button
               variant="outline"
               leftIcon={<Download className="h-4 w-4" />}
@@ -1189,6 +1274,15 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                             tooltip="Edit"
                           >
                             <Edit2 className="w-4 h-4" />
+                          </IconButton>
+                          <IconButton
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setSaveTemplateExam(exam)}
+                            aria-label="Save as template"
+                            tooltip="Save as template"
+                          >
+                            <Save className="w-4 h-4" />
                           </IconButton>
                           <IconButton
                             variant="ghost"
@@ -1725,6 +1819,37 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           onSuccess={() => {
             refetchExams();
           }}
+        />
+      )}
+
+      <TemplateLibraryModal
+        isOpen={isTemplateLibraryOpen}
+        onClose={() => setIsTemplateLibraryOpen(false)}
+        templates={templates}
+        popularTemplates={popularTemplates}
+        recentTemplates={recentTemplates}
+        onUseTemplate={handleUseTemplate}
+        isLoading={isLoadingTemplates}
+      />
+
+      <SaveTemplateModal
+        isOpen={isSaveTemplateOpen}
+        onClose={() => {
+          setIsSaveTemplateOpen(false);
+          setSaveTemplateExam(null);
+        }}
+        onSave={handleSaveAsTemplate}
+        defaultName={formState.title}
+        isSaving={createTemplate.isPending}
+      />
+
+      {saveTemplateExam && (
+        <SaveTemplateModal
+          isOpen={true}
+          onClose={() => setSaveTemplateExam(null)}
+          onSave={(name, description) => handleSaveExamAsTemplate(saveTemplateExam, name, description)}
+          defaultName={saveTemplateExam.title}
+          isSaving={createTemplateFromExam.isPending}
         />
       )}
     </div>

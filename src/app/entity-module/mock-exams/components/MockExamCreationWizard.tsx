@@ -18,7 +18,10 @@ import { MultiStepWizard, WizardStep } from '../../../../components/shared/Multi
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
+import { ConflictDetectionPanel } from './ConflictDetectionPanel';
+import { useConflictDetection } from '../../../../hooks/useConflictDetection';
 import toast from 'react-hot-toast';
+import dayjs from 'dayjs';
 
 export interface MockExamFormData {
   title: string;
@@ -162,6 +165,30 @@ export function MockExamCreationWizard({
   const [selectedDataStructure, setSelectedDataStructure] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
+  // Conflict detection
+  const conflictParams = useMemo(() => {
+    if (!formData.scheduledStart || !formData.durationMinutes || formData.schools.length === 0) {
+      return null;
+    }
+
+    const dateTime = dayjs(formData.scheduledStart);
+    return {
+      scheduledDate: dateTime.format('YYYY-MM-DD'),
+      scheduledTime: dateTime.format('HH:mm:ss'),
+      durationMinutes: Number.parseInt(formData.durationMinutes, 10),
+      schoolIds: formData.schools,
+      branchIds: formData.branches,
+      gradeLevelIds: formData.gradeBands,
+      sectionIds: formData.sections,
+      teacherIds: formData.teachers,
+    };
+  }, [formData.scheduledStart, formData.durationMinutes, formData.schools, formData.branches, formData.gradeBands, formData.sections, formData.teachers]);
+
+  const { conflictData, isChecking, checkConflicts, hasConflicts, conflicts, warnings } = useConflictDetection(
+    conflictParams,
+    currentStep === 2 // Only auto-check when on schedule step
+  );
+
   // Auto-save functionality
   useEffect(() => {
     if (!isOpen) return;
@@ -279,6 +306,11 @@ export function MockExamCreationWizard({
         }
         if (!formData.durationMinutes || parseInt(formData.durationMinutes) < 30) {
           errors.durationMinutes = 'Duration must be at least 30 minutes';
+        }
+        // Check for critical conflicts
+        const criticalConflicts = conflicts.filter(c => c.severity === 'critical');
+        if (criticalConflicts.length > 0) {
+          errors.scheduledStart = `${criticalConflicts.length} critical conflict${criticalConflicts.length !== 1 ? 's' : ''} must be resolved`;
         }
         break;
 
@@ -616,6 +648,21 @@ export function MockExamCreationWizard({
                   usePortal={false}
                 />
               </FormField>
+
+              {/* Conflict Detection */}
+              {conflictParams && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                    Schedule Conflict Check
+                  </h4>
+                  <ConflictDetectionPanel
+                    conflicts={conflicts}
+                    warnings={warnings}
+                    isChecking={isChecking}
+                    onCheckAgain={checkConflicts}
+                  />
+                </div>
+              )}
             </div>
           )}
 

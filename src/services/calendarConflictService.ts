@@ -370,7 +370,7 @@ export class CalendarConflictService {
     }
 
     // Check for multiple exams on the same day for same cohorts
-    const { data: sameDay Exams } = await supabase
+    const { data: sameDayExams } = await supabase
       .from('mock_exams')
       .select('id, title')
       .eq('scheduled_date', params.scheduledDate)
