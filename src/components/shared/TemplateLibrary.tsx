@@ -1,20 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import {
-  BookTemplate,
-  Clock,
-  Copy,
-  Edit2,
-  Loader2,
-  MoreVertical,
-  Plus,
-  Search,
-  Star,
-  Trash2,
-  TrendingUp,
-  X,
-} from 'lucide-react';
+import { LayoutTemplate as BookTemplate, Clock, Copy, CreditCard as Edit2, Loader2, MoreVertical, Plus, Search, Star, Trash2, TrendingUp, X } from 'lucide-react';
 import { Button, IconButton } from './Button';
 import { FormField, Input, Textarea } from './FormField';
 import { SearchableMultiSelect } from './SearchableMultiSelect';
