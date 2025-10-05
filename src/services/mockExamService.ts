@@ -976,15 +976,7 @@ export class MockExamService {
           subject_id,
           year,
           topic_id,
-          subtopic_id,
-          difficulty_level,
-          data_structures!questions_master_admin_data_structure_id_fkey (
-            providers!data_structures_provider_id_fkey (name),
-            programs!data_structures_program_id_fkey (name),
-            edu_subjects!data_structures_subject_id_fkey (name)
-          ),
-          edu_topics!questions_master_admin_topic_id_fkey (id, name),
-          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name)
+          subtopic_id
         `)
         .eq('status', 'active');
 
@@ -995,6 +987,12 @@ export class MockExamService {
       }
 
       const { data: questionBankData, error: questionBankError } = await questionBankQuery.order('question_number', { ascending: true });
+
+      console.log('[MockExamService] Question bank query result:', {
+        count: questionBankData?.length || 0,
+        error: questionBankError,
+        sample: questionBankData?.[0]
+      });
       if (questionBankError) {
         console.error('[MockExamService] Error fetching question bank:', questionBankError);
         // Don't throw error for question bank - it's optional
@@ -1049,24 +1047,77 @@ export class MockExamService {
           : null,
       }));
 
-      const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => ({
-        id: item.id,
-        question_number: item.question_number ?? null,
-        question_description: item.question_description ?? null,
-        type: item.type ?? null,
-        marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
-        status: item.status ?? null,
-        exam_year: item.year ?? null,
-        year: item.year ?? null,
-        topic_id: item.topic_id ?? null,
-        topic_name: item.edu_topics?.name ?? null,
-        subtopic_id: item.subtopic_id ?? null,
-        subtopic_name: item.edu_subtopics?.name ?? null,
-        difficulty_level: item.difficulty_level ?? null,
-        board_name: item.data_structures?.providers?.name ?? null,
-        programme_name: item.data_structures?.programs?.name ?? null,
-        subject_name: item.data_structures?.edu_subjects?.name ?? null,
-      }));
+      // Fetch related data separately for topics and subtopics if we have questions
+      const questionIdsWithTopics = (questionBankData || []).filter(q => q.topic_id).map(q => q.topic_id);
+      const questionIdsWithSubtopics = (questionBankData || []).filter(q => q.subtopic_id).map(q => q.subtopic_id);
+      const questionDataStructureIds = (questionBankData || []).filter(q => q.data_structure_id).map(q => q.data_structure_id);
+
+      // Fetch topics
+      let topicsMap = new Map<string, string>();
+      if (questionIdsWithTopics.length > 0) {
+        const { data: topicsData } = await supabase
+          .from('edu_topics')
+          .select('id, name')
+          .in('id', [...new Set(questionIdsWithTopics)]);
+
+        if (topicsData) {
+          topicsData.forEach(topic => topicsMap.set(topic.id, topic.name));
+        }
+      }
+
+      // Fetch subtopics
+      let subtopicsMap = new Map<string, string>();
+      if (questionIdsWithSubtopics.length > 0) {
+        const { data: subtopicsData } = await supabase
+          .from('edu_subtopics')
+          .select('id, name')
+          .in('id', [...new Set(questionIdsWithSubtopics)]);
+
+        if (subtopicsData) {
+          subtopicsData.forEach(subtopic => subtopicsMap.set(subtopic.id, subtopic.name));
+        }
+      }
+
+      // Fetch data structures
+      let dataStructuresMap = new Map<string, any>();
+      if (questionDataStructureIds.length > 0) {
+        const { data: dataStructuresData } = await supabase
+          .from('data_structures')
+          .select(`
+            id,
+            providers (name),
+            programs (name),
+            edu_subjects (name)
+          `)
+          .in('id', [...new Set(questionDataStructureIds)]);
+
+        if (dataStructuresData) {
+          dataStructuresData.forEach(ds => dataStructuresMap.set(ds.id, ds));
+        }
+      }
+
+      const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => {
+        const dataStructure = item.data_structure_id ? dataStructuresMap.get(item.data_structure_id) : null;
+
+        return {
+          id: item.id,
+          question_number: item.question_number ?? null,
+          question_description: item.question_description ?? null,
+          type: item.type ?? null,
+          marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
+          status: item.status ?? null,
+          exam_year: item.year ?? null,
+          year: item.year ?? null,
+          topic_id: item.topic_id ?? null,
+          topic_name: item.topic_id ? topicsMap.get(item.topic_id) ?? null : null,
+          subtopic_id: item.subtopic_id ?? null,
+          subtopic_name: item.subtopic_id ? subtopicsMap.get(item.subtopic_id) ?? null : null,
+          difficulty_level: null,
+          board_name: dataStructure?.providers?.name ?? null,
+          programme_name: dataStructure?.programs?.name ?? null,
+          subject_name: dataStructure?.edu_subjects?.name ?? null,
+        };
+      });
 
       const context = {
         exam: {
