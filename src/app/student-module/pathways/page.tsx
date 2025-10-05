@@ -180,7 +180,7 @@ export default function LearningPathPage() {
   const { user } = useUser();
   const navigate = useNavigate();
 
-  const { data: studentId, isLoading: isLoadingStudent } = useQuery(
+  const { data: studentId, isLoading: isLoadingStudent, error: studentError } = useQuery(
     ['student-id', user?.id],
     async () => {
       if (!user?.id) return null;
@@ -189,12 +189,16 @@ export default function LearningPathPage() {
         .from('students')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[LearningPathway] Error fetching student:', error);
+        throw error;
+      }
+
       return data?.id as string | null;
     },
-    { enabled: !!user?.id }
+    { enabled: !!user?.id, retry: 1 }
   );
 
   const {
@@ -299,6 +303,32 @@ export default function LearningPathPage() {
   return (
     <div className="p-6">
       <LearningPathwayHeader />
+
+      {/* Show error if student record not found */}
+      {!isLoadingStudent && studentError && (
+        <div className="border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 mt-1" />
+          <div>
+            <p className="font-semibold">Unable to load student information</p>
+            <p className="text-sm opacity-90">
+              {getErrorMessage(studentError)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Show message if student record doesn't exist */}
+      {!isLoadingStudent && !studentError && !studentId && (
+        <div className="border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 mt-1" />
+          <div>
+            <p className="font-semibold">Student profile not found</p>
+            <p className="text-sm opacity-90">
+              Your student profile has not been created yet. Please contact your administrator.
+            </p>
+          </div>
+        </div>
+      )}
 
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
