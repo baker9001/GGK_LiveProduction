@@ -335,10 +335,11 @@ export function Select({
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm appearance-none transition-colors duration-200',
           'focus:outline-none focus:ring-2',
-          isGreenTheme 
+          isGreenTheme
             ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
             : 'focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-white',
+          disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
           className
         )}
@@ -366,14 +367,14 @@ export function Select({
         className={cn(
           'w-full px-3 py-2 border rounded-md shadow-sm text-sm text-left transition-colors duration-200',
           'focus:outline-none focus:ring-2',
-          isGreenTheme 
+          isGreenTheme
             ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
             : 'focus:ring-blue-500 focus:border-blue-500',
           'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
           error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
-          disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed',
-          isOpen && (
-            isGreenTheme 
+          disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
+          isOpen && !disabled && (
+            isGreenTheme
               ? 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
               : 'ring-2 ring-blue-500 border-blue-500'
           ),

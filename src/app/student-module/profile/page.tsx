@@ -1062,15 +1062,16 @@ export default function StudentProfileSettingsPage() {
                           <button
                             key={option.value}
                             type="button"
+                            disabled={!isEditingProfile}
                             className={`relative overflow-hidden rounded-2xl p-3 text-left border transition-all duration-200 ${
                               isActive
                                 ? 'border-transparent scale-[1.02] shadow-lg'
                                 : 'border-gray-200 dark:border-gray-700'
-                            }`}
+                            } ${!isEditingProfile ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.01]'}`}
                             style={{
                               backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`
                             }}
-                            onClick={() => handleProfileChange('accentColor', option.value)}
+                            onClick={() => isEditingProfile && handleProfileChange('accentColor', option.value)}
                           >
                             <div className={`absolute inset-0 bg-gradient-to-r ${theme.gradient}`} />
                             <div className="relative">
