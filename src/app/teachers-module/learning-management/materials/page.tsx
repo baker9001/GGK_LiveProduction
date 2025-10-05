@@ -501,18 +501,26 @@ export default function TeacherMaterialsPage() {
       <button
         onClick={() => setPreviewMaterial(row)}
         className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
-        title="Preview"
+        title={row.type === 'video' ? 'Stream Video' : 'Preview'}
       >
         <Eye className="h-4 w-4" />
       </button>
-      <a
-        href={row.file_url}
-        download
-        className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
-        title="Download"
-      >
-        <Download className="h-4 w-4" />
-      </a>
+      {/* Hide download button for videos - security requirement */}
+      {row.type !== 'video' && row.file_url && (
+        <a
+          href={row.file_url}
+          download
+          className="text-green-600 dark:text-green-400 hover:text-green-900 dark:hover:text-green-300 p-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+          title="Download"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
+      {row.type === 'video' && (
+        <span className="text-xs text-gray-500 dark:text-gray-400 italic px-2">
+          Stream only
+        </span>
+      )}
       <button
         onClick={() => {
           setEditingMaterial(row);

@@ -94,13 +94,23 @@ export async function getMaterialsForStudent(
       // Use materials_files bucket for system/global materials
       const bucketName = 'materials_files';
 
-      const { data: urlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(material.file_path);
+      // CRITICAL SECURITY: Do NOT expose direct URLs for video materials
+      // Videos must only be accessed via signed URLs through the edge function
+      let fileUrl = '';
+
+      if (material.type !== 'video') {
+        const { data: urlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(material.file_path);
+        fileUrl = urlData.publicUrl;
+      } else {
+        // For videos, return empty string - frontend will use signed URL via edge function
+        fileUrl = '';
+      }
 
       return {
         ...material,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         source_type: 'global', // Default to global since we removed visibility_scope column
         subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
         subject_id: material.data_structures?.edu_subjects?.id || '',
@@ -191,13 +201,22 @@ export async function getMaterialsForTeacher(
 
     // Generate public URLs
     const formattedMaterials: Material[] = data.map(material => {
-      const { data: urlData } = supabase.storage
-        .from('materials_files')
-        .getPublicUrl(material.file_path);
+      // CRITICAL SECURITY: Do NOT expose direct URLs for video materials
+      let fileUrl = '';
+
+      if (material.type !== 'video') {
+        const { data: urlData } = supabase.storage
+          .from('materials_files')
+          .getPublicUrl(material.file_path);
+        fileUrl = urlData.publicUrl;
+      } else {
+        // For videos, return empty string - must use signed URLs
+        fileUrl = '';
+      }
 
       return {
         ...material,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         grade_levels: null // Removed since table doesn't have grade_id
       };
     });

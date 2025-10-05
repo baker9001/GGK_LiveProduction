@@ -130,6 +130,12 @@ export default function StudentLearningMaterialsPage() {
   };
 
   const handleDownload = async (material: StudentMaterial) => {
+    // Prevent video downloads - videos can only be streamed
+    if (material.type === 'video') {
+      toast.error('Video content cannot be downloaded for security reasons. You can stream it using the Preview button.');
+      return;
+    }
+
     if (studentId) {
       await logMaterialAccess(material.id, studentId, 'download');
     }
@@ -340,18 +346,21 @@ export default function StudentLearningMaterialsPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handlePreview(material)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors"
+                    className={`${material.type === 'video' ? 'flex-1' : 'flex-1'} flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors`}
                   >
                     <Eye className="h-4 w-4" />
-                    Preview
+                    {material.type === 'video' ? 'Stream Video' : 'Preview'}
                   </button>
-                  <button
-                    onClick={() => handleDownload(material)}
-                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    title="Download"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
+                  {/* Hide download button for videos - security requirement */}
+                  {material.type !== 'video' && (
+                    <button
+                      onClick={() => handleDownload(material)}
+                      className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      title="Download"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

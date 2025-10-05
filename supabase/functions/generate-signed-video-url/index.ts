@@ -11,6 +11,36 @@ interface RequestBody {
   materialId: string;
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 10; // 10 requests per minute per user
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+// Helper function to check rate limits
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+
+  if (!userLimit || userLimit.resetAt < now) {
+    // Reset or initialize
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (userLimit.count >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+
+  userLimit.count++;
+  return true;
+}
+
+// Helper function to generate token hash
+function generateTokenHash(materialId: string, userId: string, timestamp: number): string {
+  const data = `${materialId}:${userId}:${timestamp}`;
+  return btoa(data);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -61,6 +91,32 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: "Material ID is required" }),
         {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Rate limiting check
+    if (!checkRateLimit(user.id)) {
+      console.warn(`Rate limit exceeded for user: ${user.id}`);
+
+      // Log suspicious activity
+      await supabaseAdmin.from("suspicious_video_activity").insert({
+        user_id: user.id,
+        material_id: materialId,
+        activity_type: "rapid_token_requests",
+        severity: "medium",
+        details: { message: "Exceeded rate limit for video token requests" },
+        ip_address: req.headers.get("x-forwarded-for") || "unknown",
+        user_agent: req.headers.get("user-agent") || "unknown",
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "Too many requests. Please wait before requesting another video.",
+        }),
+        {
+          status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -140,11 +196,51 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const expiresIn = 7200;
+    // Check for concurrent active sessions (potential sharing/abuse)
+    const { data: activeSessions } = await supabaseAdmin
+      .from("video_session_tokens")
+      .select("id")
+      .eq("material_id", materialId)
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .gte("last_heartbeat", new Date(Date.now() - 600000).toISOString()); // Active in last 10 minutes
+
+    if (activeSessions && activeSessions.length >= 2) {
+      // Log suspicious activity - multiple concurrent sessions
+      await supabaseAdmin.from("suspicious_video_activity").insert({
+        user_id: user.id,
+        material_id: materialId,
+        activity_type: "multiple_concurrent_sessions",
+        severity: "high",
+        details: {
+          active_sessions: activeSessions.length,
+          message: "User attempting to stream same video on multiple devices",
+        },
+        ip_address: req.headers.get("x-forwarded-for") || "unknown",
+        user_agent: req.headers.get("user-agent") || "unknown",
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "This video is already being streamed on another device. Please close other sessions first.",
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const expiresIn = 7200; // 2 hours
+    const timestamp = Date.now();
+    const tokenHash = generateTokenHash(materialId, user.id, timestamp);
+    const sessionId = crypto.randomUUID();
 
     const { data: signedUrlData, error: signedError } = await supabaseAdmin
       .storage.from("materials_files")
-      .createSignedUrl(material.file_path, expiresIn);
+      .createSignedUrl(material.file_path, expiresIn, {
+        download: false, // Explicitly disable download
+      });
 
     if (signedError || !signedUrlData) {
       console.error("Signed URL generation error:", signedError);
@@ -158,24 +254,82 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = student?.user_id || teacher?.user_id || user.id;
-    const accessLog = {
-      user_id: userId,
-      material_id: materialId,
-      access_type: "video_stream",
-      ip_address: req.headers.get("x-forwarded-for") || "unknown",
-      user_agent: req.headers.get("user-agent") || "unknown",
-      accessed_at: new Date().toISOString(),
-    };
+    const ipAddress = req.headers.get("x-forwarded-for") || "unknown";
+    const userAgent = req.headers.get("user-agent") || "unknown";
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
+    // Store video access token
+    const { error: tokenError } = await supabaseAdmin
+      .from("video_access_tokens")
+      .insert({
+        material_id: materialId,
+        user_id: user.id,
+        token_hash: tokenHash,
+        expires_at: expiresAt.toISOString(),
+        ip_address: ipAddress,
+        user_agent: userAgent,
+      });
+
+    if (tokenError) {
+      console.error("Failed to store video access token:", tokenError);
+    }
+
+    // Create video session token
+    const { error: sessionError } = await supabaseAdmin
+      .from("video_session_tokens")
+      .insert({
+        session_id: sessionId,
+        material_id: materialId,
+        user_id: user.id,
+        token_hash: tokenHash,
+        ip_address: ipAddress,
+        device_fingerprint: userAgent, // Simple fingerprint using user agent
+      });
+
+    if (sessionError) {
+      console.error("Failed to create video session token:", sessionError);
+    }
+
+    // Log comprehensive audit trail
+    const { error: auditError } = await supabaseAdmin
+      .from("video_access_audit")
+      .insert({
+        material_id: materialId,
+        user_id: user.id,
+        student_id: student?.id || null,
+        teacher_id: teacher?.id || null,
+        access_type: "token_generated",
+        session_id: sessionId,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        metadata: {
+          expires_at: expiresAt.toISOString(),
+          expires_in: expiresIn,
+          token_hash: tokenHash,
+        },
+      });
+
+    if (auditError) {
+      console.error("Failed to log video access audit:", auditError);
+    }
+
+    // Also log to material_access_logs for backward compatibility
     const { error: logError } = await supabaseAdmin
       .from("material_access_logs")
-      .insert(accessLog);
+      .insert({
+        user_id: userId,
+        material_id: materialId,
+        access_type: "video_stream",
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        accessed_at: new Date().toISOString(),
+      });
 
     if (logError) {
       console.error("Failed to log access:", logError);
     }
 
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+    console.log(`Video token generated for user ${user.id}, material ${materialId}, session ${sessionId}`);
 
     return new Response(
       JSON.stringify({
@@ -183,6 +337,7 @@ Deno.serve(async (req: Request) => {
         expiresAt: expiresAt.toISOString(),
         expiresIn: expiresIn,
         title: material.title,
+        sessionId: sessionId,
       }),
       {
         status: 200,

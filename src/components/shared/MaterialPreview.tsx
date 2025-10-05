@@ -356,24 +356,33 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             This file type ({mimeType || fileType}) cannot be previewed directly in the browser.
           </p>
-          <div className="space-y-3">
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Open in New Tab
-            </a>
-            <a
-              href={fileUrl}
-              download
-              className="inline-flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download File
-            </a>
-          </div>
+          {/* Only show download options for non-video content */}
+          {fileType !== 'video' && !mimeType?.startsWith('video/') ? (
+            <div className="space-y-3">
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Open in New Tab
+              </a>
+              <a
+                href={fileUrl}
+                download
+                className="inline-flex items-center justify-center w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download File
+              </a>
+            </div>
+          ) : (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-red-700 dark:text-red-300 text-sm">
+                Video content cannot be downloaded for security and copyright protection. Please use the streaming player to view this content.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
