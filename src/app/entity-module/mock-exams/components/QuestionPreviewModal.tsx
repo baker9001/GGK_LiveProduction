@@ -48,29 +48,54 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
             order
           ),
           questions_hints (
+            id,
             hint_text
           ),
-          edu_topics (
+          edu_topics!questions_master_admin_topic_id_fkey (
             id,
             name
           ),
-          question_subtopics (
-            edu_subtopics (
-              id,
-              name
-            )
+          edu_subtopics!questions_master_admin_subtopic_id_fkey (
+            id,
+            name
+          ),
+          data_structures!questions_master_admin_data_structure_id_fkey (
+            providers!data_structures_provider_id_fkey (name),
+            programs!data_structures_program_id_fkey (name),
+            edu_subjects!data_structures_subject_id_fkey (name)
+          ),
+          question_correct_answers (
+            id,
+            answer,
+            marks
           )
         `)
         .eq('id', question.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error fetching question:', error);
+        throw error;
+      }
 
-      setFullQuestion(data);
+      if (!data) {
+        throw new Error('Question not found');
+      }
+
+      setFullQuestion({
+        ...data,
+        board_name: data.data_structures?.providers?.name,
+        programme_name: data.data_structures?.programs?.name,
+        subject_name: data.data_structures?.edu_subjects?.name,
+        topic_name: data.edu_topics?.name,
+        subtopic_name: data.edu_subtopics?.name,
+        exam_year: data.year
+      });
       setAttachments(data?.questions_attachments || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching full question data:', error);
-      toast.error('Failed to load complete question details');
+      const message = error?.message || 'Failed to load complete question details';
+      toast.error(message);
       setFullQuestion(question);
     } finally {
       setIsLoading(false);

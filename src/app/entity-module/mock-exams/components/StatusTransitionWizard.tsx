@@ -452,6 +452,8 @@ export function StatusTransitionWizard({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isCustomBuilderOpen, setIsCustomBuilderOpen] = useState(false);
   const [editingCustomQuestionIndex, setEditingCustomQuestionIndex] = useState<number | null>(null);
+  const [draggedQuestionIndex, setDraggedQuestionIndex] = useState<number | null>(null);
+  const [dragOverQuestionIndex, setDragOverQuestionIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -797,17 +799,51 @@ export function StatusTransitionWizard({
   };
 
   const handleReorderQuestion = (index: number, direction: 'up' | 'down') => {
+    if (questionState.length === 0) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= questionState.length) {
+      return;
+    }
+
     setQuestionState(prev => {
       const next = [...prev];
-      const targetIndex = direction === 'up' ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= next.length) {
-        return prev;
-      }
-      const temp = next[targetIndex];
-      next[targetIndex] = next[index];
-      next[index] = temp;
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return normaliseSequences(next);
     });
+  };
+
+  const handleQuestionDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedQuestionIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleQuestionDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedQuestionIndex === null || draggedQuestionIndex === index) return;
+    setDragOverQuestionIndex(index);
+  };
+
+  const handleQuestionDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedQuestionIndex === null || draggedQuestionIndex === dropIndex) return;
+
+    setQuestionState(prev => {
+      const next = [...prev];
+      const [draggedItem] = next.splice(draggedQuestionIndex, 1);
+      next.splice(dropIndex, 0, draggedItem);
+      return normaliseSequences(next);
+    });
+
+    setDraggedQuestionIndex(null);
+    setDragOverQuestionIndex(null);
+  };
+
+  const handleQuestionDragEnd = () => {
+    setDraggedQuestionIndex(null);
+    setDragOverQuestionIndex(null);
   };
 
   const validateStage = (): boolean => {
@@ -1371,10 +1407,23 @@ export function StatusTransitionWizard({
                       {questionState.map((question, index) => {
                         const isCustom = question.sourceType === 'custom';
                         const optionDetails = wizardData?.questionBank.find(item => item.id === question.questionId);
+                        const isDragging = draggedQuestionIndex === index;
+                        const isDragOver = dragOverQuestionIndex === index;
                         return (
                           <div
                             key={question.id ?? `${question.sourceType}-${index}`}
-                            className="rounded-lg border border-gray-200 p-4 shadow-sm dark:border-gray-800"
+                            draggable
+                            onDragStart={(e) => handleQuestionDragStart(e, index)}
+                            onDragOver={(e) => handleQuestionDragOver(e, index)}
+                            onDrop={(e) => handleQuestionDrop(e, index)}
+                            onDragEnd={handleQuestionDragEnd}
+                            className={`rounded-lg border p-4 shadow-sm transition-all cursor-move ${
+                              isDragging
+                                ? 'opacity-50 border-[#8CC63F] dark:border-[#8CC63F]'
+                                : isDragOver
+                                  ? 'border-[#8CC63F] bg-[#8CC63F]/5 dark:border-[#8CC63F] dark:bg-[#8CC63F]/10'
+                                  : 'border-gray-200 dark:border-gray-800'
+                            }`}
                           >
                             <div className="mb-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">

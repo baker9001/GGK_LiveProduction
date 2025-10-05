@@ -144,6 +144,16 @@ export interface QuestionBankItem {
   type: string | null;
   marks: number | null;
   status: string | null;
+  exam_year: number | null;
+  year: number | null;
+  topic_id: string | null;
+  topic_name: string | null;
+  subtopic_id: string | null;
+  subtopic_name: string | null;
+  difficulty_level: string | null;
+  board_name: string | null;
+  programme_name: string | null;
+  subject_name: string | null;
 }
 
 export interface MockExamStatusWizardContext {
@@ -963,7 +973,18 @@ export class MockExamService {
           marks,
           status,
           data_structure_id,
-          subject_id
+          subject_id,
+          year,
+          topic_id,
+          subtopic_id,
+          difficulty_level,
+          data_structures!questions_master_admin_data_structure_id_fkey (
+            providers!data_structures_provider_id_fkey (name),
+            programs!data_structures_program_id_fkey (name),
+            edu_subjects!data_structures_subject_id_fkey (name)
+          ),
+          edu_topics!questions_master_admin_topic_id_fkey (id, name),
+          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name)
         `)
         .eq('status', 'active');
 
@@ -1035,6 +1056,16 @@ export class MockExamService {
         type: item.type ?? null,
         marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
         status: item.status ?? null,
+        exam_year: item.year ?? null,
+        year: item.year ?? null,
+        topic_id: item.topic_id ?? null,
+        topic_name: item.edu_topics?.name ?? null,
+        subtopic_id: item.subtopic_id ?? null,
+        subtopic_name: item.edu_subtopics?.name ?? null,
+        difficulty_level: item.difficulty_level ?? null,
+        board_name: item.data_structures?.providers?.name ?? null,
+        programme_name: item.data_structures?.programs?.name ?? null,
+        subject_name: item.data_structures?.edu_subjects?.name ?? null,
       }));
 
       const context = {
