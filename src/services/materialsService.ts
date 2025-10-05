@@ -47,6 +47,8 @@ export async function getMaterialsForStudent(
   subjectId: string
 ): Promise<StudentMaterial[]> {
   try {
+    console.log('[MaterialsService] Fetching materials for student:', studentId, 'subject:', subjectId);
+
     const { data, error } = await supabase
       .from('materials')
       .select(`
@@ -63,11 +65,7 @@ export async function getMaterialsForStudent(
         size,
         status,
         created_at,
-        school_id,
-        created_by_role,
-        visibility_scope,
-        grade_id,
-        teacher_id,
+        created_by,
         data_structures!inner (
           id,
           subject_id,
@@ -78,20 +76,23 @@ export async function getMaterialsForStudent(
         ),
         edu_units (id, name),
         edu_topics (id, name),
-        edu_subtopics (id, name),
-        grade_levels (id, grade_name)
+        edu_subtopics (id, name)
       `)
       .eq('data_structures.edu_subjects.id', subjectId)
       .eq('status', 'active')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[MaterialsService] Error fetching materials:', error);
+      throw error;
+    }
+
+    console.log('[MaterialsService] Materials found:', data?.length || 0);
 
     // Generate public URLs and format data
     const formattedMaterials: StudentMaterial[] = data.map(material => {
-      const bucketName = material.created_by_role === 'teacher'
-        ? 'materials_files_teachers'
-        : 'materials_files';
+      // Use materials_files bucket for system/global materials
+      const bucketName = 'materials_files';
 
       const { data: urlData } = supabase.storage
         .from(bucketName)
@@ -100,13 +101,10 @@ export async function getMaterialsForStudent(
       return {
         ...material,
         file_url: urlData.publicUrl,
-        source_type: material.visibility_scope === 'global' ? 'global' : 'school',
+        source_type: 'global', // Default to global since we removed visibility_scope column
         subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
         subject_id: material.data_structures?.edu_subjects?.id || '',
-        grade_levels: material.grade_levels ? {
-          id: material.grade_levels.id,
-          name: material.grade_levels.grade_name
-        } : null
+        grade_levels: null // Removed grade_levels since it doesn't exist in materials table
       };
     });
 
@@ -132,6 +130,8 @@ export async function getMaterialsForTeacher(
   }
 ): Promise<Material[]> {
   try {
+    console.log('[MaterialsService] Fetching materials for teacher:', teacherId);
+
     let query = supabase
       .from('materials')
       .select(`
@@ -148,11 +148,7 @@ export async function getMaterialsForTeacher(
         size,
         status,
         created_at,
-        school_id,
-        created_by_role,
-        visibility_scope,
-        grade_id,
-        teacher_id,
+        created_by,
         data_structures (
           id,
           regions (name),
@@ -162,11 +158,9 @@ export async function getMaterialsForTeacher(
         ),
         edu_units (id, name),
         edu_topics (id, name),
-        edu_subtopics (id, name),
-        grade_levels (id, grade_name)
+        edu_subtopics (id, name)
       `)
-      .eq('school_id', schoolId)
-      .eq('teacher_id', teacherId)
+      .eq('created_by', teacherId)
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -186,27 +180,25 @@ export async function getMaterialsForTeacher(
       query = query.in('status', filters.status);
     }
 
-    if (filters?.grade_ids && filters.grade_ids.length > 0) {
-      query = query.in('grade_id', filters.grade_ids);
-    }
-
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('[MaterialsService] Error fetching teacher materials:', error);
+      throw error;
+    }
+
+    console.log('[MaterialsService] Teacher materials found:', data?.length || 0);
 
     // Generate public URLs
     const formattedMaterials: Material[] = data.map(material => {
       const { data: urlData } = supabase.storage
-        .from('materials_files_teachers')
+        .from('materials_files')
         .getPublicUrl(material.file_path);
 
       return {
         ...material,
         file_url: urlData.publicUrl,
-        grade_levels: material.grade_levels ? {
-          id: material.grade_levels.id,
-          name: material.grade_levels.grade_name
-        } : null
+        grade_levels: null // Removed since table doesn't have grade_id
       };
     });
 
