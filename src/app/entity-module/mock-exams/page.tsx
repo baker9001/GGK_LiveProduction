@@ -28,6 +28,7 @@ import { ToggleSwitch } from '../../../components/shared/ToggleSwitch';
 import { SearchableMultiSelect } from '../../../components/shared/SearchableMultiSelect';
 import { ProgressBar } from '../../../components/shared/ProgressBar';
 import { StatusTransitionWizard } from './components/StatusTransitionWizard';
+import { MockExamCreationWizard } from './components/MockExamCreationWizard';
 import type { MockExamLifecycleStatus } from '../../../services/mockExamService';
 
 interface MockExamTeacher {
@@ -215,6 +216,7 @@ export default function EntityMockExamsPage() {
   const [selectedDataStructure, setSelectedDataStructure] = useState<string>('');
   const [statusWizardExam, setStatusWizardExam] = useState<{ id: string; status: MockExamStatus } | null>(null);
   const [showStatusHistory, setShowStatusHistory] = useState(false);
+  const [useNewWizard, setUseNewWizard] = useState(true);
 
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
     companyId,
@@ -705,38 +707,50 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
     }
   };
 
-  const handleCreateMockExam = async () => {
-    if (!validateForm() || !companyId) {
+  const handleCreateMockExam = async (wizardData?: any) => {
+    // Support both old form and new wizard
+    const data = wizardData || formState;
+
+    if (!wizardData && !validateForm()) {
       return;
     }
 
-    const scheduledDateTime = new Date(formState.scheduledStart);
-    const paperNumber = formState.paper.match(/\d+/);
+    if (!companyId) {
+      toast.error('Company ID is missing');
+      return;
+    }
+
+    const scheduledDateTime = new Date(data.scheduledStart);
+    const paperNumber = data.paper.match(/\d+/);
 
     try {
       await createMockExam.mutateAsync({
-        title: formState.title.trim(),
+        title: data.title.trim(),
         companyId,
-        dataStructureId: selectedDataStructure,
-        paperType: formState.paper,
+        dataStructureId: wizardData ? dataStructures.find(ds =>
+          ds.provider_name === data.board &&
+          ds.program_name === data.program &&
+          ds.subject_name === data.subject
+        )?.id : selectedDataStructure,
+        paperType: data.paper,
         paperNumber: paperNumber ? parseInt(paperNumber[0]) : undefined,
         scheduledDate: scheduledDateTime.toISOString().split('T')[0],
         scheduledTime: scheduledDateTime.toTimeString().split(' ')[0],
-        durationMinutes: Number.parseInt(formState.durationMinutes, 10) || 120,
-        deliveryMode: formState.deliveryMode,
-        examWindow: formState.examWindow,
+        durationMinutes: Number.parseInt(data.durationMinutes, 10) || 120,
+        deliveryMode: data.deliveryMode,
+        examWindow: data.examWindow,
         readinessScore: 55,
-        aiProctoringEnabled: formState.aiProctoringEnabled,
-        releaseAnalytics: formState.releaseAnalyticsToStudents,
-        allowRetakes: formState.allowRetakes,
-        notes: formState.notes.trim() || undefined,
-        schoolIds: formState.schools,
-        gradeLevelIds: formState.gradeBands,
-        sectionIds: formState.sections,
-        teacherIds: formState.teachers.map(teacherId => ({
+        aiProctoringEnabled: data.aiProctoringEnabled,
+        releaseAnalytics: data.releaseAnalyticsToStudents,
+        allowRetakes: data.allowRetakes,
+        notes: data.notes?.trim() || undefined,
+        schoolIds: data.schools,
+        gradeLevelIds: data.gradeBands,
+        sectionIds: data.sections,
+        teacherIds: data.teachers.map((teacherId: string) => ({
           entityUserId: teacherId,
           role: 'lead_teacher',
-          schoolId: formState.schools[0]
+          schoolId: data.schools[0]
         }))
       });
 
@@ -747,6 +761,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
     } catch (error) {
       console.error('Error creating mock exam:', error);
       toast.error('Failed to create mock exam. Please try again.');
+      throw error; // Re-throw for wizard error handling
     }
   };
 
@@ -1230,14 +1245,14 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
 
       <SlideInForm
         title={editingExamId ? "Edit mock exam" : "Create mock exam"}
-        isOpen={isCreatePanelOpen || isEditPanelOpen}
+        isOpen={(!useNewWizard && isCreatePanelOpen) || isEditPanelOpen}
         onClose={() => {
           setIsCreatePanelOpen(false);
           setIsEditPanelOpen(false);
           setEditingExamId(null);
           resetFormState();
         }}
-        onSave={handleCreateMockExam}
+        onSave={() => handleCreateMockExam()}
         saveButtonText={editingExamId ? "Update exam" : "Add to plan"}
         footerContent={(
           <Button
@@ -1680,6 +1695,26 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           </div>
         )}
       </SlideInForm>
+
+      {useNewWizard && isCreatePanelOpen && (
+        <MockExamCreationWizard
+          isOpen={isCreatePanelOpen}
+          onClose={() => {
+            setIsCreatePanelOpen(false);
+            resetFormState();
+          }}
+          onSubmit={handleCreateMockExam}
+          dataStructures={dataStructures}
+          schools={schools}
+          branches={branches}
+          gradeLevels={gradeLevels}
+          classSections={classSections}
+          teachers={teachers}
+          isLoadingBranches={isLoadingBranches}
+          isLoadingGradeLevels={isLoadingGradeLevels}
+          isLoadingTeachers={isLoadingTeachers}
+        />
+      )}
 
       {statusWizardExam && (
         <StatusTransitionWizard
