@@ -397,28 +397,48 @@ export default function StudentProfileSettingsPage() {
 
       if (profileData.student) {
         const sanitizedPhone = sanitizeValue(values.phone);
-        console.log('[StudentProfile] Saving phone number:', {
-          original: values.phone,
-          sanitized: sanitizedPhone,
-          studentId: profileData.student.id
-        });
+        const sanitizedBirthday = sanitizeValue(values.birthday);
+        const sanitizedGender = sanitizeValue(values.gender);
 
-        const { error: studentUpdateError } = await supabase
+        const updatePayload = {
+          phone: sanitizedPhone,
+          birthday: sanitizedBirthday,
+          gender: sanitizedGender,
+          updated_at: new Date().toISOString()
+        };
+
+        console.log('[StudentProfile] === UPDATE ATTEMPT START ===');
+        console.log('[StudentProfile] User ID:', user.id);
+        console.log('[StudentProfile] Student ID:', profileData.student.id);
+        console.log('[StudentProfile] Form values:', {
+          phone: values.phone,
+          birthday: values.birthday,
+          gender: values.gender
+        });
+        console.log('[StudentProfile] Sanitized values:', {
+          phone: sanitizedPhone,
+          birthday: sanitizedBirthday,
+          gender: sanitizedGender
+        });
+        console.log('[StudentProfile] Update payload:', updatePayload);
+
+        const { data: updateResult, error: studentUpdateError } = await supabase
           .from('students')
-          .update({
-            phone: sanitizedPhone,
-            birthday: sanitizeValue(values.birthday),
-            gender: sanitizeValue(values.gender),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', profileData.student.id);
+          .update(updatePayload)
+          .eq('id', profileData.student.id)
+          .select();
+
+        console.log('[StudentProfile] Update result:', updateResult);
+        console.log('[StudentProfile] Update error:', studentUpdateError);
 
         if (studentUpdateError) {
-          console.error('[StudentProfile] Student update error:', {
+          console.error('[StudentProfile] === UPDATE FAILED ===');
+          console.error('[StudentProfile] Error details:', {
             error: studentUpdateError,
             code: studentUpdateError.code,
             message: studentUpdateError.message,
             details: studentUpdateError.details,
+            hint: studentUpdateError.hint,
             studentId: profileData.student.id
           });
 
@@ -426,9 +446,19 @@ export default function StudentProfileSettingsPage() {
             throw new Error('Database schema issue. Please contact support.');
           } else if (studentUpdateError.message?.includes('permission denied')) {
             throw new Error('You do not have permission to update this profile.');
+          } else if (studentUpdateError.code === '42501') {
+            throw new Error('Permission denied by Row Level Security. Cannot update student profile.');
           } else {
             throw new Error(studentUpdateError.message);
           }
+        }
+
+        console.log('[StudentProfile] === UPDATE SUCCESS ===');
+        console.log('[StudentProfile] Rows affected:', updateResult?.length || 0);
+        if (updateResult && updateResult.length > 0) {
+          console.log('[StudentProfile] Updated student record:', updateResult[0]);
+        } else {
+          console.warn('[StudentProfile] WARNING: Update succeeded but no rows returned. This may indicate RLS blocking the read.');
         }
       }
     },
