@@ -129,19 +129,52 @@ export function QuestionSelector({
   }, [availableQuestions, searchQuery, filterTopic, filterYear, filterDifficulty, selectedQuestions]);
 
   // Drag and drop handlers
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
     setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+
     if (draggedIndex === null || draggedIndex === index) return;
     setDragOverIndex(index);
   };
 
+  const handleDragEnter = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if we're leaving the container, not just moving between children
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setDragOverIndex(null);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) return;
+    e.stopPropagation();
+
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
 
     const newQuestions = [...selectedQuestions];
     const [draggedQuestion] = newQuestions.splice(draggedIndex, 1);
@@ -158,7 +191,8 @@ export function QuestionSelector({
     setDragOverIndex(null);
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.preventDefault();
     setDraggedIndex(null);
     setDragOverIndex(null);
   };
@@ -201,8 +235,12 @@ export function QuestionSelector({
     onQuestionsChange(updated);
   };
 
-  const handleMoveUp = (index: number) => {
+  const handleMoveUp = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (index === 0) return;
+
     const newQuestions = [...selectedQuestions];
     [newQuestions[index - 1], newQuestions[index]] = [newQuestions[index], newQuestions[index - 1]];
 
@@ -214,8 +252,12 @@ export function QuestionSelector({
     onQuestionsChange(resequenced);
   };
 
-  const handleMoveDown = (index: number) => {
+  const handleMoveDown = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (index === selectedQuestions.length - 1) return;
+
     const newQuestions = [...selectedQuestions];
     [newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]];
 
@@ -417,39 +459,49 @@ export function QuestionSelector({
                   <div
                     key={question.id}
                     draggable
-                    onDragStart={() => handleDragStart(index)}
+                    onDragStart={(e) => handleDragStart(e, index)}
                     onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnter={(e) => handleDragEnter(e, index)}
+                    onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
                     className={`
-                      p-4 transition-colors cursor-move
-                      ${draggedIndex === index ? 'opacity-50' : ''}
-                      ${dragOverIndex === index ? 'bg-[#8CC63F]/10' : 'hover:bg-gray-50 dark:hover:bg-gray-900/40'}
+                      p-4 transition-all duration-200 cursor-move
+                      ${draggedIndex === index ? 'opacity-40 scale-95 bg-gray-100 dark:bg-gray-800' : ''}
+                      ${dragOverIndex === index && draggedIndex !== index ? 'bg-[#8CC63F]/20 border-2 border-[#8CC63F] border-dashed' : 'border-2 border-transparent hover:bg-gray-50 dark:hover:bg-gray-900/40'}
                     `}
+                    style={{
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      MozUserSelect: 'none',
+                      msUserSelect: 'none'
+                    }}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex flex-col gap-1 pt-1">
-                        <IconButton
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleMoveUp(index)}
+                        <button
+                          onClick={(e) => handleMoveUp(e, index)}
                           disabled={index === 0}
                           aria-label="Move up"
-                          className="h-6 w-6 p-0"
+                          className={`h-6 w-6 p-0 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+                            index === 0 ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+                          }`}
+                          type="button"
                         >
-                          <ChevronUp className={`w-4 h-4 ${index === 0 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400'}`} />
-                        </IconButton>
-                        <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-600 cursor-grab active:cursor-grabbing" />
-                        <IconButton
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleMoveDown(index)}
+                          <ChevronUp className={`w-4 h-4 ${index === 0 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'}`} />
+                        </button>
+                        <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-600 cursor-grab active:cursor-grabbing my-1" />
+                        <button
+                          onClick={(e) => handleMoveDown(e, index)}
                           disabled={index === selectedQuestions.length - 1}
                           aria-label="Move down"
-                          className="h-6 w-6 p-0"
+                          className={`h-6 w-6 p-0 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+                            index === selectedQuestions.length - 1 ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+                          }`}
+                          type="button"
                         >
-                          <ChevronDown className={`w-4 h-4 ${index === selectedQuestions.length - 1 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400'}`} />
-                        </IconButton>
+                          <ChevronDown className={`w-4 h-4 ${index === selectedQuestions.length - 1 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'}`} />
+                        </button>
                       </div>
 
                       <div className="flex-1 min-w-0">

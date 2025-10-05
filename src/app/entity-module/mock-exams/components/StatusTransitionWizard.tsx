@@ -807,7 +807,10 @@ export function StatusTransitionWizard({
     setIsCustomBuilderOpen(true);
   };
 
-  const handleReorderQuestion = (index: number, direction: 'up' | 'down') => {
+  const handleReorderQuestion = (e: React.MouseEvent, index: number, direction: 'up' | 'down') => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (questionState.length === 0) return;
 
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -823,6 +826,7 @@ export function StatusTransitionWizard({
   };
 
   const handleQuestionDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
     setDraggedQuestionIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
@@ -830,14 +834,42 @@ export function StatusTransitionWizard({
 
   const handleQuestionDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
+
     if (draggedQuestionIndex === null || draggedQuestionIndex === index) return;
     setDragOverQuestionIndex(index);
   };
 
+  const handleQuestionDragEnter = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedQuestionIndex !== null && draggedQuestionIndex !== index) {
+      setDragOverQuestionIndex(index);
+    }
+  };
+
+  const handleQuestionDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setDragOverQuestionIndex(null);
+    }
+  };
+
   const handleQuestionDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    if (draggedQuestionIndex === null || draggedQuestionIndex === dropIndex) return;
+    e.stopPropagation();
+
+    if (draggedQuestionIndex === null || draggedQuestionIndex === dropIndex) {
+      setDraggedQuestionIndex(null);
+      setDragOverQuestionIndex(null);
+      return;
+    }
 
     setQuestionState(prev => {
       const next = [...prev];
@@ -850,7 +882,8 @@ export function StatusTransitionWizard({
     setDragOverQuestionIndex(null);
   };
 
-  const handleQuestionDragEnd = () => {
+  const handleQuestionDragEnd = (e: React.DragEvent) => {
+    e.preventDefault();
     setDraggedQuestionIndex(null);
     setDragOverQuestionIndex(null);
   };
@@ -1424,15 +1457,23 @@ export function StatusTransitionWizard({
                             draggable
                             onDragStart={(e) => handleQuestionDragStart(e, index)}
                             onDragOver={(e) => handleQuestionDragOver(e, index)}
+                            onDragEnter={(e) => handleQuestionDragEnter(e, index)}
+                            onDragLeave={handleQuestionDragLeave}
                             onDrop={(e) => handleQuestionDrop(e, index)}
                             onDragEnd={handleQuestionDragEnd}
-                            className={`rounded-lg border p-4 shadow-sm transition-all cursor-move ${
+                            className={`rounded-lg border p-4 shadow-sm transition-all duration-200 cursor-move ${
                               isDragging
-                                ? 'opacity-50 border-[#8CC63F] dark:border-[#8CC63F]'
+                                ? 'opacity-40 scale-95 bg-gray-100 dark:bg-gray-800 border-[#8CC63F] dark:border-[#8CC63F]'
                                 : isDragOver
-                                  ? 'border-[#8CC63F] bg-[#8CC63F]/5 dark:border-[#8CC63F] dark:bg-[#8CC63F]/10'
+                                  ? 'border-2 border-[#8CC63F] border-dashed bg-[#8CC63F]/10 dark:border-[#8CC63F] dark:bg-[#8CC63F]/20'
                                   : 'border-gray-200 dark:border-gray-800'
                             }`}
+                            style={{
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              MozUserSelect: 'none',
+                              msUserSelect: 'none'
+                            }}
                           >
                             <div className="mb-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
@@ -1463,24 +1504,32 @@ export function StatusTransitionWizard({
                                     <Edit3 className="h-4 w-4" />
                                   </Button>
                                 )}
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => handleReorderQuestion(index, 'up')}
+                                <button
+                                  onClick={(e) => handleReorderQuestion(e, index, 'up')}
                                   disabled={index === 0}
                                   aria-label="Move question up"
+                                  className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+                                    index === 0 ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+                                  }`}
+                                  type="button"
                                 >
-                                  <ChevronRight className="h-4 w-4 rotate-[-90deg]" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => handleReorderQuestion(index, 'down')}
+                                  <ChevronRight className={`h-4 w-4 rotate-[-90deg] ${
+                                    index === 0 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+                                  }`} />
+                                </button>
+                                <button
+                                  onClick={(e) => handleReorderQuestion(e, index, 'down')}
                                   disabled={index === questionState.length - 1}
                                   aria-label="Move question down"
+                                  className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+                                    index === questionState.length - 1 ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+                                  }`}
+                                  type="button"
                                 >
-                                  <ChevronRight className="h-4 w-4 rotate-90" />
-                                </Button>
+                                  <ChevronRight className={`h-4 w-4 rotate-90 ${
+                                    index === questionState.length - 1 ? 'text-gray-300 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F]'
+                                  }`} />
+                                </button>
                                 <IconButton
                                   variant="ghost"
                                   size="icon-sm"
