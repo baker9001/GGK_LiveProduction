@@ -237,6 +237,8 @@ export default function StudentProfileSettingsPage() {
         throw new Error('User not authenticated');
       }
 
+      console.log('[StudentProfile] Fetching profile for user:', user.id);
+
       const { data: userRow, error: userError } = await supabase
         .from('users')
         .select('id, email, created_at, last_login_at, is_active, password_updated_at, raw_user_meta_data')
@@ -244,7 +246,12 @@ export default function StudentProfileSettingsPage() {
         .single();
 
       if (userError) {
-        throw userError;
+        console.error('[StudentProfile] User fetch error:', userError);
+        throw new Error(`Failed to load user profile: ${userError.message}`);
+      }
+
+      if (!userRow) {
+        throw new Error('User record not found');
       }
 
       const { data: studentRow, error: studentError } = await supabase
@@ -273,8 +280,11 @@ export default function StudentProfileSettingsPage() {
         .maybeSingle();
 
       if (studentError) {
-        throw studentError;
+        console.error('[StudentProfile] Student fetch error:', studentError);
+        throw new Error(`Failed to load student data: ${studentError.message}`);
       }
+
+      console.log('[StudentProfile] Student data loaded:', studentRow ? 'Found' : 'Not found');
 
       let programName: string | null = null;
       if (studentRow?.enrolled_programs && studentRow.enrolled_programs.length > 0) {
@@ -315,8 +325,9 @@ export default function StudentProfileSettingsPage() {
       } satisfies StudentProfileData;
     },
     {
-      enabled: !!user?.id && (user.role === 'STUDENT' || user.role === 'SSA'),
-      staleTime: 60 * 1000
+      enabled: !!user?.id,
+      staleTime: 60 * 1000,
+      retry: 2
     }
   );
 
