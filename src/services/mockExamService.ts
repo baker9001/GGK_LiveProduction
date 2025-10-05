@@ -1072,28 +1072,80 @@ export class MockExamService {
           : null,
       }));
 
-      // Fetch sub-question counts for all questions
+      // Fetch ALL sub-questions with hierarchy for all questions
       const questionIds = (questionBankData || []).map(q => q.id);
-      let subPartsCountMap = new Map<string, number>();
+      let subQuestionsMap = new Map<string, SubQuestionItem[]>();
 
       if (questionIds.length > 0) {
-        const { data: subPartsCounts, error: subPartsError } = await supabase
+        const { data: allSubQuestions, error: subQuestionsError } = await supabase
           .from('sub_questions')
-          .select('question_id')
+          .select('id, question_id, parent_id, sub_question_number, description, marks, type')
           .in('question_id', questionIds)
-          .is('parent_id', null); // Only count first-level sub-parts
+          .order('sub_question_number', { ascending: true });
 
-        if (!subPartsError && subPartsCounts) {
-          // Count sub-parts per question
-          subPartsCounts.forEach(sp => {
-            const count = subPartsCountMap.get(sp.question_id) || 0;
-            subPartsCountMap.set(sp.question_id, count + 1);
+        if (!subQuestionsError && allSubQuestions) {
+          // Build hierarchical structure for each question
+          questionIds.forEach(questionId => {
+            const questionsSubParts = allSubQuestions.filter(sq => sq.question_id === questionId);
+
+            if (questionsSubParts.length > 0) {
+              // Build hierarchy
+              const subQuestionsHierarchy: any[] = [];
+              const subQuestionsById = new Map<string, any>();
+
+              // First pass: create map of all sub-questions
+              questionsSubParts.forEach(sq => {
+                subQuestionsById.set(sq.id, {
+                  ...sq,
+                  level: 0,
+                  children: []
+                });
+              });
+
+              // Second pass: build hierarchy and calculate levels
+              questionsSubParts.forEach(sq => {
+                const subQuestion = subQuestionsById.get(sq.id);
+                if (sq.parent_id && subQuestionsById.has(sq.parent_id)) {
+                  const parent = subQuestionsById.get(sq.parent_id);
+                  subQuestion.level = parent.level + 1;
+                  parent.children.push(subQuestion);
+                } else if (!sq.parent_id) {
+                  // Root level sub-question
+                  subQuestion.level = 1;
+                  subQuestionsHierarchy.push(subQuestion);
+                }
+              });
+
+              // Flatten hierarchy for display
+              const flattenSubQuestions = (items: any[]): SubQuestionItem[] => {
+                const result: SubQuestionItem[] = [];
+                items.forEach(item => {
+                  result.push({
+                    id: item.id,
+                    question_id: item.question_id,
+                    parent_id: item.parent_id,
+                    sub_question_number: item.sub_question_number,
+                    description: item.description,
+                    marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
+                    type: item.type,
+                    level: item.level
+                  });
+                  if (item.children && item.children.length > 0) {
+                    result.push(...flattenSubQuestions(item.children));
+                  }
+                });
+                return result;
+              };
+
+              subQuestionsMap.set(questionId, flattenSubQuestions(subQuestionsHierarchy));
+            }
           });
         }
       }
 
       const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => {
-        const subPartsCount = subPartsCountMap.get(item.id) || 0;
+        const subQuestions = subQuestionsMap.get(item.id) || [];
+        const subPartsCount = subQuestions.filter(sq => sq.level === 1).length; // Count only first-level
 
         return {
           id: item.id,
@@ -1114,6 +1166,7 @@ export class MockExamService {
           programme_name: item.data_structures?.programs?.name ?? null,
           subject_name: item.data_structures?.edu_subjects?.name ?? null,
           sub_parts_count: subPartsCount,
+          sub_questions: subQuestions.length > 0 ? subQuestions : undefined,
         };
       });
 

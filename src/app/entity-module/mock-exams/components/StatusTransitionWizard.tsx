@@ -110,15 +110,29 @@ function getQuestionPreview(question: QuestionBankItem): string {
   const marks = question.marks ? `${question.marks} mark${question.marks === 1 ? '' : 's'}` : 'Unscored';
   const prefix = question.question_number ? `Q${question.question_number}` : 'Question';
 
-  // Add sub-parts count if the question has multiple parts
-  const partsInfo = question.sub_parts_count > 0
-    ? `, ${question.sub_parts_count} part${question.sub_parts_count === 1 ? '' : 's'}`
+  const subCount = question.sub_questions?.length || 0;
+  const partsInfo = subCount > 0
+    ? `, ${subCount} sub-question${subCount === 1 ? '' : 's'}`
     : '';
 
-  // Add question type badge for complex questions
   const typeInfo = question.category === 'complex' ? ' [Complex]' : '';
 
   return `${prefix}: ${truncated} (${marks}${partsInfo})${typeInfo}`;
+}
+
+function renderSubQuestionNumber(subQuestion: any): string {
+  if (!subQuestion.sub_question_number) return '';
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const romans = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+
+  if (subQuestion.level === 1) {
+    const index = parseInt(subQuestion.sub_question_number) - 1;
+    return index >= 0 && index < letters.length ? `(${letters[index]})` : `(${subQuestion.sub_question_number})`;
+  } else if (subQuestion.level === 2) {
+    const index = parseInt(subQuestion.sub_question_number) - 1;
+    return index >= 0 && index < romans.length ? `(${romans[index]})` : `(${subQuestion.sub_question_number})`;
+  }
+  return `(${subQuestion.sub_question_number})`;
 }
 
 const STAGE_DEFINITIONS: StageDefinition[] = [
@@ -1475,12 +1489,13 @@ export function StatusTransitionWizard({
                               msUserSelect: 'none'
                             }}
                           >
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                <GripVertical className="h-4 w-4 text-gray-300" />
-                                <span>{isCustom ? 'Custom question' : optionDetails ? getQuestionPreview(optionDetails) : 'Bank question'}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                  <GripVertical className="h-4 w-4 text-gray-300" />
+                                  <span>{isCustom ? 'Custom question' : optionDetails ? getQuestionPreview(optionDetails) : 'Bank question'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
                                 {!isCustom && optionDetails && (
                                   <Button
                                     variant="ghost"
@@ -1538,8 +1553,40 @@ export function StatusTransitionWizard({
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </IconButton>
+                                </div>
                               </div>
+
+                              {!isCustom && optionDetails?.sub_questions && optionDetails.sub_questions.length > 0 && (
+                                <div className="space-y-2 pl-8 border-l-2 border-gray-200 dark:border-gray-700">
+                                  {optionDetails.sub_questions.map((subQ, subIdx) => (
+                                    <div
+                                      key={subQ.id || subIdx}
+                                      className="text-sm"
+                                      style={{ paddingLeft: `${subQ.level * 16}px` }}
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        <span className="font-medium text-[#8CC63F] min-w-[40px]">
+                                          {renderSubQuestionNumber(subQ)}
+                                        </span>
+                                        <div className="flex-1">
+                                          <span className="text-gray-700 dark:text-gray-300">
+                                            {subQ.description && subQ.description.length > 100
+                                              ? `${subQ.description.slice(0, 100)}...`
+                                              : subQ.description || 'Sub-question'}
+                                          </span>
+                                          {subQ.marks && (
+                                            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                              [{subQ.marks} mark{subQ.marks === 1 ? '' : 's'}]
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
+
                             <div className="grid gap-4 md:grid-cols-4">
                               <FormField id={`sequence-${index}`} label="Sequence" required>
                                 <Input
