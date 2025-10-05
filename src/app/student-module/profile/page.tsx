@@ -1035,11 +1035,9 @@ export default function StudentProfileSettingsPage() {
                         onChange={(value) => handleProfileChange('gender', value)}
                         disabled={!isEditingProfile}
                         options={[
-                          { value: '', label: 'Prefer not to say' },
+                          { value: '', label: 'Select an option' },
                           { value: 'male', label: 'Male' },
-                          { value: 'female', label: 'Female' },
-                          { value: 'other', label: 'Other' },
-                          { value: 'prefer_not_to_say', label: 'Prefer not to say' }
+                          { value: 'female', label: 'Female' }
                         ]}
                         searchable={false}
                       />
