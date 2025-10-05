@@ -59,6 +59,8 @@ interface MockExamCreationWizardProps {
   isLoadingBranches?: boolean;
   isLoadingGradeLevels?: boolean;
   isLoadingTeachers?: boolean;
+  onSchoolsChange?: (schoolIds: string[]) => void;
+  onSubjectChange?: (subjectId: string) => void;
 }
 
 const WIZARD_STEPS: WizardStep[] = [
@@ -156,6 +158,8 @@ export function MockExamCreationWizard({
   isLoadingBranches = false,
   isLoadingGradeLevels = false,
   isLoadingTeachers = false,
+  onSchoolsChange,
+  onSubjectChange,
 }: MockExamCreationWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<MockExamFormData>({ ...INITIAL_FORM_DATA, ...initialData });
@@ -429,6 +433,7 @@ export function MockExamCreationWizard({
                         subject: ds.subject_name,
                         subjectId: ds.subject_id
                       }));
+                      onSubjectChange?.(ds.subject_id);
                     }
                   }}
                   options={dataStructureOptions}
@@ -506,6 +511,7 @@ export function MockExamCreationWizard({
                       sections: [],
                       teachers: []
                     }));
+                    onSchoolsChange?.(values);
                   }}
                   placeholder="Select schools"
                   className="green-theme"

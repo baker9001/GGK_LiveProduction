@@ -1807,6 +1807,21 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           isLoadingBranches={isLoadingBranches}
           isLoadingGradeLevels={isLoadingGradeLevels}
           isLoadingTeachers={isLoadingTeachers}
+          onSchoolsChange={(schoolIds) => {
+            setFormState(prev => ({
+              ...prev,
+              schools: schoolIds,
+              branches: [],
+              gradeBands: [],
+              sections: []
+            }));
+          }}
+          onSubjectChange={(subjectId) => {
+            setFormState(prev => ({
+              ...prev,
+              subjectId
+            }));
+          }}
         />
       )}
 
