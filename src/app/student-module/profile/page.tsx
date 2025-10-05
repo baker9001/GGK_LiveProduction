@@ -131,8 +131,15 @@ const profileFormSchema = z.object({
     .or(z.literal('')),
   phone: z
     .string()
-    .min(1, 'Phone number is required')
-    .regex(/^\+\d{1,4}\s[0-9\s-]{4,20}$/, 'Enter a valid phone number with country code')
+    .refine(
+      (val) => {
+        // Allow empty string (no phone number provided)
+        if (!val || val.trim() === '') return true;
+        // If value exists, it must match the international format
+        return /^\+\d{1,4}\s[0-9\s-]{4,20}$/.test(val);
+      },
+      { message: 'Enter a valid phone number with country code (e.g., +965 12345678)' }
+    )
     .optional()
     .or(z.literal('')),
   birthday: z.string().optional().or(z.literal('')),
@@ -177,7 +184,15 @@ function sanitizeValue<T>(value: T | null | undefined): T | null {
   if (value === undefined) return null;
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    return trimmed.length === 0 ? null : (trimmed as unknown as T);
+    // Return null for empty strings
+    if (trimmed.length === 0) return null;
+    // Special handling for phone numbers: reject "country code only" values
+    // Valid format should be: +XXX followed by space and digits
+    if (trimmed.startsWith('+') && /^\+\d{1,4}$/.test(trimmed)) {
+      // This is just a country code without phone digits - treat as empty
+      return null;
+    }
+    return trimmed as unknown as T;
   }
   return value as T | null;
 }
@@ -381,10 +396,17 @@ export default function StudentProfileSettingsPage() {
       }
 
       if (profileData.student) {
+        const sanitizedPhone = sanitizeValue(values.phone);
+        console.log('[StudentProfile] Saving phone number:', {
+          original: values.phone,
+          sanitized: sanitizedPhone,
+          studentId: profileData.student.id
+        });
+
         const { error: studentUpdateError } = await supabase
           .from('students')
           .update({
-            phone: sanitizeValue(values.phone),
+            phone: sanitizedPhone,
             birthday: sanitizeValue(values.birthday),
             gender: sanitizeValue(values.gender),
             updated_at: new Date().toISOString()

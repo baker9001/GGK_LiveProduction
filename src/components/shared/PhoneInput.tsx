@@ -141,7 +141,9 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   // Update parent only when local values change
   useEffect(() => {
     if (isInitialized && onChange) {
-      const fullNumber = `${countryCode} ${phoneNumber}`.trim();
+      // Only send full number if phoneNumber has actual digits
+      // If phoneNumber is empty, send empty string instead of just country code
+      const fullNumber = phoneNumber.trim() ? `${countryCode} ${phoneNumber}` : '';
       if (fullNumber !== value) {
         onChange(fullNumber);
       }
