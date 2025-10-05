@@ -109,7 +109,16 @@ function getQuestionPreview(question: QuestionBankItem): string {
   const truncated = base.length > 90 ? `${base.slice(0, 90)}…` : base;
   const marks = question.marks ? `${question.marks} mark${question.marks === 1 ? '' : 's'}` : 'Unscored';
   const prefix = question.question_number ? `Q${question.question_number}` : 'Question';
-  return `${prefix}: ${truncated} (${marks})`;
+
+  // Add sub-parts count if the question has multiple parts
+  const partsInfo = question.sub_parts_count > 0
+    ? `, ${question.sub_parts_count} part${question.sub_parts_count === 1 ? '' : 's'}`
+    : '';
+
+  // Add question type badge for complex questions
+  const typeInfo = question.category === 'complex' ? ' [Complex]' : '';
+
+  return `${prefix}: ${truncated} (${marks}${partsInfo})${typeInfo}`;
 }
 
 const STAGE_DEFINITIONS: StageDefinition[] = [

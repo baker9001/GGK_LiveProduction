@@ -154,6 +154,8 @@ export interface QuestionBankItem {
   board_name: string | null;
   programme_name: string | null;
   subject_name: string | null;
+  sub_parts_count: number;
+  category: 'direct' | 'complex' | null;
 }
 
 export interface MockExamStatusWizardContext {
@@ -963,6 +965,8 @@ export class MockExamService {
       const subjectId = examData.data_structures?.subject_id || null;
       const dataStructureId = examData.data_structure_id || null;
 
+      // Query question bank with proper joins to edu_topics and edu_subtopics
+      // Now using the foreign key relationships established in the database
       let questionBankQuery = supabase
         .from('questions_master_admin')
         .select(`
@@ -970,13 +974,22 @@ export class MockExamService {
           question_number,
           question_description,
           type,
+          category,
           marks,
           status,
           data_structure_id,
           subject_id,
           year,
           topic_id,
-          subtopic_id
+          subtopic_id,
+          edu_topics!questions_master_admin_topic_id_fkey (id, name),
+          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name),
+          data_structures!fk_questions_master_admin_data_structure (
+            id,
+            providers!data_structures_provider_id_fkey (name),
+            programs!data_structures_program_id_fkey (name),
+            edu_subjects!data_structures_subject_id_fkey (name)
+          )
         `)
         .eq('status', 'active');
 
@@ -1047,75 +1060,48 @@ export class MockExamService {
           : null,
       }));
 
-      // Fetch related data separately for topics and subtopics if we have questions
-      const questionIdsWithTopics = (questionBankData || []).filter(q => q.topic_id).map(q => q.topic_id);
-      const questionIdsWithSubtopics = (questionBankData || []).filter(q => q.subtopic_id).map(q => q.subtopic_id);
-      const questionDataStructureIds = (questionBankData || []).filter(q => q.data_structure_id).map(q => q.data_structure_id);
+      // Fetch sub-question counts for all questions
+      const questionIds = (questionBankData || []).map(q => q.id);
+      let subPartsCountMap = new Map<string, number>();
 
-      // Fetch topics
-      let topicsMap = new Map<string, string>();
-      if (questionIdsWithTopics.length > 0) {
-        const { data: topicsData } = await supabase
-          .from('edu_topics')
-          .select('id, name')
-          .in('id', [...new Set(questionIdsWithTopics)]);
+      if (questionIds.length > 0) {
+        const { data: subPartsCounts, error: subPartsError } = await supabase
+          .from('sub_questions')
+          .select('question_id')
+          .in('question_id', questionIds)
+          .is('parent_id', null); // Only count first-level sub-parts
 
-        if (topicsData) {
-          topicsData.forEach(topic => topicsMap.set(topic.id, topic.name));
-        }
-      }
-
-      // Fetch subtopics
-      let subtopicsMap = new Map<string, string>();
-      if (questionIdsWithSubtopics.length > 0) {
-        const { data: subtopicsData } = await supabase
-          .from('edu_subtopics')
-          .select('id, name')
-          .in('id', [...new Set(questionIdsWithSubtopics)]);
-
-        if (subtopicsData) {
-          subtopicsData.forEach(subtopic => subtopicsMap.set(subtopic.id, subtopic.name));
-        }
-      }
-
-      // Fetch data structures
-      let dataStructuresMap = new Map<string, any>();
-      if (questionDataStructureIds.length > 0) {
-        const { data: dataStructuresData } = await supabase
-          .from('data_structures')
-          .select(`
-            id,
-            providers (name),
-            programs (name),
-            edu_subjects (name)
-          `)
-          .in('id', [...new Set(questionDataStructureIds)]);
-
-        if (dataStructuresData) {
-          dataStructuresData.forEach(ds => dataStructuresMap.set(ds.id, ds));
+        if (!subPartsError && subPartsCounts) {
+          // Count sub-parts per question
+          subPartsCounts.forEach(sp => {
+            const count = subPartsCountMap.get(sp.question_id) || 0;
+            subPartsCountMap.set(sp.question_id, count + 1);
+          });
         }
       }
 
       const questionBank: QuestionBankItem[] = (questionBankData || []).map((item: any) => {
-        const dataStructure = item.data_structure_id ? dataStructuresMap.get(item.data_structure_id) : null;
+        const subPartsCount = subPartsCountMap.get(item.id) || 0;
 
         return {
           id: item.id,
           question_number: item.question_number ?? null,
           question_description: item.question_description ?? null,
           type: item.type ?? null,
+          category: item.category ?? null,
           marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
           status: item.status ?? null,
           exam_year: item.year ?? null,
           year: item.year ?? null,
           topic_id: item.topic_id ?? null,
-          topic_name: item.topic_id ? topicsMap.get(item.topic_id) ?? null : null,
+          topic_name: item.edu_topics?.name ?? null,
           subtopic_id: item.subtopic_id ?? null,
-          subtopic_name: item.subtopic_id ? subtopicsMap.get(item.subtopic_id) ?? null : null,
+          subtopic_name: item.edu_subtopics?.name ?? null,
           difficulty_level: null,
-          board_name: dataStructure?.providers?.name ?? null,
-          programme_name: dataStructure?.programs?.name ?? null,
-          subject_name: dataStructure?.edu_subjects?.name ?? null,
+          board_name: item.data_structures?.providers?.name ?? null,
+          programme_name: item.data_structures?.programs?.name ?? null,
+          subject_name: item.data_structures?.edu_subjects?.name ?? null,
+          sub_parts_count: subPartsCount,
         };
       });
 
