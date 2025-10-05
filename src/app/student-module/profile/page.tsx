@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { supabase } from '../../../lib/supabase';
 import { useUser } from '../../../contexts/UserContext';
 import { Button } from '../../../components/shared/Button';
-import { FormField, Input, Textarea } from '../../../components/shared/FormField';
+import { FormField, Input, Textarea, Select } from '../../../components/shared/FormField';
 import { PhoneInput } from '../../../components/shared/PhoneInput';
 import { toast } from '../../../components/shared/Toast';
 import { getPublicUrl } from '../../../lib/storageHelpers';
@@ -1032,15 +1032,17 @@ export default function StudentProfileSettingsPage() {
                       <Select
                         id="gender"
                         value={profileForm.gender}
-                        onChange={e => handleProfileChange('gender', e.target.value)}
+                        onChange={(value) => handleProfileChange('gender', value)}
                         disabled={!isEditingProfile}
-                      >
-                        <option value="">Prefer not to say</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not_to_say">Prefer not to say</option>
-                      </Select>
+                        options={[
+                          { value: '', label: 'Prefer not to say' },
+                          { value: 'male', label: 'Male' },
+                          { value: 'female', label: 'Female' },
+                          { value: 'other', label: 'Other' },
+                          { value: 'prefer_not_to_say', label: 'Prefer not to say' }
+                        ]}
+                        searchable={false}
+                      />
                     </FormField>
                   </div>
                   <FormField id="vibe" label="Current vibe" error={profileErrors.vibe}>
