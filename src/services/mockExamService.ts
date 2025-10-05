@@ -137,6 +137,17 @@ export interface MockExamQuestionSelectionRecord {
   } | null;
 }
 
+export interface SubQuestionItem {
+  id: string;
+  question_id: string;
+  parent_id: string | null;
+  sub_question_number: string | null;
+  description: string | null;
+  marks: number | null;
+  type: string | null;
+  level: number;
+}
+
 export interface QuestionBankItem {
   id: string;
   question_number: number | null;
@@ -155,6 +166,7 @@ export interface QuestionBankItem {
   programme_name: string | null;
   subject_name: string | null;
   sub_parts_count: number;
+  sub_questions?: SubQuestionItem[];
   category: 'direct' | 'complex' | null;
 }
 
