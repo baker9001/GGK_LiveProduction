@@ -847,6 +847,69 @@ export default function StudentProfileSettingsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* School Identity Banner */}
+      {(profileData.schoolName || profileData.branchName) && (
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-blue-500/20">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+            {/* School Logo */}
+            {profileData.schoolLogoUrl ? (
+              <div className="flex-shrink-0">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white shadow-lg p-3 ring-4 ring-white/30">
+                  <img
+                    src={getPublicUrl('school-logos', profileData.schoolLogoUrl) || undefined}
+                    alt={`${profileData.schoolName} logo`}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>';
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-shrink-0">
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white shadow-lg p-3 ring-4 ring-white/30 flex items-center justify-center">
+                  <Building2 className="w-12 h-12 md:w-14 md:h-14 text-blue-600" />
+                </div>
+              </div>
+            )}
+
+            {/* School Information */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="w-5 h-5 text-blue-200" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-blue-200">My School</span>
+              </div>
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 break-words">
+                {profileData.schoolName}
+              </h2>
+
+              <div className="flex flex-wrap items-center gap-3 text-sm md:text-base">
+                {profileData.branchName && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full">
+                    <MapPin className="w-4 h-4 text-blue-100" />
+                    <span className="text-white font-medium">{profileData.branchName}</span>
+                  </div>
+                )}
+                {profileData.student?.grade_level && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full">
+                    <GraduationCap className="w-4 h-4 text-blue-100" />
+                    <span className="text-white font-medium">
+                      {profileData.student.grade_level}
+                      {profileData.student.section && ` - Section ${profileData.student.section}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <div className={`relative overflow-hidden rounded-3xl border border-white/10 shadow-lg bg-gradient-to-r ${accentTheme.gradient}`}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_transparent_60%)]" />
@@ -1152,70 +1215,6 @@ export default function StudentProfileSettingsPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* My School Section */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-sm p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">My School</h3>
-              <Building2 className="w-5 h-5 text-blue-500" />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              These details are managed by your school administration
-            </p>
-            <div className="space-y-3 text-sm">
-              {profileData.schoolName && (
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
-                  {profileData.schoolLogoUrl ? (
-                    <div className="flex-shrink-0">
-                      <img
-                        src={getPublicUrl('school-logos', profileData.schoolLogoUrl) || undefined}
-                        alt={`${profileData.schoolName} logo`}
-                        className="w-12 h-12 rounded-lg object-contain bg-white dark:bg-gray-800 p-1 border border-blue-200 dark:border-blue-800"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const fallback = target.nextElementSibling as HTMLElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                      <div className="hidden w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 items-center justify-center">
-                        <Building2 className="w-6 h-6 text-blue-500" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
-                      <Building2 className="w-6 h-6 text-blue-500" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">School</p>
-                    <p className="text-gray-600 dark:text-gray-300 break-words">{profileData.schoolName}</p>
-                  </div>
-                </div>
-              )}
-              {profileData.branchName && (
-                <div className="flex items-start gap-3 p-3 rounded-2xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-900/40">
-                  <MapPin className="w-5 h-5 text-sky-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">Branch</p>
-                    <p className="text-gray-600 dark:text-gray-300">{profileData.branchName}</p>
-                  </div>
-                </div>
-              )}
-              {profileData.student?.grade_level && (
-                <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40">
-                  <GraduationCap className="w-5 h-5 text-emerald-500 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">Grade & Section</p>
-                    <p className="text-gray-600 dark:text-gray-300">
-                      {profileData.student.grade_level}
-                      {profileData.student.section && ` - ${profileData.student.section}`}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Account Insights */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
