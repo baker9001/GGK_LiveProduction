@@ -109,9 +109,9 @@ interface PhoneInputProps {
   required?: boolean;
 }
 
-export const PhoneInput: React.FC<PhoneInputProps> = ({ 
-  value = '', 
-  onChange, 
+export const PhoneInput: React.FC<PhoneInputProps> = ({
+  value = '',
+  onChange,
   placeholder = 'XXXX XXXX',
   className = '',
   disabled = false,
@@ -122,50 +122,48 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [searchCountry, setSearchCountry] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isUpdatingFromProps = useRef(false);
 
   // Parse the initial value on mount and when value changes from external source
   useEffect(() => {
-    if (!isInitialized) {
-      // First initialization
-      if (value) {
-        const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
-        if (match) {
-          setCountryCode(match[1]);
-          setPhoneNumber(match[2] || '');
-        } else if (value) {
-          setPhoneNumber(value);
-        }
-      }
-      setIsInitialized(true);
-    } else if (value !== `${countryCode} ${phoneNumber}`.trim()) {
-      // Value changed externally (e.g., form reset)
-      if (value) {
-        const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
-        if (match) {
-          setCountryCode(match[1]);
-          setPhoneNumber(match[2] || '');
-        } else {
-          setPhoneNumber(value);
-        }
-      } else {
-        // Value was cleared externally
-        setPhoneNumber('');
-      }
-    }
-  }, [value, isInitialized, countryCode, phoneNumber]);
+    // Set flag to indicate we're updating from props
+    isUpdatingFromProps.current = true;
 
-  // Update parent only when local values change
-  useEffect(() => {
-    if (isInitialized && onChange) {
-      // Only send full number if phoneNumber has actual digits
-      // If phoneNumber is empty, send empty string instead of just country code
-      const fullNumber = phoneNumber.trim() ? `${countryCode} ${phoneNumber}` : '';
-      if (fullNumber !== value) {
-        onChange(fullNumber);
+    if (value) {
+      const match = value.match(/^(\+\d{1,4})\s?(.*)$/);
+      if (match) {
+        setCountryCode(match[1]);
+        setPhoneNumber(match[2] || '');
+      } else if (value) {
+        setPhoneNumber(value);
       }
+    } else {
+      // Value was cleared externally
+      setPhoneNumber('');
     }
-  }, [countryCode, phoneNumber, isInitialized]);
+
+    // Reset flag after state updates have been applied
+    setTimeout(() => {
+      isUpdatingFromProps.current = false;
+    }, 0);
+  }, [value]);
+
+  // Handle changes to local state
+  const handleCountryCodeChange = (newCode: string) => {
+    setCountryCode(newCode);
+    if (onChange) {
+      const fullNumber = phoneNumber.trim() ? `${newCode} ${phoneNumber}` : '';
+      onChange(fullNumber);
+    }
+  };
+
+  const handlePhoneNumberChange = (newNumber: string) => {
+    setPhoneNumber(newNumber);
+    if (onChange && !isUpdatingFromProps.current) {
+      const fullNumber = newNumber.trim() ? `${countryCode} ${newNumber}` : '';
+      onChange(fullNumber);
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -209,7 +207,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        
+
         {showCountryDropdown && (
           <div className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[9999] max-h-96 overflow-hidden">
             <div className="sticky top-0 bg-white dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700">
@@ -229,7 +227,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
                     key={`${country.code}-${country.country}`}
                     type="button"
                     onClick={() => {
-                      setCountryCode(country.code);
+                      handleCountryCodeChange(country.code);
                       setShowCountryDropdown(false);
                       setSearchCountry('');
                     }}
@@ -249,11 +247,11 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           </div>
         )}
       </div>
-      
+
       <input
         type="tel"
         value={phoneNumber}
-        onChange={(e) => setPhoneNumber(e.target.value)}
+        onChange={(e) => handlePhoneNumberChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         required={required}
