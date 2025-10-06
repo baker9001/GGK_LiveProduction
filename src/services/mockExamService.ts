@@ -556,20 +556,21 @@ export class MockExamService {
         branchGradeLevels = data || [];
       }
 
-      const gradeLevelMap = new Map<string, any>();
+      const gradeNameMap = new Map<string, any>();
 
       (schoolGradeLevels || []).forEach((item: any) => {
         if (item.grade_levels) {
-          const key = item.grade_levels.id;
-          if (!gradeLevelMap.has(key)) {
-            gradeLevelMap.set(key, {
-              id: item.grade_levels.id,
-              name: item.grade_levels.grade_name,
+          const gradeName = item.grade_levels.grade_name;
+          if (!gradeNameMap.has(gradeName)) {
+            gradeNameMap.set(gradeName, {
+              ids: new Set(),
+              name: gradeName,
               description: item.grade_levels.education_level,
               associations: []
             });
           }
-          gradeLevelMap.get(key).associations.push({
+          gradeNameMap.get(gradeName).ids.add(item.grade_levels.id);
+          gradeNameMap.get(gradeName).associations.push({
             type: 'school',
             school_id: item.school_id,
             school_name: item.schools?.name || 'Unknown School',
@@ -581,16 +582,17 @@ export class MockExamService {
 
       branchGradeLevels.forEach((item: any) => {
         if (item.grade_levels) {
-          const key = item.grade_levels.id;
-          if (!gradeLevelMap.has(key)) {
-            gradeLevelMap.set(key, {
-              id: item.grade_levels.id,
-              name: item.grade_levels.grade_name,
+          const gradeName = item.grade_levels.grade_name;
+          if (!gradeNameMap.has(gradeName)) {
+            gradeNameMap.set(gradeName, {
+              ids: new Set(),
+              name: gradeName,
               description: item.grade_levels.education_level,
               associations: []
             });
           }
-          gradeLevelMap.get(key).associations.push({
+          gradeNameMap.get(gradeName).ids.add(item.grade_levels.id);
+          gradeNameMap.get(gradeName).associations.push({
             type: 'branch',
             school_id: item.branches?.school_id,
             school_name: item.branches?.schools?.name || 'Unknown School',
@@ -600,7 +602,7 @@ export class MockExamService {
         }
       });
 
-      return Array.from(gradeLevelMap.values()).map(gl => {
+      return Array.from(gradeNameMap.values()).map(gl => {
         const uniqueAssociations = gl.associations.reduce((acc: any[], curr: any) => {
           const exists = acc.find(a =>
             a.school_id === curr.school_id && a.branch_id === curr.branch_id
@@ -621,7 +623,7 @@ export class MockExamService {
           .filter((part: string, index: number, self: string[]) => self.indexOf(part) === index);
 
         return {
-          id: gl.id,
+          id: Array.from(gl.ids)[0],
           name: gl.name,
           description: contextParts.length > 0 ? contextParts.join(' | ') : gl.description
         };
