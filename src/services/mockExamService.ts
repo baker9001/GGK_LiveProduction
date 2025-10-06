@@ -1610,7 +1610,13 @@ export class MockExamService {
           query = query.in('school_id', schoolIds);
         }
       } else {
-        query = query.or(`scope.eq.global,and(scope.eq.custom,school_id.in.(${schoolIds.join(',')}))`);
+        // Handle 'all' scope - include both global and custom questions
+        if (schoolIds.length > 0) {
+          query = query.or(`scope.eq.global,and(scope.eq.custom,school_id.in.(${schoolIds.join(',')}))`);
+        } else {
+          // If no school IDs provided, only show global questions
+          query = query.eq('scope', 'global');
+        }
       }
 
       if (years && years.length > 0) {

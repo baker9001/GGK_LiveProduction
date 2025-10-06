@@ -389,16 +389,16 @@ export function QuestionsStep({
   return (
     <div className="h-full flex flex-col">
       {/* Info Banner with Selection Mode Toggle */}
-      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
+      <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-start gap-3">
-          <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          <FileText className="h-5 w-5 text-gray-600 dark:text-gray-400 mt-0.5" />
           <div className="flex-1">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm">
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm">
                   Select Questions for Your Mock Exam
                 </h4>
-                <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
                   Choose questions from the global question bank or your school's custom questions.
                   Drag and drop to reorder questions in your exam paper.
                 </p>
@@ -408,8 +408,8 @@ export function QuestionsStep({
                   onClick={() => setSelectionMode('manual')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     selectionMode === 'manual'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-blue-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700'
+                      ? 'bg-[#8CC63F] text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                   }`}
                 >
                   <List className="h-4 w-4" />
@@ -419,8 +419,8 @@ export function QuestionsStep({
                   onClick={() => setSelectionMode('random')}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     selectionMode === 'random'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-blue-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700'
+                      ? 'bg-[#8CC63F] text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                   }`}
                 >
                   <Shuffle className="h-4 w-4" />
@@ -520,7 +520,7 @@ export function QuestionsStep({
       )}
 
       {/* Two Panel Layout */}
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
         {/* Left Panel - Available Questions */}
         <div className="flex flex-col min-h-0 border border-gray-200 rounded-lg bg-white dark:border-gray-800 dark:bg-gray-900">
           {/* Header */}
@@ -553,7 +553,7 @@ export function QuestionsStep({
                 onClick={() => setFilters(f => ({ ...f, scope: 'global' }))}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                   filters.scope === 'global'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-gray-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                 }`}
               >
@@ -630,7 +630,7 @@ export function QuestionsStep({
           </div>
 
           {/* Question List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {isLoadingQuestions ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <Loader2 className="h-12 w-12 text-[#8CC63F] animate-spin mb-3" />
@@ -706,7 +706,7 @@ export function QuestionsStep({
           </div>
 
           {/* Selected Questions List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {selectedQuestions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <FileText className="h-12 w-12 text-gray-400 mb-3" />
@@ -767,7 +767,7 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
   const [isExpanded, setIsExpanded] = useState(false);
 
   const scopeBadge = question.scope === 'global' ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
       <Globe className="h-3 w-3" />
       Global
     </span>
@@ -787,7 +787,7 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
   const hasDescription = question.question_description && question.question_description.length > 100;
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 hover:border-[#8CC63F] transition-all dark:border-gray-800 dark:hover:border-[#8CC63F] hover:shadow-md">
+    <div className="border border-gray-200 rounded-lg p-5 hover:border-[#8CC63F] transition-all dark:border-gray-800 dark:hover:border-[#8CC63F] hover:shadow-md">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-bold text-lg text-[#8CC63F]">
@@ -828,7 +828,7 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
       </div>
 
       <div
-        className={`text-sm text-gray-700 dark:text-gray-300 mb-3 cursor-pointer ${!isExpanded && hasDescription ? 'line-clamp-3' : ''}`}
+        className={`text-base text-gray-700 dark:text-gray-300 mb-3 cursor-pointer leading-relaxed ${!isExpanded && hasDescription ? 'line-clamp-3' : ''}`}
         onClick={() => hasDescription && setIsExpanded(!isExpanded)}
       >
         {question.question_description || 'No description available'}
@@ -926,7 +926,7 @@ function SelectedQuestionCard({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className={`border rounded-lg p-4 transition-all cursor-move ${
+      className={`border rounded-lg p-5 transition-all cursor-move ${
         isDragging
           ? 'opacity-50 scale-95 border-[#8CC63F]'
           : isDragOver
