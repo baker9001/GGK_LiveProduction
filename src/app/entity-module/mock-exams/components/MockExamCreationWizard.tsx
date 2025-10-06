@@ -19,6 +19,7 @@ import { FormField, Input, Select, Textarea } from '../../../../components/share
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
 import { ConflictDetectionPanel } from './ConflictDetectionPanel';
+import { QuestionsStep, SelectedQuestion } from './QuestionsStep';
 import { useConflictDetection } from '../../../../hooks/useConflictDetection';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
@@ -39,6 +40,7 @@ export interface MockExamFormData {
   durationMinutes: string;
   deliveryMode: 'In-person' | 'Digital (exam hall)' | 'Remote proctored';
   teachers: string[];
+  selectedQuestions: SelectedQuestion[];
   aiProctoringEnabled: boolean;
   releaseAnalyticsToStudents: boolean;
   allowRetakes: boolean;
@@ -93,6 +95,13 @@ const WIZARD_STEPS: WizardStep[] = [
     estimatedMinutes: 2,
   },
   {
+    id: 'questions',
+    title: 'Questions',
+    description: 'Select and organize exam questions',
+    icon: <FileText className="w-5 h-5" />,
+    estimatedMinutes: 6,
+  },
+  {
     id: 'review',
     title: 'Review & Create',
     description: 'Review all details and create the mock exam',
@@ -138,6 +147,7 @@ const INITIAL_FORM_DATA: MockExamFormData = {
   durationMinutes: '120',
   deliveryMode: 'In-person',
   teachers: [],
+  selectedQuestions: [],
   aiProctoringEnabled: false,
   releaseAnalyticsToStudents: false,
   allowRetakes: false,
@@ -321,6 +331,12 @@ export function MockExamCreationWizard({
       case 3: // Team
         if (formData.teachers.length === 0) {
           errors.teachers = 'Assign at least one lead teacher';
+        }
+        break;
+
+      case 4: // Questions
+        if (formData.selectedQuestions.length === 0) {
+          errors.questions = 'Select at least one question for the exam';
         }
         break;
     }
@@ -726,8 +742,19 @@ export function MockExamCreationWizard({
             </div>
           )}
 
-          {/* Step 4: Review */}
+          {/* Step 4: Questions */}
           {currentStep === 4 && (
+            <QuestionsStep
+              selectedQuestions={formData.selectedQuestions}
+              onQuestionsChange={(questions) => setFormData(prev => ({ ...prev, selectedQuestions: questions }))}
+              subjectId={formData.subjectId}
+              schoolIds={formData.schools}
+              companyId={null}
+            />
+          )}
+
+          {/* Step 5: Review */}
+          {currentStep === 5 && (
             <div className="space-y-6">
               <div className="p-4 rounded-lg bg-[#8CC63F]/10 border border-[#8CC63F]">
                 <div className="flex items-start gap-3">
@@ -817,6 +844,27 @@ export function MockExamCreationWizard({
                       <dt className="text-gray-600 dark:text-gray-400">Lead Teachers:</dt>
                       <dd className="font-medium text-gray-900 dark:text-white">{formData.teachers.length}</dd>
                     </div>
+                  </dl>
+                </div>
+
+                <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#8CC63F]" />
+                    Questions
+                  </h4>
+                  <dl className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-gray-600 dark:text-gray-400">Total Questions:</dt>
+                      <dd className="font-medium text-gray-900 dark:text-white">{formData.selectedQuestions.length}</dd>
+                    </div>
+                    {formData.selectedQuestions.length > 0 && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-600 dark:text-gray-400">Question Range:</dt>
+                        <dd className="font-medium text-gray-900 dark:text-white">
+                          Q1 - Q{formData.selectedQuestions.length}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               </div>
