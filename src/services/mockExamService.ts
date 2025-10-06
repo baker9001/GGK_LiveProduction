@@ -455,18 +455,32 @@ export class MockExamService {
   }
 
   /**
-   * Get branches for schools
+   * Get branches for schools with school names
    */
   static async getBranchesForSchools(schoolIds: string[]) {
     try {
       const { data, error } = await supabase
         .from('branches')
-        .select('id, name, school_id')
+        .select(`
+          id,
+          name,
+          school_id,
+          schools!branches_school_id_fkey (
+            id,
+            name
+          )
+        `)
         .in('school_id', schoolIds)
         .eq('status', 'active');
 
       if (error) throw error;
-      return data || [];
+
+      return (data || []).map((branch: any) => ({
+        id: branch.id,
+        name: branch.name,
+        school_id: branch.school_id,
+        school_name: branch.schools?.name || 'Unknown School'
+      }));
     } catch (error) {
       console.error('Error fetching branches:', error);
       throw error;
@@ -474,7 +488,7 @@ export class MockExamService {
   }
 
   /**
-   * Get grade levels for schools
+   * Get grade levels for schools with school and branch context
    */
   static async getGradeLevelsForSchools(schoolIds: string[]): Promise<GradeLevel[]> {
     try {
@@ -482,6 +496,11 @@ export class MockExamService {
         .from('grade_level_schools')
         .select(`
           grade_level_id,
+          school_id,
+          schools!grade_level_schools_school_id_fkey (
+            id,
+            name
+          ),
           grade_levels!grade_level_schools_grade_level_id_fkey (
             id,
             grade_name,
@@ -497,7 +516,7 @@ export class MockExamService {
 
       const { data: branches, error: branchesError } = await supabase
         .from('branches')
-        .select('id')
+        .select('id, school_id')
         .in('school_id', schoolIds);
 
       if (branchesError) {
@@ -513,6 +532,16 @@ export class MockExamService {
           .from('grade_level_branches')
           .select(`
             grade_level_id,
+            branch_id,
+            branches!grade_level_branches_branch_id_fkey (
+              id,
+              name,
+              school_id,
+              schools!branches_school_id_fkey (
+                id,
+                name
+              )
+            ),
             grade_levels!grade_level_branches_grade_level_id_fkey (
               id,
               grade_name,
@@ -527,29 +556,76 @@ export class MockExamService {
         branchGradeLevels = data || [];
       }
 
-      const uniqueGradeLevels = new Map();
+      const gradeLevelMap = new Map<string, any>();
 
       (schoolGradeLevels || []).forEach((item: any) => {
-        if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
-          uniqueGradeLevels.set(item.grade_levels.id, {
-            id: item.grade_levels.id,
-            name: item.grade_levels.grade_name,
-            description: item.grade_levels.education_level
+        if (item.grade_levels) {
+          const key = item.grade_levels.id;
+          if (!gradeLevelMap.has(key)) {
+            gradeLevelMap.set(key, {
+              id: item.grade_levels.id,
+              name: item.grade_levels.grade_name,
+              description: item.grade_levels.education_level,
+              associations: []
+            });
+          }
+          gradeLevelMap.get(key).associations.push({
+            type: 'school',
+            school_id: item.school_id,
+            school_name: item.schools?.name || 'Unknown School',
+            branch_id: null,
+            branch_name: null
           });
         }
       });
 
       branchGradeLevels.forEach((item: any) => {
-        if (item.grade_levels && !uniqueGradeLevels.has(item.grade_levels.id)) {
-          uniqueGradeLevels.set(item.grade_levels.id, {
-            id: item.grade_levels.id,
-            name: item.grade_levels.grade_name,
-            description: item.grade_levels.education_level
+        if (item.grade_levels) {
+          const key = item.grade_levels.id;
+          if (!gradeLevelMap.has(key)) {
+            gradeLevelMap.set(key, {
+              id: item.grade_levels.id,
+              name: item.grade_levels.grade_name,
+              description: item.grade_levels.education_level,
+              associations: []
+            });
+          }
+          gradeLevelMap.get(key).associations.push({
+            type: 'branch',
+            school_id: item.branches?.school_id,
+            school_name: item.branches?.schools?.name || 'Unknown School',
+            branch_id: item.branch_id,
+            branch_name: item.branches?.name || 'Unknown Branch'
           });
         }
       });
 
-      return Array.from(uniqueGradeLevels.values());
+      return Array.from(gradeLevelMap.values()).map(gl => {
+        const uniqueAssociations = gl.associations.reduce((acc: any[], curr: any) => {
+          const exists = acc.find(a =>
+            a.school_id === curr.school_id && a.branch_id === curr.branch_id
+          );
+          if (!exists) {
+            acc.push(curr);
+          }
+          return acc;
+        }, []);
+
+        const contextParts = uniqueAssociations
+          .map((assoc: any) => {
+            if (assoc.type === 'branch' && assoc.branch_name) {
+              return `${assoc.school_name}, ${assoc.branch_name}`;
+            }
+            return assoc.school_name;
+          })
+          .filter((part: string, index: number, self: string[]) => self.indexOf(part) === index);
+
+        return {
+          id: gl.id,
+          name: gl.name,
+          description: contextParts.length > 0 ? contextParts.join(' | ') : gl.description
+        };
+      });
     } catch (error) {
       console.error('Error fetching grade levels:', error);
       throw error;

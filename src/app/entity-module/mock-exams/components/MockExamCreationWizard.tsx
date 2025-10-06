@@ -245,7 +245,10 @@ export function MockExamCreationWizard({
   }, [dataStructures]);
 
   const gradeOptions = useMemo(() => {
-    return gradeLevels.map(gl => ({ value: gl.id, label: gl.name }));
+    return gradeLevels.map(gl => ({
+      value: gl.id,
+      label: gl.description ? `${gl.name} (${gl.description})` : gl.name
+    }));
   }, [gradeLevels]);
 
   const sectionOptions = useMemo(() => {
