@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -17,12 +17,17 @@ import {
   Loader2,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shuffle,
+  List,
+  Wand2
 } from 'lucide-react';
 import { Button, IconButton } from '../../../../components/shared/Button';
 import { Input } from '../../../../components/shared/FormField';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { QuestionPreviewModal } from './QuestionPreviewModal';
+import MockExamService, { type QuestionBankItem as ServiceQuestionBankItem } from '../../../../services/mockExamService';
+import { toast } from '../../../../components/shared/Toast';
 
 export interface QuestionBankItem {
   id: string;
@@ -116,11 +121,78 @@ export function QuestionsStep({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  // Mock data for development - replace with actual API call
-  const questionBank: QuestionBankItem[] = useMemo(() => {
-    // TODO: Fetch from API based on subjectId, schoolIds, and filters
-    return [];
-  }, [subjectId, schoolIds, filters]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [questionBank, setQuestionBank] = useState<QuestionBankItem[]>([]);
+  const [selectionMode, setSelectionMode] = useState<'manual' | 'random'>('manual');
+  const [randomConfig, setRandomConfig] = useState({
+    totalQuestions: 10,
+    includeGlobal: true,
+    includeCustom: true
+  });
+
+  useEffect(() => {
+    fetchQuestions();
+  }, [subjectId, schoolIds]);
+
+  const fetchQuestions = async () => {
+    if (!subjectId) {
+      console.warn('No subject ID provided');
+      return;
+    }
+
+    setIsLoadingQuestions(true);
+    try {
+      const questions = await MockExamService.fetchQuestionsForMockExam({
+        subjectId,
+        schoolIds,
+        companyId,
+        scope: filters.scope,
+        years: filters.years,
+        topics: filters.topics,
+        subtopics: filters.subtopics,
+        types: filters.types,
+        search: filters.search
+      });
+
+      const mappedQuestions: QuestionBankItem[] = questions.map(q => ({
+        id: q.id,
+        question_number: q.question_number,
+        question_description: q.question_description,
+        marks: q.marks,
+        type: q.type,
+        difficulty: q.difficulty_level,
+        scope: 'global',
+        school_id: null,
+        school_name: null,
+        is_shared: false,
+        question_bank_tag: null,
+        year: q.year,
+        topic_id: q.topic_id,
+        topic_name: q.topic_name,
+        subtopic_id: q.subtopic_id,
+        subtopic_name: q.subtopic_name,
+        subject_name: q.subject_name,
+        sub_questions_count: q.sub_parts_count,
+        attachments_count: 0,
+        sub_questions: q.sub_questions
+      }));
+
+      setQuestionBank(mappedQuestions);
+      console.log(`Loaded ${mappedQuestions.length} questions`);
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      toast.error('Failed to load questions. Please try again.');
+      setQuestionBank([]);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (subjectId) {
+      fetchQuestions();
+    }
+  }, [filters]);
 
   // Filter question bank based on filters
   const filteredQuestions = useMemo(() => {
@@ -316,24 +388,139 @@ export function QuestionsStep({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Info Banner */}
+      {/* Info Banner with Selection Mode Toggle */}
       <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
         <div className="flex items-start gap-3">
           <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div className="flex-1">
-            <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm">
-              Select Questions for Your Mock Exam
-            </h4>
-            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
-              Choose questions from the global question bank or your school's custom questions.
-              Drag and drop to reorder questions in your exam paper.
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-sm">
+                  Select Questions for Your Mock Exam
+                </h4>
+                <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                  Choose questions from the global question bank or your school's custom questions.
+                  Drag and drop to reorder questions in your exam paper.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectionMode('manual')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    selectionMode === 'manual'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-blue-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                  Manual
+                </button>
+                <button
+                  onClick={() => setSelectionMode('random')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    selectionMode === 'random'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-blue-700 hover:bg-blue-100 dark:bg-gray-800 dark:text-blue-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <Shuffle className="h-4 w-4" />
+                  Random
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Random Selection Config */}
+      {selectionMode === 'random' && (
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="flex items-start gap-4">
+            <Wand2 className="h-5 w-5 text-[#8CC63F] mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-3">
+                Random Question Selection
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Total Questions
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={randomConfig.totalQuestions}
+                    onChange={(e) => setRandomConfig({ ...randomConfig, totalQuestions: parseInt(e.target.value) || 10 })}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={randomConfig.includeGlobal}
+                      onChange={(e) => setRandomConfig({ ...randomConfig, includeGlobal: e.target.checked })}
+                      className="w-4 h-4 text-[#8CC63F] border-gray-300 rounded focus:ring-[#8CC63F]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Include Global Questions</span>
+                  </label>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={randomConfig.includeCustom}
+                      onChange={(e) => setRandomConfig({ ...randomConfig, includeCustom: e.target.checked })}
+                      className="w-4 h-4 text-[#8CC63F] border-gray-300 rounded focus:ring-[#8CC63F]"
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Include Custom Questions</span>
+                  </label>
+                </div>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={async () => {
+                  if (!subjectId) {
+                    toast.error('Please select a subject first');
+                    return;
+                  }
+                  try {
+                    const randomQuestions = await MockExamService.generateRandomQuestionSelection({
+                      subjectId,
+                      schoolIds,
+                      totalQuestions: randomConfig.totalQuestions,
+                      includeGlobal: randomConfig.includeGlobal,
+                      includeCustom: randomConfig.includeCustom
+                    });
+
+                    const newSelections = randomQuestions.map((q, idx) => ({
+                      id: crypto.randomUUID(),
+                      questionId: q.id,
+                      sequence: selectedQuestions.length + idx + 1,
+                      marks: q.marks,
+                      isOptional: false
+                    }));
+
+                    onQuestionsChange([...selectedQuestions, ...newSelections]);
+                    toast.success(`Added ${randomQuestions.length} random questions`);
+                  } catch (error) {
+                    console.error('Error generating random selection:', error);
+                    toast.error('Failed to generate random questions');
+                  }
+                }}
+                leftIcon={<Shuffle className="h-4 w-4" />}
+                className="mt-3"
+              >
+                Generate Random Selection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Two Panel Layout */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-0">
         {/* Left Panel - Available Questions */}
         <div className="flex flex-col min-h-0 border border-gray-200 rounded-lg bg-white dark:border-gray-800 dark:bg-gray-900">
           {/* Header */}
@@ -444,7 +631,14 @@ export function QuestionsStep({
 
           {/* Question List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {paginatedQuestions.length === 0 ? (
+            {isLoadingQuestions ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <Loader2 className="h-12 w-12 text-[#8CC63F] animate-spin mb-3" />
+                <p className="text-gray-600 dark:text-gray-400 font-medium">
+                  Loading questions...
+                </p>
+              </div>
+            ) : paginatedQuestions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <AlertCircle className="h-12 w-12 text-gray-400 mb-3" />
                 <p className="text-gray-600 dark:text-gray-400 font-medium">
@@ -570,6 +764,8 @@ interface QuestionCardProps {
 }
 
 function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const scopeBadge = question.scope === 'global' ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
       <Globe className="h-3 w-3" />
@@ -588,19 +784,29 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
     hard: 'bg-red-500'
   }[question.difficulty || 'medium'] || 'bg-gray-500';
 
+  const hasDescription = question.question_description && question.question_description.length > 100;
+
   return (
-    <div className="border border-gray-200 rounded-lg p-4 hover:border-[#8CC63F] transition-colors dark:border-gray-800 dark:hover:border-[#8CC63F]">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-gray-900 dark:text-white">
+    <div className="border border-gray-200 rounded-lg p-4 hover:border-[#8CC63F] transition-all dark:border-gray-800 dark:hover:border-[#8CC63F] hover:shadow-md">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-bold text-lg text-[#8CC63F]">
             Q{question.question_number || '?'}
           </span>
           {scopeBadge}
           {question.difficulty && (
-            <div className={`w-2 h-2 rounded-full ${difficultyColor}`} title={question.difficulty} />
+            <div className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full ${difficultyColor}`} />
+              <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{question.difficulty}</span>
+            </div>
+          )}
+          {question.year && (
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+              {question.year}
+            </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <IconButton
             variant="ghost"
             size="icon-sm"
@@ -621,23 +827,56 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
         </div>
       </div>
 
-      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
+      <div
+        className={`text-sm text-gray-700 dark:text-gray-300 mb-3 cursor-pointer ${!isExpanded && hasDescription ? 'line-clamp-3' : ''}`}
+        onClick={() => hasDescription && setIsExpanded(!isExpanded)}
+      >
         {question.question_description || 'No description available'}
-      </p>
+      </div>
 
-      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-        {question.marks !== null && (
-          <span>{question.marks} mark{question.marks !== 1 ? 's' : ''}</span>
-        )}
-        {question.sub_questions_count > 0 && (
-          <span>{question.sub_questions_count} part{question.sub_questions_count !== 1 ? 's' : ''}</span>
-        )}
-        {question.attachments_count > 0 && (
-          <span>{question.attachments_count} attachment{question.attachments_count !== 1 ? 's' : ''}</span>
-        )}
-        {question.topic_name && (
-          <span className="truncate">{question.topic_name}</span>
-        )}
+      {hasDescription && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs text-[#8CC63F] hover:text-[#7AB635] font-medium mb-2"
+        >
+          {isExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+
+      {/* Topic breadcrumb */}
+      {(question.topic_name || question.subtopic_name) && (
+        <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-2 flex-wrap">
+          {question.topic_name && (
+            <>
+              <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800">{question.topic_name}</span>
+              {question.subtopic_name && <span>›</span>}
+            </>
+          )}
+          {question.subtopic_name && (
+            <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800">{question.subtopic_name}</span>
+          )}
+        </div>
+      )}
+
+      {/* Metadata bar */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+          {question.marks !== null && (
+            <span className="font-semibold text-[#8CC63F]">{question.marks} mark{question.marks !== 1 ? 's' : ''}</span>
+          )}
+          {question.sub_questions_count > 0 && (
+            <span className="flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              {question.sub_questions_count} part{question.sub_questions_count !== 1 ? 's' : ''}
+            </span>
+          )}
+          {question.attachments_count > 0 && (
+            <span>{question.attachments_count} file{question.attachments_count !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+        <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">
+          {question.type || 'Unknown'}
+        </span>
       </div>
     </div>
   );

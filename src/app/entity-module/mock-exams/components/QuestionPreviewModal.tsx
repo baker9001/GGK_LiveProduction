@@ -186,7 +186,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6 overflow-y-auto">
-      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6">
+      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6 max-h-[90vh] flex flex-col">
         <div className="flex items-start justify-between border-b border-gray-200 p-6 dark:border-gray-800">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Question Preview</h2>
@@ -204,7 +204,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
           </IconButton>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
           {isLoading && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
@@ -293,12 +293,44 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Question Description</h4>
-            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-              <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+            <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+              <p className="text-base leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
                 {displayQuestion.question_description || 'No description available'}
               </p>
             </div>
           </div>
+
+          {/* Sub-questions/Parts */}
+          {displayQuestion.sub_questions && displayQuestion.sub_questions.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Question Parts</h4>
+              <div className="space-y-3">
+                {displayQuestion.sub_questions.map((subQ: any, index: number) => (
+                  <div
+                    key={index}
+                    className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+                    style={{ marginLeft: `${(subQ.level - 1) * 20}px` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#8CC63F] text-white text-xs font-semibold flex-shrink-0">
+                        {subQ.sub_question_number || index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          {subQ.description || 'No description'}
+                        </p>
+                        {subQ.marks !== null && (
+                          <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                            {subQ.marks} mark{subQ.marks !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {renderOptions()}
 

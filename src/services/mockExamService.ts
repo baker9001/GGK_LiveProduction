@@ -1550,6 +1550,222 @@ export class MockExamService {
       };
     }
   }
+
+  /**
+   * Fetch questions for mock exam creation with filters
+   * Includes global questions and school-specific custom questions
+   */
+  static async fetchQuestionsForMockExam(params: {
+    subjectId: string | null;
+    schoolIds: string[];
+    companyId: string | null;
+    scope?: 'all' | 'global' | 'custom';
+    years?: string[];
+    topics?: string[];
+    subtopics?: string[];
+    types?: string[];
+    difficulties?: string[];
+    search?: string;
+  }): Promise<QuestionBankItem[]> {
+    try {
+      const { subjectId, schoolIds, companyId, scope = 'all', years, topics, subtopics, types, search } = params;
+
+      if (!subjectId) {
+        console.warn('No subject ID provided for question fetch');
+        return [];
+      }
+
+      let query = supabase
+        .from('questions_master_admin')
+        .select(`
+          id,
+          question_number,
+          question_description,
+          type,
+          category,
+          marks,
+          status,
+          year,
+          topic_id,
+          subtopic_id,
+          difficulty,
+          scope,
+          school_id,
+          is_shared,
+          edu_topics!questions_master_admin_topic_id_fkey (id, name),
+          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name),
+          data_structures!fk_questions_master_admin_data_structure (
+            edu_subjects!data_structures_subject_id_fkey (id, name)
+          ),
+          schools!questions_master_admin_school_id_fkey (id, name)
+        `)
+        .eq('status', 'active')
+        .eq('subject_id', subjectId);
+
+      if (scope === 'global') {
+        query = query.eq('scope', 'global');
+      } else if (scope === 'custom') {
+        query = query.eq('scope', 'custom');
+        if (schoolIds.length > 0) {
+          query = query.in('school_id', schoolIds);
+        }
+      } else {
+        query = query.or(`scope.eq.global,and(scope.eq.custom,school_id.in.(${schoolIds.join(',')}))`);
+      }
+
+      if (years && years.length > 0) {
+        query = query.in('year', years.map(y => parseInt(y)));
+      }
+
+      if (topics && topics.length > 0) {
+        query = query.in('topic_id', topics);
+      }
+
+      if (subtopics && subtopics.length > 0) {
+        query = query.in('subtopic_id', subtopics);
+      }
+
+      if (types && types.length > 0) {
+        query = query.in('type', types);
+      }
+
+      if (search && search.trim()) {
+        query = query.or(`question_description.ilike.%${search}%,question_number.eq.${parseInt(search) || -1}`);
+      }
+
+      const { data, error } = await query.order('question_number', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching questions:', error);
+        throw error;
+      }
+
+      const questionIds = (data || []).map(q => q.id);
+      let subQuestionsMap = new Map<string, SubQuestionItem[]>();
+
+      if (questionIds.length > 0) {
+        const { data: allSubQuestions } = await supabase
+          .from('sub_questions')
+          .select('id, question_id, parent_id, part_label, description, marks, type, level, order_index')
+          .in('question_id', questionIds)
+          .order('order_index', { ascending: true });
+
+        if (allSubQuestions) {
+          questionIds.forEach(questionId => {
+            const subParts = allSubQuestions.filter(sq => sq.question_id === questionId);
+            if (subParts.length > 0) {
+              subQuestionsMap.set(questionId, subParts.map(sq => ({
+                id: sq.id,
+                question_id: sq.question_id,
+                parent_id: sq.parent_id,
+                sub_question_number: sq.part_label,
+                description: sq.description,
+                marks: sq.marks !== null ? Number(sq.marks) : null,
+                type: sq.type,
+                level: sq.level || 1
+              })));
+            }
+          });
+        }
+      }
+
+      const questions: QuestionBankItem[] = (data || []).map((item: any) => {
+        const subQuestions = subQuestionsMap.get(item.id) || [];
+        return {
+          id: item.id,
+          question_number: item.question_number ?? null,
+          question_description: item.question_description ?? null,
+          type: item.type ?? null,
+          category: item.category ?? null,
+          marks: item.marks !== null && item.marks !== undefined ? Number(item.marks) : null,
+          status: item.status ?? null,
+          exam_year: item.year ?? null,
+          year: item.year ?? null,
+          topic_id: item.topic_id ?? null,
+          topic_name: item.edu_topics?.name ?? null,
+          subtopic_id: item.subtopic_id ?? null,
+          subtopic_name: item.edu_subtopics?.name ?? null,
+          difficulty_level: item.difficulty ?? null,
+          board_name: null,
+          programme_name: null,
+          subject_name: item.data_structures?.edu_subjects?.name ?? null,
+          sub_parts_count: subQuestions.filter(sq => sq.level === 1).length,
+          sub_questions: subQuestions.length > 0 ? subQuestions : undefined
+        };
+      });
+
+      console.log(`Fetched ${questions.length} questions for subject ${subjectId}`);
+      return questions;
+    } catch (error) {
+      console.error('Error in fetchQuestionsForMockExam:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate random question selection based on criteria
+   */
+  static async generateRandomQuestionSelection(params: {
+    subjectId: string;
+    schoolIds: string[];
+    totalQuestions: number;
+    topicDistribution?: Record<string, number>;
+    difficultyDistribution?: { easy?: number; medium?: number; hard?: number };
+    includeGlobal?: boolean;
+    includeCustom?: boolean;
+  }): Promise<QuestionBankItem[]> {
+    try {
+      const { subjectId, schoolIds, totalQuestions, topicDistribution, difficultyDistribution, includeGlobal = true, includeCustom = true } = params;
+
+      let scope: 'all' | 'global' | 'custom' = 'all';
+      if (includeGlobal && !includeCustom) scope = 'global';
+      if (!includeGlobal && includeCustom) scope = 'custom';
+
+      const allQuestions = await this.fetchQuestionsForMockExam({
+        subjectId,
+        schoolIds,
+        companyId: null,
+        scope
+      });
+
+      if (allQuestions.length === 0) {
+        return [];
+      }
+
+      let selectedQuestions: QuestionBankItem[] = [];
+
+      if (topicDistribution && Object.keys(topicDistribution).length > 0) {
+        for (const [topicId, count] of Object.entries(topicDistribution)) {
+          const topicQuestions = allQuestions.filter(q => q.topic_id === topicId);
+          const shuffled = topicQuestions.sort(() => Math.random() - 0.5);
+          selectedQuestions.push(...shuffled.slice(0, count));
+        }
+      } else if (difficultyDistribution) {
+        const { easy = 0, medium = 0, hard = 0 } = difficultyDistribution;
+
+        if (easy > 0) {
+          const easyQuestions = allQuestions.filter(q => q.difficulty_level?.toLowerCase() === 'easy');
+          selectedQuestions.push(...easyQuestions.sort(() => Math.random() - 0.5).slice(0, easy));
+        }
+        if (medium > 0) {
+          const mediumQuestions = allQuestions.filter(q => q.difficulty_level?.toLowerCase() === 'medium');
+          selectedQuestions.push(...mediumQuestions.sort(() => Math.random() - 0.5).slice(0, medium));
+        }
+        if (hard > 0) {
+          const hardQuestions = allQuestions.filter(q => q.difficulty_level?.toLowerCase() === 'hard');
+          selectedQuestions.push(...hardQuestions.sort(() => Math.random() - 0.5).slice(0, hard));
+        }
+      } else {
+        const shuffled = allQuestions.sort(() => Math.random() - 0.5);
+        selectedQuestions = shuffled.slice(0, totalQuestions);
+      }
+
+      return selectedQuestions.slice(0, totalQuestions);
+    } catch (error) {
+      console.error('Error generating random question selection:', error);
+      throw error;
+    }
+  }
 }
 
 export default MockExamService;
