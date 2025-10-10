@@ -293,8 +293,39 @@ export function MockExamCreationWizard({
         .filter(cs => formData.sections.includes(cs.id))
         .reduce((sum, cs) => sum + cs.student_count, 0);
     }
+    // If no specific sections selected, try to calculate from selected schools
+    if (formData.schools.length > 0) {
+      return schools
+        .filter(s => formData.schools.includes(s.id))
+        .reduce((sum, s) => sum + (s.student_count || 0), 0);
+    }
     return 0;
-  }, [formData.sections, classSections]);
+  }, [formData.sections, formData.schools, classSections, schools]);
+
+  // Helper functions to get display names for review
+  const getSelectedSchoolNames = useMemo(() => {
+    return schools
+      .filter(s => formData.schools.includes(s.id))
+      .map(s => s.name);
+  }, [schools, formData.schools]);
+
+  const getSelectedBranchNames = useMemo(() => {
+    return branches
+      .filter(b => formData.branches.includes(b.id))
+      .map(b => b.name);
+  }, [branches, formData.branches]);
+
+  const getSelectedYearGroupNames = useMemo(() => {
+    return gradeLevels
+      .filter(g => formData.gradeBands.includes(g.id))
+      .map(g => g.name);
+  }, [gradeLevels, formData.gradeBands]);
+
+  const getSelectedTeacherNames = useMemo(() => {
+    return teachers
+      .filter(t => formData.teachers.includes(t.id))
+      .map(t => t.full_name || t.name);
+  }, [teachers, formData.teachers]);
 
   // Validation for each step
   const validateStep = (stepIndex: number): boolean => {
@@ -853,21 +884,73 @@ export function MockExamCreationWizard({
                     <Building2 className="w-4 h-4 text-[#8CC63F]" />
                     Scope & Cohort
                   </h4>
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <dt className="text-gray-600 dark:text-gray-400">Schools:</dt>
-                      <dd className="font-medium text-gray-900 dark:text-white">{formData.schools.length}</dd>
+                  <dl className="space-y-3 text-sm">
+                    <div>
+                      <dt className="text-gray-600 dark:text-gray-400 mb-1">Schools ({formData.schools.length}):</dt>
+                      <dd className="font-medium text-gray-900 dark:text-white">
+                        {getSelectedSchoolNames.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {getSelectedSchoolNames.map((name, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-block px-2 py-1 rounded-md bg-[#8CC63F]/10 text-[#8CC63F] text-xs border border-[#8CC63F]/20"
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic">None selected</span>
+                        )}
+                      </dd>
                     </div>
-                    <div className="flex justify-between">
-                      <dt className="text-gray-600 dark:text-gray-400">Year Groups:</dt>
-                      <dd className="font-medium text-gray-900 dark:text-white">{formData.gradeBands.length}</dd>
-                    </div>
-                    {estimatedStudentCount > 0 && (
-                      <div className="flex justify-between">
-                        <dt className="text-gray-600 dark:text-gray-400">Est. Students:</dt>
-                        <dd className="font-medium text-[#8CC63F]">{estimatedStudentCount}</dd>
+                    {getSelectedBranchNames.length > 0 && (
+                      <div>
+                        <dt className="text-gray-600 dark:text-gray-400 mb-1">Branches ({formData.branches.length}):</dt>
+                        <dd className="font-medium text-gray-900 dark:text-white">
+                          <div className="flex flex-wrap gap-1.5">
+                            {getSelectedBranchNames.map((name, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-block px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs border border-blue-200 dark:border-blue-800"
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        </dd>
                       </div>
                     )}
+                    <div>
+                      <dt className="text-gray-600 dark:text-gray-400 mb-1">Year Groups ({formData.gradeBands.length}):</dt>
+                      <dd className="font-medium text-gray-900 dark:text-white">
+                        {getSelectedYearGroupNames.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {getSelectedYearGroupNames.map((name, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-block px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs border border-purple-200 dark:border-purple-800"
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic">None selected</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <dt className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                          <GraduationCap className="w-4 h-4" />
+                          Affected Students:
+                        </dt>
+                        <dd className="font-semibold text-lg text-[#8CC63F]">
+                          {estimatedStudentCount > 0 ? estimatedStudentCount.toLocaleString() : 'N/A'}
+                        </dd>
+                      </div>
+                    </div>
                   </dl>
                 </div>
 
@@ -895,10 +978,25 @@ export function MockExamCreationWizard({
                     <Users className="w-4 h-4 text-[#8CC63F]" />
                     Teaching Team
                   </h4>
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <dt className="text-gray-600 dark:text-gray-400">Lead Teachers:</dt>
-                      <dd className="font-medium text-gray-900 dark:text-white">{formData.teachers.length}</dd>
+                  <dl className="space-y-3 text-sm">
+                    <div>
+                      <dt className="text-gray-600 dark:text-gray-400 mb-1">Lead Teachers ({formData.teachers.length}):</dt>
+                      <dd className="font-medium text-gray-900 dark:text-white">
+                        {getSelectedTeacherNames.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {getSelectedTeacherNames.map((name, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-block px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-xs border border-amber-200 dark:border-amber-800"
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic">None selected</span>
+                        )}
+                      </dd>
                     </div>
                   </dl>
                 </div>

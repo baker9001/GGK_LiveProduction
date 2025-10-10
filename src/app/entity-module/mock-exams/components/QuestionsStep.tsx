@@ -313,6 +313,13 @@ export function QuestionsStep({
     onQuestionsChange(renumbered);
   }, [selectedQuestions, onQuestionsChange]);
 
+  const handleMarksChange = useCallback((index: number, newMarks: number) => {
+    const updated = selectedQuestions.map((q, i) =>
+      i === index ? { ...q, marks: newMarks } : q
+    );
+    onQuestionsChange(updated);
+  }, [selectedQuestions, onQuestionsChange]);
+
   const handleMoveUp = useCallback((index: number) => {
     if (index > 0) {
       handleReorder(index, index - 1);
@@ -737,6 +744,7 @@ export function QuestionsStep({
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={handleDragEnd}
                   onPreview={() => item.question && handlePreview(item.question)}
+                  onMarksChange={(newMarks) => handleMarksChange(index, newMarks)}
                 />
               ))
             )}
@@ -905,6 +913,7 @@ interface SelectedQuestionCardProps {
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onPreview: () => void;
+  onMarksChange: (newMarks: number) => void;
 }
 
 function SelectedQuestionCard({
@@ -921,9 +930,12 @@ function SelectedQuestionCard({
   onDragLeave,
   onDrop,
   onDragEnd,
-  onPreview
+  onPreview,
+  onMarksChange
 }: SelectedQuestionCardProps) {
   const { question } = item;
+  const [isEditingMarks, setIsEditingMarks] = useState(false);
+  const [editedMarks, setEditedMarks] = useState(item.marks?.toString() || question?.marks?.toString() || '');
 
   return (
     <div
@@ -1000,12 +1012,53 @@ function SelectedQuestionCard({
 
           {question && (
             <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-              {question.marks !== null && (
-                <span className="font-bold text-[#8CC63F] flex items-center gap-1">
-                  <span className="text-lg">{question.marks}</span>
-                  <span className="text-xs">mark{question.marks !== 1 ? 's' : ''}</span>
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {isEditingMarks ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={editedMarks}
+                      onChange={(e) => setEditedMarks(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const newMarks = parseFloat(editedMarks);
+                          if (!isNaN(newMarks) && newMarks >= 0) {
+                            onMarksChange(newMarks);
+                            setIsEditingMarks(false);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setEditedMarks(item.marks?.toString() || question?.marks?.toString() || '');
+                          setIsEditingMarks(false);
+                        }
+                      }}
+                      className="w-16 px-2 py-1 text-sm border border-[#8CC63F] rounded-md focus:outline-none focus:ring-2 focus:ring-[#8CC63F]/50 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      autoFocus
+                      onBlur={() => {
+                        const newMarks = parseFloat(editedMarks);
+                        if (!isNaN(newMarks) && newMarks >= 0) {
+                          onMarksChange(newMarks);
+                        } else {
+                          setEditedMarks(item.marks?.toString() || question?.marks?.toString() || '');
+                        }
+                        setIsEditingMarks(false);
+                      }}
+                    />
+                    <span className="text-xs text-gray-500">marks</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingMarks(true)}
+                    className="font-bold text-[#8CC63F] flex items-center gap-1 hover:bg-[#8CC63F]/10 px-2 py-1 rounded-md transition-colors group"
+                    title="Click to edit marks"
+                  >
+                    <span className="text-lg">{item.marks ?? question.marks ?? 0}</span>
+                    <span className="text-xs">mark{(item.marks ?? question.marks ?? 0) !== 1 ? 's' : ''}</span>
+                    <span className="text-xs opacity-0 group-hover:opacity-100 ml-1">✎</span>
+                  </button>
+                )}
+              </div>
               {question.sub_questions_count > 0 && (
                 <span className="font-medium">{question.sub_questions_count} part{question.sub_questions_count !== 1 ? 's' : ''}</span>
               )}
