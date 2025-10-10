@@ -12,7 +12,8 @@ import {
   Sparkles,
   Clock,
   Building2,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import { MultiStepWizard, WizardStep } from '../../../../components/shared/MultiStepWizard';
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
@@ -399,6 +400,101 @@ export function MockExamCreationWizard({
   }, [currentStep, formData]);
 
   if (!isOpen) return null;
+
+  // Use full-page layout for questions step
+  const isFullPage = currentStep === 4;
+
+  if (isFullPage) {
+    return (
+      <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-auto">
+        <div className="w-full min-h-screen flex flex-col">
+          {/* Header with progress and close button */}
+          <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+            <div className="container mx-auto px-6 py-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formData.title || 'New Mock Exam'}</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Step {currentStep + 1} of {WIZARD_STEPS.length}: {WIZARD_STEPS[currentStep].title}</p>
+                </div>
+                <button
+                  onClick={handleCancel}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+              {/* Step indicators */}
+              <div className="flex items-center gap-2">
+                {WIZARD_STEPS.map((step, index) => (
+                  <React.Fragment key={step.id}>
+                    <div
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                        index === currentStep
+                          ? 'bg-[#8CC63F] text-white'
+                          : completedSteps.has(index)
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {completedSteps.has(index) ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        step.icon
+                      )}
+                      <span className="text-xs font-medium hidden sm:inline">{step.title}</span>
+                    </div>
+                    {index < WIZARD_STEPS.length - 1 && (
+                      <div className="h-0.5 w-4 bg-gray-200 dark:bg-gray-700" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Full-page content */}
+          <div className="flex-1 container mx-auto px-6 py-6">
+            <QuestionsStep
+              selectedQuestions={formData.selectedQuestions}
+              onQuestionsChange={(questions) => setFormData(prev => ({ ...prev, selectedQuestions: questions }))}
+              subjectId={formData.subjectId}
+              schoolIds={formData.schools}
+              companyId={null}
+            />
+          </div>
+
+          {/* Footer navigation */}
+          <div className="sticky bottom-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-lg">
+            <div className="container mx-auto px-6 py-4">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => handleStepChange(currentStep - 1)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleCancel}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleStepChange(currentStep + 1)}
+                    disabled={!canGoNext}
+                    className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#8CC63F] to-[#7AB635] hover:from-[#7AB635] hover:to-[#6DA52F] rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Continue to Review
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
