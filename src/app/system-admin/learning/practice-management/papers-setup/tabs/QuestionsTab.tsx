@@ -3059,12 +3059,8 @@ export function QuestionsTab({
       {showSnippingTool && pdfDataUrl && (
         <PDFSnippingTool
           pdfUrl={pdfDataUrl}
-          onSnip={(dataUrl, fileName) => {
-            console.log('Snipping complete:', { fileName, dataUrlLength: dataUrl.length });
-            handleSnippingComplete({ imageDataUrl: dataUrl, fileName });
-          }}
-          onClose={() => {
-            console.log('Snipping tool closed');
+          onComplete={handleSnippingComplete}
+          onCancel={() => {
             setShowSnippingTool(false);
             setAttachmentTarget(null);
           }}
