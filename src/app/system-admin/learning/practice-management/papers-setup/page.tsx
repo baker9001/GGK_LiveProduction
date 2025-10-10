@@ -1171,55 +1171,53 @@ export default function PapersSetupPage() {
           })}
         </TabsList>
 
-        {/* Tab Content Container with Loading Overlay */}
-        <div className="relative min-h-[500px]">
-          {/* Loading Overlay During Transition */}
-          {isTabTransitioning && (
-            <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-50 rounded-lg flex items-center justify-center">
-              <div className="text-center space-y-6 p-8">
-                <div className="relative">
-                  {/* Animated circles */}
-                  <div className="relative w-24 h-24 mx-auto">
-                    <div className="absolute inset-0 border-4 border-[#8CC63F]/20 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
-                    <div className="absolute inset-3 border-4 border-[#8CC63F]/40 rounded-full border-r-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
-                    {/* Center dot */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-3 h-3 bg-[#8CC63F] rounded-full animate-pulse"></div>
-                    </div>
+        {/* Loading Overlay During Transition */}
+        {isTabTransitioning && (
+          <div className="fixed inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-50 flex items-center justify-center">
+            <div className="text-center space-y-6 p-8">
+              <div className="relative">
+                {/* Animated circles */}
+                <div className="relative w-24 h-24 mx-auto">
+                  <div className="absolute inset-0 border-4 border-[#8CC63F]/20 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-3 border-4 border-[#8CC63F]/40 rounded-full border-r-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                  {/* Center dot */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-3 h-3 bg-[#8CC63F] rounded-full animate-pulse"></div>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {transitionMessage}
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Please wait while we prepare your content
-                  </p>
-                </div>
-                {/* Progress bar */}
-                <div className="w-72 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mx-auto shadow-inner">
-                  <div className="h-full bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] rounded-full animate-progress shadow-lg"></div>
-                </div>
-                {/* Step indicator */}
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  {IMPORT_TABS.map((tab) => (
-                    <div
-                      key={tab.id}
-                      className={cn(
-                        "w-2 h-2 rounded-full transition-all duration-300",
-                        tab.id === activeTab
-                          ? "bg-[#8CC63F] w-8"
-                          : tabStatuses[tab.id] === 'completed'
-                          ? "bg-green-400"
-                          : "bg-gray-300 dark:bg-gray-600"
-                      )}
-                    />
-                  ))}
-                </div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xl font-bold text-gray-900 dark:text-white">
+                  {transitionMessage}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Please wait while we prepare your content
+                </p>
+              </div>
+              {/* Progress bar */}
+              <div className="w-72 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mx-auto shadow-inner">
+                <div className="h-full bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] rounded-full animate-progress shadow-lg"></div>
+              </div>
+              {/* Step indicator */}
+              <div className="flex items-center justify-center gap-2 pt-2">
+                {IMPORT_TABS.map((tab) => (
+                  <div
+                    key={tab.id}
+                    className={cn(
+                      "w-2 h-2 rounded-full transition-all duration-300",
+                      tab.id === activeTab
+                        ? "bg-[#8CC63F] w-8"
+                        : tabStatuses[tab.id] === 'completed'
+                        ? "bg-green-400"
+                        : "bg-gray-300 dark:bg-gray-600"
+                    )}
+                  />
+                ))}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
         <TabsContent value="upload" className="space-y-6">
           <div id="upload-section">
@@ -1331,7 +1329,6 @@ export default function PapersSetupPage() {
             </div>
           )}
         </TabsContent>
-        </div>
       </Tabs>
     </div>
   );
