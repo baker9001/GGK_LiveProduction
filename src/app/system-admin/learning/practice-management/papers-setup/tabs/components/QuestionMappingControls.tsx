@@ -30,36 +30,30 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
     ? mapping.subtopic_ids.map((id: any) => String(id))
     : [];
 
-  // Debug logging
+  // Debug logging - verify topic data structure
   React.useEffect(() => {
-    console.log('QuestionMappingControls Debug:', {
-      mappingChapterId: normalizedChapterId,
-      normalizedTopicIds: normalizedTopicIds,
-      normalizedSubtopicIds: normalizedSubtopicIds,
-      unitsCount: units?.length,
-      unitsIds: units?.map(u => u.id).slice(0, 5),
-      topicsCount: topics?.length,
-      topicsSample: topics?.slice(0, 3).map(t => ({
-        id: t.id,
-        name: t.name,
-        unit_id: t.unit_id,
-        edu_unit_id: t.edu_unit_id,
-        chapter_id: t.chapter_id
-      })),
-      subtopicsCount: subtopics?.length,
-      mapping: mapping,
-      selectedTopicsForDisplay: topics?.filter(t => normalizedTopicIds.includes(String(t.id))).map(t => t.name)
-    });
+    if (topics?.length > 0) {
+      console.log('QuestionMappingControls - Academic Structure Loaded:', {
+        mappingChapterId: normalizedChapterId,
+        normalizedTopicIds: normalizedTopicIds,
+        unitsCount: units?.length,
+        topicsCount: topics?.length,
+        topicsSample: topics?.slice(0, 2).map(t => ({
+          id: t.id,
+          name: t.name,
+          unit_id: t.unit_id // This is the correct foreign key field
+        })),
+        subtopicsCount: subtopics?.length
+      });
+    }
   }, [mapping, units, topics, normalizedTopicIds, normalizedSubtopicIds]);
 
   const selectedUnit = units?.find(u => String(u.id) === normalizedChapterId);
 
-  // Filter topics based on selected unit - check multiple possible field names
+  // Filter topics based on selected unit - edu_topics table uses unit_id as foreign key
   const availableTopics = normalizedChapterId
     ? topics?.filter(t => {
-        // Check all possible foreign key field names
-        const topicUnitId = t.unit_id || t.edu_unit_id || t.chapter_id;
-        return String(topicUnitId) === normalizedChapterId;
+        return String(t.unit_id) === normalizedChapterId;
       }) || []
     : topics || [];
 
@@ -93,11 +87,10 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
     }
   }, [normalizedChapterId, availableTopics, topics, selectedUnit]);
 
-  // Filter subtopics based on selected topics - check multiple possible field names
+  // Filter subtopics based on selected topics - edu_subtopics table uses topic_id as foreign key
   const availableSubtopics = normalizedTopicIds.length > 0
     ? subtopics?.filter(s => {
-        const subtopicTopicId = s.topic_id || s.edu_topic_id;
-        return normalizedTopicIds.includes(String(subtopicTopicId));
+        return normalizedTopicIds.includes(String(s.topic_id));
       }) || []
     : subtopics || [];
 

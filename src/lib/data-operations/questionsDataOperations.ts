@@ -876,6 +876,22 @@ export const fetchDataStructureInfo = async (dataStructureId: string) => {
       if (topicsError) throw topicsError;
       topicsData = topics || [];
 
+      // Log topic data structure for debugging
+      if (topicsData.length > 0) {
+        console.log('✅ Topics loaded successfully:', {
+          count: topicsData.length,
+          sampleTopic: {
+            id: topicsData[0].id,
+            name: topicsData[0].name,
+            unit_id: topicsData[0].unit_id,
+            hasUnitId: !!topicsData[0].unit_id
+          },
+          allTopicsHaveUnitId: topicsData.every((t: any) => !!t.unit_id)
+        });
+      } else {
+        console.warn('⚠️ No topics found for units:', unitIds);
+      }
+
       if (topicsData.length > 0) {
         const topicIds = topicsData.map((t: any) => t.id);
         const { data: subtopics, error: subtopicsError } = await supabase
@@ -981,10 +997,20 @@ export const autoMapQuestions = (
     }
 
     if (unitId) {
+      // Filter topics by unit_id - edu_topics table uses unit_id as foreign key
       const unitTopics = topics.filter((t: any) => {
-        const topicUnitId = t.unit_id || t.edu_unit_id || t.chapter_id;
-        return normalizeId(topicUnitId) === unitId;
+        return normalizeId(t.unit_id) === unitId;
       });
+
+      // Debug logging for topic filtering
+      if (unitTopics.length === 0 && topics.length > 0) {
+        console.warn('No topics found for unit:', {
+          unitId,
+          totalTopics: topics.length,
+          sampleTopic: topics[0],
+          topicUnitIds: topics.slice(0, 3).map((t: any) => ({ id: t.id, name: t.name, unit_id: t.unit_id }))
+        });
+      }
 
       let topicIds: string[] = Array.isArray(existingMapping.topic_ids)
         ? existingMapping.topic_ids.map((id: any) => normalizeId(id))
@@ -1051,8 +1077,9 @@ export const autoMapQuestions = (
       const questionSubtopics = ensureArray(question.subtopics || question.original_subtopics || question.subtopic);
 
       if (topicIds.length > 0) {
+        // Filter subtopics by topic_id - edu_subtopics table uses topic_id as foreign key
         const topicSubtopics = subtopics.filter((s: any) =>
-          topicIds.includes(normalizeId(s.topic_id || s.edu_topic_id))
+          topicIds.includes(normalizeId(s.topic_id))
         );
 
         questionSubtopics.forEach((subtopicName: any) => {
@@ -1069,7 +1096,8 @@ export const autoMapQuestions = (
               hasChanges = true;
             }
 
-            const parentTopicId = normalizeId(matchingSubtopic.topic_id || matchingSubtopic.edu_topic_id);
+            // Ensure parent topic is included
+            const parentTopicId = normalizeId(matchingSubtopic.topic_id);
             if (parentTopicId && !topicIds.includes(parentTopicId)) {
               topicIds.push(parentTopicId);
             }
@@ -1092,7 +1120,8 @@ export const autoMapQuestions = (
                 hasChanges = true;
               }
 
-              const parentTopicId = normalizeId(subtopic.topic_id || subtopic.edu_topic_id);
+              // Ensure parent topic is included
+              const parentTopicId = normalizeId(subtopic.topic_id);
               if (parentTopicId && !topicIds.includes(parentTopicId)) {
                 topicIds.push(parentTopicId);
               }
