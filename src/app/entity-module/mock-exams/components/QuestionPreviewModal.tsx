@@ -147,6 +147,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
   if (!isOpen || !question) return null;
 
+  // Only use fullQuestion if available to avoid showing truncated data
   const displayQuestion = fullQuestion || question;
 
   const renderOptions = () => {
@@ -200,8 +201,8 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                 <div className="relative group">
                   <img
                     src={attachment.file_url || attachment.url}
-                    alt={attachment.file_name || attachment.filename || 'Question attachment'}
-                    className="w-full h-auto max-h-64 object-contain bg-gray-50 dark:bg-gray-900"
+                    alt="Question attachment"
+                    className="w-full h-auto object-contain bg-gray-50 dark:bg-gray-900"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                       const parent = (e.target as HTMLImageElement).parentElement;
@@ -223,17 +224,6 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                   <FileText className="h-8 w-8 text-gray-400" />
                 </div>
               )}
-              <div className="p-3 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                  {attachment.file_name || attachment.filename}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {attachment.file_type || attachment.type}
-                  {(attachment.file_size || attachment.size) && (
-                    <> • {Math.round((attachment.file_size || attachment.size) / 1024)} KB</>
-                  )}
-                </p>
-              </div>
             </div>
           ))}
         </div>
@@ -348,10 +338,16 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Question Description</h4>
-            <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
-              <div className="text-base leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words w-full">
-                {displayQuestion.question_description || displayQuestion.question_text || displayQuestion.description || displayQuestion.text || 'No description available'}
-              </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800 min-h-[100px]">
+              {!fullQuestion && isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#8CC63F]" />
+                </div>
+              ) : (
+                <div className="text-base leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words w-full">
+                  {displayQuestion.question_description || displayQuestion.question_text || displayQuestion.description || displayQuestion.text || 'No description available'}
+                </div>
+              )}
             </div>
           </div>
 
