@@ -1135,32 +1135,21 @@ export default function PapersSetupPage() {
         onValueChange={handleTabChange}
         className="space-y-6"
       >
-        <TabsList className="grid grid-cols-4 w-full bg-gray-100/50 dark:bg-gray-800/50 p-1 rounded-lg">
+        <TabsList className="w-full justify-center">
           {IMPORT_TABS.map((tab) => {
             const Icon = tab.icon;
             const status = getTabStatus(tab.id);
             const isDisabled = isTabDisabled(tab.id);
-            
+
             return (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 disabled={isDisabled}
-                className={cn(
-                  "flex items-center justify-center gap-2 px-3 py-2 rounded-md transition-all",
-                  status === 'completed' && "bg-green-50 dark:bg-green-900/20",
-                  status === 'error' && "bg-red-50 dark:bg-red-900/20",
-                  status === 'active' && "bg-white dark:bg-gray-900 shadow-sm",
-                  isDisabled && "opacity-50 cursor-not-allowed"
-                )}
+                tabStatus={status}
               >
-                <Icon className={cn(
-                  "h-4 w-4",
-                  status === 'completed' && "text-green-600 dark:text-green-400",
-                  status === 'error' && "text-red-600 dark:text-red-400",
-                  status === 'active' && "text-blue-600 dark:text-blue-400"
-                )} />
-                <span className="font-medium">{tab.label}</span>
+                <Icon className="h-4 w-4 mr-2" />
+                <span>{tab.label}</span>
               </TabsTrigger>
             );
           })}
