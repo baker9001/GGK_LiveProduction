@@ -278,13 +278,34 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               </label>
               <div className="space-y-2">
                 {question.options.map((option: any, idx: number) => {
-                  // Check if this option is correct by comparing with correct_answers
-                  const correctAnswerLabels = question.correct_answers || [];
-                  const isCorrect = option.is_correct ||
-                    correctAnswerLabels.some((ans: any) => {
-                      const answerText = typeof ans === 'string' ? ans : ans.answer_text || ans.text;
-                      return answerText === option.label || answerText === option.text;
+                  // Check if this option is correct - handle multiple data formats
+                  const correctAnswers = question.correct_answers || [];
+
+                  let isCorrect = option.is_correct || false;
+
+                  // Check if any correct answer matches this option
+                  if (!isCorrect && correctAnswers.length > 0) {
+                    isCorrect = correctAnswers.some((ans: any) => {
+                      // Get the answer value from different possible formats
+                      let answerValue = '';
+                      if (typeof ans === 'string') {
+                        answerValue = ans.trim();
+                      } else if (ans && typeof ans === 'object') {
+                        answerValue = (ans.answer_text || ans.text || ans.answer || ans.value || '').toString().trim();
+                      }
+
+                      // Match against option label or text (case-insensitive)
+                      const optionLabel = (option.label || '').toString().trim();
+                      const optionText = (option.text || '').toString().trim();
+
+                      return answerValue &&(
+                        answerValue === optionLabel ||
+                        answerValue === optionText ||
+                        answerValue.toLowerCase() === optionLabel.toLowerCase() ||
+                        answerValue.toLowerCase() === optionText.toLowerCase()
+                      );
                     });
+                  }
 
                   return (
                     <div

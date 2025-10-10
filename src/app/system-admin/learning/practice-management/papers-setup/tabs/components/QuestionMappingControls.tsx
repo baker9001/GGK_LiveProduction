@@ -22,14 +22,26 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
   onUpdate,
   isDisabled = false,
 }) => {
-  const selectedUnit = units.find(u => u.id === mapping?.chapter_id);
+  // Debug logging
+  React.useEffect(() => {
+    console.log('QuestionMappingControls Debug:', {
+      mappingChapterId: mapping?.chapter_id,
+      unitsCount: units?.length,
+      unitsIds: units?.map(u => u.id).slice(0, 5),
+      topicsCount: topics?.length,
+      subtopicsCount: subtopics?.length,
+      mapping: mapping
+    });
+  }, [mapping, units]);
+
+  const selectedUnit = units?.find(u => u.id === mapping?.chapter_id);
   const availableTopics = mapping?.chapter_id
-    ? topics.filter(t => t.unit_id === mapping.chapter_id || t.edu_unit_id === mapping.chapter_id)
-    : topics;
+    ? topics?.filter(t => t.unit_id === mapping.chapter_id || t.edu_unit_id === mapping.chapter_id) || []
+    : topics || [];
 
   const availableSubtopics = mapping?.topic_ids && mapping.topic_ids.length > 0
-    ? subtopics.filter(s => mapping.topic_ids.includes(s.topic_id || s.edu_topic_id))
-    : subtopics;
+    ? subtopics?.filter(s => mapping.topic_ids.includes(s.topic_id || s.edu_topic_id)) || []
+    : subtopics || [];
 
   const isMapped = mapping?.chapter_id && mapping?.topic_ids && mapping.topic_ids.length > 0;
 
@@ -64,14 +76,17 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             onChange={(value) => onUpdate('chapter_id', value)}
             disabled={isDisabled}
             className="w-full"
-          >
-            <option value="">Select Unit...</option>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.number ? `${unit.number}. ` : ''}{unit.name}
-              </option>
-            ))}
-          </Select>
+            placeholder="Select Unit..."
+            searchable={true}
+            usePortal={false}
+            options={[
+              { value: '', label: 'Select Unit...', disabled: true },
+              ...units.map((unit) => ({
+                value: unit.id,
+                label: `${unit.number ? `${unit.number}. ` : ''}${unit.name}`
+              }))
+            ]}
+          />
           {!mapping?.chapter_id && !isDisabled && (
             <p className="mt-1 text-xs text-red-600 dark:text-red-400">Required</p>
           )}
