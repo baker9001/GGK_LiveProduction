@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase } from '../../../../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import {
   setAuthenticatedUser,
   clearAuthenticatedUser,
@@ -9,8 +9,8 @@ import {
   type UserRole,
   getRedirectPathForUser,
   mapUserTypeToRole
-} from '../../../../lib/auth';
-import { toast } from '../../../../components/shared/Toast';
+} from '../../../lib/auth';
+import { toast } from '../../../components/shared/Toast';
 
 interface StatusState {
   message: string;
