@@ -1106,7 +1106,7 @@ export function QuestionsTab({
         // Auto-fill missing data from parsedData if available
         const originalIndex = parseInt(question.question_number) - 1;
         const originalQuestion = parsedData?.questions?.[originalIndex];
-        
+
         if (originalQuestion) {
           // Map missing fields
           if (!question.hint && originalQuestion.hint) {
@@ -1121,12 +1121,12 @@ export function QuestionsTab({
           if (!question.subtopic && originalQuestion.subtopic) {
             question.subtopic = originalQuestion.subtopic;
           }
-          
+
           // Map answer requirement
           if (!question.answer_requirement && originalQuestion.answer_requirement) {
             question.answer_requirement = originalQuestion.answer_requirement;
           }
-          
+
           // Map parts data
           if (question.parts && originalQuestion.parts) {
             question.parts = question.parts.map((part: any, partIndex: number) => {
@@ -1164,13 +1164,10 @@ export function QuestionsTab({
             });
           }
         }
-        
+
         return question;
       });
-      
-      // Update questions with enhanced data
-      setQuestions(enhancedQuestions);
-      
+
       // Now perform the mapping
       const mappingResult = await autoMapQuestions(
         enhancedQuestions,
@@ -1180,10 +1177,76 @@ export function QuestionsTab({
         questionMappings
       );
 
+      // Merge mapping results back into questions with human-readable names
+      const questionsWithMappings = enhancedQuestions.map(question => {
+        const mapping = mappingResult.mappings[question.id];
+
+        if (mapping) {
+          // Find the unit/chapter name
+          const unit = units.find(u => u.id === mapping.chapter_id);
+          if (unit && !question.topic) {
+            question.original_unit = unit.name;
+          }
+
+          // Find topic names
+          if (mapping.topic_ids && mapping.topic_ids.length > 0) {
+            const topicNames = mapping.topic_ids
+              .map(topicId => {
+                const topic = topics.find(t => t.id === topicId);
+                return topic?.name;
+              })
+              .filter(Boolean);
+
+            if (topicNames.length > 0) {
+              question.topic = topicNames.join(', ');
+              question.original_topics = topicNames;
+            }
+          }
+
+          // Find subtopic names
+          if (mapping.subtopic_ids && mapping.subtopic_ids.length > 0) {
+            const subtopicNames = mapping.subtopic_ids
+              .map(subtopicId => {
+                const subtopic = subtopics.find(s => s.id === subtopicId);
+                return subtopic?.name;
+              })
+              .filter(Boolean);
+
+            if (subtopicNames.length > 0) {
+              question.subtopic = subtopicNames.join(', ');
+              question.original_subtopics = subtopicNames;
+            }
+          }
+        }
+
+        return question;
+      });
+
+      // Update both questions and mappings state
+      setQuestions(questionsWithMappings);
       setQuestionMappings(mappingResult.mappings);
-      
+
+      // Run validation after mapping to update validation errors
+      if (typeof validateQuestionsForImport === 'function') {
+        try {
+          const errors = validateQuestionsForImport(
+            questionsWithMappings,
+            mappingResult.mappings,
+            existingQuestionNumbers,
+            attachments
+          );
+          setValidationErrors(errors);
+        } catch (err) {
+          console.warn('Validation failed after auto-mapping:', err);
+        }
+      }
+
       if (showNotification) {
-        toast.success(`Auto-mapped ${mappingResult.mappedCount} out of ${questions.length} questions with all associated data`);
+        const successCount = mappingResult.mappedCount + mappingResult.enhancedCount;
+        toast.success(
+          `Auto-mapped ${successCount} question${successCount !== 1 ? 's' : ''}: ` +
+          `${mappingResult.mappedCount} newly mapped, ${mappingResult.enhancedCount} enhanced`
+        );
       }
     } catch (error) {
       console.error('Error auto-mapping questions:', error);
