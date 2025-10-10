@@ -19,6 +19,7 @@ import { MultiStepWizard, WizardStep } from '../../../../components/shared/Multi
 import { FormField, Input, Select, Textarea } from '../../../../components/shared/FormField';
 import { SearchableMultiSelect } from '../../../../components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '../../../../components/shared/ToggleSwitch';
+import { DateTimePicker } from '../../../../components/shared/DateTimePicker';
 import { ConflictDetectionPanel } from './ConflictDetectionPanel';
 import { QuestionsStep, SelectedQuestion } from './QuestionsStep';
 import { useConflictDetection } from '../../../../hooks/useConflictDetection';
@@ -692,11 +693,13 @@ export function MockExamCreationWizard({
               </div>
 
               <FormField id="mock-datetime" label="Scheduled date & time" required error={fieldErrors.scheduledStart}>
-                <Input
-                  id="mock-datetime"
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.scheduledStart}
-                  onChange={event => setFormData(prev => ({ ...prev, scheduledStart: event.target.value }))}
+                  onChange={value => setFormData(prev => ({ ...prev, scheduledStart: value }))}
+                  error={!!fieldErrors.scheduledStart}
+                  placeholder="Select exam date and time"
+                  minDate={dayjs().format('YYYY-MM-DD')}
+                  usePortal={true}
                 />
               </FormField>
 
