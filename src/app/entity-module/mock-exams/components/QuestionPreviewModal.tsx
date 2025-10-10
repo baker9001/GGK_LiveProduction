@@ -243,7 +243,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 px-4 py-6 overflow-y-auto">
-      <div className="w-full max-w-6xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6 max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-7xl rounded-2xl bg-white shadow-2xl dark:bg-gray-900 my-6 max-h-[90vh] flex flex-col">
         <div className="flex items-start justify-between border-b border-gray-200 p-6 dark:border-gray-800">
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Question Preview</h2>
@@ -262,13 +262,11 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-          {isLoading && (
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
             </div>
-          )}
-
-          {!isLoading && (
+          ) : (
           <>
           <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-900/50">
             <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
@@ -351,9 +349,9 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Question Description</h4>
             <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
-              <p className="text-base leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
-                {displayQuestion.question_description || 'No description available'}
-              </p>
+              <div className="text-base leading-relaxed text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words w-full">
+                {displayQuestion.question_description || displayQuestion.question_text || displayQuestion.description || displayQuestion.text || 'No description available'}
+              </div>
             </div>
           </div>
 
