@@ -454,6 +454,7 @@ export default function StructureTab({
     } catch (error: any) {
       console.error('[GGK] Error in handleNext:', error);
       toast.error(error.message || 'Failed to proceed to next step');
+    } finally {
       setLoading(false);
     }
   }, [structureComplete, structureMetadata, extractedStructure, importSession, onNext]);
@@ -503,14 +504,12 @@ export default function StructureTab({
       if (error) throw error;
 
       toast.success('Academic structure configured successfully');
-      
+
       // Navigate to metadata tab
       onNext();
     } catch (error) {
       console.error('[GGK] Error updating import session:', error);
       throw new Error('Failed to save structure configuration');
-    } finally {
-      setLoading(false);
     }
   };
 
