@@ -404,13 +404,13 @@ export function MockExamCreationWizard({
 
   if (!isOpen) return null;
 
-  // Full-page layout for entire wizard
+  // Modal dialog layout that respects the application's sidebar and header
   return (
-    <div className="fixed inset-0 z-30 bg-white dark:bg-gray-900 overflow-auto">
-      <div className="w-full min-h-screen flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-7xl my-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
         {/* Header with progress and close button */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-          <div className="container mx-auto px-6 py-4">
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm rounded-t-2xl">
+          <div className="px-6 py-4">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formData.title || 'New Mock Exam'}</h2>
@@ -460,9 +460,9 @@ export function MockExamCreationWizard({
           </div>
         </div>
 
-        {/* Full-page content area */}
-        <div className="flex-1 overflow-auto">
-          <div className="container mx-auto px-6 py-8 max-w-7xl">
+        {/* Modal content area with scroll */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-6 py-8">
           {/* Step 0: Basic Info */}
           {currentStep === 0 && (
             <div className="space-y-6">
@@ -925,8 +925,8 @@ export function MockExamCreationWizard({
         </div>
 
         {/* Footer navigation */}
-        <div className="sticky bottom-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-lg">
-          <div className="container mx-auto px-6 py-4">
+        <div className="sticky bottom-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-lg rounded-b-2xl">
+          <div className="px-6 py-4">
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => handleStepChange(currentStep - 1)}
