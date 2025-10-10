@@ -83,7 +83,7 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             Topics *
           </label>
           <SearchableMultiSelect
-            label="Topics"
+            label=""
             options={availableTopics.map(t => ({
               value: t.id,
               label: `${t.number ? `${t.number}. ` : ''}${t.name}`
@@ -105,7 +105,7 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             Subtopics (Optional)
           </label>
           <SearchableMultiSelect
-            label="Subtopics"
+            label=""
             options={availableSubtopics.map(s => ({
               value: s.id,
               label: s.name

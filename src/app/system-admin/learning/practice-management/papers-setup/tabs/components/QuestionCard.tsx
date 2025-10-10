@@ -33,7 +33,7 @@ interface QuestionCardProps {
   onSave: () => void;
   onCancel: () => void;
   onMappingUpdate: (field: string, value: any) => void;
-  onAddAttachment: () => void;
+  onAddAttachment: (partIndex?: number, subpartIndex?: number) => void;
   onDeleteAttachment: (attachmentId: string) => void;
   onUpdateQuestion: (updates: any) => void;
 }
@@ -264,7 +264,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               questionLabel={`Question ${question.question_number}`}
               requiresFigure={question.figure}
               pdfAvailable={!!pdfDataUrl}
-              onAdd={onAddAttachment}
+              onAdd={() => onAddAttachment()}
               onDelete={onDeleteAttachment}
               isEditing={isEditing}
             />
@@ -277,29 +277,39 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                 Options
               </label>
               <div className="space-y-2">
-                {question.options.map((option: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className={cn(
-                      "p-3 rounded-lg border",
-                      option.is_correct
-                        ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                        : "bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="font-medium text-gray-700 dark:text-gray-300">
-                        {option.label}.
-                      </span>
-                      <span className="flex-1 text-gray-900 dark:text-white">
-                        {option.text}
-                      </span>
-                      {option.is_correct && (
-                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                {question.options.map((option: any, idx: number) => {
+                  // Check if this option is correct by comparing with correct_answers
+                  const correctAnswerLabels = question.correct_answers || [];
+                  const isCorrect = option.is_correct ||
+                    correctAnswerLabels.some((ans: any) => {
+                      const answerText = typeof ans === 'string' ? ans : ans.answer_text || ans.text;
+                      return answerText === option.label || answerText === option.text;
+                    });
+
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "p-3 rounded-lg border",
+                        isCorrect
+                          ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+                          : "bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
                       )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                          {option.label}.
+                        </span>
+                        <span className="flex-1 text-gray-900 dark:text-white">
+                          {option.text}
+                        </span>
+                        {isCorrect && (
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

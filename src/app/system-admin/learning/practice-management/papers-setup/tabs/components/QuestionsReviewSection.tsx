@@ -69,6 +69,7 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
   onExpandAll,
   onCollapseAll,
 }) => {
+  // Safety checks
   if (!questions || questions.length === 0) {
     return (
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
@@ -83,9 +84,18 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
     );
   }
 
-  const allExpanded = expandedQuestions.size === questions.length;
-  const errorCount = Object.keys(validationErrors).length;
-  const mappedCount = Object.values(mappings).filter((m: any) =>
+  // Ensure required data exists
+  const safeUnits = units || [];
+  const safeTopics = topics || [];
+  const safeSubtopics = subtopics || [];
+  const safeMappings = mappings || {};
+  const safeValidationErrors = validationErrors || {};
+  const safeExpandedQuestions = expandedQuestions || new Set();
+  const safeAttachments = attachments || {};
+
+  const allExpanded = safeExpandedQuestions.size === questions.length;
+  const errorCount = Object.keys(safeValidationErrors).length;
+  const mappedCount = Object.values(safeMappings).filter((m: any) =>
     m?.chapter_id && m?.topic_ids && m.topic_ids.length > 0
   ).length;
 
@@ -162,11 +172,11 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
       {/* Questions List */}
       <div className="space-y-4">
         {questions.map((question, index) => {
-          const isExpanded = expandedQuestions.has(question.id);
+          const isExpanded = safeExpandedQuestions.has(question.id);
           const isEditing = editingQuestion?.id === question.id;
-          const mapping = mappings[question.id] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
-          const questionAttachments = attachments[question.id] || [];
-          const questionValidationErrors = validationErrors[question.id] || [];
+          const mapping = safeMappings[question.id] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
+          const questionAttachments = safeAttachments[question.id] || [];
+          const questionValidationErrors = safeValidationErrors[question.id] || [];
 
           const handleAddAttachment = (partIndex?: number, subpartIndex?: number) => {
             const partPath = [];
@@ -213,9 +223,9 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
               validationErrors={questionValidationErrors}
               existingQuestionNumbers={existingQuestionNumbers}
               dataStructureInfo={dataStructureInfo}
-              units={units}
-              topics={topics}
-              subtopics={subtopics}
+              units={safeUnits}
+              topics={safeTopics}
+              subtopics={safeSubtopics}
               paperMetadata={paperMetadata}
               pdfDataUrl={pdfDataUrl}
               onToggleExpand={() => onToggleExpanded(question.id)}
