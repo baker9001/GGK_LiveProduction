@@ -1086,14 +1086,14 @@ export default function PapersSetupPage() {
         offset={100}
       />
 
-      {/* Progress Indicator */}
+      {/* Progress Indicator - Visual Only (not clickable) */}
       <div id="workflow" className="mb-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             {IMPORT_TABS.map((tab, index) => {
               const status = getTabStatus(tab.id);
               const Icon = tab.icon;
-              
+
               return (
                 <div key={tab.id} className="flex items-center flex-1">
                   <div className="flex flex-col items-center">
@@ -1111,7 +1111,7 @@ export default function PapersSetupPage() {
                       )}
                     </div>
                     <span className={cn(
-                      "text-xs mt-1 font-medium",
+                      "text-xs mt-1 font-medium text-center",
                       status === 'active' && "text-blue-600 dark:text-blue-400",
                       status === 'completed' && "text-green-600 dark:text-green-400",
                       status === 'pending' && "text-gray-400 dark:text-gray-500"
@@ -1122,9 +1122,9 @@ export default function PapersSetupPage() {
                   {index < IMPORT_TABS.length - 1 && (
                     <div className={cn(
                       "flex-1 h-0.5 mx-2 transition-all",
-                      tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' || 
-                      tabStatuses[IMPORT_TABS[index + 1].id] === 'active' 
-                        ? "bg-green-500 dark:bg-green-400" 
+                      tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' ||
+                      tabStatuses[IMPORT_TABS[index + 1].id] === 'active'
+                        ? "bg-green-500 dark:bg-green-400"
                         : "bg-gray-300 dark:bg-gray-600"
                     )} />
                   )}
@@ -1145,76 +1145,23 @@ export default function PapersSetupPage() {
         </div>
       )}
 
-      {/* Tab Content */}
+      {/* Tab Content - Tabs hidden, navigation through progress bar only */}
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
         className="space-y-6"
       >
-        <TabsList className="w-full justify-center">
-          {IMPORT_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const status = getTabStatus(tab.id);
-            const isDisabled = isTabDisabled(tab.id);
 
-            return (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                disabled={isDisabled || isTabTransitioning}
-                tabStatus={status}
-              >
-                <Icon className="h-4 w-4 mr-2" />
-                <span>{tab.label}</span>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-
-        {/* Loading Overlay During Transition */}
+        {/* Subtle Loading Indicator During Transition */}
         {isTabTransitioning && (
-          <div className="fixed inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-50 flex items-center justify-center">
-            <div className="text-center space-y-6 p-8">
-              <div className="relative">
-                {/* Animated circles */}
-                <div className="relative w-24 h-24 mx-auto">
-                  <div className="absolute inset-0 border-4 border-[#8CC63F]/20 rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
-                  <div className="absolute inset-3 border-4 border-[#8CC63F]/40 rounded-full border-r-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
-                  {/* Center dot */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-3 h-3 bg-[#8CC63F] rounded-full animate-pulse"></div>
-                  </div>
-                </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="relative w-12 h-12">
+                <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
               </div>
-              <div className="space-y-3">
-                <p className="text-xl font-bold text-gray-900 dark:text-white">
-                  {transitionMessage}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Please wait while we prepare your content
-                </p>
-              </div>
-              {/* Progress bar */}
-              <div className="w-72 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mx-auto shadow-inner">
-                <div className="h-full bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] rounded-full animate-progress shadow-lg"></div>
-              </div>
-              {/* Step indicator */}
-              <div className="flex items-center justify-center gap-2 pt-2">
-                {IMPORT_TABS.map((tab) => (
-                  <div
-                    key={tab.id}
-                    className={cn(
-                      "w-2 h-2 rounded-full transition-all duration-300",
-                      tab.id === activeTab
-                        ? "bg-[#8CC63F] w-8"
-                        : tabStatuses[tab.id] === 'completed'
-                        ? "bg-green-400"
-                        : "bg-gray-300 dark:bg-gray-600"
-                    )}
-                  />
-                ))}
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 animate-pulse">
+                {transitionMessage}
+              </p>
             </div>
           </div>
         )}
