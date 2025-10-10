@@ -1197,39 +1197,45 @@ export function StatusTransitionWizard({
                     key={stage.status}
                     type="button"
                     onClick={() => isAllowed && setActiveStage(stage.status)}
-                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                    className={`w-full rounded-xl px-4 py-3 text-left transition-all ${
                       isActive
-                        ? 'border-[#8CC63F] bg-white shadow dark:border-[#8CC63F] dark:bg-gray-900'
+                        ? 'bg-[#8CC63F] text-white shadow-md hover:shadow-lg'
                         : isAllowed
-                          ? 'border-transparent bg-white/60 hover:border-[#8CC63F]/40 hover:bg-white dark:border-transparent dark:bg-gray-900/70 dark:hover:border-[#8CC63F]/40'
-                          : 'cursor-not-allowed border-transparent bg-white/40 opacity-60 dark:bg-gray-900/40'
+                          ? 'bg-gray-100 dark:bg-gray-800 text-[#8CC63F] border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          : 'cursor-not-allowed bg-gray-100 dark:bg-gray-800 opacity-50 border border-gray-200 dark:border-gray-700'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-3">
                         <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${
-                          isComplete
-                            ? 'bg-[#8CC63F]/10 text-[#8CC63F]'
-                            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : isComplete
+                            ? 'bg-white dark:bg-gray-700 text-[#8CC63F]'
+                            : 'bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                         }`}>
                           {stage.icon}
                         </div>
                         <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          <div className={`flex items-center gap-2 text-sm font-semibold ${
+                            isActive ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+                          }`}>
                             {stage.label}
-                            {isComplete && <CheckCircle2 className="h-4 w-4 text-[#8CC63F]" />}
+                            {isComplete && <CheckCircle2 className={`h-4 w-4 ${isActive ? 'text-white' : 'text-[#8CC63F]'}`} />}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{stage.description}</div>
+                          <div className={`text-xs ${isActive ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                            {stage.description}
+                          </div>
                         </div>
                       </div>
                       {isAllowed ? (
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                        <ChevronRight className={`h-4 w-4 ${isActive ? 'text-white/80' : 'text-gray-400'}`} />
                       ) : (
                         <Info className="h-4 w-4 text-gray-300" />
                       )}
                     </div>
                     {stageProgress?.completed_at && (
-                      <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                      <div className={`mt-2 text-xs ${isActive ? 'text-white/70' : 'text-gray-400 dark:text-gray-500'}`}>
                         Completed on {dayjs(stageProgress.completed_at).format('DD MMM YYYY HH:mm')}
                       </div>
                     )}

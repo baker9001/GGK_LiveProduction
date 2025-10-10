@@ -148,19 +148,19 @@ export function MultiStepWizard({
                   onClick={() => isClickable && handleStepClick(index)}
                   disabled={!isClickable}
                   className={`
-                    flex items-center gap-2 px-3 py-2 rounded-lg transition-all
-                    ${status === 'current' ? 'bg-[#8CC63F]/10 border-2 border-[#8CC63F]' : ''}
-                    ${status === 'completed' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : ''}
-                    ${status === 'upcoming' || status === 'locked' ? 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700' : ''}
-                    ${isClickable ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-60'}
+                    flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all font-medium
+                    ${status === 'current' ? 'bg-[#8CC63F] text-white shadow-md' : ''}
+                    ${status === 'completed' ? 'bg-[#8CC63F] text-white shadow-md' : ''}
+                    ${status === 'upcoming' || status === 'locked' ? 'bg-gray-100 dark:bg-gray-800 text-[#8CC63F] border border-gray-200 dark:border-gray-700' : ''}
+                    ${isClickable ? 'cursor-pointer hover:shadow-lg hover:scale-105' : 'cursor-not-allowed opacity-50'}
                   `}
                   title={step.description}
                 >
                   <div className={`
-                    flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
-                    ${status === 'current' ? 'bg-[#8CC63F] text-white' : ''}
-                    ${status === 'completed' ? 'bg-green-500 text-white' : ''}
-                    ${status === 'upcoming' || status === 'locked' ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400' : ''}
+                    flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold
+                    ${status === 'current' ? 'bg-white/20 text-white' : ''}
+                    ${status === 'completed' ? 'bg-white/20 text-white' : ''}
+                    ${status === 'upcoming' || status === 'locked' ? 'bg-white dark:bg-gray-700 text-[#8CC63F] border border-[#8CC63F]' : ''}
                   `}>
                     {status === 'completed' ? (
                       <Check className="w-4 h-4" />
@@ -168,16 +168,12 @@ export function MultiStepWizard({
                       <span>{index + 1}</span>
                     )}
                   </div>
-                  <span className={`
-                    text-sm font-medium whitespace-nowrap
-                    ${status === 'current' ? 'text-[#8CC63F]' : ''}
-                    ${status === 'completed' ? 'text-green-700 dark:text-green-400' : ''}
-                    ${status === 'upcoming' || status === 'locked' ? 'text-gray-600 dark:text-gray-400' : ''}
-                  `}>
+                  <span className="text-sm font-semibold whitespace-nowrap flex items-center gap-1">
+                    {step.icon && <span className="opacity-90">{step.icon}</span>}
                     {step.title}
                   </span>
                   {step.estimatedMinutes && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className={`text-xs ${status === 'current' || status === 'completed' ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
                       {step.estimatedMinutes}m
                     </span>
                   )}
@@ -208,6 +204,7 @@ export function MultiStepWizard({
             onClick={handlePrevious}
             disabled={isFirstStep || !canGoPrevious || isSubmitting}
             leftIcon={<ChevronLeft className="w-4 h-4" />}
+            className="bg-gray-100 dark:bg-gray-800 text-[#8CC63F] border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </Button>
@@ -217,6 +214,7 @@ export function MultiStepWizard({
               variant="ghost"
               onClick={onCancel}
               disabled={isSubmitting}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
             >
               Cancel
             </Button>
@@ -225,6 +223,7 @@ export function MultiStepWizard({
                 onClick={handleNext}
                 disabled={!canGoNext || isSubmitting}
                 rightIcon={<ChevronRight className="w-4 h-4" />}
+                className="bg-[#8CC63F] text-white hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               >
                 Next Step
               </Button>
@@ -233,6 +232,7 @@ export function MultiStepWizard({
                 onClick={onComplete}
                 disabled={!canGoNext || isSubmitting}
                 leftIcon={isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                className="bg-[#8CC63F] text-white hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               >
                 {isSubmitting ? 'Creating...' : 'Create Mock Exam'}
               </Button>
