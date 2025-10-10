@@ -17,6 +17,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
   const [fullQuestion, setFullQuestion] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isOpen && question) {
@@ -29,6 +30,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
 
     setIsLoading(true);
     try {
+      // Fetch main question with attachments
       const { data, error } = await supabase
         .from('questions_master_admin')
         .select(`
@@ -51,18 +53,18 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
             id,
             hint_text
           ),
-          edu_topics!questions_master_admin_topic_id_fkey (
+          edu_topics:topic_id (
             id,
             name
           ),
-          edu_subtopics!questions_master_admin_subtopic_id_fkey (
+          edu_subtopics:subtopic_id (
             id,
             name
           ),
-          data_structures!questions_master_admin_data_structure_id_fkey (
-            providers!data_structures_provider_id_fkey (name),
-            programs!data_structures_program_id_fkey (name),
-            edu_subjects!data_structures_subject_id_fkey (name)
+          data_structures:data_structure_id (
+            providers:provider_id (name),
+            programs:program_id (name),
+            edu_subjects:subject_id (name)
           ),
           question_correct_answers (
             id,
@@ -82,6 +84,46 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
         throw new Error('Question not found');
       }
 
+      // Fetch sub-questions with their attachments
+      const { data: subQuestions, error: subError } = await supabase
+        .from('sub_questions')
+        .select(`
+          id,
+          question_id,
+          parent_id,
+          sub_question_number,
+          description,
+          marks,
+          type,
+          level
+        `)
+        .eq('question_id', question.id)
+        .order('sub_question_number', { ascending: true });
+
+      if (subError) {
+        console.error('Error fetching sub-questions:', subError);
+      }
+
+      // Fetch attachments for all sub-questions if any exist
+      let subQuestionAttachments: any[] = [];
+      if (subQuestions && subQuestions.length > 0) {
+        const subQuestionIds = subQuestions.map(sq => sq.id);
+        const { data: sqAttachments, error: sqAttError } = await supabase
+          .from('questions_attachments')
+          .select('*')
+          .in('sub_question_id', subQuestionIds);
+
+        if (!sqAttError && sqAttachments) {
+          subQuestionAttachments = sqAttachments;
+        }
+      }
+
+      // Build hierarchical sub-questions structure with attachments
+      const subQuestionsWithAttachments = (subQuestions || []).map((sq: any) => ({
+        ...sq,
+        attachments: subQuestionAttachments.filter(att => att.sub_question_id === sq.id)
+      }));
+
       setFullQuestion({
         ...data,
         board_name: data.data_structures?.providers?.name,
@@ -89,7 +131,8 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
         subject_name: data.data_structures?.edu_subjects?.name,
         topic_name: data.edu_topics?.name,
         subtopic_name: data.edu_subtopics?.name,
-        exam_year: data.year
+        exam_year: data.year,
+        sub_questions: subQuestionsWithAttachments
       });
       setAttachments(data?.questions_attachments || []);
     } catch (error: any) {
@@ -141,42 +184,56 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
     );
   };
 
-  const renderAttachments = () => {
-    if (attachments.length === 0) return null;
+  const renderAttachments = (attachmentsList: any[] = []) => {
+    if (attachmentsList.length === 0) return null;
 
     return (
       <div className="space-y-2">
         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Attachments</h4>
-        <div className="space-y-2">
-          {attachments.map((attachment: any, index: number) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {attachmentsList.map((attachment: any, index: number) => (
             <div
               key={index}
-              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden"
             >
               {attachment.file_type?.startsWith('image/') ? (
-                <ImageIcon className="h-5 w-5 text-blue-500" />
+                <div className="relative group">
+                  <img
+                    src={attachment.file_url || attachment.url}
+                    alt={attachment.file_name || attachment.filename || 'Question attachment'}
+                    className="w-full h-auto max-h-64 object-contain bg-gray-50 dark:bg-gray-900"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      const parent = (e.target as HTMLImageElement).parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<div class="flex items-center justify-center h-32 bg-gray-100 dark:bg-gray-800"><span class="text-gray-400">Image failed to load</span></div>';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => window.open(attachment.file_url || attachment.url, '_blank')}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="View full size"
+                  >
+                    <Eye className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                  </button>
+                </div>
               ) : (
-                <FileText className="h-5 w-5 text-gray-400" />
+                <div className="flex items-center justify-center h-32 bg-gray-50 dark:bg-gray-900">
+                  <FileText className="h-8 w-8 text-gray-400" />
+                </div>
               )}
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {attachment.file_name || attachment.filename}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {attachment.file_type || attachment.type}
                   {(attachment.file_size || attachment.size) && (
                     <> • {Math.round((attachment.file_size || attachment.size) / 1024)} KB</>
                   )}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(attachment.file_url || attachment.url, '_blank')}
-                leftIcon={<Eye className="h-4 w-4" />}
-              >
-                View
-              </Button>
             </div>
           ))}
         </div>
@@ -300,34 +357,98 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
             </div>
           </div>
 
-          {/* Sub-questions/Parts */}
+          {/* Sub-questions/Parts - Hierarchical Display */}
           {displayQuestion.sub_questions && displayQuestion.sub_questions.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Question Parts</h4>
-              <div className="space-y-3">
-                {displayQuestion.sub_questions.map((subQ: any, index: number) => (
-                  <div
-                    key={index}
-                    className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-                    style={{ marginLeft: `${(subQ.level - 1) * 20}px` }}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  Question Parts ({displayQuestion.sub_questions.length})
+                </h4>
+                {displayQuestion.sub_questions.length > 3 && (
+                  <button
+                    onClick={() => {
+                      if (expandedParts.size === 0) {
+                        setExpandedParts(new Set(displayQuestion.sub_questions.map((sq: any) => sq.id)));
+                      } else {
+                        setExpandedParts(new Set());
+                      }
+                    }}
+                    className="text-xs text-[#8CC63F] hover:text-[#7AB635] font-medium"
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#8CC63F] text-white text-xs font-semibold flex-shrink-0">
-                        {subQ.sub_question_number || index + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900 dark:text-gray-100">
-                          {subQ.description || 'No description'}
-                        </p>
-                        {subQ.marks !== null && (
-                          <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                            {subQ.marks} mark{subQ.marks !== 1 ? 's' : ''}
+                    {expandedParts.size === 0 ? 'Expand All' : 'Collapse All'}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {displayQuestion.sub_questions.map((subQ: any, index: number) => {
+                  const isExpanded = expandedParts.has(subQ.id);
+                  const hasAttachments = subQ.attachments && subQ.attachments.length > 0;
+                  const indent = (subQ.level - 1) * 20;
+
+                  return (
+                    <div
+                      key={subQ.id || index}
+                      className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden"
+                      style={{ marginLeft: `${indent}px` }}
+                    >
+                      <div className="p-4">
+                        <div className="flex items-start gap-3">
+                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-[#8CC63F] text-white text-xs font-semibold flex-shrink-0">
+                            {subQ.sub_question_number || String.fromCharCode(97 + index)}
                           </span>
-                        )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <p className={`text-sm text-gray-900 dark:text-gray-100 ${!isExpanded && (subQ.description?.length > 100 || hasAttachments) ? 'line-clamp-2' : ''}`}>
+                                {subQ.description || 'No description'}
+                              </p>
+                              {(subQ.description?.length > 100 || hasAttachments) && (
+                                <button
+                                  onClick={() => {
+                                    const newExpanded = new Set(expandedParts);
+                                    if (isExpanded) {
+                                      newExpanded.delete(subQ.id);
+                                    } else {
+                                      newExpanded.add(subQ.id);
+                                    }
+                                    setExpandedParts(newExpanded);
+                                  }}
+                                  className="text-xs text-[#8CC63F] hover:text-[#7AB635] font-medium whitespace-nowrap flex-shrink-0"
+                                >
+                                  {isExpanded ? 'Show Less' : 'View'}
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {subQ.marks !== null && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                  <span className="font-semibold">{subQ.marks}</span>
+                                  <span>mark{subQ.marks !== 1 ? 's' : ''}</span>
+                                </span>
+                              )}
+                              {subQ.type && (
+                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                  {subQ.type}
+                                </span>
+                              )}
+                              {hasAttachments && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                                  <ImageIcon className="h-3 w-3" />
+                                  {subQ.attachments.length} attachment{subQ.attachments.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </div>
+
+                            {isExpanded && hasAttachments && (
+                              <div className="mt-4">
+                                {renderAttachments(subQ.attachments)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -356,29 +477,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
             </div>
           )}
 
-          {renderAttachments()}
-
-          {attachments.length > 0 && attachments.some((a: any) => (a.file_type || a.type)?.startsWith('image/')) && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Image Previews</h4>
-              <div className="grid grid-cols-2 gap-4">
-                {attachments
-                  .filter((a: any) => (a.file_type || a.type)?.startsWith('image/'))
-                  .map((attachment: any, index: number) => (
-                    <div key={index} className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                      <img
-                        src={attachment.file_url || attachment.url}
-                        alt={attachment.file_name || attachment.filename}
-                        className="w-full h-auto"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
+          {renderAttachments(attachments)}
 
           {question.tags && question.tags.length > 0 && (
             <div className="space-y-2">

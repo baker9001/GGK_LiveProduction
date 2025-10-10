@@ -1072,13 +1072,14 @@ export class MockExamService {
           year,
           topic_id,
           subtopic_id,
-          edu_topics!questions_master_admin_topic_id_fkey (id, name),
-          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name),
-          data_structures!fk_questions_master_admin_data_structure (
+          edu_topics:topic_id (id, name),
+          edu_subtopics:subtopic_id (id, name),
+          data_structures:data_structure_id (
             id,
-            providers!data_structures_provider_id_fkey (name),
-            programs!data_structures_program_id_fkey (name),
-            edu_subjects!data_structures_subject_id_fkey (name)
+            subject_id,
+            providers:provider_id (name),
+            programs:program_id (name),
+            edu_subjects:subject_id (name)
           )
         `)
         .eq('status', 'active');
