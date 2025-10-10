@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Progress bar animation for loading states */
+@keyframes progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.animate-progress {
+  animation: progress 1.5s ease-in-out infinite;
+}
+
 /* Fix for calendar icon in dark mode - enhanced version */
 .dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) !important;

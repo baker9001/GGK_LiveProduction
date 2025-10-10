@@ -504,7 +504,9 @@ export default function PapersSetupPage() {
   const [stagedAttachments, setStagedAttachments] = useState<Record<string, any[]>>({});
   const [previousSessionsExpanded, setPreviousSessionsExpanded] = useState(false);
   const [extractionRulesExpanded, setExtractionRulesExpanded] = useState(true); // Always expanded by default
-  
+  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
+  const [transitionMessage, setTransitionMessage] = useState('');
+
   // Track the status of each tab
   const [tabStatuses, setTabStatuses] = useState<Record<string, TabStatus>>({
     upload: 'pending',
@@ -949,11 +951,25 @@ export default function PapersSetupPage() {
     return 'structure';
   };
 
-  const handleTabChange = (tabId: string) => {
+  const handleTabChange = async (tabId: string) => {
+    // Show loading state during transition
+    setIsTabTransitioning(true);
+
+    // Set appropriate transition message
+    const tabName = IMPORT_TABS.find(t => t.id === tabId)?.label || 'content';
+    setTransitionMessage(`Loading ${tabName}...`);
+
+    // Simulate minimum loading time for smooth UX (prevents flash)
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     const params = new URLSearchParams(location.search);
     params.set('tab', tabId);
     navigate({ search: params.toString() }, { replace: true });
     setActiveTab(tabId);
+
+    // Hide loading state
+    setIsTabTransitioning(false);
+    setTransitionMessage('');
   };
 
   const handleStructureComplete = async () => {
@@ -1130,8 +1146,8 @@ export default function PapersSetupPage() {
       )}
 
       {/* Tab Content */}
-      <Tabs 
-        value={activeTab} 
+      <Tabs
+        value={activeTab}
         onValueChange={handleTabChange}
         className="space-y-6"
       >
@@ -1145,7 +1161,7 @@ export default function PapersSetupPage() {
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                disabled={isDisabled}
+                disabled={isDisabled || isTabTransitioning}
                 tabStatus={status}
               >
                 <Icon className="h-4 w-4 mr-2" />
@@ -1154,6 +1170,56 @@ export default function PapersSetupPage() {
             );
           })}
         </TabsList>
+
+        {/* Tab Content Container with Loading Overlay */}
+        <div className="relative min-h-[500px]">
+          {/* Loading Overlay During Transition */}
+          {isTabTransitioning && (
+            <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md z-50 rounded-lg flex items-center justify-center">
+              <div className="text-center space-y-6 p-8">
+                <div className="relative">
+                  {/* Animated circles */}
+                  <div className="relative w-24 h-24 mx-auto">
+                    <div className="absolute inset-0 border-4 border-[#8CC63F]/20 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
+                    <div className="absolute inset-3 border-4 border-[#8CC63F]/40 rounded-full border-r-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                    {/* Center dot */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-3 h-3 bg-[#8CC63F] rounded-full animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">
+                    {transitionMessage}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Please wait while we prepare your content
+                  </p>
+                </div>
+                {/* Progress bar */}
+                <div className="w-72 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mx-auto shadow-inner">
+                  <div className="h-full bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] rounded-full animate-progress shadow-lg"></div>
+                </div>
+                {/* Step indicator */}
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  {IMPORT_TABS.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-all duration-300",
+                        tab.id === activeTab
+                          ? "bg-[#8CC63F] w-8"
+                          : tabStatuses[tab.id] === 'completed'
+                          ? "bg-green-400"
+                          : "bg-gray-300 dark:bg-gray-600"
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
         <TabsContent value="upload" className="space-y-6">
           <div id="upload-section">
@@ -1265,6 +1331,7 @@ export default function PapersSetupPage() {
             </div>
           )}
         </TabsContent>
+        </div>
       </Tabs>
     </div>
   );
