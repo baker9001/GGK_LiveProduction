@@ -161,7 +161,7 @@ export function QuestionsStep({
         marks: q.marks,
         type: q.type,
         difficulty: q.difficulty_level,
-        scope: 'global',
+        scope: 'global', // All questions from questions_master_admin are global
         school_id: null,
         school_name: null,
         is_shared: false,
@@ -172,7 +172,7 @@ export function QuestionsStep({
         subtopic_id: q.subtopic_id,
         subtopic_name: q.subtopic_name,
         subject_name: q.subject_name,
-        sub_questions_count: q.sub_parts_count,
+        sub_questions_count: q.sub_parts_count || 0,
         attachments_count: 0,
         sub_questions: q.sub_questions
       }));

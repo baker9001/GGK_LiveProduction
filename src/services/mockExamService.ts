@@ -1589,35 +1589,18 @@ export class MockExamService {
           topic_id,
           subtopic_id,
           difficulty,
-          scope,
-          school_id,
-          is_shared,
           edu_topics!questions_master_admin_topic_id_fkey (id, name),
           edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name),
           data_structures!fk_questions_master_admin_data_structure (
             edu_subjects!data_structures_subject_id_fkey (id, name)
-          ),
-          schools!questions_master_admin_school_id_fkey (id, name)
+          )
         `)
         .eq('status', 'active')
         .eq('subject_id', subjectId);
 
-      if (scope === 'global') {
-        query = query.eq('scope', 'global');
-      } else if (scope === 'custom') {
-        query = query.eq('scope', 'custom');
-        if (schoolIds.length > 0) {
-          query = query.in('school_id', schoolIds);
-        }
-      } else {
-        // Handle 'all' scope - include both global and custom questions
-        if (schoolIds.length > 0) {
-          query = query.or(`scope.eq.global,and(scope.eq.custom,school_id.in.(${schoolIds.join(',')}))`);
-        } else {
-          // If no school IDs provided, only show global questions
-          query = query.eq('scope', 'global');
-        }
-      }
+      // Note: scope and school_id columns don't exist in questions_master_admin
+      // All questions in this table are global questions from the question bank
+      // Custom questions would be in a different table if needed
 
       if (years && years.length > 0) {
         query = query.in('year', years.map(y => parseInt(y)));
