@@ -406,7 +406,7 @@ export function MockExamCreationWizard({
 
   // Full-page layout for entire wizard
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-auto">
+    <div className="fixed inset-0 z-30 bg-white dark:bg-gray-900 overflow-auto">
       <div className="w-full min-h-screen flex flex-col">
         {/* Header with progress and close button */}
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
@@ -927,7 +927,7 @@ export function MockExamCreationWizard({
         {/* Footer navigation */}
         <div className="sticky bottom-0 z-10 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-lg">
           <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => handleStepChange(currentStep - 1)}
                 disabled={currentStep === 0}
@@ -935,38 +935,36 @@ export function MockExamCreationWizard({
               >
                 Previous
               </button>
-              <div className="flex items-center gap-3">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              {currentStep < WIZARD_STEPS.length - 1 ? (
                 <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  onClick={() => handleStepChange(currentStep + 1)}
+                  disabled={!canGoNext}
+                  className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#8CC63F] to-[#7AB635] hover:from-[#7AB635] hover:to-[#6DA52F] rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Cancel
+                  Continue
                 </button>
-                {currentStep < WIZARD_STEPS.length - 1 ? (
-                  <button
-                    onClick={() => handleStepChange(currentStep + 1)}
-                    disabled={!canGoNext}
-                    className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#8CC63F] to-[#7AB635] hover:from-[#7AB635] hover:to-[#6DA52F] rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Continue
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleComplete}
-                    disabled={!canGoNext || isSubmitting}
-                    className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#8CC63F] to-[#7AB635] hover:from-[#7AB635] hover:to-[#6DA52F] rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Mock Exam'
-                    )}
-                  </button>
-                )}
-              </div>
+              ) : (
+                <button
+                  onClick={handleComplete}
+                  disabled={!canGoNext || isSubmitting}
+                  className="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#8CC63F] to-[#7AB635] hover:from-[#7AB635] hover:to-[#6DA52F] rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Mock Exam'
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
