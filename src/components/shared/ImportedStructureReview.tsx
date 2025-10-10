@@ -664,15 +664,15 @@ export default function ImportedStructureReview({
         await checkOrCreateDataStructure(root);
       }
       
-      // Only call onComplete if all entities exist and we haven't called it yet for this structure
-      if (exists && onComplete && !completionCalled) {
+      // Only call onComplete if all entities exist, no errors, and we haven't called it yet for this structure
+      if (exists && onComplete && !completionCalled && !dataStructureError) {
         setCompletionCalled(true);
         onComplete();
       }
     }
-    
+
     buildStructure();
-  }, [importedData, maps, onComplete, completionCalled]);
+  }, [importedData, maps, onComplete, completionCalled, dataStructureError]);
 
   // Check or create data structure
   async function checkOrCreateDataStructure(root: StructureEntity) {
@@ -837,13 +837,13 @@ export default function ImportedStructureReview({
     
     const allExist = checkAllExist(structure);
     setAllEntitiesExist(allExist);
-    
-    if (allExist && onComplete) {
+
+    if (allExist && onComplete && !dataStructureError) {
       console.log('[GGK] All entities already exist, calling onComplete');
       setCompletionCalled(true);
       onComplete();
     }
-  }, [structure, onComplete, completionCalled]);
+  }, [structure, onComplete, completionCalled, dataStructureError]);
 
   // Create a single entity
   async function createEntity(node: StructureEntity, parentId?: string, trackRollback = true) {
@@ -1119,8 +1119,8 @@ export default function ImportedStructureReview({
         variant: "success"
       });
       
-      // Trigger onComplete callback if all entities exist
-      if (allExist && onComplete && !completionCalled) {
+      // Trigger onComplete callback if all entities exist and no data structure errors
+      if (allExist && onComplete && !completionCalled && !dataStructureError) {
         console.log('[GGK] All entities created, calling onComplete');
         setCompletionCalled(true);
         onComplete();
@@ -1154,8 +1154,8 @@ export default function ImportedStructureReview({
         
         if (allExist) {
           await checkOrCreateDataStructure(structure);
-          
-          if (onComplete && !completionCalled) {
+
+          if (onComplete && !completionCalled && !dataStructureError) {
             console.log('[GGK] All entities now exist after individual creation, calling onComplete');
             setCompletionCalled(true);
             onComplete();

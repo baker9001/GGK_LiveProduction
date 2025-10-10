@@ -391,6 +391,11 @@ export default function StructureTab({
       return;
     }
 
+    if (!structureMetadata?.dataStructureId) {
+      toast.error('Data structure was not created successfully. Please check the error messages and try refreshing the structure.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -402,7 +407,7 @@ export default function StructureTab({
           // Fetch entity IDs from the data structure
           console.log('[GGK] Fetching entity IDs from data structure...');
           const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
-          
+
           entityIds = {
             program_id: fetchedIds.program_id,
             provider_id: fetchedIds.provider_id,
