@@ -51,41 +51,81 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
   const selectedUnit = units?.find(u => String(u.id) === normalizedChapterId);
 
   // Filter topics based on selected unit - edu_topics table uses unit_id as foreign key
-  const availableTopics = normalizedChapterId
-    ? topics?.filter(t => {
-        return String(t.unit_id) === normalizedChapterId;
-      }) || []
-    : topics || [];
+  // ENHANCED: Also include topics that are already selected (to fix orphaned topics issue)
+  const availableTopics = React.useMemo(() => {
+    if (!normalizedChapterId) return topics || [];
 
-  // Debug log for topics filtering
+    const filtered = topics?.filter(t => {
+      const topicUnitId = String(t.unit_id);
+      const selectedUnitId = String(normalizedChapterId);
+      const isMatchingUnit = topicUnitId === selectedUnitId;
+      const isAlreadySelected = normalizedTopicIds.includes(String(t.id));
+
+      // Include if: matches current unit OR is already selected (to prevent losing selection)
+      return isMatchingUnit || isAlreadySelected;
+    }) || [];
+
+    return filtered;
+  }, [normalizedChapterId, topics, normalizedTopicIds]);
+
+  // ENHANCED Debug log for topics filtering with detailed diagnostics
   React.useEffect(() => {
     if (normalizedChapterId) {
-      console.log('Topics Filtering Debug:', {
+      // Find selected topics details
+      const selectedTopicsDetails = normalizedTopicIds.map(topicId => {
+        const topic = topics?.find(t => String(t.id) === topicId);
+        return topic ? {
+          id: topic.id,
+          name: topic.name,
+          unit_id: topic.unit_id,
+          unit_id_type: typeof topic.unit_id,
+          matches_selected_unit: String(topic.unit_id) === String(normalizedChapterId),
+          is_in_available_list: availableTopics.some(at => String(at.id) === topicId)
+        } : null;
+      }).filter(Boolean);
+
+      console.log('🔍 COMPREHENSIVE Topics Filtering Debug:', {
+        // Current state
         selectedUnitId: normalizedChapterId,
         selectedUnitName: selectedUnit?.name,
-        totalTopicsCount: topics?.length,
+        selectedTopicIds: normalizedTopicIds,
+
+        // Counts
+        totalTopicsInDB: topics?.length || 0,
         availableTopicsCount: availableTopics.length,
-        availableTopicsNames: availableTopics.map(t => t.name),
-        allTopicsMatchCheck: topics?.slice(0, 5).map(t => ({
+        selectedTopicsCount: normalizedTopicIds.length,
+
+        // Selected topics analysis
+        selectedTopicsDetails: selectedTopicsDetails,
+
+        // Available topics
+        availableTopicsNames: availableTopics.map(t => ({
+          id: t.id,
           name: t.name,
-          unit_id: t.unit_id,
-          matches: String(t.unit_id) === normalizedChapterId
-        }))
+          unit_id: t.unit_id
+        })),
+
+        // Type analysis
+        unitIdType: typeof normalizedChapterId,
+        sampleTopicUnitIdType: topics?.[0] ? typeof topics[0].unit_id : 'N/A',
+
+        // Mismatch detection
+        hasMismatch: selectedTopicsDetails.some(t => !t?.matches_selected_unit),
+        mismatchedTopics: selectedTopicsDetails.filter(t => !t?.matches_selected_unit)
       });
 
-      if (availableTopics.length === 0 && topics && topics.length > 0) {
-        console.error('❌ NO TOPICS FOUND! Debugging:', {
-          mappingChapterId: normalizedChapterId,
-          mappingChapterIdType: typeof normalizedChapterId,
-          sampleTopic: topics[0],
-          sampleTopicUnitId: topics[0]?.unit_id,
-          sampleTopicUnitIdType: typeof topics[0]?.unit_id,
-          comparison: `"${topics[0]?.unit_id}" === "${normalizedChapterId}"`,
-          strictEqual: String(topics[0]?.unit_id) === normalizedChapterId
-        });
+      // Alert if we have a mismatch
+      if (selectedTopicsDetails.length > 0 && selectedTopicsDetails.some(t => !t?.matches_selected_unit)) {
+        console.warn('⚠️ TOPIC-UNIT MISMATCH DETECTED!');
+        console.warn('Selected topics do not belong to the selected unit.');
+        console.warn('This may indicate:');
+        console.warn('1. Data integrity issue in database');
+        console.warn('2. Topics were moved between units');
+        console.warn('3. Auto-mapping error');
+        console.warn('Mismatched topics:', selectedTopicsDetails.filter(t => !t?.matches_selected_unit));
       }
     }
-  }, [normalizedChapterId, availableTopics, topics, selectedUnit]);
+  }, [normalizedChapterId, availableTopics, topics, selectedUnit, normalizedTopicIds]);
 
   // Filter subtopics based on selected topics - edu_subtopics table uses topic_id as foreign key
   const availableSubtopics = normalizedTopicIds.length > 0
@@ -95,6 +135,31 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
     : subtopics || [];
 
   const isMapped = !!normalizedChapterId && normalizedTopicIds.length > 0;
+
+  // Check if any selected topics don't belong to the selected unit (orphaned topics)
+  const orphanedTopics = React.useMemo(() => {
+    if (!normalizedChapterId || normalizedTopicIds.length === 0) return [];
+
+    return normalizedTopicIds
+      .map(topicId => {
+        const topic = topics?.find(t => String(t.id) === topicId);
+        if (!topic) return null;
+
+        const belongsToSelectedUnit = String(topic.unit_id) === String(normalizedChapterId);
+        if (belongsToSelectedUnit) return null;
+
+        // Find the actual unit this topic belongs to
+        const actualUnit = units?.find(u => String(u.id) === String(topic.unit_id));
+
+        return {
+          topicId: topic.id,
+          topicName: topic.name,
+          actualUnitId: topic.unit_id,
+          actualUnitName: actualUnit?.name || 'Unknown Unit'
+        };
+      })
+      .filter(Boolean);
+  }, [normalizedChapterId, normalizedTopicIds, topics, units]);
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -150,10 +215,13 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
           </label>
           <SearchableMultiSelect
             label=""
-            options={availableTopics.map(t => ({
-              value: String(t.id),
-              label: `${t.sort !== undefined ? `${t.sort}. ` : ''}${t.name}`
-            }))}
+            options={availableTopics.map(t => {
+              const isOrphaned = orphanedTopics.some(ot => ot?.topicId === String(t.id));
+              return {
+                value: String(t.id),
+                label: `${t.sort !== undefined ? `${t.sort}. ` : ''}${t.name}${isOrphaned ? ' ⚠️' : ''}`
+              };
+            })}
             selectedValues={normalizedTopicIds}
             onChange={(value) => onUpdate('topic_ids', value)}
             placeholder={!normalizedChapterId ? "Select unit first..." : `Select topics... (${availableTopics.length} available)`}
@@ -162,6 +230,24 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
           />
           {normalizedTopicIds.length === 0 && !isDisabled && (
             <p className="mt-1 text-xs text-red-600 dark:text-red-400">At least one required</p>
+          )}
+          {orphanedTopics.length > 0 && (
+            <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs">
+              <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">⚠️ Topic Mismatch Detected</p>
+              <p className="text-amber-700 dark:text-amber-300">
+                The following topic(s) belong to a different unit:
+              </p>
+              <ul className="mt-1 space-y-0.5 text-amber-700 dark:text-amber-300">
+                {orphanedTopics.map(ot => (
+                  <li key={ot?.topicId} className="ml-2">
+                    • <span className="font-medium">{ot?.topicName}</span> (belongs to: {ot?.actualUnitName})
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-amber-700 dark:text-amber-300 italic">
+                Consider updating the unit selection or removing these topics.
+              </p>
+            </div>
           )}
         </div>
 
