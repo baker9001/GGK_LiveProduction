@@ -738,7 +738,7 @@ export default function ImportedStructureReview({
       if (existingStructure) {
         console.log('[GGK] Data structure already exists:', existingStructure.id);
         setDataStructureId(existingStructure.id);
-        
+
         // Store in metadata if onStructureChange is provided
         if (onStructureChange) {
           onStructureChange({
@@ -746,13 +746,17 @@ export default function ImportedStructureReview({
             program: program.name,
             provider: provider.name,
             subject: subject.name,
-            region: availableRegions.find(r => r.id === selectedRegionId)?.name
+            region: availableRegions.find(r => r.id === selectedRegionId)?.name,
+            programId: program.id,
+            providerId: provider.id,
+            subjectId: subject.id,
+            regionId: selectedRegionId
           });
         }
       } else {
         // Create new data structure
         console.log('[GGK] Creating new data structure for:', program.name, provider.name, subject.name);
-        
+
         const { data: newStructure, error: createError } = await supabase
           .from('data_structures')
           .insert({
@@ -773,7 +777,7 @@ export default function ImportedStructureReview({
             setDataStructureError(error);
             return;
           }
-          
+
           const error = `Failed to create data structure: ${createError.message}`;
           console.error('[GGK]', error);
           setDataStructureError(error);
@@ -785,7 +789,7 @@ export default function ImportedStructureReview({
         } else {
           console.log('[GGK] Created new data structure:', newStructure.id);
           setDataStructureId(newStructure.id);
-          
+
           // Store in metadata if onStructureChange is provided
           if (onStructureChange) {
             onStructureChange({
@@ -793,10 +797,14 @@ export default function ImportedStructureReview({
               program: program.name,
               provider: provider.name,
               subject: subject.name,
-              region: availableRegions.find(r => r.id === selectedRegionId)?.name
+              region: availableRegions.find(r => r.id === selectedRegionId)?.name,
+              programId: program.id,
+              providerId: provider.id,
+              subjectId: subject.id,
+              regionId: selectedRegionId
             });
           }
-          
+
           showToast({
             title: "Success",
             description: `Data structure created: ${program.name} - ${provider.name} - ${subject.name}`,

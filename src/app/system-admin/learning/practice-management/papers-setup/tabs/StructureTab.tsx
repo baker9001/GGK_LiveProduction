@@ -401,43 +401,42 @@ export default function StructureTab({
     try {
       let entityIds: any = {};
 
-      // Check if we need to fetch entity IDs
-      if (structureMetadata?.dataStructureId) {
-        if (!structureMetadata.programId) {
-          // Fetch entity IDs from the data structure
-          console.log('[GGK] Fetching entity IDs from data structure...');
-          const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
+      // Check if we have all the entity IDs we need
+      if (structureMetadata?.programId && structureMetadata?.providerId && structureMetadata?.subjectId) {
+        // Use existing IDs from structureMetadata (fast path)
+        console.log('[GGK] Using existing entity IDs from metadata');
+        entityIds = {
+          program_id: structureMetadata.programId,
+          provider_id: structureMetadata.providerId,
+          subject_id: structureMetadata.subjectId,
+          region_id: structureMetadata.regionId,
+          data_structure_id: structureMetadata.dataStructureId
+        };
+      } else if (structureMetadata?.dataStructureId) {
+        // Fetch entity IDs from the data structure (slow path - only as fallback)
+        console.log('[GGK] Fetching entity IDs from data structure...');
+        const fetchedIds = await fetchEntityIds(structureMetadata.dataStructureId);
 
-          entityIds = {
-            program_id: fetchedIds.program_id,
-            provider_id: fetchedIds.provider_id,
-            subject_id: fetchedIds.subject_id,
-            region_id: fetchedIds.region_id,
-            data_structure_id: structureMetadata.dataStructureId
-          };
+        entityIds = {
+          program_id: fetchedIds.program_id,
+          provider_id: fetchedIds.provider_id,
+          subject_id: fetchedIds.subject_id,
+          region_id: fetchedIds.region_id,
+          data_structure_id: structureMetadata.dataStructureId
+        };
 
-          // Update local state with fetched IDs
-          setStructureMetadata(prev => ({
-            ...prev,
-            programId: fetchedIds.program_id,
-            providerId: fetchedIds.provider_id,
-            subjectId: fetchedIds.subject_id,
-            regionId: fetchedIds.region_id,
-            program: fetchedIds.program_name,
-            provider: fetchedIds.provider_name,
-            subject: fetchedIds.subject_name,
-            region: fetchedIds.region_name
-          }));
-        } else {
-          // Use existing IDs from structureMetadata
-          entityIds = {
-            program_id: structureMetadata.programId,
-            provider_id: structureMetadata.providerId,
-            subject_id: structureMetadata.subjectId,
-            region_id: structureMetadata.regionId,
-            data_structure_id: structureMetadata.dataStructureId
-          };
-        }
+        // Update local state with fetched IDs
+        setStructureMetadata(prev => ({
+          ...prev,
+          programId: fetchedIds.program_id,
+          providerId: fetchedIds.provider_id,
+          subjectId: fetchedIds.subject_id,
+          regionId: fetchedIds.region_id,
+          program: fetchedIds.program_name,
+          provider: fetchedIds.provider_name,
+          subject: fetchedIds.subject_name,
+          region: fetchedIds.region_name
+        }));
       } else {
         // No data structure ID - this shouldn't happen
         throw new Error('No data structure ID available. Please complete the structure setup.');
@@ -461,18 +460,12 @@ export default function StructureTab({
 
   const updateImportSession = async (entityIds: any) => {
     try {
-      // First, get the existing metadata if any
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('past_paper_import_sessions')
-        .select('metadata')
-        .eq('id', importSession.id)
-        .single();
-
-      if (fetchError) throw fetchError;
+      // Use existing metadata from importSession prop instead of fetching
+      const existingMetadata = importSession?.metadata || {};
 
       // Merge with existing metadata and ensure entity_ids are stored
       const updatedMetadata = {
-        ...(existingSession?.metadata || {}),
+        ...existingMetadata,
         structure_complete: true,
         academic_structure: {
           ...extractedStructure,
