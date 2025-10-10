@@ -2907,38 +2907,48 @@ export function QuestionsTab({
         onQuestionCancel={handleCancelEdit}
         onMappingUpdate={(questionId: string, field: string, value: string | string[]) => {
           const mapping = questionMappings[questionId] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
-          const updatedMapping = { ...mapping };
-          
+          const normalizedValue = Array.isArray(value)
+            ? value.map(v => String(v))
+            : value !== undefined && value !== null
+              ? String(value)
+              : value;
+          const updatedMapping = {
+            ...mapping,
+            chapter_id: mapping?.chapter_id ? String(mapping.chapter_id) : '',
+            topic_ids: Array.isArray(mapping?.topic_ids) ? mapping.topic_ids.map(id => String(id)) : [],
+            subtopic_ids: Array.isArray(mapping?.subtopic_ids) ? mapping.subtopic_ids.map(id => String(id)) : []
+          };
+
           if (field === 'chapter_id') {
-            updatedMapping.chapter_id = value as string;
+            updatedMapping.chapter_id = (normalizedValue as string) || '';
             // Don't clear topics and subtopics when chapter changes if they're already populated
             if (!mapping.topic_ids || mapping.topic_ids.length === 0) {
               updatedMapping.topic_ids = [];
               updatedMapping.subtopic_ids = [];
             }
           } else if (field === 'topic_ids') {
-            updatedMapping.topic_ids = value as string[];
+            updatedMapping.topic_ids = (normalizedValue as string[]) || [];
             // Only clear subtopics if no topics are selected
-            if ((value as string[]).length === 0) {
+            if (((normalizedValue as string[]) || []).length === 0) {
               updatedMapping.subtopic_ids = [];
             }
           } else if (field === 'subtopic_ids') {
-            updatedMapping.subtopic_ids = value as string[];
-            
+            updatedMapping.subtopic_ids = (normalizedValue as string[]) || [];
+
             // Auto-select parent topics when subtopics are selected
-            const selectedSubtopics = subtopics.filter(s => (value as string[]).includes(s.id));
+            const selectedSubtopics = subtopics.filter(s => ((normalizedValue as string[]) || []).includes(String(s.id)));
             const parentTopicIds = [...new Set(selectedSubtopics
               .map(s => s.topic_id || s.edu_topic_id)
               .filter(Boolean)
-            )];
-            
+            )].map(id => String(id));
+
             console.log('Selected subtopics:', selectedSubtopics);
             console.log('Parent topic IDs:', parentTopicIds);
-            
+
             // Add parent topic IDs that aren't already selected
-            const newTopicIds = [...new Set([...updatedMapping.topic_ids, ...parentTopicIds])];
+            const newTopicIds = [...new Set([...updatedMapping.topic_ids.map(id => String(id)), ...parentTopicIds])];
             updatedMapping.topic_ids = newTopicIds;
-            
+
             console.log('Updated topic IDs:', newTopicIds);
           }
           

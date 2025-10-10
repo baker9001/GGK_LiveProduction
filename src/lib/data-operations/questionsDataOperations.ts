@@ -92,6 +92,11 @@ export const ensureArray = (value: any): any[] => {
   return [value];
 };
 
+const normalizeId = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
 export const getUUIDFromMapping = (value: any): string | null => {
   if (!value) return null;
   if (typeof value === 'string' && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
@@ -962,88 +967,135 @@ export const autoMapQuestions = (
   questions.forEach((question: any) => {
     const existingMapping = updatedMappings[question.id] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
     let hasChanges = false;
-    
-    let unitId = existingMapping.chapter_id;
+
+    let unitId = normalizeId(existingMapping.chapter_id);
     if (!unitId && question.unit) {
-      const matchingUnit = units.find((u: any) => 
-        u.name.toLowerCase() === question.unit.toLowerCase() ||
-        u.code === question.unit
+      const matchingUnit = units.find((u: any) =>
+        u.name?.toLowerCase() === question.unit.toLowerCase() ||
+        normalizeId(u.code) === normalizeId(question.unit)
       );
       if (matchingUnit) {
-        unitId = matchingUnit.id;
+        unitId = normalizeId(matchingUnit.id);
         hasChanges = true;
       }
     }
 
     if (unitId) {
-      const unitTopics = topics.filter((t: any) => t.unit_id === unitId);
-      let topicIds: string[] = [...(existingMapping.topic_ids || [])];
-      let subtopicIds: string[] = [...(existingMapping.subtopic_ids || [])];
-      
-      const questionTopics = ensureArray(question.topics);
-      
+      const unitTopics = topics.filter((t: any) => {
+        const topicUnitId = t.unit_id || t.edu_unit_id || t.chapter_id;
+        return normalizeId(topicUnitId) === unitId;
+      });
+
+      let topicIds: string[] = Array.isArray(existingMapping.topic_ids)
+        ? existingMapping.topic_ids.map((id: any) => normalizeId(id))
+        : [];
+      let subtopicIds: string[] = Array.isArray(existingMapping.subtopic_ids)
+        ? existingMapping.subtopic_ids.map((id: any) => normalizeId(id))
+        : [];
+
+      const questionTopics = ensureArray(question.topics || question.original_topics || question.topic);
+
       if (questionTopics.length > 0) {
         questionTopics.forEach((topicName: any) => {
           if (!topicName) return;
-          const matchingTopic = unitTopics.find((t: any) => 
-            t.name.toLowerCase() === topicName.toLowerCase() ||
+          const matchingTopic = unitTopics.find((t: any) =>
+            t.name?.toLowerCase() === topicName.toLowerCase() ||
             t.code === topicName ||
-            t.name.toLowerCase().includes(topicName.toLowerCase()) ||
-            topicName.toLowerCase().includes(t.name.toLowerCase())
+            t.name?.toLowerCase().includes(topicName.toLowerCase()) ||
+            topicName.toLowerCase().includes(t.name?.toLowerCase() || '')
           );
-          if (matchingTopic && !topicIds.includes(matchingTopic.id)) {
-            topicIds.push(matchingTopic.id);
-            hasChanges = true;
-          }
-        });
-      }
-      
-      if (topicIds.length === 0 && (question.question_description || question.question_text)) {
-        const questionContent = (question.question_description || question.question_text || '').toLowerCase();
-        
-        unitTopics.forEach((topic: any) => {
-          const topicKeywords = topic.name.toLowerCase().split(/\s+/);
-          const hasMatch = topicKeywords.some((keyword: string) => 
-            keyword.length > 3 && questionContent.includes(keyword)
-          );
-          
-          if (hasMatch && !topicIds.includes(topic.id)) {
-            topicIds.push(topic.id);
-            hasChanges = true;
+          if (matchingTopic) {
+            const matchingTopicId = normalizeId(matchingTopic.id);
+            if (!topicIds.includes(matchingTopicId)) {
+              topicIds.push(matchingTopicId);
+              hasChanges = true;
+            }
           }
         });
       }
 
-      const questionSubtopics = ensureArray(question.subtopics);
-      
-      if (topicIds.length > 0) {
-        const topicSubtopics = subtopics.filter((s: any) => topicIds.includes(s.topic_id));
-        
-        questionSubtopics.forEach((subtopicName: any) => {
-          if (!subtopicName) return;
-          const matchingSubtopic = topicSubtopics.find((s: any) => 
-            s.name.toLowerCase() === subtopicName.toLowerCase() ||
-            s.name.toLowerCase().includes(subtopicName.toLowerCase()) ||
-            subtopicName.toLowerCase().includes(s.name.toLowerCase())
-          );
-          if (matchingSubtopic && !subtopicIds.includes(matchingSubtopic.id)) {
-            subtopicIds.push(matchingSubtopic.id);
-            hasChanges = true;
+      if (topicIds.length === 0 && (question.topic || question.original_topics)) {
+        const fallbackTopics = ensureArray(question.topic || question.original_topics);
+        fallbackTopics.forEach((topicName: any) => {
+          if (!topicName) return;
+          const matchingTopic = unitTopics.find((t: any) => t.name?.toLowerCase() === topicName.toLowerCase());
+          if (matchingTopic) {
+            const matchingTopicId = normalizeId(matchingTopic.id);
+            if (!topicIds.includes(matchingTopicId)) {
+              topicIds.push(matchingTopicId);
+              hasChanges = true;
+            }
           }
         });
-        
+      }
+
+      if (topicIds.length === 0 && (question.question_description || question.question_text)) {
+        const questionContent = (question.question_description || question.question_text || '').toLowerCase();
+
+        unitTopics.forEach((topic: any) => {
+          const topicKeywords = topic.name.toLowerCase().split(/\s+/);
+          const hasMatch = topicKeywords.some((keyword: string) =>
+            keyword.length > 3 && questionContent.includes(keyword)
+          );
+
+          if (hasMatch) {
+            const topicId = normalizeId(topic.id);
+            if (!topicIds.includes(topicId)) {
+              topicIds.push(topicId);
+              hasChanges = true;
+            }
+          }
+        });
+      }
+
+      const questionSubtopics = ensureArray(question.subtopics || question.original_subtopics || question.subtopic);
+
+      if (topicIds.length > 0) {
+        const topicSubtopics = subtopics.filter((s: any) =>
+          topicIds.includes(normalizeId(s.topic_id || s.edu_topic_id))
+        );
+
+        questionSubtopics.forEach((subtopicName: any) => {
+          if (!subtopicName) return;
+          const matchingSubtopic = topicSubtopics.find((s: any) =>
+            s.name?.toLowerCase() === subtopicName.toLowerCase() ||
+            s.name?.toLowerCase().includes(subtopicName.toLowerCase()) ||
+            subtopicName.toLowerCase().includes(s.name?.toLowerCase() || '')
+          );
+          if (matchingSubtopic) {
+            const matchingSubtopicId = normalizeId(matchingSubtopic.id);
+            if (!subtopicIds.includes(matchingSubtopicId)) {
+              subtopicIds.push(matchingSubtopicId);
+              hasChanges = true;
+            }
+
+            const parentTopicId = normalizeId(matchingSubtopic.topic_id || matchingSubtopic.edu_topic_id);
+            if (parentTopicId && !topicIds.includes(parentTopicId)) {
+              topicIds.push(parentTopicId);
+            }
+          }
+        });
+
         if (subtopicIds.length === 0 && (question.question_description || question.question_text)) {
           const questionContent = (question.question_description || question.question_text || '').toLowerCase();
-          
+
           topicSubtopics.forEach((subtopic: any) => {
             const subtopicKeywords = subtopic.name.toLowerCase().split(/\s+/);
-            const hasMatch = subtopicKeywords.some((keyword: string) => 
+            const hasMatch = subtopicKeywords.some((keyword: string) =>
               keyword.length > 3 && questionContent.includes(keyword)
             );
-            
-            if (hasMatch && !subtopicIds.includes(subtopic.id)) {
-              subtopicIds.push(subtopic.id);
-              hasChanges = true;
+
+            if (hasMatch) {
+              const subtopicId = normalizeId(subtopic.id);
+              if (!subtopicIds.includes(subtopicId)) {
+                subtopicIds.push(subtopicId);
+                hasChanges = true;
+              }
+
+              const parentTopicId = normalizeId(subtopic.topic_id || subtopic.edu_topic_id);
+              if (parentTopicId && !topicIds.includes(parentTopicId)) {
+                topicIds.push(parentTopicId);
+              }
             }
           });
         }
@@ -1055,7 +1107,7 @@ export const autoMapQuestions = (
           topic_ids: topicIds || [],
           subtopic_ids: subtopicIds || []
         };
-        
+
         if (!existingMapping.chapter_id) {
           mappedCount++;
         } else {

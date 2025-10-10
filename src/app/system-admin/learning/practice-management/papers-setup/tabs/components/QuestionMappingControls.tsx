@@ -22,10 +22,18 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
   onUpdate,
   isDisabled = false,
 }) => {
+  const normalizedChapterId = mapping?.chapter_id ? String(mapping.chapter_id) : '';
+  const normalizedTopicIds = Array.isArray(mapping?.topic_ids)
+    ? mapping.topic_ids.map((id: any) => String(id))
+    : [];
+  const normalizedSubtopicIds = Array.isArray(mapping?.subtopic_ids)
+    ? mapping.subtopic_ids.map((id: any) => String(id))
+    : [];
+
   // Debug logging
   React.useEffect(() => {
     console.log('QuestionMappingControls Debug:', {
-      mappingChapterId: mapping?.chapter_id,
+      mappingChapterId: normalizedChapterId,
       unitsCount: units?.length,
       unitsIds: units?.map(u => u.id).slice(0, 5),
       topicsCount: topics?.length,
@@ -41,22 +49,22 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
     });
   }, [mapping, units, topics]);
 
-  const selectedUnit = units?.find(u => u.id === mapping?.chapter_id);
+  const selectedUnit = units?.find(u => String(u.id) === normalizedChapterId);
 
   // Filter topics based on selected unit - check multiple possible field names
-  const availableTopics = mapping?.chapter_id
+  const availableTopics = normalizedChapterId
     ? topics?.filter(t => {
         // Check all possible foreign key field names
         const topicUnitId = t.unit_id || t.edu_unit_id || t.chapter_id;
-        return topicUnitId === mapping.chapter_id;
+        return String(topicUnitId) === normalizedChapterId;
       }) || []
     : topics || [];
 
   // Debug log for topics filtering
   React.useEffect(() => {
-    if (mapping?.chapter_id) {
+    if (normalizedChapterId) {
       console.log('Topics Filtering Debug:', {
-        selectedUnitId: mapping.chapter_id,
+        selectedUnitId: normalizedChapterId,
         selectedUnitName: selectedUnit?.name,
         totalTopicsCount: topics?.length,
         availableTopicsCount: availableTopics.length,
@@ -64,33 +72,33 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
         allTopicsMatchCheck: topics?.slice(0, 5).map(t => ({
           name: t.name,
           unit_id: t.unit_id,
-          matches: t.unit_id === mapping.chapter_id
+          matches: String(t.unit_id) === normalizedChapterId
         }))
       });
 
       if (availableTopics.length === 0 && topics && topics.length > 0) {
         console.error('❌ NO TOPICS FOUND! Debugging:', {
-          mappingChapterId: mapping.chapter_id,
-          mappingChapterIdType: typeof mapping.chapter_id,
+          mappingChapterId: normalizedChapterId,
+          mappingChapterIdType: typeof normalizedChapterId,
           sampleTopic: topics[0],
           sampleTopicUnitId: topics[0]?.unit_id,
           sampleTopicUnitIdType: typeof topics[0]?.unit_id,
-          comparison: `"${topics[0]?.unit_id}" === "${mapping.chapter_id}"`,
-          strictEqual: topics[0]?.unit_id === mapping.chapter_id
+          comparison: `"${topics[0]?.unit_id}" === "${normalizedChapterId}"`,
+          strictEqual: String(topics[0]?.unit_id) === normalizedChapterId
         });
       }
     }
-  }, [mapping?.chapter_id, availableTopics, topics, selectedUnit]);
+  }, [normalizedChapterId, availableTopics, topics, selectedUnit]);
 
   // Filter subtopics based on selected topics - check multiple possible field names
-  const availableSubtopics = mapping?.topic_ids && mapping.topic_ids.length > 0
+  const availableSubtopics = normalizedTopicIds.length > 0
     ? subtopics?.filter(s => {
         const subtopicTopicId = s.topic_id || s.edu_topic_id;
-        return mapping.topic_ids.includes(subtopicTopicId);
+        return normalizedTopicIds.includes(String(subtopicTopicId));
       }) || []
     : subtopics || [];
 
-  const isMapped = mapping?.chapter_id && mapping?.topic_ids && mapping.topic_ids.length > 0;
+  const isMapped = !!normalizedChapterId && normalizedTopicIds.length > 0;
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -119,7 +127,7 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             Unit / Chapter *
           </label>
           <Select
-            value={mapping?.chapter_id || ''}
+            value={normalizedChapterId}
             onChange={(value) => onUpdate('chapter_id', value)}
             disabled={isDisabled}
             className="w-full"
@@ -147,16 +155,16 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
           <SearchableMultiSelect
             label=""
             options={availableTopics.map(t => ({
-              value: t.id,
+              value: String(t.id),
               label: `${t.sort !== undefined ? `${t.sort}. ` : ''}${t.name}`
             }))}
-            selectedValues={mapping?.topic_ids || []}
+            selectedValues={normalizedTopicIds}
             onChange={(value) => onUpdate('topic_ids', value)}
-            placeholder={!mapping?.chapter_id ? "Select unit first..." : `Select topics... (${availableTopics.length} available)`}
-            disabled={isDisabled || !mapping?.chapter_id}
+            placeholder={!normalizedChapterId ? "Select unit first..." : `Select topics... (${availableTopics.length} available)`}
+            disabled={isDisabled || !normalizedChapterId}
             usePortal={false}
           />
-          {(!mapping?.topic_ids || mapping.topic_ids.length === 0) && !isDisabled && (
+          {normalizedTopicIds.length === 0 && !isDisabled && (
             <p className="mt-1 text-xs text-red-600 dark:text-red-400">At least one required</p>
           )}
         </div>
@@ -169,13 +177,13 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
           <SearchableMultiSelect
             label=""
             options={availableSubtopics.map(s => ({
-              value: s.id,
+              value: String(s.id),
               label: s.name
             }))}
-            selectedValues={mapping?.subtopic_ids || []}
+            selectedValues={normalizedSubtopicIds}
             onChange={(value) => onUpdate('subtopic_ids', value)}
             placeholder="Select subtopics..."
-            disabled={isDisabled || !mapping?.topic_ids || mapping.topic_ids.length === 0}
+            disabled={isDisabled || normalizedTopicIds.length === 0}
             usePortal={false}
           />
         </div>
@@ -192,18 +200,18 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
                 {selectedUnit && (
                   <li>• Unit: {selectedUnit.name}</li>
                 )}
-                {mapping.topic_ids && mapping.topic_ids.length > 0 && (
+                {normalizedTopicIds.length > 0 && (
                   <li>
                     • Topics: {topics
-                      .filter(t => mapping.topic_ids.includes(t.id))
+                      .filter(t => normalizedTopicIds.includes(String(t.id)))
                       .map(t => t.name)
                       .join(', ')}
                   </li>
                 )}
-                {mapping.subtopic_ids && mapping.subtopic_ids.length > 0 && (
+                {normalizedSubtopicIds.length > 0 && (
                   <li>
                     • Subtopics: {subtopics
-                      .filter(s => mapping.subtopic_ids.includes(s.id))
+                      .filter(s => normalizedSubtopicIds.includes(String(s.id)))
                       .map(s => s.name)
                       .join(', ')}
                   </li>
