@@ -36,7 +36,7 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
           <Paperclip className="h-4 w-4" />
           Attachments {requiresFigure && <span className="text-red-600">*</span>}
         </label>
-        {pdfAvailable && (
+        {pdfAvailable ? (
           <Button
             variant="outline"
             size="sm"
@@ -45,6 +45,16 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
           >
             <Plus className="h-4 w-4 mr-1" />
             Add from PDF
+          </Button>
+        ) : requiresFigure && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAdd}
+            disabled
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Upload PDF First
           </Button>
         )}
       </div>

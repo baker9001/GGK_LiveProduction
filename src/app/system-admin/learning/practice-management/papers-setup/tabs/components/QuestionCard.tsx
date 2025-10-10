@@ -270,35 +270,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             />
           )}
 
-          {/* Answer Display - Only for questions without parts */}
-          {!hasParts && question.correct_answers && question.correct_answers.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Correct Answer(s)
-              </label>
-              <DynamicAnswerField
-                question={{
-                  id: question.id,
-                  type: question.question_type,
-                  subject: paperMetadata.subject,
-                  answer_format: question.answer_format,
-                  answer_requirement: question.answer_requirement,
-                  marks: question.marks,
-                  correct_answers: question.correct_answers
-                }}
-                mode={isEditing ? "admin" : "review"}
-                showCorrectAnswer={true}
-                onChange={(newAnswers) => {
-                  if (isEditing) {
-                    onUpdateQuestion({ correct_answers: newAnswers });
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {/* MCQ Options */}
-          {question.question_type === 'mcq' && question.options && (
+          {/* MCQ Options - Display BEFORE answers */}
+          {question.question_type === 'mcq' && question.options && question.options.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Options
@@ -330,6 +303,42 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               </div>
             </div>
           )}
+
+          {/* Answer Display - Show for ALL question types */}
+          {!hasParts && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Correct Answer(s)
+              </label>
+              {question.correct_answers && question.correct_answers.length > 0 ? (
+                <DynamicAnswerField
+                  question={{
+                    id: question.id,
+                    type: question.question_type,
+                    subject: paperMetadata.subject,
+                    answer_format: question.answer_format,
+                    answer_requirement: question.answer_requirement,
+                    marks: question.marks,
+                    correct_answers: question.correct_answers
+                  }}
+                  mode={isEditing ? "admin" : "review"}
+                  showCorrectAnswer={true}
+                  onChange={(newAnswers) => {
+                    if (isEditing) {
+                      onUpdateQuestion({ correct_answers: newAnswers });
+                    }
+                  }}
+                />
+              ) : (
+                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    No correct answer provided
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
 
           {/* Hint */}
           {(question.hint || isEditing) && (

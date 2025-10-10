@@ -83,15 +83,16 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             Topics *
           </label>
           <SearchableMultiSelect
+            label="Topics"
             options={availableTopics.map(t => ({
               value: t.id,
               label: `${t.number ? `${t.number}. ` : ''}${t.name}`
             }))}
-            value={mapping?.topic_ids || []}
+            selectedValues={mapping?.topic_ids || []}
             onChange={(value) => onUpdate('topic_ids', value)}
             placeholder="Select topics..."
             disabled={isDisabled || !mapping?.chapter_id}
-            className="w-full"
+            usePortal={false}
           />
           {(!mapping?.topic_ids || mapping.topic_ids.length === 0) && !isDisabled && (
             <p className="mt-1 text-xs text-red-600 dark:text-red-400">At least one required</p>
@@ -104,15 +105,16 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             Subtopics (Optional)
           </label>
           <SearchableMultiSelect
+            label="Subtopics"
             options={availableSubtopics.map(s => ({
               value: s.id,
               label: s.name
             }))}
-            value={mapping?.subtopic_ids || []}
+            selectedValues={mapping?.subtopic_ids || []}
             onChange={(value) => onUpdate('subtopic_ids', value)}
             placeholder="Select subtopics..."
             disabled={isDisabled || !mapping?.topic_ids || mapping.topic_ids.length === 0}
-            className="w-full"
+            usePortal={false}
           />
         </div>
       </div>
