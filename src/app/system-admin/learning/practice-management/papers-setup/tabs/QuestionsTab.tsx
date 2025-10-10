@@ -3055,16 +3055,24 @@ export function QuestionsTab({
         </div>
       )}
 
-      {/* PDF Snipping Tool */}
+      {/* PDF Snipping Tool - Modal Overlay */}
       {showSnippingTool && pdfDataUrl && (
-        <PDFSnippingTool
-          pdfUrl={pdfDataUrl}
-          onComplete={handleSnippingComplete}
-          onCancel={() => {
-            setShowSnippingTool(false);
-            setAttachmentTarget(null);
-          }}
-        />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-6xl max-h-[90vh] bg-white dark:bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
+            <PDFSnippingTool
+              pdfUrl={pdfDataUrl}
+              onSnip={(dataUrl, fileName) => {
+                if (attachmentTarget) {
+                  handleSnippingComplete({ imageDataUrl: dataUrl, fileName });
+                }
+              }}
+              onClose={() => {
+                setShowSnippingTool(false);
+                setAttachmentTarget(null);
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Confirmation Dialog */}

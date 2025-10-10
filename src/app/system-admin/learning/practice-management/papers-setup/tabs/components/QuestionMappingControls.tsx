@@ -35,12 +35,33 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
   }, [mapping, units]);
 
   const selectedUnit = units?.find(u => u.id === mapping?.chapter_id);
+
+  // Filter topics based on selected unit - check multiple possible field names
   const availableTopics = mapping?.chapter_id
-    ? topics?.filter(t => t.unit_id === mapping.chapter_id || t.edu_unit_id === mapping.chapter_id) || []
+    ? topics?.filter(t => {
+        // Check all possible foreign key field names
+        const topicUnitId = t.unit_id || t.edu_unit_id || t.chapter_id;
+        return topicUnitId === mapping.chapter_id;
+      }) || []
     : topics || [];
 
+  // Debug log for topics filtering
+  React.useEffect(() => {
+    if (mapping?.chapter_id && availableTopics.length === 0 && topics && topics.length > 0) {
+      console.warn('No topics found for unit:', {
+        selectedUnitId: mapping.chapter_id,
+        sampleTopicFields: topics[0],
+        allTopicsCount: topics.length
+      });
+    }
+  }, [mapping?.chapter_id, availableTopics, topics]);
+
+  // Filter subtopics based on selected topics - check multiple possible field names
   const availableSubtopics = mapping?.topic_ids && mapping.topic_ids.length > 0
-    ? subtopics?.filter(s => mapping.topic_ids.includes(s.topic_id || s.edu_topic_id)) || []
+    ? subtopics?.filter(s => {
+        const subtopicTopicId = s.topic_id || s.edu_topic_id;
+        return mapping.topic_ids.includes(subtopicTopicId);
+      }) || []
     : subtopics || [];
 
   const isMapped = mapping?.chapter_id && mapping?.topic_ids && mapping.topic_ids.length > 0;

@@ -410,26 +410,34 @@ export function PDFSnippingTool({
   // Handle mouse events for selection
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
-    
+
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    // Get the canvas coordinates (accounting for canvas scaling)
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
     setStartPoint({ x, y });
     setIsSelecting(true);
     setSelectionRect(null);
   };
-  
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelecting || !startPoint || !canvasRef.current) return;
-    
+
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    // Get the canvas coordinates (accounting for canvas scaling)
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
     const width = x - startPoint.x;
     const height = y - startPoint.y;
-    
+
     setSelectionRect({
       x: width > 0 ? startPoint.x : x,
       y: height > 0 ? startPoint.y : y,
@@ -437,9 +445,13 @@ export function PDFSnippingTool({
       height: Math.abs(height)
     });
   };
-  
+
   const handleMouseUp = () => {
     setIsSelecting(false);
+    // Show success message if selection was made
+    if (selectionRect && selectionRect.width > 0 && selectionRect.height > 0) {
+      toast.success('Selection captured! Click "Capture Selection" to save.');
+    }
   };
   
   // Handle page navigation
