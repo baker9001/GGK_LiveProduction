@@ -220,19 +220,19 @@ export function MultiStepWizard({
             </Button>
             {!isLastStep ? (
               <Button
+                variant="default"
                 onClick={handleNext}
                 disabled={!canGoNext || isSubmitting}
                 rightIcon={<ChevronRight className="w-4 h-4" />}
-                className="bg-[#8CC63F] text-white hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               >
                 Next Step
               </Button>
             ) : (
               <Button
+                variant="default"
                 onClick={onComplete}
                 disabled={!canGoNext || isSubmitting}
                 leftIcon={isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                className="bg-[#8CC63F] text-white hover:bg-[#7AB635] disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               >
                 {isSubmitting ? 'Creating...' : 'Create Mock Exam'}
               </Button>

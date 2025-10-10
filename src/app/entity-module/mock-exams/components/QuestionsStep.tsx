@@ -540,23 +540,23 @@ export function QuestionsStep({
           {/* Filters */}
           <div className="p-5 border-b border-gray-200 dark:border-gray-800 space-y-4 bg-gray-50 dark:bg-gray-900/50">
             {/* Scope Toggle */}
-            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="inline-flex items-center gap-2 p-1 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
               <button
                 onClick={() => setFilters(f => ({ ...f, scope: 'all' }))}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   filters.scope === 'all'
-                    ? 'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white shadow-md'
-                    : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
+                    ? 'bg-[#8CC63F] text-white shadow-md'
+                    : 'bg-gray-100 dark:bg-gray-800 text-[#8CC63F] hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilters(f => ({ ...f, scope: 'global' }))}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
                   filters.scope === 'global'
-                    ? 'bg-gradient-to-r from-gray-700 to-gray-600 text-white shadow-md'
-                    : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
+                    ? 'bg-[#8CC63F] text-white shadow-md'
+                    : 'bg-gray-100 dark:bg-gray-800 text-[#8CC63F] hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 <Globe className="h-4 w-4" />
@@ -564,10 +564,10 @@ export function QuestionsStep({
               </button>
               <button
                 onClick={() => setFilters(f => ({ ...f, scope: 'custom' }))}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
                   filters.scope === 'custom'
-                    ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-md'
-                    : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
+                    ? 'bg-[#8CC63F] text-white shadow-md'
+                    : 'bg-gray-100 dark:bg-gray-800 text-[#8CC63F] hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
               >
                 <Building2 className="h-4 w-4" />
