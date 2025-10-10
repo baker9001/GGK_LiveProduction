@@ -53,7 +53,7 @@ export function SearchableMultiSelect({
 }: SearchableMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openUpward: false });
   const [isCreating, setIsCreating] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -89,14 +89,25 @@ export function SearchableMultiSelect({
       option.label.toLowerCase() === searchTerm.toLowerCase()
     );
 
-  // Update dropdown position
+  // Update dropdown position with intelligent placement
   const updatePosition = () => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const dropdownMaxHeight = 400;
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      // Determine if dropdown should open upward or downward
+      const shouldOpenUpward = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
+
       setPosition({
-        top: rect.bottom + window.scrollY,
+        top: shouldOpenUpward
+          ? rect.top + window.scrollY - Math.min(dropdownMaxHeight, spaceAbove - 10)
+          : rect.bottom + window.scrollY,
         left: rect.left + window.scrollX,
-        width: rect.width
+        width: rect.width,
+        openUpward: shouldOpenUpward
       });
     }
   };
@@ -265,7 +276,7 @@ export function SearchableMultiSelect({
   // Render dropdown menu through portal if usePortal is true
   const renderDropdown = () => {
     if (!isOpen) return null;
-    
+
     const dropdownContent = (
       <div
         ref={dropdownRef}
@@ -281,14 +292,16 @@ export function SearchableMultiSelect({
           zIndex: 150
         } : {
           position: 'absolute',
-          top: '100%',
+          top: position.openUpward ? 'auto' : '100%',
+          bottom: position.openUpward ? '100%' : 'auto',
           left: 0,
           right: 0,
           maxHeight: '300px',
           display: 'flex',
           flexDirection: 'column',
           zIndex: 150,
-          marginTop: '4px'
+          marginTop: position.openUpward ? '0' : '4px',
+          marginBottom: position.openUpward ? '4px' : '0'
         }}
         onKeyDown={handleKeyDown}
         role="listbox"

@@ -407,7 +407,7 @@ export function MockExamCreationWizard({
   // Modal dialog layout that respects the application's sidebar and header
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-7xl my-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]">
+      <div className="relative w-full max-w-7xl my-8 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
         {/* Header with progress and close button */}
         <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm rounded-t-2xl">
           <div className="px-6 py-4">
@@ -461,8 +461,10 @@ export function MockExamCreationWizard({
         </div>
 
         {/* Modal content area with scroll */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-6 py-8">
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800 relative">
+          {/* Scroll indicator shadow at top */}
+          <div className="sticky top-0 left-0 right-0 h-4 bg-gradient-to-b from-white dark:from-gray-900 to-transparent pointer-events-none z-10" />
+          <div className="px-6 py-8 pb-96">
           {/* Step 0: Basic Info */}
           {currentStep === 0 && (
             <div className="space-y-6">
@@ -550,7 +552,7 @@ export function MockExamCreationWizard({
 
           {/* Step 1: Scope & Cohort */}
           {currentStep === 1 && (
-            <div className="space-y-6">
+            <div className="space-y-6 min-h-[600px]">
               <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                 <div className="flex items-start gap-3">
                   <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -561,7 +563,7 @@ export function MockExamCreationWizard({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 mb-8">
                 <SearchableMultiSelect
                   label="Schools"
                   options={schools.map(school => ({
@@ -582,7 +584,7 @@ export function MockExamCreationWizard({
                   }}
                   placeholder="Select schools"
                   className="green-theme"
-                  usePortal={false}
+                  usePortal={true}
                 />
                 {fieldErrors.schools && (
                   <p className="text-xs text-red-500 flex items-center gap-1">
@@ -594,7 +596,7 @@ export function MockExamCreationWizard({
 
               {formData.schools.length > 0 && (
                 <>
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-8">
                     <SearchableMultiSelect
                       label="Branches (optional)"
                       options={branchOptions}
@@ -602,7 +604,7 @@ export function MockExamCreationWizard({
                       onChange={values => setFormData(prev => ({ ...prev, branches: values }))}
                       placeholder={isLoadingBranches ? "Loading branches..." : "Select branches within schools"}
                       className="green-theme"
-                      usePortal={false}
+                      usePortal={true}
                       disabled={isLoadingBranches}
                     />
                     {!isLoadingBranches && branches.length === 0 && (
@@ -612,7 +614,7 @@ export function MockExamCreationWizard({
                     )}
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-8">
                     <SearchableMultiSelect
                       label="Year groups"
                       options={gradeOptions}
@@ -626,7 +628,7 @@ export function MockExamCreationWizard({
                       }}
                       placeholder={isLoadingGradeLevels ? "Loading year groups..." : "Select year groups"}
                       className="green-theme"
-                      usePortal={false}
+                      usePortal={true}
                       disabled={isLoadingGradeLevels}
                     />
                     {fieldErrors.gradeBands && (
@@ -638,7 +640,7 @@ export function MockExamCreationWizard({
                   </div>
 
                   {formData.gradeBands.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 mb-8">
                       <SearchableMultiSelect
                         label="Class sections (optional)"
                         options={sectionOptions}
@@ -646,7 +648,7 @@ export function MockExamCreationWizard({
                         onChange={values => setFormData(prev => ({ ...prev, sections: values }))}
                         placeholder="Select specific class sections"
                         className="green-theme"
-                        usePortal={false}
+                        usePortal={true}
                       />
                       {formData.sections.length === 0 && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -752,7 +754,7 @@ export function MockExamCreationWizard({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 mb-8">
                 <SearchableMultiSelect
                   label="Lead teachers"
                   options={teacherDirectory.map(teacher => ({ label: teacher.label, value: teacher.id }))}
@@ -760,7 +762,7 @@ export function MockExamCreationWizard({
                   onChange={values => setFormData(prev => ({ ...prev, teachers: values }))}
                   placeholder={isLoadingTeachers ? "Loading teachers..." : "Assign responsible teachers"}
                   className="green-theme"
-                  usePortal={false}
+                  usePortal={true}
                   disabled={!formData.subjectId || isLoadingTeachers}
                 />
                 {fieldErrors.teachers && (
