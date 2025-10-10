@@ -29,10 +29,17 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
       unitsCount: units?.length,
       unitsIds: units?.map(u => u.id).slice(0, 5),
       topicsCount: topics?.length,
+      topicsSample: topics?.slice(0, 3).map(t => ({
+        id: t.id,
+        name: t.name,
+        unit_id: t.unit_id,
+        edu_unit_id: t.edu_unit_id,
+        chapter_id: t.chapter_id
+      })),
       subtopicsCount: subtopics?.length,
       mapping: mapping
     });
-  }, [mapping, units]);
+  }, [mapping, units, topics]);
 
   const selectedUnit = units?.find(u => u.id === mapping?.chapter_id);
 
@@ -47,14 +54,33 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
 
   // Debug log for topics filtering
   React.useEffect(() => {
-    if (mapping?.chapter_id && availableTopics.length === 0 && topics && topics.length > 0) {
-      console.warn('No topics found for unit:', {
+    if (mapping?.chapter_id) {
+      console.log('Topics Filtering Debug:', {
         selectedUnitId: mapping.chapter_id,
-        sampleTopicFields: topics[0],
-        allTopicsCount: topics.length
+        selectedUnitName: selectedUnit?.name,
+        totalTopicsCount: topics?.length,
+        availableTopicsCount: availableTopics.length,
+        availableTopicsNames: availableTopics.map(t => t.name),
+        allTopicsMatchCheck: topics?.slice(0, 5).map(t => ({
+          name: t.name,
+          unit_id: t.unit_id,
+          matches: t.unit_id === mapping.chapter_id
+        }))
       });
+
+      if (availableTopics.length === 0 && topics && topics.length > 0) {
+        console.error('❌ NO TOPICS FOUND! Debugging:', {
+          mappingChapterId: mapping.chapter_id,
+          mappingChapterIdType: typeof mapping.chapter_id,
+          sampleTopic: topics[0],
+          sampleTopicUnitId: topics[0]?.unit_id,
+          sampleTopicUnitIdType: typeof topics[0]?.unit_id,
+          comparison: `"${topics[0]?.unit_id}" === "${mapping.chapter_id}"`,
+          strictEqual: topics[0]?.unit_id === mapping.chapter_id
+        });
+      }
     }
-  }, [mapping?.chapter_id, availableTopics, topics]);
+  }, [mapping?.chapter_id, availableTopics, topics, selectedUnit]);
 
   // Filter subtopics based on selected topics - check multiple possible field names
   const availableSubtopics = mapping?.topic_ids && mapping.topic_ids.length > 0
@@ -122,11 +148,11 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
             label=""
             options={availableTopics.map(t => ({
               value: t.id,
-              label: `${t.number ? `${t.number}. ` : ''}${t.name}`
+              label: `${t.sort !== undefined ? `${t.sort}. ` : ''}${t.name}`
             }))}
             selectedValues={mapping?.topic_ids || []}
             onChange={(value) => onUpdate('topic_ids', value)}
-            placeholder="Select topics..."
+            placeholder={!mapping?.chapter_id ? "Select unit first..." : `Select topics... (${availableTopics.length} available)`}
             disabled={isDisabled || !mapping?.chapter_id}
             usePortal={false}
           />
