@@ -90,40 +90,45 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
       )}
 
       {hasAttachments && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="space-y-4">
           {attachments.map((attachment, idx) => (
             <div
               key={attachment.id || idx}
-              className="relative group bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
+              className="relative group bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-600 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="aspect-square relative">
+              {/* Image Container - Full width, proper aspect ratio */}
+              <div className="relative bg-gray-50 dark:bg-gray-900 p-4 flex items-center justify-center min-h-[200px]">
                 <img
                   src={attachment.dataUrl || attachment.data || attachment.file_url}
                   alt={attachment.fileName || attachment.name || attachment.file_name || `Attachment ${idx + 1}`}
-                  className="w-full h-full object-cover cursor-pointer"
+                  className="max-w-full max-h-[400px] object-contain cursor-pointer rounded"
                   onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+
+                {/* Hover Overlay with Actions */}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
                   <button
                     onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
-                    className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                    title="Preview"
+                    className="p-3 bg-white rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
+                    title="Preview Full Size"
                   >
-                    <Eye className="h-4 w-4 text-gray-700" />
+                    <Eye className="h-5 w-5 text-gray-700" />
                   </button>
                   {!isEditing && (
                     <button
                       onClick={() => onDelete(attachment.id)}
-                      className="p-2 bg-red-600 rounded-full hover:bg-red-700 transition-colors"
-                      title="Delete"
+                      className="p-3 bg-red-600 rounded-lg hover:bg-red-700 transition-colors shadow-lg"
+                      title="Delete Attachment"
                     >
-                      <Trash2 className="h-4 w-4 text-white" />
+                      <Trash2 className="h-5 w-5 text-white" />
                     </button>
                   )}
                 </div>
               </div>
-              <div className="p-2">
-                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+
+              {/* Attachment Info */}
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                   {attachment.fileName || attachment.name || attachment.file_name || `Figure ${idx + 1}`}
                 </p>
               </div>
