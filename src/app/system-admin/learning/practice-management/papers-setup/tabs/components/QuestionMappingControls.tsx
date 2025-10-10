@@ -34,6 +34,8 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
   React.useEffect(() => {
     console.log('QuestionMappingControls Debug:', {
       mappingChapterId: normalizedChapterId,
+      normalizedTopicIds: normalizedTopicIds,
+      normalizedSubtopicIds: normalizedSubtopicIds,
       unitsCount: units?.length,
       unitsIds: units?.map(u => u.id).slice(0, 5),
       topicsCount: topics?.length,
@@ -45,9 +47,10 @@ export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = (
         chapter_id: t.chapter_id
       })),
       subtopicsCount: subtopics?.length,
-      mapping: mapping
+      mapping: mapping,
+      selectedTopicsForDisplay: topics?.filter(t => normalizedTopicIds.includes(String(t.id))).map(t => t.name)
     });
-  }, [mapping, units, topics]);
+  }, [mapping, units, topics, normalizedTopicIds, normalizedSubtopicIds]);
 
   const selectedUnit = units?.find(u => String(u.id) === normalizedChapterId);
 

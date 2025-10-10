@@ -1303,12 +1303,34 @@ export const insertSubQuestion = async (
       }
     }
 
+    // Insert additional topics for this sub-question (all topics beyond the first one stored in topic_id)
+    if (Array.isArray(partMapping?.topic_ids) && partMapping.topic_ids.length > 1) {
+      const additionalTopics = partMapping.topic_ids.slice(1)
+        .map((id: string) => getUUIDFromMapping(id))
+        .filter((id: string | null) => id !== null);
+
+      const topicInserts = additionalTopics.map((topicId: string) => ({
+        sub_question_id: subQuestionRecord.id,
+        topic_id: topicId
+      }));
+
+      if (topicInserts.length > 0) {
+        const { error: topicsError } = await supabase
+          .from('question_topics')
+          .insert(topicInserts);
+
+        if (topicsError) {
+          console.error('Error inserting sub-question additional topics:', topicsError);
+        }
+      }
+    }
+
     // Insert additional subtopics for this sub-question
     if (Array.isArray(partMapping?.subtopic_ids) && partMapping.subtopic_ids.length > 1) {
       const additionalSubtopics = partMapping.subtopic_ids.slice(1)
         .map((id: string) => getUUIDFromMapping(id))
         .filter((id: string | null) => id !== null);
-      
+
       const subtopicInserts = additionalSubtopics.map((subtopicId: string) => ({
         sub_question_id: subQuestionRecord.id,
         subtopic_id: subtopicId
@@ -1547,23 +1569,47 @@ export const importQuestions = async (params: {
           }
         }
 
+        // Insert additional topics (all topics beyond the first one stored in topic_id)
+        if (mapping?.topic_ids && mapping.topic_ids.length > 1) {
+          const additionalTopics = mapping.topic_ids.slice(1)
+            .map((id: string) => getUUIDFromMapping(id))
+            .filter((id: string | null) => id !== null);
+
+          const topicInserts = additionalTopics.map((topicId: string) => ({
+            question_id: insertedQuestion.id,
+            topic_id: topicId
+          }));
+
+          if (topicInserts.length > 0) {
+            const { error: topicsError } = await supabase
+              .from('question_topics')
+              .insert(topicInserts);
+
+            if (topicsError) {
+              console.error('Error inserting additional topics:', topicsError);
+            }
+          }
+        }
+
         // Insert additional subtopics
         if (mapping?.subtopic_ids && mapping.subtopic_ids.length > 1) {
           const additionalSubtopics = mapping.subtopic_ids.slice(1)
             .map((id: string) => getUUIDFromMapping(id))
             .filter((id: string | null) => id !== null);
-          
+
           const subtopicInserts = additionalSubtopics.map((subtopicId: string) => ({
             question_id: insertedQuestion.id,
             subtopic_id: subtopicId
           }));
 
-          const { error: subtopicsError } = await supabase
-            .from('question_subtopics')
-            .insert(subtopicInserts);
+          if (subtopicInserts.length > 0) {
+            const { error: subtopicsError } = await supabase
+              .from('question_subtopics')
+              .insert(subtopicInserts);
 
-          if (subtopicsError) {
-            console.error('Error inserting additional subtopics:', subtopicsError);
+            if (subtopicsError) {
+              console.error('Error inserting additional subtopics:', subtopicsError);
+            }
           }
         }
 
