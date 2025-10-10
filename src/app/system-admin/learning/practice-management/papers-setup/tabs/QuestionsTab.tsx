@@ -54,6 +54,31 @@ import {
   type ImportResult
 } from '../../../../../../lib/data-operations/questionsDataOperations';
 
+// Import extraction parsers
+import {
+  parseForwardSlashAnswers,
+  extractAllValidAlternatives,
+  getAlternativeCount
+} from '../../../../../../lib/extraction/forwardSlashParser';
+import {
+  parseAndOrOperators,
+  analyzeAnswerLogic,
+  extractRequiredComponents,
+  extractOptionalComponents
+} from '../../../../../../lib/extraction/andOrOperatorParser';
+import {
+  validateAnswerStructure,
+  batchValidateAnswers,
+  getValidationSummary,
+  type ValidationIssue
+} from '../../../../../../lib/extraction/answerValidator';
+import {
+  validateQuestionsBeforeImport,
+  formatValidationErrors,
+  getValidationReportSummary,
+  type PreImportValidationResult
+} from '../../../../../../lib/extraction/preImportValidation';
+
 // Try to import validateQuestionsForImport if it exists
 let validateQuestionsForImport: any;
 try {
@@ -90,6 +115,43 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+interface ExtractionRules {
+  forwardSlashHandling: boolean;
+  lineByLineProcessing: boolean;
+  alternativeLinking: boolean;
+  contextRequired: boolean;
+  figureDetection: boolean;
+  educationalContent: {
+    hintsRequired: boolean;
+    explanationsRequired: boolean;
+  };
+  subjectSpecific: {
+    physics: boolean;
+    chemistry: boolean;
+    biology: boolean;
+    mathematics: boolean;
+  };
+  abbreviations: {
+    ora: boolean;
+    owtte: boolean;
+    ecf: boolean;
+    cao: boolean;
+  };
+  answerStructure: {
+    validateMarks: boolean;
+    requireContext: boolean;
+    validateLinking: boolean;
+    acceptAlternatives: boolean;
+  };
+  markScheme: {
+    requiresManualMarking: boolean;
+    markingCriteria: boolean;
+    componentMarking: boolean;
+    levelDescriptors: boolean;
+  };
+  examBoard: 'Cambridge' | 'Edexcel' | 'Both';
+}
+
 interface QuestionsTabProps {
   importSession: any;
   parsedData: any;
@@ -97,7 +159,7 @@ interface QuestionsTabProps {
   savedPaperDetails: any;
   onPrevious: () => void;
   onContinue: () => void;
-  extractionRules?: any;
+  extractionRules?: ExtractionRules;
   updateStagedAttachments?: (questionId: string, attachments: any[]) => void;
   stagedAttachments?: Record<string, any[]>;
 }
@@ -176,6 +238,11 @@ interface ProcessedAnswer {
   error_carried_forward?: boolean;
   answer_requirement?: string;
   total_alternatives?: number;
+  validation_issues?: string[];
+  answer_logic?: 'simple' | 'all_required' | 'any_accepted' | 'complex';
+  required_components?: string[];
+  optional_components?: string[];
+  needs_context?: boolean;
 }
 
 interface ProcessedOption {
@@ -902,21 +969,81 @@ export function QuestionsTab({
 
   const processAnswers = (answers: any[], answerRequirement?: string): ProcessedAnswer[] => {
     if (!Array.isArray(answers)) return [];
-    
-    return answers.map((ans, index) => ({
-      answer: ensureString(ans.answer) || '',
-      marks: parseInt(ans.marks || '1'),
-      alternative_id: ans.alternative_id || index + 1,
-      linked_alternatives: ans.linked_alternatives,
-      alternative_type: ans.alternative_type,
-      context: ans.context,
-      unit: ans.unit,
-      measurement_details: ans.measurement_details,
-      accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-      error_carried_forward: ans.error_carried_forward,
-      answer_requirement: answerRequirement || ans.answer_requirement,
-      total_alternatives: ans.total_alternatives
-    }));
+
+    return answers.map((ans, index) => {
+      const answerText = ensureString(ans.answer) || '';
+      const context = ans.context;
+
+      let processedAnswer: ProcessedAnswer = {
+        answer: answerText,
+        marks: parseInt(ans.marks || '1'),
+        alternative_id: ans.alternative_id || index + 1,
+        linked_alternatives: ans.linked_alternatives,
+        alternative_type: ans.alternative_type,
+        context: context,
+        unit: ans.unit,
+        measurement_details: ans.measurement_details,
+        accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+        error_carried_forward: ans.error_carried_forward,
+        answer_requirement: answerRequirement || ans.answer_requirement,
+        total_alternatives: ans.total_alternatives
+      };
+
+      if (extractionRules?.forwardSlashHandling) {
+        const forwardSlashResult = parseForwardSlashAnswers(answerText);
+
+        if (forwardSlashResult.hasForwardSlash) {
+          const alternatives = extractAllValidAlternatives(answerText);
+          processedAnswer.total_alternatives = alternatives.length;
+
+          if (forwardSlashResult.validationErrors.length > 0) {
+            processedAnswer.validation_issues = forwardSlashResult.validationErrors;
+          }
+        }
+      }
+
+      if (extractionRules?.alternativeLinking) {
+        const andOrResult = parseAndOrOperators(answerText);
+
+        if (andOrResult.hasOperators) {
+          const logic = analyzeAnswerLogic(answerText);
+          processedAnswer.answer_logic = logic.type;
+          processedAnswer.required_components = extractRequiredComponents(answerText);
+          processedAnswer.optional_components = extractOptionalComponents(answerText);
+
+          if (andOrResult.validationErrors.length > 0) {
+            processedAnswer.validation_issues = [
+              ...(processedAnswer.validation_issues || []),
+              ...andOrResult.validationErrors
+            ];
+          }
+        }
+      }
+
+      if (extractionRules?.answerStructure?.requireContext || extractionRules?.contextRequired) {
+        const subjectRules = extractionRules?.subjectSpecific ? {
+          requiresUnits: extractionRules.subjectSpecific.physics || extractionRules.subjectSpecific.chemistry,
+          allowsApproximations: true,
+          requiresSignificantFigures: extractionRules.subjectSpecific.physics || extractionRules.subjectSpecific.chemistry,
+          allowsEquivalentPhrasing: true
+        } : undefined;
+
+        const validation = validateAnswerStructure(answerText, context, subjectRules);
+
+        if (!validation.isValid) {
+          processedAnswer.validation_issues = [
+            ...(processedAnswer.validation_issues || []),
+            ...validation.issues.map(issue => issue.message)
+          ];
+        }
+
+        if (!validation.hasContext && !context) {
+          processedAnswer.needs_context = true;
+        }
+      }
+
+      return processedAnswer;
+    });
   };
 
   const processOptions = (options: any[]): ProcessedOption[] => {
@@ -1558,7 +1685,48 @@ export function QuestionsTab({
       }
       
       console.log('Prerequisites check passed');
-      
+
+      if (extractionRules && (extractionRules.forwardSlashHandling || extractionRules.alternativeLinking)) {
+        console.log('Running extraction rules validation...');
+        const subject = savedPaperDetails?.subject || parsedData?.subject;
+        const preImportValidation = validateQuestionsBeforeImport(questions, subject);
+
+        if (!preImportValidation.canProceed) {
+          console.log('Pre-import validation failed:', preImportValidation.summary);
+          const report = getValidationReportSummary(preImportValidation);
+          const errorDetails = formatValidationErrors(preImportValidation.errors.slice(0, 10));
+
+          toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
+
+          const showFullReport = window.confirm(
+            `Extraction validation found ${preImportValidation.summary.totalErrors} errors.\n\n` +
+            `- Missing Answers: ${preImportValidation.summary.missingAnswers}\n` +
+            `- Invalid Alternatives: ${preImportValidation.summary.invalidAlternatives}\n` +
+            `- Invalid Operators: ${preImportValidation.summary.invalidOperators}\n\n` +
+            `Click OK to see full report in console, Cancel to fix errors.`
+          );
+
+          if (showFullReport) {
+            console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
+            console.log(report);
+            console.log('\n=== DETAILED ERRORS ===');
+            console.log(formatValidationErrors(preImportValidation.errors));
+            console.log('\n=== DETAILED WARNINGS ===');
+            console.log(formatValidationErrors(preImportValidation.warnings));
+          }
+
+          return;
+        } else if (preImportValidation.warnings.length > 0) {
+          console.log('Pre-import validation has warnings:', preImportValidation.summary.totalWarnings);
+          toast.warning(`${preImportValidation.summary.totalWarnings} warnings found. Check console for details.`, { duration: 5000 });
+          console.log('=== EXTRACTION VALIDATION WARNINGS ===');
+          console.log(formatValidationErrors(preImportValidation.warnings));
+        } else {
+          console.log('Pre-import validation passed successfully');
+          toast.success('Extraction validation passed', { duration: 2000 });
+        }
+      }
+
       // Perform validation with multiple fallbacks
       let errors: Record<string, string[]> = {};
       
