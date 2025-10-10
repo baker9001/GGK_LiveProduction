@@ -1589,10 +1589,12 @@ export class MockExamService {
           topic_id,
           subtopic_id,
           difficulty,
-          edu_topics!questions_master_admin_topic_id_fkey (id, name),
-          edu_subtopics!questions_master_admin_subtopic_id_fkey (id, name),
-          data_structures!fk_questions_master_admin_data_structure (
-            edu_subjects!data_structures_subject_id_fkey (id, name)
+          data_structure_id,
+          edu_topics:topic_id (id, name),
+          edu_subtopics:subtopic_id (id, name),
+          data_structures:data_structure_id (
+            subject_id,
+            edu_subjects:subject_id (id, name)
           )
         `)
         .eq('status', 'active')
