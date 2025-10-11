@@ -243,32 +243,32 @@ export function AttachmentManager({
     }
   };
   
-  const handleSnippingComplete = async (dataUrl: string, fileName: string) => {
+  const handleSnippingComplete = useCallback(async (dataUrl: string, fileName: string) => {
     setUploadingFile(true);
-    
+
     // Add to recent snips for quick preview
     setRecentSnips(prev => [dataUrl, ...prev.slice(0, 2)]);
-    
+
     try {
       // Convert data URL to blob
       const response = await fetch(dataUrl);
       const blob = await response.blob();
-      
+
       // Create a File object
-      const file = new File([blob], fileName, { 
+      const file = new File([blob], fileName, {
         type: 'image/png',
         lastModified: Date.now()
       });
-      
+
       // Upload the snipped image
       await uploadAttachment.mutateAsync({
         file: file,
         questionId,
         subQuestionId
       });
-      
+
       onUpdate();
-      
+
       // Success feedback with preview
       toast.success(
         <div className="flex items-center">
@@ -276,7 +276,7 @@ export function AttachmentManager({
           <span>Snip added successfully!</span>
         </div>
       );
-      
+
       // Keep tool open for multiple snips
     } catch (error) {
       console.error('Upload error:', error);
@@ -284,7 +284,7 @@ export function AttachmentManager({
     } finally {
       setUploadingFile(false);
     }
-  };
+  }, [uploadAttachment, questionId, subQuestionId, onUpdate]);
   
   const handleDelete = async (attachment: Attachment) => {
     if (window.confirm('Are you sure you want to delete this attachment?')) {
@@ -359,6 +359,10 @@ export function AttachmentManager({
   const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
     setSnippingViewState(state);
     globalPdfStorage.viewState = { ...state };
+  }, []);
+
+  const handleCloseSnippingTool = useCallback(() => {
+    setShowSnippingTool(false);
   }, []);
   
   return (
@@ -538,7 +542,7 @@ export function AttachmentManager({
                 </button>
                 
                 <button
-                  onClick={() => setShowSnippingTool(false)}
+                  onClick={handleCloseSnippingTool}
                   className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
                   title="Close snipping tool"
                 >
@@ -585,7 +589,7 @@ export function AttachmentManager({
             <PDFSnippingTool
               pdfUrl={pdfDataUrl}
               onSnip={handleSnippingComplete}
-              onClose={() => setShowSnippingTool(false)}
+              onClose={handleCloseSnippingTool}
               className="!shadow-none !rounded-none"
               initialPage={snippingViewState.page}
               initialScale={snippingViewState.scale}
