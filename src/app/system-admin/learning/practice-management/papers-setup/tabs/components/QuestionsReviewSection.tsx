@@ -194,6 +194,12 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
           };
 
           const handleDeleteAttachment = (attachmentId: string, partIndex?: number, subpartIndex?: number) => {
+            console.log('🎯 QuestionsReviewSection handleDeleteAttachment called:', {
+              questionId: question.id,
+              attachmentId,
+              partIndex,
+              subpartIndex
+            });
             let key = question.id;
             if (partIndex !== undefined) {
               key += `_p${partIndex}`;
@@ -201,6 +207,8 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
                 key += `_s${subpartIndex}`;
               }
             }
+            console.log('🔑 Generated attachment key:', key);
+            console.log('📦 Available attachments for this question:', questionAttachments);
             onAttachmentDelete(key, attachmentId);
           };
 

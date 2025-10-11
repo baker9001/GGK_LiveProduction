@@ -29,6 +29,19 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   const hasAttachments = attachments && attachments.length > 0;
   const showWarning = requiresFigure && !hasAttachments;
 
+  // Debug logging
+  React.useEffect(() => {
+    if (hasAttachments) {
+      console.log(`📎 AttachmentDisplay for "${questionLabel}" received attachments:`, attachments.map(a => ({
+        id: a.id,
+        fileName: a.fileName || a.name || a.file_name,
+        hasDataUrl: !!a.dataUrl,
+        hasData: !!a.data,
+        hasFileUrl: !!a.file_url
+      })));
+    }
+  }, [attachments, questionLabel, hasAttachments]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
