@@ -1851,6 +1851,314 @@ export const importQuestions = async (params: {
   }
 };
 
+// ===== OPTIMIZED FETCHING WITH JOINS (No N+1 Queries) =====
+
+/**
+ * Fetch questions with all related data in a single optimized query
+ * Eliminates N+1 query problem by using JOIN queries
+ */
+export const fetchQuestionsWithRelations = async (paperId: string) => {
+  try {
+    // Single query with all joins to fetch all related data at once
+    const { data: questions, error } = await supabase
+      .from('questions_master_admin')
+      .select(`
+        *,
+        correct_answers:question_correct_answers!question_id(*),
+        options:question_options!question_id(
+          id,
+          option_text,
+          is_correct,
+          order,
+          created_at
+        ),
+        topics:question_topics!question_id(
+          topic_id,
+          edu_topics(id, name, code)
+        ),
+        subtopics:question_subtopics!question_id(
+          subtopic_id,
+          edu_subtopics(id, name, code)
+        ),
+        attachments:questions_attachments!question_id(
+          id,
+          file_url,
+          file_name,
+          file_type,
+          file_size,
+          created_at
+        ),
+        sub_questions!question_id(
+          id,
+          parent_id,
+          level,
+          order_index,
+          type,
+          part_label,
+          description,
+          question_description,
+          explanation,
+          hint,
+          marks,
+          difficulty,
+          status,
+          answer_format,
+          topic_id,
+          subtopic_id,
+          correct_answers:question_correct_answers!sub_question_id(*),
+          options:question_options!sub_question_id(
+            id,
+            option_text,
+            is_correct,
+            order,
+            created_at
+          ),
+          attachments:questions_attachments!sub_question_id(
+            id,
+            file_url,
+            file_name,
+            file_type,
+            file_size,
+            created_at
+          )
+        )
+      `)
+      .eq('paper_id', paperId)
+      .is('deleted_at', null)
+      .order('question_number', { ascending: true });
+
+    if (error) throw error;
+
+    return questions || [];
+  } catch (error) {
+    console.error('Error fetching questions with relations:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch a single question with all related data
+ * Optimized single-question query with all joins
+ */
+export const fetchQuestionByIdWithRelations = async (questionId: string) => {
+  try {
+    const { data: question, error } = await supabase
+      .from('questions_master_admin')
+      .select(`
+        *,
+        correct_answers:question_correct_answers!question_id(*),
+        options:question_options!question_id(
+          id,
+          option_text,
+          is_correct,
+          order,
+          created_at
+        ),
+        topics:question_topics!question_id(
+          topic_id,
+          edu_topics(id, name, code)
+        ),
+        subtopics:question_subtopics!question_id(
+          subtopic_id,
+          edu_subtopics(id, name, code)
+        ),
+        attachments:questions_attachments!question_id(
+          id,
+          file_url,
+          file_name,
+          file_type,
+          file_size,
+          created_at
+        ),
+        sub_questions!question_id(
+          id,
+          parent_id,
+          level,
+          order_index,
+          type,
+          part_label,
+          description,
+          question_description,
+          explanation,
+          hint,
+          marks,
+          difficulty,
+          status,
+          answer_format,
+          topic_id,
+          subtopic_id,
+          correct_answers:question_correct_answers!sub_question_id(*),
+          options:question_options!sub_question_id(
+            id,
+            option_text,
+            is_correct,
+            order,
+            created_at
+          ),
+          attachments:questions_attachments!sub_question_id(
+            id,
+            file_url,
+            file_name,
+            file_type,
+            file_size,
+            created_at
+          )
+        )
+      `)
+      .eq('id', questionId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return question;
+  } catch (error) {
+    console.error('Error fetching question with relations:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetch questions with lightweight data for listing views
+ * Optimized for performance when full relations aren't needed
+ */
+export const fetchQuestionsLightweight = async (paperId: string, options?: {
+  limit?: number;
+  offset?: number;
+  searchTerm?: string;
+}) => {
+  try {
+    let query = supabase
+      .from('questions_master_admin')
+      .select(`
+        id,
+        question_number,
+        question_description,
+        type,
+        marks,
+        difficulty,
+        status,
+        question_content_type,
+        year,
+        created_at,
+        updated_at
+      `, { count: 'exact' })
+      .eq('paper_id', paperId)
+      .is('deleted_at', null)
+      .order('question_number', { ascending: true });
+
+    if (options?.searchTerm) {
+      query = query.ilike('question_description', `%${options.searchTerm}%`);
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+
+    if (options?.offset) {
+      query = query.range(options.offset, options.offset + (options?.limit || 10) - 1);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    return {
+      questions: data || [],
+      total: count || 0
+    };
+  } catch (error) {
+    console.error('Error fetching questions lightweight:', error);
+    throw error;
+  }
+};
+
+/**
+ * Batch fetch questions by IDs with all relations
+ * Optimized for fetching specific questions without N+1 queries
+ */
+export const fetchQuestionsByIdsWithRelations = async (questionIds: string[]) => {
+  try {
+    if (!questionIds || questionIds.length === 0) {
+      return [];
+    }
+
+    const { data: questions, error } = await supabase
+      .from('questions_master_admin')
+      .select(`
+        *,
+        correct_answers:question_correct_answers!question_id(*),
+        options:question_options!question_id(
+          id,
+          option_text,
+          is_correct,
+          order,
+          created_at
+        ),
+        topics:question_topics!question_id(
+          topic_id,
+          edu_topics(id, name, code)
+        ),
+        subtopics:question_subtopics!question_id(
+          subtopic_id,
+          edu_subtopics(id, name, code)
+        ),
+        attachments:questions_attachments!question_id(
+          id,
+          file_url,
+          file_name,
+          file_type,
+          file_size,
+          created_at
+        ),
+        sub_questions!question_id(
+          id,
+          parent_id,
+          level,
+          order_index,
+          type,
+          part_label,
+          description,
+          question_description,
+          explanation,
+          hint,
+          marks,
+          difficulty,
+          status,
+          answer_format,
+          topic_id,
+          subtopic_id,
+          correct_answers:question_correct_answers!sub_question_id(*),
+          options:question_options!sub_question_id(
+            id,
+            option_text,
+            is_correct,
+            order,
+            created_at
+          ),
+          attachments:questions_attachments!sub_question_id(
+            id,
+            file_url,
+            file_name,
+            file_type,
+            file_size,
+            created_at
+          )
+        )
+      `)
+      .in('id', questionIds)
+      .is('deleted_at', null)
+      .order('question_number', { ascending: true });
+
+    if (error) throw error;
+
+    return questions || [];
+  } catch (error) {
+    console.error('Error fetching questions by IDs with relations:', error);
+    throw error;
+  }
+};
+
 export const fixIncompleteQuestions = async (
   paperId: string,
   importSession?: any,

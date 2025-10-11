@@ -2256,8 +2256,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" role="table">
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" role="table">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
                   <th className="text-left p-3" scope="col">
@@ -2462,19 +2463,20 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-          <PaginationControls
-            page={teachersPage}
-            rowsPerPage={teachersRowsPerPage}
-            totalCount={teachersTotalCount}
-            totalPages={teachersTotalPages}
-            onPageChange={goToTeachersPage}
-            onNextPage={nextTeachersPage}
-            onPreviousPage={previousTeachersPage}
-            onRowsPerPageChange={changeTeachersRowsPerPage}
-            showingRange={{ start: teachersStart, end: teachersEnd }}
-          />
+              </table>
+            </div>
+            <PaginationControls
+              page={teachersPage}
+              rowsPerPage={teachersRowsPerPage}
+              totalCount={teachersTotalCount}
+              totalPages={teachersTotalPages}
+              onPageChange={goToTeachersPage}
+              onNextPage={nextTeachersPage}
+              onPreviousPage={previousTeachersPage}
+              onRowsPerPageChange={changeTeachersRowsPerPage}
+              showingRange={{ start: teachersStart, end: teachersEnd }}
+            />
+          </>
         )}
       </div>
 
