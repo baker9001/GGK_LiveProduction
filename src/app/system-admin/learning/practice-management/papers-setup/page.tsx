@@ -19,7 +19,7 @@
  * - paper_id: uuid (nullable, foreign key to papers_setup)
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
 import { supabase } from '../../../../../lib/supabase';
@@ -481,6 +481,7 @@ export default function PapersSetupPage() {
   const location = useLocation();
   const displayedSessionIdRef = useRef<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const tabTransitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasCheckedForSession = useRef(false);
   
   // Get tab from URL query parameter or default to 'upload'
@@ -514,6 +515,32 @@ export default function PapersSetupPage() {
     metadata: 'pending',
     questions: 'pending',
   });
+
+  const activeTabDefinition = useMemo(
+    () => IMPORT_TABS.find(tab => tab.id === activeTab),
+    [activeTab]
+  );
+
+  const workflowProgress = useMemo(() => {
+    const total = IMPORT_TABS.length;
+    if (total === 0) return 0;
+
+    const completedCount = IMPORT_TABS.reduce((count, tab) => {
+      return count + (tabStatuses[tab.id] === 'completed' ? 1 : 0);
+    }, 0);
+
+    const activeStatus = tabStatuses[activeTab];
+    const activeContribution = activeStatus === 'completed' ? 0 : 0.5;
+    const transitionBoost = isTabTransitioning ? 0.2 : 0;
+
+    const progressUnits = Math.min(
+      total,
+      completedCount + activeContribution + transitionBoost
+    );
+
+    const rawProgress = Math.round((progressUnits / total) * 100);
+    return Math.max(0, Math.min(100, rawProgress));
+  }, [tabStatuses, activeTab, isTabTransitioning]);
   
   // Enhanced extraction rules configuration with defaults based on JSON structure
   const [extractionRules, setExtractionRules] = useState<ExtractionRules>({
@@ -646,6 +673,14 @@ export default function PapersSetupPage() {
       navigate(newUrl, { replace: true });
     }
   }, [activeTab, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (tabTransitionTimeoutRef.current) {
+        clearTimeout(tabTransitionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Load session from URL if present
   useEffect(() => {
@@ -951,25 +986,34 @@ export default function PapersSetupPage() {
     return 'structure';
   };
 
-  const handleTabChange = async (tabId: string) => {
-    // Show loading state during transition
-    setIsTabTransitioning(true);
+  const handleTabChange = (tabId: string) => {
+    if (!tabId || tabId === activeTab) {
+      return;
+    }
 
-    // Set appropriate transition message
+    if (tabTransitionTimeoutRef.current) {
+      clearTimeout(tabTransitionTimeoutRef.current);
+    }
+
     const tabName = IMPORT_TABS.find(t => t.id === tabId)?.label || 'content';
-    setTransitionMessage(`Loading ${tabName}...`);
 
-    // Simulate minimum loading time for smooth UX (prevents flash)
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    const params = new URLSearchParams(location.search);
-    params.set('tab', tabId);
-    navigate({ search: params.toString() }, { replace: true });
+    setTransitionMessage(`Preparing ${tabName}...`);
+    setIsTabTransitioning(true);
     setActiveTab(tabId);
 
-    // Hide loading state
-    setIsTabTransitioning(false);
-    setTransitionMessage('');
+    setTabStatuses(prev => {
+      const updatedStatuses = { ...prev };
+      if (updatedStatuses[tabId] !== 'completed') {
+        updatedStatuses[tabId] = 'active';
+      }
+      return updatedStatuses;
+    });
+
+    tabTransitionTimeoutRef.current = setTimeout(() => {
+      setIsTabTransitioning(false);
+      setTransitionMessage('');
+      tabTransitionTimeoutRef.current = null;
+    }, 450);
   };
 
   const handleStructureComplete = async () => {
@@ -1068,104 +1112,148 @@ export default function PapersSetupPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl" ref={contentRef}>
-      {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Past Papers Import Wizard
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Import and configure past exam papers with structured question extraction
-        </p>
-      </div>
-
-      {/* Scroll Navigator */}
-      <ScrollNavigator
-        sections={scrollSections}
-        containerRef={contentRef}
-        offset={100}
-      />
-
-      {/* Progress Indicator - Visual Only (not clickable) */}
-      <div id="workflow" className="mb-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            {IMPORT_TABS.map((tab, index) => {
-              const status = getTabStatus(tab.id);
-              const Icon = tab.icon;
-
-              return (
-                <div key={tab.id} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                      status === 'completed' && "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400",
-                      status === 'active' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500",
-                      status === 'error' && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
-                      status === 'pending' && "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
-                    )}>
-                      {status === 'completed' ? (
-                        <CheckCircle className="h-5 w-5" />
-                      ) : (
-                        <Icon className="h-5 w-5" />
-                      )}
-                    </div>
-                    <span className={cn(
-                      "text-xs mt-1 font-medium text-center",
-                      status === 'active' && "text-blue-600 dark:text-blue-400",
-                      status === 'completed' && "text-green-600 dark:text-green-400",
-                      status === 'pending' && "text-gray-400 dark:text-gray-500"
-                    )}>
-                      {tab.label}
-                    </span>
-                  </div>
-                  {index < IMPORT_TABS.length - 1 && (
-                    <div className={cn(
-                      "flex-1 h-0.5 mx-2 transition-all",
-                      tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' ||
-                      tabStatuses[IMPORT_TABS[index + 1].id] === 'active'
-                        ? "bg-green-500 dark:bg-green-400"
-                        : "bg-gray-300 dark:bg-gray-600"
-                    )} />
-                  )}
+    <>
+      {isTabTransitioning && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm dark:bg-gray-950/80"
+          role="status"
+          aria-live="assertive"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white/90 p-8 text-center shadow-xl dark:border-gray-700 dark:bg-gray-900/90">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative h-14 w-14">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900/40" />
+                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {transitionMessage || 'Preparing the next step...'}
+                </p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {activeTabDefinition?.label
+                    ? `Moving to ${activeTabDefinition.label}`
+                    : 'Hang tight while we set things up.'}
+                </p>
+              </div>
+              <div className="w-full">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div className="h-full w-full animate-pulse bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500" />
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Error display */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg p-4 mb-6">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            <p>{error}</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Tab Content - Tabs hidden, navigation through progress bar only */}
-      <Tabs
-        value={activeTab}
-        onValueChange={handleTabChange}
-        className="space-y-6"
-      >
+      <div className="container mx-auto px-4 py-6 max-w-7xl" ref={contentRef}>
+        {/* Page Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Past Papers Import Wizard
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Import and configure past exam papers with structured question extraction
+          </p>
+        </div>
 
-        {/* Subtle Loading Indicator During Transition */}
-        {isTabTransitioning && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="relative w-12 h-12">
-                <div className="absolute inset-0 border-4 border-[#8CC63F] rounded-full border-t-transparent animate-spin"></div>
+        {/* Scroll Navigator */}
+        <ScrollNavigator
+          sections={scrollSections}
+          containerRef={contentRef}
+          offset={100}
+        />
+
+        {/* Progress Indicator - Visual Only (not clickable) */}
+        <div id="workflow" className="mb-8 space-y-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Workflow progress
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {activeTabDefinition?.label
+                      ? `Currently on: ${activeTabDefinition.label}`
+                      : 'Getting things ready'}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                  {workflowProgress}%
+                </span>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 animate-pulse">
-                {transitionMessage}
-              </p>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-green-500 transition-all duration-500 ease-out"
+                  style={{ width: `${workflowProgress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              {IMPORT_TABS.map((tab, index) => {
+                const status = getTabStatus(tab.id);
+                const Icon = tab.icon;
+
+                return (
+                  <div key={tab.id} className="flex items-center flex-1">
+                    <div className="flex flex-col items-center">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                        status === 'completed' && "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400",
+                        status === 'active' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500",
+                        status === 'error' && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
+                        status === 'pending' && "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
+                      )}>
+                        {status === 'completed' ? (
+                          <CheckCircle className="h-5 w-5" />
+                        ) : (
+                          <Icon className="h-5 w-5" />
+                        )}
+                      </div>
+                      <span className={cn(
+                        "text-xs mt-1 font-medium text-center",
+                        status === 'active' && "text-blue-600 dark:text-blue-400",
+                        status === 'completed' && "text-green-600 dark:text-green-400",
+                        status === 'pending' && "text-gray-400 dark:text-gray-500"
+                      )}>
+                        {tab.label}
+                      </span>
+                    </div>
+                    {index < IMPORT_TABS.length - 1 && (
+                      <div className={cn(
+                        "flex-1 h-0.5 mx-2 transition-all",
+                        tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' ||
+                        tabStatuses[IMPORT_TABS[index + 1].id] === 'active'
+                          ? "bg-green-500 dark:bg-green-400"
+                          : "bg-gray-300 dark:bg-gray-600",
+                      )} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Error display */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              <p>{error}</p>
             </div>
           </div>
         )}
 
+        {/* Tab Content - Tabs hidden, navigation through progress bar only */}
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="space-y-6"
+        >
         <TabsContent value="upload" className="space-y-6">
           <div id="upload-section">
             <UploadTab
@@ -1278,5 +1366,6 @@ export default function PapersSetupPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </>
   );
 }
