@@ -1,6 +1,6 @@
 // src/app/system-admin/learning/practice-management/papers-setup/tabs/UploadTab.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle as CircleCheck, AlertCircle, FileText, ArrowRight, Trash2, RefreshCw, Loader2, FileJson } from 'lucide-react';
 import { supabase } from '../../../../../../lib/supabase';
 import { FileUploader } from '../../../../../../components/shared/FileUploader';
@@ -18,6 +18,7 @@ interface UploadTabProps {
   parsedData: any;
   onSelectPreviousSession: (session: any) => void;
   importSession: any;
+  onNavigateToTab: (tabId: string, options?: { message?: string }) => void;
 }
 
 export function UploadTab({
@@ -28,10 +29,13 @@ export function UploadTab({
   error,
   parsedData,
   onSelectPreviousSession,
-  importSession
+  importSession,
+  onNavigateToTab
 }: UploadTabProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const continueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Handle file selection
   const handleFileSelected = async (file: File, content: string | ArrayBuffer | null) => {
@@ -69,29 +73,58 @@ export function UploadTab({
       setShowDeleteConfirm(false);
     }
   };
-  
+
   // Continue with existing session
   const handleContinueSession = () => {
+    if (!importSession) return;
+
+    setIsContinuing(true);
+
+    const clearLoader = () => {
+      if (continueTimeoutRef.current) {
+        clearTimeout(continueTimeoutRef.current);
+      }
+
+      continueTimeoutRef.current = setTimeout(() => {
+        setIsContinuing(false);
+        continueTimeoutRef.current = null;
+      }, 1200);
+    };
+
     // Navigate to the appropriate tab based on session state
     const params = new URLSearchParams(window.location.search);
-    
+
     if (importSession.metadata?.questions_imported) {
       params.set('tab', 'questions');
+      onNavigateToTab('questions', { message: 'Restoring your questions review...' });
     } else if (importSession.metadata?.metadata_complete) {
       params.set('tab', 'questions');
+      onNavigateToTab('questions', { message: 'Loading your saved metadata...' });
     } else if (importSession.metadata?.structure_complete) {
       params.set('tab', 'metadata');
+      onNavigateToTab('metadata', { message: 'Preparing paper metadata...' });
     } else {
       params.set('tab', 'structure');
+      onNavigateToTab('structure', { message: 'Reopening academic structure...' });
     }
-    
-    window.location.search = params.toString();
+
+    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+
+    clearLoader();
   };
-  
+
   // Refresh session data
   const handleRefreshSession = () => {
     window.location.reload();
   };
+
+  useEffect(() => {
+    return () => {
+      if (continueTimeoutRef.current) {
+        clearTimeout(continueTimeoutRef.current);
+      }
+    };
+  }, []);
   
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
@@ -130,8 +163,16 @@ export function UploadTab({
                   size="sm"
                   leftIcon={<ArrowRight className="h-4 w-4" />}
                   onClick={handleContinueSession}
+                  disabled={isContinuing}
                 >
-                  Continue Import
+                  {isContinuing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Resuming...
+                    </>
+                  ) : (
+                    'Continue Import'
+                  )}
                 </Button>
                 <Button
                   size="sm"
@@ -346,8 +387,16 @@ export function UploadTab({
           <Button
             onClick={handleContinueSession}
             rightIcon={<ArrowRight className="h-4 w-4 ml-1" />}
+            disabled={isContinuing}
           >
-            Continue to Next Step
+            {isContinuing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Preparing next step...
+              </>
+            ) : (
+              'Continue to Next Step'
+            )}
           </Button>
         </div>
       )}
