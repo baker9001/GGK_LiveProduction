@@ -106,13 +106,18 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                 />
 
                 {/* Hover Overlay with Actions */}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 pointer-events-none">
                   <Button
                     variant="secondary"
                     size="icon"
-                    className="bg-white text-gray-700 hover:text-[#8CC63F] hover:bg-white shadow-lg"
+                    className="bg-white text-gray-700 hover:text-[#8CC63F] hover:bg-white shadow-lg pointer-events-auto"
                     title="Preview Full Size"
-                    onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('👁️ Preview button clicked');
+                      setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url);
+                    }}
                   >
                     <Eye className="h-5 w-5" />
                   </Button>
@@ -120,13 +125,15 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                     <Button
                       variant="destructive"
                       size="icon"
-                      className="shadow-lg"
+                      className="shadow-lg pointer-events-auto"
                       title="Delete Attachment"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         console.log('🗑️ Delete button clicked in AttachmentDisplay:', attachment.id);
+                        console.log('📋 Calling onDelete with ID:', attachment.id);
                         onDelete(attachment.id);
+                        console.log('✅ onDelete called successfully');
                       }}
                     >
                       <Trash2 className="h-5 w-5" />
