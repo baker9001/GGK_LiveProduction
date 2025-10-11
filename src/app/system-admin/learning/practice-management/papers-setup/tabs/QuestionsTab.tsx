@@ -1488,7 +1488,7 @@ export function QuestionsTab({
           status: 'pending', // Initialize status
           options: q.options?.map((opt, index) => ({
             id: `opt_${index}`,
-            label: opt.label,
+            label: opt.label || opt.option_label || String.fromCharCode(65 + index),
             option_text: opt.text,
             is_correct: opt.is_correct,
             order: index
@@ -1522,12 +1522,14 @@ export function QuestionsTab({
               unit: ans.unit,
               measurement_details: ans.measurement_details,
               accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
-              error_carried_forward: ans.error_carried_forward
+              error_carried_forward: ans.error_carried_forward,
+              answer_requirement: ans.answer_requirement,
+              total_alternatives: ans.total_alternatives
             })),
             correct_answer: p.correct_answers?.[0]?.answer, // For MCQ compatibility
             options: p.options?.map((opt, index) => ({
               id: `opt_${index}`,
-              label: opt.label,
+              label: opt.label || opt.option_label || String.fromCharCode(65 + index),
               option_text: opt.text,
               is_correct: opt.is_correct,
               order: index
@@ -1540,8 +1542,37 @@ export function QuestionsTab({
               marks: sp.marks,
               answer_format: sp.answer_format,
               answer_requirement: sp.answer_requirement,
-              correct_answers: sp.correct_answers,
-              options: sp.options
+              correct_answers: sp.correct_answers?.map(ans => ({
+                answer: ans.answer,
+                marks: ans.marks,
+                alternative_id: ans.alternative_id,
+                linked_alternatives: ans.linked_alternatives,
+                alternative_type: ans.alternative_type,
+                context: ans.context,
+                unit: ans.unit,
+                measurement_details: ans.measurement_details,
+                accepts_equivalent_phrasing: ans.accepts_equivalent_phrasing,
+                error_carried_forward: ans.error_carried_forward,
+                answer_requirement: ans.answer_requirement,
+                total_alternatives: ans.total_alternatives
+              })),
+              options: sp.options?.map((opt, index) => ({
+                id: `opt_${index}`,
+                label: opt.label || opt.option_label || String.fromCharCode(65 + index),
+                option_text: opt.text || opt.option_text,
+                is_correct: opt.is_correct,
+                order: index
+              })),
+              attachments: attachments[generateAttachmentKey(q.id, pIndex, spIndex)]?.map((att, attIndex) => ({
+                id: `att_${attIndex}`,
+                file_url: att.data || att.url || att.dataUrl || att.file_url,
+                file_name: att.name || att.fileName || att.file_name,
+                file_type: att.type || att.file_type || 'image/png'
+              })) || [],
+              hint: sp.hint,
+              explanation: sp.explanation,
+              requires_manual_marking: sp.requires_manual_marking,
+              marking_criteria: sp.marking_criteria
             })),
             attachments: attachments[generateAttachmentKey(q.id, pIndex)]?.map((att, attIndex) => ({
               id: `att_${attIndex}`,
@@ -1562,6 +1593,8 @@ export function QuestionsTab({
           })) || [],
           hint: q.hint,
           explanation: q.explanation,
+          requires_manual_marking: q.requires_manual_marking,
+          marking_criteria: q.marking_criteria,
           // Navigation and progress tracking
           _navigation: {
             index: qIndex,

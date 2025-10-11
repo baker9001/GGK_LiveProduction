@@ -9,7 +9,8 @@ import {
   Globe, 
   Music, 
   Palette, 
-  Check, 
+  Check,
+  CircleCheck,
   X, 
   ChevronRight,
   Ruler,
@@ -1084,7 +1085,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
     
     // Existing MCQ rendering logic...
-    const shouldShowFeedback = (mode === 'review' || (mode === 'practice' && showCorrectAnswer && hasAnswered));
+    const shouldShowFeedback = (
+      mode === 'review' ||
+      mode === 'admin' ||
+      (mode === 'practice' && showCorrectAnswer && hasAnswered)
+    );
     const allCorrectAnswers = getAllCorrectAnswers();
     
     return (
@@ -1140,11 +1145,18 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               )}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   <span className={cn("font-semibold px-2 py-1 rounded", labelClass)}>
                     {option.label}
                   </span>
-                  <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
+                  <div className="flex flex-col">
+                    <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
+                    {shouldShowFeedback && isCorrect && (
+                      <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                        <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {shouldShowFeedback && (
                   isSelected ? (
@@ -1174,7 +1186,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
     
     // Existing true/false rendering logic...
-    const shouldShowFeedback = (mode === 'review' || (mode === 'practice' && showCorrectAnswer && hasAnswered));
+    const shouldShowFeedback = (
+      mode === 'review' ||
+      mode === 'admin' ||
+      (mode === 'practice' && showCorrectAnswer && hasAnswered)
+    );
     const correctAnswer = question.correct_answer?.toLowerCase() === 'true' || question.correct_answer === true;
     const isDisabled = disabled || (hasAnswered && mode === 'practice' && showCorrectAnswer);
     
@@ -1197,10 +1213,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
           )}
         >
-          True
-          {shouldShowFeedback && value === true && (
-            correctAnswer ? <Check className="inline ml-2 w-4 h-4" /> : <X className="inline ml-2 w-4 h-4" />
-          )}
+          <div className="flex flex-col items-center gap-1">
+            <span>True</span>
+            {shouldShowFeedback && correctAnswer && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+              </span>
+            )}
+            {shouldShowFeedback && value === true && !correctAnswer && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+                <X className="h-3.5 w-3.5" /> Incorrect selection
+              </span>
+            )}
+          </div>
         </button>
         <button
           onClick={() => handleTrueFalse(false)}
@@ -1219,10 +1244,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
           )}
         >
-          False
-          {shouldShowFeedback && value === false && (
-            !correctAnswer ? <Check className="inline ml-2 w-4 h-4" /> : <X className="inline ml-2 w-4 h-4" />
-          )}
+          <div className="flex flex-col items-center gap-1">
+            <span>False</span>
+            {shouldShowFeedback && !correctAnswer && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+              </span>
+            )}
+            {shouldShowFeedback && value === false && correctAnswer && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+                <X className="h-3.5 w-3.5" /> Incorrect selection
+              </span>
+            )}
+          </div>
         </button>
       </div>
     );
@@ -1449,7 +1483,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
 
   // Render correct answers section
   const renderCorrectAnswers = () => {
-    if (!showCorrectAnswer || !(mode === 'review' || (mode === 'practice' && hasAnswered))) {
+    if (
+      !showCorrectAnswer ||
+      !(
+        mode === 'review' ||
+        mode === 'admin' ||
+        (mode === 'practice' && hasAnswered)
+      )
+    ) {
       return null;
     }
 
