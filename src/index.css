@@ -2,6 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-accent: #7dc242;
+  --brand-accent-strong: #4f8c1f;
+  --brand-accent-soft: #e8f5dc;
+  --brand-accent-contrast: #ffffff;
+  --brand-accent-muted-contrast: #123116;
+}
+
+.dark {
+  --brand-accent-contrast: #0f2610;
+  --brand-accent-muted-contrast: #f1f7ed;
+}
+
+.brand-select {
+  border: 1px solid var(--brand-accent);
+  background-color: var(--brand-select-background, #ffffff);
+  color: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
+}
+
+.brand-select:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgb(125 194 66 / 0.15);
+}
+
+.brand-select option {
+  background-color: var(--brand-accent-soft);
+  color: var(--brand-accent-muted-contrast);
+}
+
+.brand-select option:checked,
+.brand-select option:focus,
+.brand-select option:hover {
+  background-color: var(--brand-accent);
+  color: var(--brand-accent-contrast);
+}
+
+.dark .brand-select {
+  background-color: rgb(31 41 55 / 1);
+  color: rgb(248 250 252 / 1);
+  box-shadow: none;
+}
+
+.dark .brand-select option {
+  color: var(--brand-accent-muted-contrast);
+}
+
+.brand-pagination-button {
+  border: 1px solid var(--brand-accent);
+  color: var(--brand-accent);
+  background-color: transparent;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.brand-pagination-button:hover:not(:disabled) {
+  background-color: var(--brand-accent-soft);
+  color: var(--brand-accent-strong);
+}
+
+.brand-pagination-button:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+.brand-pagination-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.brand-pagination-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  background-color: var(--brand-accent);
+  color: var(--brand-accent-contrast);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 10px 15px -10px rgb(15 118 110 / 0.35);
+}
+
+.brand-pagination-badge__value {
+  color: inherit;
+}
+
+.dark .brand-pagination-badge {
+  color: var(--brand-accent-contrast);
+  box-shadow: 0 10px 15px -10px rgb(148 210 101 / 0.45);
+}
+
+.brand-pagination-summary {
+  color: rgb(55 65 81 / 1);
+}
+
+.dark .brand-pagination-summary {
+  color: rgb(209 213 219 / 1);
+}
+
 /* Progress bar animation for loading states */
 @keyframes progress {
   0% {

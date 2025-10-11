@@ -1271,6 +1271,20 @@ export default function PapersSetupPage() {
           onValueChange={handleTabChange}
           className="space-y-6"
         >
+        <TabsContent value="upload" className="space-y-6">
+          <div id="upload-section">
+            <UploadTab
+              onFileSelected={handleFileSelected}
+              uploadedFile={uploadedFile}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              error={error}
+              parsedData={parsedData}
+              onSelectPreviousSession={handleSelectPreviousSession}
+              importSession={importSession}
+              onNavigateToTab={handleTabChange}
+            />
+          </div>
           <TabsList className="w-full justify-start overflow-x-auto">
             {IMPORT_TABS.map((tab) => {
               const status = getTabStatus(tab.id);
