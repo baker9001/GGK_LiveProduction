@@ -37,7 +37,7 @@ import { cn } from '../../../../../lib/utils';
 import { UploadTab } from './tabs/UploadTab';
 import StructureTab from './tabs/StructureTab';
 import { MetadataTab } from './tabs/MetadataTab';
-import { QuestionsTab } from './tabs/QuestionsTab';
+import { QuestionsTabWrapper } from './tabs/QuestionsTabWrapper';
 import { PreviousSessionsTable } from './components/PreviousSessionsTable';
 
 // Define the tabs for the import workflow
@@ -1388,7 +1388,7 @@ export default function PapersSetupPage() {
 
         <TabsContent value="questions">
           {importSession && parsedData && existingPaperId ? (
-            <QuestionsTab
+            <QuestionsTabWrapper
               importSession={importSession}
               parsedData={parsedData}
               existingPaperId={existingPaperId}

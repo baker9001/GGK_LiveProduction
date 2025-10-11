@@ -529,32 +529,50 @@ export function QuestionsTab({
   }, [savedPaperDetails]);
 
   const loadDataStructureInfo = async () => {
+    console.log('=== loadDataStructureInfo START ===', {
+      hasSavedPaperDetails: !!savedPaperDetails,
+      dataStructureId: savedPaperDetails?.data_structure_id
+    });
+
     try {
       setAcademicStructureLoaded(false);
+
+      if (!savedPaperDetails?.data_structure_id) {
+        throw new Error('Data structure ID is missing from paper details');
+      }
+
+      console.log('Fetching data structure info for ID:', savedPaperDetails.data_structure_id);
       const result = await fetchDataStructureInfo(savedPaperDetails.data_structure_id);
+
+      if (!result) {
+        throw new Error('fetchDataStructureInfo returned null or undefined');
+      }
+
       setDataStructureInfo(result.dataStructure);
-      setUnits(result.units);
-      
+      setUnits(result.units || []);
+
       // Ensure topics are properly loaded with their relationships
       const allTopics = result.topics || [];
       const allSubtopics = result.subtopics || [];
-      
+
       // Set all topics and subtopics
       setTopics(allTopics);
       setSubtopics(allSubtopics);
-      
+
       console.log('Loaded data structure:', {
-        units: result.units.length,
+        dataStructureId: savedPaperDetails.data_structure_id,
+        units: result.units?.length || 0,
         topics: allTopics.length,
         subtopics: allSubtopics.length,
-        topicSample: allTopics[0],
-        subtopicSample: allSubtopics[0]
+        topicSample: allTopics[0] || 'none',
+        subtopicSample: allSubtopics[0] || 'none'
       });
-      
+
       setAcademicStructureLoaded(true);
+      console.log('=== loadDataStructureInfo COMPLETE ===');
     } catch (error) {
-      console.error('Error loading data structure info:', error);
-      toast.error('Failed to load academic structure information');
+      console.error('=== loadDataStructureInfo ERROR ===', error);
+      toast.error(`Failed to load academic structure: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setAcademicStructureLoaded(false);
     }
   };
@@ -839,9 +857,22 @@ export function QuestionsTab({
   }, [importSession]);
 
   const initializeFromParsedData = (data: any) => {
+    console.log('=== initializeFromParsedData START ===', { hasData: !!data, dataKeys: data ? Object.keys(data) : [] });
+
     try {
       setLoading(true);
-      
+
+      // Validate data
+      if (!data) {
+        throw new Error('No data provided to initializeFromParsedData');
+      }
+
+      if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+        throw new Error('No questions found in parsed data');
+      }
+
+      console.log('Processing', data.questions.length, 'questions');
+
       // Extract paper metadata with all available fields
       const metadata = {
         title: data.title || data.paper_name || data.paper_code || '',
@@ -861,9 +892,11 @@ export function QuestionsTab({
         subject_code: data.subject_code || ''
       };
       setPaperMetadata(metadata);
+      console.log('Paper metadata set:', metadata);
 
       // Process questions with enhanced extraction rules
       const processedQuestions = processQuestions(data.questions || []);
+      console.log('Processed questions:', processedQuestions.length);
       setQuestions(processedQuestions);
 
       // Initialize question mappings
@@ -876,16 +909,19 @@ export function QuestionsTab({
         };
       });
       setQuestionMappings(mappings);
+      console.log('Question mappings initialized');
 
       // Initialize attachments from staged attachments
       if (stagedAttachments) {
         setAttachments(stagedAttachments);
+        console.log('Staged attachments loaded:', Object.keys(stagedAttachments).length);
       }
 
       setLoading(false);
+      console.log('=== initializeFromParsedData COMPLETE ===');
     } catch (error) {
-      console.error('Error initializing questions:', error);
-      toast.error('Failed to process questions data');
+      console.error('=== initializeFromParsedData ERROR ===', error);
+      toast.error(`Failed to process questions data: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setLoading(false);
     }
   };
@@ -2635,49 +2671,65 @@ export function QuestionsTab({
   // [Continue with all the render methods and JSX from the original code]
   
   const renderMetadataSummary = () => {
-    // ... [Keep the same implementation as in the original code]
-    const metadata = paperMetadata;
-    const isEditing = editingMetadata;
-    
-    // Calculate question statistics
-    const questionStats = {
-      total: questions.length,
-      mcq: questions.filter(q => q.question_type === 'mcq').length,
-      descriptive: questions.filter(q => q.question_type === 'descriptive').length,
-      complex: questions.filter(q => q.parts && q.parts.length > 0).length,
-      withFigures: questions.filter(q => q.figure || (q.parts && q.parts.some((p: any) => p.figure))).length,
-      withDynamicAnswers: questions.filter(q => 
-        q.answer_requirement || 
-        (q.parts && q.parts.some((p: any) => p.answer_requirement))
-      ).length,
-      flaggedInSimulation: questions.filter(q => q.simulation_flags?.includes('flagged')).length
-    };
-    
-    // Calculate answer format distribution
-    const answerFormatDistribution: Record<string, number> = {};
-    const answerRequirementDistribution: Record<string, number> = {};
-    
-    questions.forEach(q => {
-      if (q.parts) {
-        q.parts.forEach((p: any) => {
-          const format = p.answer_format || 'single_line';
-          answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-          
-          if (p.answer_requirement) {
-            answerRequirementDistribution[p.answer_requirement] = 
-              (answerRequirementDistribution[p.answer_requirement] || 0) + 1;
-          }
-        });
-      } else {
-        const format = detectAnswerFormat(q.question_text || '') || 'single_line';
-        answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
-        
-        if (q.answer_requirement) {
-          answerRequirementDistribution[q.answer_requirement] = 
-            (answerRequirementDistribution[q.answer_requirement] || 0) + 1;
-        }
+    try {
+      // Safety check for required data
+      if (!paperMetadata || !questions) {
+        console.warn('renderMetadataSummary called with missing data:', { paperMetadata, questions });
+        return (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Paper metadata is not fully loaded yet. Please wait...
+            </p>
+          </div>
+        );
       }
-    });
+
+      const metadata = paperMetadata;
+      const isEditing = editingMetadata;
+
+      // Calculate question statistics with safety checks
+      const safeQuestions = Array.isArray(questions) ? questions : [];
+      const questionStats = {
+        total: safeQuestions.length,
+        mcq: safeQuestions.filter(q => q?.question_type === 'mcq').length,
+        descriptive: safeQuestions.filter(q => q?.question_type === 'descriptive').length,
+        complex: safeQuestions.filter(q => q?.parts && Array.isArray(q.parts) && q.parts.length > 0).length,
+        withFigures: safeQuestions.filter(q => q?.figure || (q?.parts && Array.isArray(q.parts) && q.parts.some((p: any) => p?.figure))).length,
+        withDynamicAnswers: safeQuestions.filter(q =>
+          q?.answer_requirement ||
+          (q?.parts && Array.isArray(q.parts) && q.parts.some((p: any) => p?.answer_requirement))
+        ).length,
+        flaggedInSimulation: safeQuestions.filter(q => Array.isArray(q?.simulation_flags) && q.simulation_flags.includes('flagged')).length
+      };
+
+      // Calculate answer format distribution with safety checks
+      const answerFormatDistribution: Record<string, number> = {};
+      const answerRequirementDistribution: Record<string, number> = {};
+
+      safeQuestions.forEach(q => {
+        if (!q) return;
+
+        if (q.parts && Array.isArray(q.parts)) {
+          q.parts.forEach((p: any) => {
+            if (!p) return;
+            const format = p.answer_format || 'single_line';
+            answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
+
+            if (p.answer_requirement) {
+              answerRequirementDistribution[p.answer_requirement] =
+                (answerRequirementDistribution[p.answer_requirement] || 0) + 1;
+            }
+          });
+        } else {
+          const format = (typeof detectAnswerFormat === 'function' ? detectAnswerFormat(q.question_text || '') : null) || 'single_line';
+          answerFormatDistribution[format] = (answerFormatDistribution[format] || 0) + 1;
+
+          if (q.answer_requirement) {
+            answerRequirementDistribution[q.answer_requirement] =
+              (answerRequirementDistribution[q.answer_requirement] || 0) + 1;
+          }
+        }
+      });
     
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
@@ -2937,6 +2989,16 @@ export function QuestionsTab({
         )}
       </div>
     );
+    } catch (error) {
+      console.error('Error rendering metadata summary:', error);
+      return (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-sm text-red-800 dark:text-red-200">
+            Error loading metadata summary. {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+        </div>
+      );
+    }
   };
 
   if (loading) {
