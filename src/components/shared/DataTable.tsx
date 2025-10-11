@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { DataTableSkeleton } from './DataTableSkeleton';
@@ -371,98 +371,8 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination */}
-      <div 
-        className="px-4 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 sm:px-6 flex items-center justify-between"
-        role="navigation"
-        aria-label={pagination?.ariaLabel || "Table pagination"}
-      >
-        <div className="flex items-center">
-          <label htmlFor="table-select" className="sr-only">
-            Items per page
-          </label>
-          <select
-            id="table-select"
-            name="table-select"
-            className={cn(
-              'brand-select block w-full py-1 pl-3 pr-8 text-sm rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
-              'focus-visible:outline-none'
-            )}
-            value={rowsPerPage}
-            aria-label="Rows per page"
-            onChange={(e) => {
-              const newRowsPerPage = Number(e.target.value);
-              if (pagination) {
-                pagination.changeRowsPerPage(newRowsPerPage);
-              } else {
-                setInternalRowsPerPage(newRowsPerPage);
-                setInternalPage(1);
-              }
-            }}
-          >
-            {[10, 25, 50, 100].map(value => (
-              <option
-                key={value}
-                value={value}
-              >
-                {value} rows
-              </option>
-            ))}
-          </select>
-
-          <div className="hidden sm:block ml-4">
-            <p className="text-sm brand-pagination-summary">
-              Showing <span className="font-medium">{data.length > 0 ? startIndex + 1 : 0}</span> to{' '}
-              <span className="font-medium">
-                {Math.min(pagination ? startIndex + data.length : endIndex, data.length)}
-              </span>{' '}
-              of <span className="font-medium">{pagination?.totalCount || data.length}</span> results
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            className="brand-pagination-button inline-flex items-center px-2 py-1 rounded-md text-sm font-medium"
-            aria-label="Go to previous page"
-            title="Previous page"
-            onClick={() => {
-              if (pagination) {
-                pagination.previousPage();
-              } else {
-                setInternalPage(prev => Math.max(prev - 1, 1));
-              }
-            }}
-            disabled={page === 1}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-
-          <div className="brand-pagination-badge text-sm" role="status" aria-live="polite">
-            Page <span className="brand-pagination-badge__value">{page}</span> of{' '}
-            <span className="brand-pagination-badge__value">{Math.max(1, totalPages)}</span>
-          </div>
-
-          <button
-            type="button"
-            className="brand-pagination-button inline-flex items-center px-2 py-1 rounded-md text-sm font-medium"
-            aria-label="Go to next page"
-            title="Next page"
-            onClick={() => {
-              if (pagination) {
-                pagination.nextPage();
-              } else {
-                setInternalPage(prev => Math.min(prev + 1, totalPages));
-              }
-            }}
-            disabled={page === totalPages || totalPages === 0}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
       <PaginationControls
         page={page}
         rowsPerPage={rowsPerPage}
