@@ -1214,6 +1214,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           showHints={showHints}
                           showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
                           mode={isQAMode ? 'review' : examMode}
+                          mode={isQAMode ? 'admin' : examMode}
                         />
                       </div>
                     )}
@@ -1221,6 +1222,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     {isQAMode && (
                       <TeacherInsights
                         correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
+                        correctAnswers={currentQuestion.correct_answers}
                         answerRequirement={currentQuestion.answer_requirement}
                         markingCriteria={currentQuestion.marking_criteria}
                         requiresManualMarking={currentQuestion.requires_manual_marking}
@@ -1298,11 +1300,13 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 showHints={showHints}
                                 showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
                                 mode={isQAMode ? 'review' : examMode}
+                                mode={isQAMode ? 'admin' : examMode}
                               />
 
                               {isQAMode && (
                                 <TeacherInsights
                                   correctAnswers={buildNormalisedCorrectAnswers(part)}
+                                  correctAnswers={part.correct_answers}
                                   answerRequirement={part.answer_requirement}
                                   markingCriteria={part.marking_criteria}
                                   requiresManualMarking={part.requires_manual_marking}
@@ -1363,11 +1367,13 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             showHints={showHints}
                                             showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
                                             mode={isQAMode ? 'review' : examMode}
+                                            mode={isQAMode ? 'admin' : examMode}
                                           />
 
                                           {isQAMode && (
                                             <TeacherInsights
                                               correctAnswers={buildNormalisedCorrectAnswers(subpart)}
+                                              correctAnswers={subpart.correct_answers}
                                               answerRequirement={subpart.answer_requirement}
                                               markingCriteria={subpart.marking_criteria}
                                               requiresManualMarking={subpart.requires_manual_marking}

@@ -1,17 +1,17 @@
 // src/components/shared/DynamicAnswerField.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  AlertCircle, 
-  Calculator, 
-  Beaker, 
-  Book, 
-  Globe, 
-  Music, 
-  Palette, 
+import React, { useState, useEffect } from 'react';
+import {
+  AlertCircle,
+  Calculator,
+  Beaker,
+  Book,
+  Globe,
+  Music,
+  Palette,
   Check,
-  CircleCheck,
-  X, 
+  CheckCircle2,
+  X,
   ChevronRight,
   Ruler,
   FlaskConical,
@@ -1227,6 +1227,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     {shouldShowFeedback && isIncorrect && (
                       <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
                         <X className="h-3.5 w-3.5" /> Incorrect selection
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
                       </span>
                     )}
                   </div>
@@ -1291,6 +1292,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             {shouldShowFeedback && correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
                 <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
             {shouldShowFeedback && value === true && !correctAnswer && (
@@ -1322,6 +1324,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             {shouldShowFeedback && !correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
                 <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
             {shouldShowFeedback && value === false && correctAnswer && (

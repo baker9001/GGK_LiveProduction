@@ -61,6 +61,9 @@ export function PDFSnippingTool({
   });
   const hasAppliedInitialViewStateRef = useRef(false);
   const lastEmittedViewStateRef = useRef<{ page: number; scale: number } | null>(null);
+  const isInternalUpdateRef = useRef(false);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(false);
 
   const clampPage = (value: number, total: number) => {
     if (!Number.isFinite(value)) {
@@ -147,182 +150,206 @@ export function PDFSnippingTool({
     }
   };
   
-  // Load PDF from URL if provided
+  // Load PDF from URL if provided - OPTIMIZED to prevent unnecessary re-fetches
   useEffect(() => {
-    if (pdfUrl) {
-      if (lastPdfUrlRef.current !== pdfUrl) {
-        lastPdfUrlRef.current = pdfUrl;
-        initialViewStateRef.current = {
-          page: initialPage ?? DEFAULT_PAGE,
-          scale: initialScale ?? DEFAULT_SCALE
-        };
-        hasAppliedInitialViewStateRef.current = false;
-      }
+    if (!pdfUrl) return;
 
-      const fetchAndLoadPdf = async () => {
-        try {
-          // Check if pdfUrl is a data URL or a regular URL
-          if (pdfUrl.startsWith('data:')) {
-            // For data URLs, convert to array buffer
-            const base64 = pdfUrl.split(',')[1];
-            if (!base64) {
-              const errorMsg = 'Invalid PDF data format';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
-            
-            try {
-              const binaryString = window.atob(base64);
-              
-              // Check if the binary string has content
-              if (binaryString.length === 0) {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              const len = binaryString.length;
-              const bytes = new Uint8Array(len);
-              for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              await loadAndRenderPdf(bytes.buffer);
-            } catch (decodeError) {
-              console.error('Error decoding data URL:', decodeError);
-              const errorMsg = 'Failed to decode PDF data. The file may be corrupted.';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
-          } else {
-            // For regular URLs, fetch the PDF
-            try {
-              const response = await fetch(pdfUrl, {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/pdf'
-                }
-              });
-              
-              if (!response.ok) {
-                if (response.status === 404) {
-                  console.error(`PDF not found: ${response.status} ${response.statusText}`);
-                  const errorMsg = 'PDF file not found in storage. Please upload again.';
-                  setPdfLoadingError(true);
-                  setErrorMessage(errorMsg);
-                  onErrorChange?.(true, errorMsg);
-                  throw new Error(errorMsg);
-                } else {
-                  console.error(`PDF fetch failed: ${response.status} ${response.statusText}`);
-                  const errorMsg = `PDF file is not accessible (HTTP ${response.status}). Please upload again.`;
-                  setPdfLoadingError(true);
-                  setErrorMessage(errorMsg);
-                  onErrorChange?.(true, errorMsg);
-                  throw new Error(errorMsg);
-                }
-              }
-              
-              // Check if the response has content
-              const contentLength = response.headers.get('content-length');
-              if (contentLength === '0') {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              const arrayBuffer = await response.arrayBuffer();
-              
-              // Verify the array buffer has content
-              if (arrayBuffer.byteLength === 0) {
-                const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
-                setPdfLoadingError(true);
-                setErrorMessage(errorMsg);
-                onErrorChange?.(true, errorMsg);
-                throw new Error(errorMsg);
-              }
-              
-              await loadAndRenderPdf(arrayBuffer);
-            } catch (fetchError) {
-              console.error('Network error fetching PDF:', fetchError);
-              const errorMsg = 'Failed to fetch PDF file. Please check your connection and try again.';
-              setPdfLoadingError(true);
-              setErrorMessage(errorMsg);
-              onErrorChange?.(true, errorMsg);
-              throw new Error(errorMsg);
-            }
+    // Only reload if the URL actually changed
+    if (lastPdfUrlRef.current === pdfUrl) {
+      return;
+    }
+
+    lastPdfUrlRef.current = pdfUrl;
+    initialViewStateRef.current = {
+      page: initialPage ?? DEFAULT_PAGE,
+      scale: initialScale ?? DEFAULT_SCALE
+    };
+    hasAppliedInitialViewStateRef.current = false;
+
+    const fetchAndLoadPdf = async () => {
+      try {
+        // Check if pdfUrl is a data URL or a regular URL
+        if (pdfUrl.startsWith('data:')) {
+          // For data URLs, convert to array buffer
+          const base64 = pdfUrl.split(',')[1];
+          if (!base64) {
+            const errorMsg = 'Invalid PDF data format';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
           }
-        } catch (error) {
-          console.error('Error fetching PDF:', error);
-          setPdfLoadingError(true);
-          
-          if (error instanceof Error) {
-            // Check if it's a network error
-            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-              setErrorMessage('Unable to access PDF file. Please check your connection and try again.');
-              onErrorChange?.(true, 'Unable to access PDF file. Please check your connection and try again.');
-            } else if (error.message.includes('Invalid PDF structure') ||
-                       error.message.includes('PDF header not found') ||
-                       error.message.includes('Invalid PDF') ||
-                       error.message.includes('corrupted')) {
-              setErrorMessage('The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
-              onErrorChange?.(true, 'The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
-            } else if (error.message.includes('PDF file is empty')) {
-              setErrorMessage('PDF file is empty. Please upload a valid PDF.');
-              onErrorChange?.(true, 'PDF file is empty. Please upload a valid PDF.');
-            } else if (error.message.includes('PDF file not found')) {
-              setErrorMessage('PDF file not found in storage. Please upload again.');
-              onErrorChange?.(true, 'PDF file not found in storage. Please upload again.');
-            } else {
-              setErrorMessage('Failed to load PDF file');
-              onErrorChange?.(true, 'Failed to load PDF file');
+
+          try {
+            const binaryString = window.atob(base64);
+
+            // Check if the binary string has content
+            if (binaryString.length === 0) {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
             }
+
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            await loadAndRenderPdf(bytes.buffer);
+          } catch (decodeError) {
+            console.error('Error decoding data URL:', decodeError);
+            const errorMsg = 'Failed to decode PDF data. The file may be corrupted.';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
+          }
+        } else {
+          // For regular URLs, fetch the PDF
+          try {
+            const response = await fetch(pdfUrl, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/pdf'
+              }
+            });
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                console.error(`PDF not found: ${response.status} ${response.statusText}`);
+                const errorMsg = 'PDF file not found in storage. Please upload again.';
+                setPdfLoadingError(true);
+                setErrorMessage(errorMsg);
+                onErrorChange?.(true, errorMsg);
+                throw new Error(errorMsg);
+              } else {
+                console.error(`PDF fetch failed: ${response.status} ${response.statusText}`);
+                const errorMsg = `PDF file is not accessible (HTTP ${response.status}). Please upload again.`;
+                setPdfLoadingError(true);
+                setErrorMessage(errorMsg);
+                onErrorChange?.(true, errorMsg);
+                throw new Error(errorMsg);
+              }
+            }
+
+            // Check if the response has content
+            const contentLength = response.headers.get('content-length');
+            if (contentLength === '0') {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+
+            // Verify the array buffer has content
+            if (arrayBuffer.byteLength === 0) {
+              const errorMsg = 'PDF file is empty. Please upload a valid PDF.';
+              setPdfLoadingError(true);
+              setErrorMessage(errorMsg);
+              onErrorChange?.(true, errorMsg);
+              throw new Error(errorMsg);
+            }
+
+            await loadAndRenderPdf(arrayBuffer);
+          } catch (fetchError) {
+            console.error('Network error fetching PDF:', fetchError);
+            const errorMsg = 'Failed to fetch PDF file. Please check your connection and try again.';
+            setPdfLoadingError(true);
+            setErrorMessage(errorMsg);
+            onErrorChange?.(true, errorMsg);
+            throw new Error(errorMsg);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching PDF:', error);
+        setPdfLoadingError(true);
+
+        if (error instanceof Error) {
+          // Check if it's a network error
+          if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            setErrorMessage('Unable to access PDF file. Please check your connection and try again.');
+            onErrorChange?.(true, 'Unable to access PDF file. Please check your connection and try again.');
+          } else if (error.message.includes('Invalid PDF structure') ||
+                     error.message.includes('PDF header not found') ||
+                     error.message.includes('Invalid PDF') ||
+                     error.message.includes('corrupted')) {
+            setErrorMessage('The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
+            onErrorChange?.(true, 'The uploaded file is not a valid PDF. Please upload a valid PDF to use the snipping tool.');
+          } else if (error.message.includes('PDF file is empty')) {
+            setErrorMessage('PDF file is empty. Please upload a valid PDF.');
+            onErrorChange?.(true, 'PDF file is empty. Please upload a valid PDF.');
+          } else if (error.message.includes('PDF file not found')) {
+            setErrorMessage('PDF file not found in storage. Please upload again.');
+            onErrorChange?.(true, 'PDF file not found in storage. Please upload again.');
           } else {
             setErrorMessage('Failed to load PDF file');
             onErrorChange?.(true, 'Failed to load PDF file');
           }
-          
-          // Display the error message as a toast as well
-          if (error instanceof Error) {
-            toast.error(error.message);
-          } else {
-            toast.error('Failed to load PDF file');
-          }
+        } else {
+          setErrorMessage('Failed to load PDF file');
+          onErrorChange?.(true, 'Failed to load PDF file');
         }
-      };
-      
-      fetchAndLoadPdf();
-    }
-  }, [pdfUrl, initialPage, initialScale]);
 
-  useEffect(() => {
-    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
-      return;
-    }
-
-    if (typeof initialPage === 'number' && initialPage !== currentPage) {
-      const clamped = clampPage(initialPage, totalPages || initialPage);
-      if (clamped !== currentPage) {
-        setCurrentPage(clamped);
+        // Display the error message as a toast as well
+        if (error instanceof Error) {
+          toast.error(error.message);
+        } else {
+          toast.error('Failed to load PDF file');
+        }
       }
-    }
-  }, [initialPage, pdfDocument, totalPages, currentPage]);
+    };
 
+    fetchAndLoadPdf();
+  }, [pdfUrl]);
+
+  // CONSOLIDATED view state management - prevents circular updates
   useEffect(() => {
-    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
       return;
     }
 
-    if (typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001) {
-      setScale(initialScale);
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current || isInternalUpdateRef.current) {
+      return;
     }
-  }, [initialScale, pdfDocument, scale]);
+
+    // Clear any pending timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+
+    // Debounce external prop changes to prevent rapid updates
+    updateTimeoutRef.current = setTimeout(() => {
+      let needsUpdate = false;
+      let newPage = currentPage;
+      let newScale = scale;
+
+      if (typeof initialPage === 'number' && initialPage !== currentPage) {
+        const clamped = clampPage(initialPage, totalPages || initialPage);
+        if (clamped !== currentPage) {
+          newPage = clamped;
+          needsUpdate = true;
+        }
+      }
+
+      if (typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001) {
+        newScale = initialScale;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        if (newPage !== currentPage) setCurrentPage(newPage);
+        if (newScale !== scale) setScale(newScale);
+      }
+
+      updateTimeoutRef.current = null;
+    }, 100);
+  }, [initialPage, initialScale, pdfDocument, totalPages, currentPage, scale]);
   
   // Render the current page
   useEffect(() => {
@@ -556,23 +583,48 @@ export function PDFSnippingTool({
     }
   };
 
+  // OPTIMIZED view state change emission - prevents circular updates
   useEffect(() => {
-    if (!pdfDocument) {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
       return;
     }
 
     const nextState = { page: currentPage, scale };
 
+    // Only emit if values actually changed
     if (
       !lastEmittedViewStateRef.current ||
       lastEmittedViewStateRef.current.page !== nextState.page ||
       Math.abs(lastEmittedViewStateRef.current.scale - nextState.scale) > 0.001
     ) {
+      // Mark this as an internal update
+      isInternalUpdateRef.current = true;
+
       lastEmittedViewStateRef.current = nextState;
-      onViewStateChange?.(nextState);
       initialViewStateRef.current = nextState;
+
+      // Emit the change
+      if (onViewStateChange) {
+        onViewStateChange(nextState);
+      }
+
+      // Reset the internal update flag after a brief delay
+      const timer = setTimeout(() => {
+        isInternalUpdateRef.current = false;
+      }, 150);
+
+      return () => clearTimeout(timer);
     }
-  }, [currentPage, scale, pdfDocument, onViewStateChange]);
+  }, [currentPage, scale, pdfDocument]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isDefaultView = currentPage === DEFAULT_PAGE && Math.abs(scale - DEFAULT_SCALE) < 0.001;
   
