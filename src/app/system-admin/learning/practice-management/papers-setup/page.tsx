@@ -513,6 +513,7 @@ export default function PapersSetupPage() {
   const [extractionRulesExpanded, setExtractionRulesExpanded] = useState(true); // Always expanded by default
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [transitionMessage, setTransitionMessage] = useState('');
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
 
   // Track the status of each tab
   const [tabStatuses, setTabStatuses] = useState<Record<string, TabStatus>>({
@@ -692,12 +693,37 @@ export default function PapersSetupPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('session');
-    
+
     if (sessionId && sessionId !== displayedSessionIdRef.current) {
       displayedSessionIdRef.current = sessionId;
       loadImportSession(sessionId);
     }
   }, [location.search]);
+
+  useEffect(() => {
+    if (!pendingTab) {
+      return;
+    }
+
+    if (pendingTab === activeTab && !isLoadingSession) {
+      if (tabTransitionTimeoutRef.current) {
+        clearTimeout(tabTransitionTimeoutRef.current);
+      }
+
+      tabTransitionTimeoutRef.current = setTimeout(() => {
+        setIsTabTransitioning(false);
+        setTransitionMessage('');
+        setPendingTab(null);
+        tabTransitionTimeoutRef.current = null;
+      }, 800);
+    }
+
+    return () => {
+      if (tabTransitionTimeoutRef.current && pendingTab === activeTab) {
+        clearTimeout(tabTransitionTimeoutRef.current);
+      }
+    };
+  }, [activeTab, pendingTab, isLoadingSession]);
 
   const loadImportSession = async (sessionId: string) => {
     setIsLoadingSession(true);
@@ -765,6 +791,13 @@ export default function PapersSetupPage() {
       toast.error('Failed to load import session');
     } finally {
       setIsLoadingSession(false);
+      if (tabTransitionTimeoutRef.current) {
+        clearTimeout(tabTransitionTimeoutRef.current);
+        tabTransitionTimeoutRef.current = null;
+      }
+      setIsTabTransitioning(false);
+      setTransitionMessage('');
+      setPendingTab(null);
     }
   };
 
@@ -829,7 +862,7 @@ export default function PapersSetupPage() {
             structure: 'active',
           }));
           
-          handleTabChange('structure');
+          handleTabChange('structure', { message: 'Preparing academic structure review...' });
           return;
         }
       } catch (hashError) {
@@ -885,7 +918,7 @@ export default function PapersSetupPage() {
               structure: 'active',
             }));
             
-            handleTabChange('structure');
+            handleTabChange('structure', { message: 'Preparing academic structure review...' });
             return;
           }
           // Continue to create new session if user chose OK
@@ -939,7 +972,7 @@ export default function PapersSetupPage() {
       toast.success('File uploaded successfully');
       
       // Auto-navigate to structure tab
-      handleTabChange('structure');
+      handleTabChange('structure', { message: 'Preparing academic structure review...' });
       
       // Update subject rules based on parsed data
       if (jsonData.subject) {
@@ -981,7 +1014,22 @@ export default function PapersSetupPage() {
   const handleSelectPreviousSession = async (session: any) => {
     const params = new URLSearchParams(location.search);
     params.set('session', session.id);
-    params.set('tab', getAppropriateTab(session));
+
+    const nextTab = getAppropriateTab(session);
+    params.set('tab', nextTab);
+
+    if (tabTransitionTimeoutRef.current) {
+      clearTimeout(tabTransitionTimeoutRef.current);
+    }
+
+    setTransitionMessage('Restoring previous session...');
+    setIsTabTransitioning(true);
+    setPendingTab(nextTab);
+
+    if (activeTab !== nextTab) {
+      setActiveTab(nextTab);
+    }
+
     navigate({ search: params.toString() });
   };
 
@@ -992,7 +1040,20 @@ export default function PapersSetupPage() {
     return 'structure';
   };
 
-  const handleTabChange = (tabId: string) => {
+  const handleQuestionsContinue = () => {
+    if (tabTransitionTimeoutRef.current) {
+      clearTimeout(tabTransitionTimeoutRef.current);
+      tabTransitionTimeoutRef.current = null;
+    }
+
+    setTransitionMessage('Opening question management workspace...');
+    setIsTabTransitioning(true);
+    setPendingTab(null);
+
+    navigate('/system-admin/learning/practice-management/questions-setup');
+  };
+
+  const handleTabChange = useCallback((tabId: string, options?: { message?: string }) => {
     if (!tabId || tabId === activeTab) {
       return;
     }
@@ -1003,8 +1064,9 @@ export default function PapersSetupPage() {
 
     const tabName = IMPORT_TABS.find(t => t.id === tabId)?.label || 'content';
 
-    setTransitionMessage(`Preparing ${tabName}...`);
+    setTransitionMessage(options?.message || `Preparing ${tabName}...`);
     setIsTabTransitioning(true);
+    setPendingTab(tabId);
     setActiveTab(tabId);
 
     setTabStatuses(prev => {
@@ -1014,13 +1076,7 @@ export default function PapersSetupPage() {
       }
       return updatedStatuses;
     });
-
-    tabTransitionTimeoutRef.current = setTimeout(() => {
-      setIsTabTransitioning(false);
-      setTransitionMessage('');
-      tabTransitionTimeoutRef.current = null;
-    }, 450);
-  };
+  }, [activeTab]);
 
   const handleStructureComplete = async () => {
     if (structureCompleteCalled) return;
@@ -1034,7 +1090,7 @@ export default function PapersSetupPage() {
     }));
     
     // Auto-navigate to metadata tab
-    handleTabChange('metadata');
+    handleTabChange('metadata', { message: 'Configuring paper metadata workspace...' });
   };
 
   const handleMetadataSave = async (paperId: string, paperDetails: any) => {
@@ -1070,7 +1126,7 @@ export default function PapersSetupPage() {
     }));
     
     // Auto-navigate to questions tab
-    handleTabChange('questions');
+    handleTabChange('questions', { message: 'Preparing questions review...' });
   };
 
   const getTabStatus = (tabId: string): TabStatus => {
@@ -1271,6 +1327,7 @@ export default function PapersSetupPage() {
               parsedData={parsedData}
               onSelectPreviousSession={handleSelectPreviousSession}
               importSession={importSession}
+              onNavigateToTab={handleTabChange}
             />
           </div>
           
@@ -1324,7 +1381,7 @@ export default function PapersSetupPage() {
               importSession={importSession}
               parsedData={parsedData}
               onNext={handleStructureComplete}
-              onPrevious={() => handleTabChange('upload')}
+              onPrevious={() => handleTabChange('upload', { message: 'Returning to upload review...' })}
             />
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
@@ -1342,7 +1399,7 @@ export default function PapersSetupPage() {
               importSession={importSession}
               parsedData={parsedData}
               onSave={handleMetadataSave}
-              onPrevious={() => handleTabChange('structure')}
+              onPrevious={() => handleTabChange('structure', { message: 'Going back to academic structure...' })}
             />
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
@@ -1361,8 +1418,8 @@ export default function PapersSetupPage() {
               parsedData={parsedData}
               existingPaperId={existingPaperId}
               savedPaperDetails={savedPaperDetails}
-              onPrevious={() => handleTabChange('metadata')}
-              onContinue={() => navigate('/system-admin/learning/practice-management/questions-setup')}
+              onPrevious={() => handleTabChange('metadata', { message: 'Returning to metadata setup...' })}
+              onContinue={handleQuestionsContinue}
               extractionRules={extractionRules}
               updateStagedAttachments={updateStagedAttachments}
               stagedAttachments={stagedAttachments}
