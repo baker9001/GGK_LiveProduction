@@ -15,6 +15,7 @@ interface AttachmentDisplayProps {
   onAdd: () => void;
   onDelete: (attachmentKey: string, attachmentId: string) => void;
   isEditing?: boolean;
+  showDeleteButton?: boolean;
 }
 
 export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
@@ -26,6 +27,7 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   onAdd,
   onDelete,
   isEditing = false,
+  showDeleteButton = true,
 }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const hasAttachments = attachments && attachments.length > 0;
@@ -136,24 +138,26 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                   >
                     <Eye className="h-5 w-5" />
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="shadow-lg pointer-events-auto"
-                    title="Delete Attachment"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log('🗑️ Delete button clicked in AttachmentDisplay');
-                      console.log('📋 Attachment Key:', attachmentKey);
-                      console.log('📋 Attachment ID:', attachment.id);
-                      console.log('📋 Calling onDelete with both parameters');
-                      onDelete(attachmentKey, attachment.id);
-                      console.log('✅ onDelete called successfully with key and id');
-                    }}
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </Button>
+                  {showDeleteButton && (
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="shadow-lg pointer-events-auto"
+                      title="Delete Attachment"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🗑️ Delete button clicked in AttachmentDisplay');
+                        console.log('📋 Attachment Key:', attachmentKey);
+                        console.log('📋 Attachment ID:', attachment.id);
+                        console.log('📋 Calling onDelete with both parameters');
+                        onDelete(attachmentKey, attachment.id);
+                        console.log('✅ onDelete called successfully with key and id');
+                      }}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  )}
                 </div>
               </div>
 

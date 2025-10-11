@@ -111,6 +111,7 @@ export const QuestionPartDisplay: React.FC<QuestionPartDisplayProps> = ({
             onAdd={() => onAddAttachment(partIndex)}
             onDelete={onDeleteAttachment}
             isEditing={isEditing}
+            showDeleteButton={false}
           />
         )}
 

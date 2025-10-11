@@ -270,6 +270,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               onAdd={() => onAddAttachment()}
               onDelete={onDeleteAttachment}
               isEditing={isEditing}
+              showDeleteButton={false}
             />
           )}
 
