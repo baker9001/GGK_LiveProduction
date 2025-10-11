@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -72,30 +72,8 @@ export default function UnitsTable() {
     status: ''
   });
 
-  useEffect(() => {
-    fetchUnits();
-    fetchSubjects();
-  }, [filters]);
-
-  useEffect(() => {
-    if (editingUnit) {
-      setFormState({
-        subject_id: editingUnit.subject_id,
-        name: editingUnit.name,
-        code: editingUnit.code,
-        status: editingUnit.status
-      });
-    } else {
-      setFormState({
-        subject_id: '',
-        name: '',
-        code: '',
-        status: 'active'
-      });
-    }
-  }, [editingUnit]);
-
-  const fetchUnits = async () => {
+  const fetchUnits = useCallback(async () => {
+    setLoading(true);
     try {
       let query = supabase
         .from('edu_units')
@@ -151,9 +129,9 @@ export default function UnitsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('edu_subjects')
@@ -167,7 +145,33 @@ export default function UnitsTable() {
       console.error('Error fetching subjects:', error);
       toast.error('Failed to fetch subjects');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUnits();
+  }, [fetchUnits]);
+
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
+
+  useEffect(() => {
+    if (editingUnit) {
+      setFormState({
+        subject_id: editingUnit.subject_id,
+        name: editingUnit.name,
+        code: editingUnit.code,
+        status: editingUnit.status
+      });
+    } else {
+      setFormState({
+        subject_id: '',
+        name: '',
+        code: '',
+        status: 'active'
+      });
+    }
+  }, [editingUnit]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -339,7 +343,6 @@ export default function UnitsTable() {
             subject_id: '',
             status: ''
           });
-          fetchUnits();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

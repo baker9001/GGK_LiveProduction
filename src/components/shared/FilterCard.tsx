@@ -288,9 +288,6 @@ export function FilterCard({
     if (typeof onClear === 'function') {
       onClear();
     }
-    if (typeof onApply === 'function') {
-      onApply();
-    }
   };
   
   return (

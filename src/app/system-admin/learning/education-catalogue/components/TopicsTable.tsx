@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -85,75 +85,8 @@ export default function TopicsTable() {
     status: []
   });
 
-  useEffect(() => {
-    fetchTopics();
-    fetchSubjects();
-  }, []);
-
-  // Filter cascade effects
-  useEffect(() => {
-    if (filters.subject_id) {
-      fetchFilterUnits(filters.subject_id);
-    } else {
-      setFilterUnits([]);
-      setFilters(prev => ({ ...prev, unit_id: '' }));
-    }
-  }, [filters.subject_id]);
-
-  // Form cascade effects
-  useEffect(() => {
-    if (formState.subject_id) {
-      fetchFormUnits(formState.subject_id);
-    } else {
-      setFormUnits([]);
-      setFormState(prev => ({ ...prev, unit_id: '' }));
-    }
-  }, [formState.subject_id]);
-
-  // Populate form when editing
-  useEffect(() => {
-    if (editingTopic) {
-      const fetchTopicDetails = async () => {
-        try {
-          // Get unit to find subject_id
-          const { data: unit, error: unitError } = await supabase
-            .from('edu_units')
-            .select('id, subject_id')
-            .eq('id', editingTopic.unit_id)
-            .single();
-
-          if (unitError) throw unitError;
-
-          // Set form state with all IDs
-          setFormState({
-            subject_id: unit.subject_id,
-            unit_id: editingTopic.unit_id,
-            name: editingTopic.name,
-            sort: editingTopic.sort || 0,
-            status: editingTopic.status
-          });
-
-          // Fetch cascading options
-          await fetchFormUnits(unit.subject_id);
-        } catch (error) {
-          console.error('Error fetching topic details:', error);
-          toast.error('Failed to load topic details');
-        }
-      };
-
-      fetchTopicDetails();
-    } else {
-      setFormState({
-        subject_id: '',
-        unit_id: '',
-        name: '',
-        sort: 0,
-        status: 'active'
-      });
-    }
-  }, [editingTopic]);
-
-  const fetchTopics = async () => {
+  const fetchTopics = useCallback(async () => {
+    setLoading(true);
     try {
       // First, fetch the topics
       let query = supabase
@@ -169,7 +102,7 @@ export default function TopicsTable() {
           .from('edu_units')
           .select('id')
           .eq('subject_id', filters.subject_id);
-        
+
         if (units && units.length > 0) {
           query = query.in('unit_id', units.map(u => u.id));
         }
@@ -234,9 +167,9 @@ export default function TopicsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('edu_subjects')
@@ -250,7 +183,79 @@ export default function TopicsTable() {
       console.error('Error fetching subjects:', error);
       toast.error('Failed to fetch subjects');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchTopics();
+  }, [fetchTopics]);
+
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
+
+  // Filter cascade effects
+  useEffect(() => {
+    if (filters.subject_id) {
+      fetchFilterUnits(filters.subject_id);
+    } else {
+      setFilterUnits([]);
+      setFilters(prev => ({ ...prev, unit_id: '' }));
+    }
+  }, [filters.subject_id]);
+
+  // Form cascade effects
+  useEffect(() => {
+    if (formState.subject_id) {
+      fetchFormUnits(formState.subject_id);
+    } else {
+      setFormUnits([]);
+      setFormState(prev => ({ ...prev, unit_id: '' }));
+    }
+  }, [formState.subject_id]);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editingTopic) {
+      const fetchTopicDetails = async () => {
+        try {
+          // Get unit to find subject_id
+          const { data: unit, error: unitError } = await supabase
+            .from('edu_units')
+            .select('id, subject_id')
+            .eq('id', editingTopic.unit_id)
+            .single();
+
+          if (unitError) throw unitError;
+
+          // Set form state with all IDs
+          setFormState({
+            subject_id: unit.subject_id,
+            unit_id: editingTopic.unit_id,
+            name: editingTopic.name,
+            sort: editingTopic.sort || 0,
+            status: editingTopic.status
+          });
+
+          // Fetch cascading options
+          await fetchFormUnits(unit.subject_id);
+        } catch (error) {
+          console.error('Error fetching topic details:', error);
+          toast.error('Failed to load topic details');
+        }
+      };
+
+      fetchTopicDetails();
+    } else {
+      setFormState({
+        subject_id: '',
+        unit_id: '',
+        name: '',
+        sort: 0,
+        status: 'active'
+      });
+    }
+  }, [editingTopic]);
+
 
   const fetchFilterUnits = async (subjectId: string) => {
     try {
@@ -473,7 +478,6 @@ export default function TopicsTable() {
             unit_id: '',
             status: []
           });
-          fetchTopics();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -484,7 +488,13 @@ export default function TopicsTable() {
               label: subject.name
             }))}
             selectedValues={filters.subject_id ? [filters.subject_id] : []}
-            onChange={(values) => setFilters({ ...filters, subject_id: values[0] || '', unit_id: '' })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                subject_id: values[0] || '',
+                unit_id: ''
+              }))
+            }
             isMulti={false}
             placeholder="Select subject..."
           />
@@ -496,7 +506,12 @@ export default function TopicsTable() {
               label: unit.name
             }))}
             selectedValues={filters.unit_id ? [filters.unit_id] : []}
-            onChange={(values) => setFilters({ ...filters, unit_id: values[0] || '' })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                unit_id: values[0] || ''
+              }))
+            }
             isMulti={false}
             disabled={!filters.subject_id}
             placeholder="Select unit..."
@@ -509,7 +524,12 @@ export default function TopicsTable() {
               { value: 'inactive', label: 'Inactive' }
             ]}
             selectedValues={filters.status}
-            onChange={(values) => setFilters({ ...filters, status: values })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                status: values
+              }))
+            }
             placeholder="Select status..."
           />
         </div>

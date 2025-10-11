@@ -1,6 +1,6 @@
 ///home/project/src/app/system-admin/learning/education-catalogue/components/SubjectsTable.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { Plus, ImageOff } from 'lucide-react';
@@ -40,7 +40,6 @@ type Subject = {
 export default function SubjectsTable() {
   const queryClient = useQueryClient();
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [localSearchTerm, setLocalSearchTerm] = useState('');
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [logoPath, setLogoPath] = useState<string | null>(null);
@@ -313,6 +312,23 @@ export default function SubjectsTable() {
     },
   ];
 
+  const filteredSubjects = useMemo(() => {
+    const searchTerm = filters.search.trim().toLowerCase();
+
+    return subjects.filter(subject => {
+      const matchesSearch = searchTerm
+        ? ((subject.name || '').toLowerCase().includes(searchTerm) ||
+           (subject.code || '').toLowerCase().includes(searchTerm))
+        : true;
+
+      const matchesStatus = filters.status.length > 0
+        ? filters.status.includes(subject.status)
+        : true;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [subjects, filters]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -331,15 +347,12 @@ export default function SubjectsTable() {
 
       <FilterCard
         title="Filters"
-        onApply={() => filtering.applyFilters(filters)}
+        onApply={() => {}}
         onClear={() => {
-          const resetFilters = {
+          setFilters({
             search: '',
             status: []
-          };
-          setFiltersState(resetFilters);
-          setLocalSearchTerm('');
-          filtering.clearFilters();
+          });
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -350,8 +363,13 @@ export default function SubjectsTable() {
             <Input
               id="search"
               placeholder="Search by name or code..."
-              value={localSearchTerm}
-              onChange={(e) => setLocalSearchTerm(e.target.value)}
+              value={filters.search}
+              onChange={(e) =>
+                setFilters(prev => ({
+                  ...prev,
+                  search: e.target.value
+                }))
+              }
             />
           </FormField>
 
@@ -362,14 +380,19 @@ export default function SubjectsTable() {
               { value: 'inactive', label: 'Inactive' }
             ]}
             selectedValues={filters.status}
-            onChange={(values) => setFilters({ ...filters, status: values })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                status: values
+              }))
+            }
             placeholder="Select status..."
           />
         </div>
       </FilterCard>
 
       <DataTable
-        data={subjects}
+        data={filteredSubjects}
         columns={columns}
         keyField="id"
         caption="List of educational subjects with their codes and status"

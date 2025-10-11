@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -44,11 +44,8 @@ export default function RegionsTable() {
     status: ''
   });
 
-  useEffect(() => {
-    fetchRegions();
-  }, []);
-
-  const fetchRegions = async () => {
+  const fetchRegions = useCallback(async () => {
+    setLoading(true);
     try {
       let query = supabase
         .from('regions')
@@ -77,7 +74,11 @@ export default function RegionsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    fetchRegions();
+  }, [fetchRegions]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -236,7 +237,6 @@ export default function RegionsTable() {
             code: '',
             status: ''
           });
-          fetchRegions();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
