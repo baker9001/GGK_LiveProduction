@@ -1214,7 +1214,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                           showHints={showHints}
                           showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                          mode={isQAMode ? 'admin' : examMode}
+                          mode={isQAMode ? 'qa_preview' : examMode}
                         />
                       </div>
                     )}
@@ -1298,7 +1298,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                 showHints={showHints}
                                 showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                mode={isQAMode ? 'admin' : examMode}
+                                mode={isQAMode ? 'qa_preview' : examMode}
                               />
 
                               {isQAMode && (
@@ -1363,7 +1363,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                             showHints={showHints}
                                             showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                            mode={isQAMode ? 'admin' : examMode}
+                                            mode={isQAMode ? 'qa_preview' : examMode}
                                           />
 
                                           {isQAMode && (

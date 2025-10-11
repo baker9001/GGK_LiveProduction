@@ -20,7 +20,8 @@ import {
   Plus,
   Trash2,
   Copy,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Target
 } from 'lucide-react';
 import ScientificEditor from './ScientificEditor';
 import Button from './Button';
@@ -42,6 +43,28 @@ interface CorrectAnswer {
   measurement_details?: Record<string, unknown> | null;
   accepts_equivalent_phrasing?: boolean;
   error_carried_forward?: boolean;
+  accepts_reverse_argument?: boolean;
+  answer_requirement?: string;
+  total_alternatives?: number;
+  validation_issues?: string[];
+  // Enhanced variation support from extraction guides
+  equivalent_variations?: string[];
+  answer_variations?: {
+    alternative_phrasings?: string[];
+    reverse_arguments?: string[];
+    mathematical_expressions?: string[];
+    simplified_forms?: string[];
+  };
+  synonym_mappings?: Record<string, string[]>;
+  marking_flags?: {
+    accepts_reverse_argument?: boolean;
+    accepts_equivalent_phrasing?: boolean;
+    accepts_mathematical_notation?: boolean;
+    case_insensitive?: boolean;
+    accepts_abbreviated_forms?: boolean;
+    ignore_articles?: boolean;
+    accepts_symbolic_notation?: boolean;
+  };
 }
 
 type AnswerPrimitive = string | number | boolean;
@@ -133,7 +156,7 @@ interface AnswerFieldProps {
   disabled?: boolean;
   showHints?: boolean;
   showCorrectAnswer?: boolean;
-  mode?: 'practice' | 'exam' | 'review' | 'admin';
+  mode?: 'practice' | 'exam' | 'review' | 'admin' | 'qa_preview';
   // New optional props
   answerComponents?: AnswerComponent[];
   contextRequirements?: ContextRequirement[];
@@ -226,6 +249,57 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       case 'all_required': return question.correct_answers?.length || 1;
       default: return 1;
     }
+  };
+
+  // Helper to render mark scheme abbreviation badges
+  const renderMarkSchemeBadges = (answer: CorrectAnswer) => {
+    const badges: JSX.Element[] = [];
+
+    if (answer.accepts_equivalent_phrasing || answer.marking_flags?.accepts_equivalent_phrasing) {
+      badges.push(
+        <span key="owtte" className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+          OWTTE
+        </span>
+      );
+    }
+
+    if (answer.accepts_reverse_argument || answer.marking_flags?.accepts_reverse_argument) {
+      badges.push(
+        <span key="ora" className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+          ORA
+        </span>
+      );
+    }
+
+    if (answer.error_carried_forward) {
+      badges.push(
+        <span key="ecf" className="px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-xs font-medium">
+          ECF
+        </span>
+      );
+    }
+
+    if (answer.marking_flags?.accepts_mathematical_notation) {
+      badges.push(
+        <span key="math" className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium">
+          Math notation OK
+        </span>
+      );
+    }
+
+    if (answer.unit) {
+      badges.push(
+        <span key="unit" className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 rounded-full text-xs font-medium">
+          Unit: {answer.unit}
+        </span>
+      );
+    }
+
+    return badges.length > 0 ? (
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {badges}
+      </div>
+    ) : null;
   };
 
   // Helper to format chemical formulas
@@ -1151,6 +1225,10 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       return renderAdminModeEditor();
     }
 
+    // QA Preview mode: Show MCQ options + teacher insights
+    const isQAPreview = mode === 'qa_preview';
+    const shouldShowTeacherInsights = isQAPreview;
+
     // Existing MCQ rendering logic...
     const shouldExplainRequirement = showHints || mode !== 'exam';
     const shouldShowFeedback = (
@@ -1161,7 +1239,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     const allCorrectAnswers = getAllCorrectAnswers();
     
     return (
-      <div className="space-y-2">
+      <div className="space-y-4">
         {shouldExplainRequirement && question.answer_requirement && (
           <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-300">
@@ -1247,6 +1325,139 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         {shouldShowFeedback && allCorrectAnswers.length > 1 && (
           <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             <p className="font-medium">Note: {allCorrectAnswers.length} correct answers available</p>
+          </div>
+        )}
+
+        {/* QA Preview Teacher Insights */}
+        {shouldShowTeacherInsights && (
+          <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-600 dark:text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h4 className="font-semibold text-amber-900 dark:text-amber-100">
+                    Teacher Review - MCQ Question
+                  </h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-200 mt-1">
+                    Preview the full marking guidance before publishing to students.
+                  </p>
+                </div>
+
+                {/* Correct Answer Indicator */}
+                {allCorrectAnswers.length > 0 && (
+                  <div>
+                    <div className="flex items-center space-x-2 text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Correct Answer{allCorrectAnswers.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {allCorrectAnswers.map((ans, idx) => {
+                        const correctOption = question.options?.find(opt =>
+                          opt.is_correct || ans.answer.includes(opt.label)
+                        );
+                        return (
+                          <div key={idx} className="bg-white/60 dark:bg-amber-900/40 rounded-md p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="font-semibold text-amber-900 dark:text-amber-50">
+                                {correctOption?.label || String.fromCharCode(65 + idx)}
+                              </span>
+                              <div className="flex-1 space-y-2">
+                                <p className="text-sm text-amber-900 dark:text-amber-50">
+                                  {correctOption?.text || ans.answer}
+                                </p>
+
+                                {/* Mark scheme badges */}
+                                {renderMarkSchemeBadges(ans)}
+
+                                {/* Answer variations */}
+                                {ans.answer_variations && (
+                                  <div className="space-y-1.5 text-xs">
+                                    {ans.answer_variations.alternative_phrasings && ans.answer_variations.alternative_phrasings.length > 0 && (
+                                      <div>
+                                        <span className="font-medium text-amber-800 dark:text-amber-200">Alternative phrasings:</span>
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {ans.answer_variations.alternative_phrasings.map((phrase, i) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-800/40 text-amber-700 dark:text-amber-200 rounded text-xs">
+                                              {phrase}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {ans.answer_variations.reverse_arguments && ans.answer_variations.reverse_arguments.length > 0 && (
+                                      <div>
+                                        <span className="font-medium text-amber-800 dark:text-amber-200">Reverse arguments:</span>
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {ans.answer_variations.reverse_arguments.map((phrase, i) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-800/40 text-purple-700 dark:text-purple-200 rounded text-xs">
+                                              {phrase}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {ans.answer_variations.mathematical_expressions && ans.answer_variations.mathematical_expressions.length > 0 && (
+                                      <div>
+                                        <span className="font-medium text-amber-800 dark:text-amber-200">Math expressions:</span>
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {ans.answer_variations.mathematical_expressions.map((expr, i) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-200 rounded text-xs font-mono">
+                                              {expr}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Equivalent variations */}
+                                {ans.equivalent_variations && ans.equivalent_variations.length > 0 && (
+                                  <div className="text-xs">
+                                    <span className="font-medium text-amber-800 dark:text-amber-200">Also accepts:</span>
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {ans.equivalent_variations.map((variation, i) => (
+                                        <span key={i} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/40 text-blue-700 dark:text-blue-200 rounded text-xs">
+                                          {variation}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Answer Requirement */}
+                {question.answer_requirement && (
+                  <div className="flex items-start space-x-2 text-sm text-amber-800 dark:text-amber-100">
+                    <Target className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>
+                      <span className="font-medium">Answer expectation:</span>{' '}
+                      {getAnswerRequirementLabel(question.answer_requirement)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Total Alternatives */}
+                {question.total_alternatives && question.total_alternatives > 1 && (
+                  <div className="text-xs text-amber-700 dark:text-amber-200">
+                    <span className="font-medium">Note:</span> {question.total_alternatives} acceptable answer variations documented
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
