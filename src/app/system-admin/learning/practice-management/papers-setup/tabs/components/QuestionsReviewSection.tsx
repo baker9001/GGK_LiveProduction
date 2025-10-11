@@ -193,17 +193,6 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
             onAttachmentUpload(question.id, partPath);
           };
 
-          const handleDeleteAttachment = (attachmentId: string, partIndex?: number, subpartIndex?: number) => {
-            let key = question.id;
-            if (partIndex !== undefined) {
-              key += `_p${partIndex}`;
-              if (subpartIndex !== undefined) {
-                key += `_s${subpartIndex}`;
-              }
-            }
-            onAttachmentDelete(key, attachmentId);
-          };
-
           const handleUpdateQuestion = (updates: any) => {
             if (editingQuestion && isEditing) {
               const updated = { ...editingQuestion, ...updates };
@@ -234,7 +223,10 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
               onCancel={onQuestionCancel}
               onMappingUpdate={(field, value) => onMappingUpdate(question.id, field, value)}
               onAddAttachment={handleAddAttachment}
-              onDeleteAttachment={(attachmentId) => handleDeleteAttachment(attachmentId)}
+              onDeleteAttachment={(attachmentKey, attachmentId) => {
+                console.log('🎯 QuestionsReviewSection onDeleteAttachment wrapper called:', { attachmentKey, attachmentId });
+                onAttachmentDelete(attachmentKey, attachmentId);
+              }}
               onUpdateQuestion={handleUpdateQuestion}
             />
           );

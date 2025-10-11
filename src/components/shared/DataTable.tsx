@@ -8,10 +8,11 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
 import { DataTableSkeleton } from './DataTableSkeleton';
+import { PaginationControls } from './PaginationControls';
 
 export interface Column<T> {
   id: string;
@@ -87,6 +88,14 @@ export function DataTable<T>({
   const startIndex = pagination ? 0 : (page - 1) * rowsPerPage;
   const endIndex = pagination ? data.length : startIndex + rowsPerPage;
   const paginatedData = pagination ? data : data.slice(startIndex, endIndex);
+
+  const displayTotal = pagination?.totalCount ?? data.length;
+  const displayStart = data.length > 0 ? (pagination ? (page - 1) * rowsPerPage + 1 : startIndex + 1) : 0;
+  const displayEnd = data.length > 0
+    ? (pagination
+      ? Math.min((page - 1) * rowsPerPage + data.length, displayTotal)
+      : Math.min(endIndex, displayTotal))
+    : 0;
   
   // Row selection
   const allRowsSelected = 
@@ -454,6 +463,46 @@ export function DataTable<T>({
           </button>
         </div>
       </div>
+      <PaginationControls
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalCount={displayTotal}
+        totalPages={totalPages}
+        onPageChange={(newPage) => {
+          if (pagination) {
+            pagination.goToPage(newPage);
+          } else {
+            setInternalPage(newPage);
+          }
+        }}
+        onNextPage={() => {
+          if (pagination) {
+            pagination.nextPage();
+          } else {
+            setInternalPage(prev => Math.min(prev + 1, totalPages));
+          }
+        }}
+        onPreviousPage={() => {
+          if (pagination) {
+            pagination.previousPage();
+          } else {
+            setInternalPage(prev => Math.max(prev - 1, 1));
+          }
+        }}
+        onRowsPerPageChange={(newRowsPerPage) => {
+          if (pagination) {
+            pagination.changeRowsPerPage(newRowsPerPage);
+          } else {
+            setInternalRowsPerPage(newRowsPerPage);
+            setInternalPage(1);
+          }
+        }}
+        showingRange={{
+          start: displayStart,
+          end: displayEnd,
+        }}
+        ariaLabel={pagination?.ariaLabel || "Table pagination"}
+      />
     </div>
   );
 }

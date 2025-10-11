@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { cn } from '../../../../lib/utils';
 import { SYSTEM_ROUTES } from '../../../../lib/constants/routes';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 export interface PermissionRecord {
   can_access: boolean;
@@ -30,6 +32,20 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
   ({ roleId, initialPermissions = [], className }, ref) => {
     // Initialize permissions state from props
     const [permissions, setPermissions] = useState<Record<string, PermissionRecord>>({});
+
+    const {
+      page: routesPage,
+      rowsPerPage: routesRowsPerPage,
+      totalPages: routesTotalPages,
+      totalCount: routesTotalCount,
+      paginatedItems: paginatedRoutes,
+      start: routesStart,
+      end: routesEnd,
+      goToPage: goToRoutesPage,
+      nextPage: nextRoutesPage,
+      previousPage: previousRoutesPage,
+      changeRowsPerPage: changeRoutesRowsPerPage,
+    } = usePagination(SYSTEM_ROUTES);
 
     // Update permissions when initialPermissions changes
     useEffect(() => {
@@ -181,7 +197,7 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {SYSTEM_ROUTES.map((route) => (
+            {paginatedRoutes.map((route) => (
               <tr key={route.path} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <input
@@ -216,6 +232,17 @@ export const PermissionsMatrix = forwardRef<PermissionsMatrixRef, PermissionsMat
             ))}
           </tbody>
         </table>
+        <PaginationControls
+          page={routesPage}
+          rowsPerPage={routesRowsPerPage}
+          totalCount={routesTotalCount}
+          totalPages={routesTotalPages}
+          onPageChange={goToRoutesPage}
+          onNextPage={nextRoutesPage}
+          onPreviousPage={previousRoutesPage}
+          onRowsPerPageChange={changeRoutesRowsPerPage}
+          showingRange={{ start: routesStart, end: routesEnd }}
+        />
       </div>
     );
   }

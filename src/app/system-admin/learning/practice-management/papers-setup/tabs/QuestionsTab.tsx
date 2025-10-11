@@ -2416,20 +2416,47 @@ export function QuestionsTab({
   };
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
-    setAttachments(prev => ({
-      ...prev,
-      [attachmentKey]: prev[attachmentKey].filter(att => att.id !== attachmentId)
-    }));
-    
+    console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
+
+    // Safety check: ensure attachmentKey exists
+    if (!attachments[attachmentKey]) {
+      console.error('❌ Attachment key not found:', attachmentKey);
+      console.error('Available keys:', Object.keys(attachments));
+      toast.error('Failed to delete attachment: Invalid attachment key');
+      return;
+    }
+
+    // Find the attachment to confirm it exists
+    const attachmentToDelete = attachments[attachmentKey].find(att => att.id === attachmentId);
+    if (!attachmentToDelete) {
+      console.error('❌ Attachment not found:', { attachmentId, availableIds: attachments[attachmentKey].map(a => a.id) });
+      toast.error('Failed to delete attachment: Attachment not found');
+      return;
+    }
+
+    console.log('✅ Found attachment to delete:', attachmentToDelete);
+
+    setAttachments(prev => {
+      const updated = {
+        ...prev,
+        [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
+      };
+      console.log('📦 Updated attachments state:', {
+        key: attachmentKey,
+        before: prev[attachmentKey]?.length,
+        after: updated[attachmentKey].length
+      });
+      return updated;
+    });
+
     // Update staged attachments
     if (updateStagedAttachments) {
-      updateStagedAttachments(
-        attachmentKey, 
-        attachments[attachmentKey].filter(att => att.id !== attachmentId)
-      );
+      const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
+      updateStagedAttachments(attachmentKey, filteredAttachments);
+      console.log('📤 Updated staged attachments');
     }
-    
-    toast.success('Attachment deleted');
+
+    toast.success('Attachment deleted successfully');
   };
 
   // FIXED: Scroll to question function
@@ -3187,7 +3214,9 @@ export function QuestionsTab({
         }}
         onAttachmentUpload={handleAttachmentUpload}
         onAttachmentDelete={(key: string, attachmentId: string) => {
+          console.log('🗑️ Delete attachment clicked:', { key, attachmentId });
           setDeleteAttachmentConfirm({ key, attachmentId });
+          console.log('✅ Confirmation dialog should now appear');
         }}
         onAutoMap={() => handleAutoMapQuestions(true)}
         onImportConfirm={handleImportQuestions}

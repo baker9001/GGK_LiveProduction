@@ -9,16 +9,18 @@ import { cn } from '../../../../../../../lib/utils';
 interface AttachmentDisplayProps {
   attachments: any[];
   questionLabel: string;
+  attachmentKey: string;
   requiresFigure?: boolean;
   pdfAvailable?: boolean;
   onAdd: () => void;
-  onDelete: (attachmentId: string) => void;
+  onDelete: (attachmentKey: string, attachmentId: string) => void;
   isEditing?: boolean;
 }
 
 export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   attachments,
   questionLabel,
+  attachmentKey,
   requiresFigure = false,
   pdfAvailable = false,
   onAdd,
@@ -28,6 +30,19 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const hasAttachments = attachments && attachments.length > 0;
   const showWarning = requiresFigure && !hasAttachments;
+
+  // Debug logging
+  React.useEffect(() => {
+    if (hasAttachments) {
+      console.log(`📎 AttachmentDisplay for "${questionLabel}" received attachments:`, attachments.map(a => ({
+        id: a.id,
+        fileName: a.fileName || a.name || a.file_name,
+        hasDataUrl: !!a.dataUrl,
+        hasData: !!a.data,
+        hasFileUrl: !!a.file_url
+      })));
+    }
+  }, [attachments, questionLabel, hasAttachments]);
 
   return (
     <div>
@@ -106,27 +121,39 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                 />
 
                 {/* Hover Overlay with Actions */}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 pointer-events-none">
                   <Button
                     variant="secondary"
                     size="icon"
-                    className="bg-white text-gray-700 hover:text-[#8CC63F] hover:bg-white shadow-lg"
+                    className="bg-white text-gray-700 hover:text-[#8CC63F] hover:bg-white shadow-lg pointer-events-auto"
                     title="Preview Full Size"
-                    onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('👁️ Preview button clicked');
+                      setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url);
+                    }}
                   >
                     <Eye className="h-5 w-5" />
                   </Button>
-                  {!isEditing && (
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="shadow-lg"
-                      title="Delete Attachment"
-                      onClick={() => onDelete(attachment.id)}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="shadow-lg pointer-events-auto"
+                    title="Delete Attachment"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('🗑️ Delete button clicked in AttachmentDisplay');
+                      console.log('📋 Attachment Key:', attachmentKey);
+                      console.log('📋 Attachment ID:', attachment.id);
+                      console.log('📋 Calling onDelete with both parameters');
+                      onDelete(attachmentKey, attachment.id);
+                      console.log('✅ onDelete called successfully with key and id');
+                    }}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
 

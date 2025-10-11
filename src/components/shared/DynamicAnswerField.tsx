@@ -282,6 +282,19 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   };
 
   const handleDeleteCorrectAnswer = (index: number) => {
+    if (adminCorrectAnswers.length <= 1) {
+      // Don't allow deleting the last answer
+      return;
+    }
+
+    const answerToDelete = adminCorrectAnswers[index];
+
+    // Show confirmation for non-empty answers
+    if (answerToDelete.answer.trim() &&
+        !window.confirm(`Are you sure you want to delete this answer: "${answerToDelete.answer}"?`)) {
+      return;
+    }
+
     const updatedAnswers = adminCorrectAnswers.filter((_, i) => i !== index);
     // Re-index alternative IDs
     const reindexedAnswers = updatedAnswers.map((ans, i) => ({
@@ -450,8 +463,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   </button>
                   <button
                     onClick={() => handleDeleteCorrectAnswer(index)}
-                    className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                    title="Delete answer"
+                    disabled={adminCorrectAnswers.length <= 1}
+                    className={cn(
+                      "p-1",
+                      adminCorrectAnswers.length <= 1
+                        ? "text-gray-300 cursor-not-allowed dark:text-gray-600"
+                        : "text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    )}
+                    title={adminCorrectAnswers.length <= 1 ? "Cannot delete the last answer" : "Delete answer"}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

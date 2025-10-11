@@ -25,8 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../compone
 import { supabase } from '../../../../../lib/supabase';
 import { toast } from '../../../../../components/shared/Toast';
 import { useUser } from '../../../../../contexts/UserContext';
-import { 
-  Loader2, CheckCircle, AlertCircle, FileJson, Database, 
+import {
+  Loader2, AlertCircle, FileJson, Database,
   FileText, ClipboardList, Shield, Settings, Info, ChevronDown
 } from 'lucide-react';
 import { ScrollNavigator } from '../../../../../components/shared/ScrollNavigator';
@@ -1225,7 +1225,7 @@ export default function PapersSetupPage() {
           offset={100}
         />
 
-        {/* Progress Indicator - Visual Only (not clickable) */}
+        {/* Progress Indicator */}
         <div id="workflow" className="mb-8 space-y-4">
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="flex flex-col gap-3">
@@ -1252,52 +1252,6 @@ export default function PapersSetupPage() {
               </div>
             </div>
           </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              {IMPORT_TABS.map((tab, index) => {
-                const status = getTabStatus(tab.id);
-                const Icon = tab.icon;
-
-                return (
-                  <div key={tab.id} className="flex items-center flex-1">
-                    <div className="flex flex-col items-center">
-                      <div className={cn(
-                        "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                        status === 'completed' && "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400",
-                        status === 'active' && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500",
-                        status === 'error' && "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400",
-                        status === 'pending' && "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
-                      )}>
-                        {status === 'completed' ? (
-                          <CheckCircle className="h-5 w-5" />
-                        ) : (
-                          <Icon className="h-5 w-5" />
-                        )}
-                      </div>
-                      <span className={cn(
-                        "text-xs mt-1 font-medium text-center",
-                        status === 'active' && "text-blue-600 dark:text-blue-400",
-                        status === 'completed' && "text-green-600 dark:text-green-400",
-                        status === 'pending' && "text-gray-400 dark:text-gray-500"
-                      )}>
-                        {tab.label}
-                      </span>
-                    </div>
-                    {index < IMPORT_TABS.length - 1 && (
-                      <div className={cn(
-                        "flex-1 h-0.5 mx-2 transition-all",
-                        tabStatuses[IMPORT_TABS[index + 1].id] === 'completed' ||
-                        tabStatuses[IMPORT_TABS[index + 1].id] === 'active'
-                          ? "bg-green-500 dark:bg-green-400"
-                          : "bg-gray-300 dark:bg-gray-600",
-                      )} />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
 
         {/* Error display */}
@@ -1310,8 +1264,9 @@ export default function PapersSetupPage() {
           </div>
         )}
 
-        {/* Tab Content - Tabs hidden, navigation through progress bar only */}
+        {/* Tabs */}
         <Tabs
+          defaultValue={activeTab}
           value={activeTab}
           onValueChange={handleTabChange}
           className="space-y-6"
@@ -1330,6 +1285,40 @@ export default function PapersSetupPage() {
               onNavigateToTab={handleTabChange}
             />
           </div>
+          <TabsList className="w-full justify-start overflow-x-auto">
+            {IMPORT_TABS.map((tab) => {
+              const status = getTabStatus(tab.id);
+              const Icon = tab.icon;
+
+              return (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  tabStatus={status}
+                  disabled={isTabDisabled(tab.id)}
+                  className="gap-2"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{tab.label}</span>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          <TabsContent value="upload" className="space-y-6">
+            <div id="upload-section">
+              <UploadTab
+                onFileSelected={handleFileSelected}
+                uploadedFile={uploadedFile}
+                isUploading={isUploading}
+                uploadProgress={uploadProgress}
+                error={error}
+                parsedData={parsedData}
+                onSelectPreviousSession={handleSelectPreviousSession}
+                importSession={importSession}
+                onNavigateToTab={handleTabChange}
+              />
+            </div>
           
           {/* Extraction Rules - moved here as requested */}
           <div id="extraction-rules" className="mt-6">

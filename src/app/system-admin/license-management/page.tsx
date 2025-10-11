@@ -19,6 +19,8 @@ import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialo
 import { ScrollNavigator } from '../../../components/shared/ScrollNavigator';
 import { toast } from '../../../components/shared/Toast';
 import { useSingleExpansion } from '../../../hooks/useSingleExpansion';
+import { PaginationControls } from '../../../components/shared/PaginationControls';
+import { usePagination } from '../../../hooks/usePagination';
 
 interface License {
   id: string;
@@ -68,6 +70,7 @@ export default function LicenseManagementPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [selectedAction, setSelectedAction] = useState<'EXPAND' | 'EXTEND' | 'RENEW' | null>(null);
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  const [companyPaginationState, setCompanyPaginationState] = useState<Record<string, { page: number; rowsPerPage: number }>>({});
   const [filters, setFilters] = useState<FilterState>({
     company_ids: [],
     region_ids: [],
@@ -227,7 +230,7 @@ export default function LicenseManagementPage() {
   // Group licenses by company
   const groupedLicenses: CompanyLicenses[] = React.useMemo(() => {
     const companyMap = new Map<string, CompanyLicenses>();
-    
+
     rawLicenses.forEach(license => {
       if (!companyMap.has(license.company_id)) {
         companyMap.set(license.company_id, {
@@ -246,9 +249,23 @@ export default function LicenseManagementPage() {
       companyData.totalQuantity += license.quantity;
       companyData.licenses.push(license);
     });
-    
+
     return Array.from(companyMap.values());
   }, [rawLicenses, isExpanded]);
+
+  const {
+    page: companiesPage,
+    rowsPerPage: companiesRowsPerPage,
+    totalPages: companiesTotalPages,
+    totalCount: companiesTotalCount,
+    paginatedItems: paginatedCompanies,
+    start: companiesStart,
+    end: companiesEnd,
+    goToPage: goToCompaniesPage,
+    nextPage: nextCompaniesPage,
+    previousPage: previousCompaniesPage,
+    changeRowsPerPage: changeCompaniesRowsPerPage,
+  } = usePagination(groupedLicenses);
 
   // License action mutation
   const actionMutation = useMutation(
@@ -608,10 +625,32 @@ export default function LicenseManagementPage() {
     );
   };
 
-  // Custom row renderer for the main table
+  const getCompanyPagination = (companyId: string) =>
+    companyPaginationState[companyId] ?? { page: 1, rowsPerPage: 10 };
+
+  const updateCompanyPagination = (companyId: string, newState: Partial<{ page: number; rowsPerPage: number }>) => {
+    setCompanyPaginationState(prev => {
+      const current = prev[companyId] ?? { page: 1, rowsPerPage: 10 };
+      return {
+        ...prev,
+        [companyId]: {
+          page: newState.page ?? current.page,
+          rowsPerPage: newState.rowsPerPage ?? current.rowsPerPage,
+        },
+      };
+    });
+  };
+
   const renderRow = (company: CompanyLicenses) => {
     const expanded = isExpanded(company.id);
-    
+    const pagination = getCompanyPagination(company.id);
+    const totalCount = company.licenses.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(pagination.rowsPerPage, 1)));
+    const page = Math.min(Math.max(pagination.page, 1), totalPages);
+    const startIndex = totalCount === 0 ? 0 : (page - 1) * pagination.rowsPerPage;
+    const paginatedLicenses = company.licenses.slice(startIndex, startIndex + pagination.rowsPerPage);
+    const endIndex = totalCount === 0 ? 0 : Math.min(startIndex + pagination.rowsPerPage, totalCount);
+
     return (
       <React.Fragment key={company.id}>
         {/* Main company row */}
@@ -688,14 +727,14 @@ export default function LicenseManagementPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {company.licenses.length === 0 ? (
+                    {paginatedLicenses.length === 0 ? (
                       <tr>
                         <td colSpan={licenseColumns.length + 1} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                           No licenses found for this company
                         </td>
                       </tr>
                     ) : (
-                      company.licenses.map(license => (
+                      paginatedLicenses.map(license => (
                         <tr key={license.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           {licenseColumns.map(column => (
                             <td key={column.id} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
@@ -710,6 +749,17 @@ export default function LicenseManagementPage() {
                     )}
                   </tbody>
                 </table>
+                <PaginationControls
+                  page={page}
+                  rowsPerPage={pagination.rowsPerPage}
+                  totalCount={totalCount}
+                  totalPages={totalPages}
+                  onPageChange={(newPage) => updateCompanyPagination(company.id, { page: newPage })}
+                  onNextPage={() => updateCompanyPagination(company.id, { page: Math.min(page + 1, totalPages) })}
+                  onPreviousPage={() => updateCompanyPagination(company.id, { page: Math.max(page - 1, 1) })}
+                  onRowsPerPageChange={(newRows) => updateCompanyPagination(company.id, { page: 1, rowsPerPage: newRows })}
+                  showingRange={{ start: totalCount === 0 ? 0 : startIndex + 1, end: endIndex }}
+                />
               </div>
             </td>
           </tr>
@@ -813,7 +863,7 @@ export default function LicenseManagementPage() {
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           </div>
-        ) : groupedLicenses.length === 0 ? (
+        ) : companiesTotalCount === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">No licenses found</p>
           </div>
@@ -837,12 +887,24 @@ export default function LicenseManagementPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {groupedLicenses.map(company => renderRow(company))}
+                {paginatedCompanies.map(company => renderRow(company))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      <PaginationControls
+        page={companiesPage}
+        rowsPerPage={companiesRowsPerPage}
+        totalCount={companiesTotalCount}
+        totalPages={companiesTotalPages}
+        onPageChange={goToCompaniesPage}
+        onNextPage={nextCompaniesPage}
+        onPreviousPage={previousCompaniesPage}
+        onRowsPerPageChange={changeCompaniesRowsPerPage}
+        showingRange={{ start: companiesStart, end: companiesEnd }}
+      />
 
       <SlideInForm
         key={selectedAction ? `${editingLicense?.id || 'new'}-${selectedAction}` : undefined}

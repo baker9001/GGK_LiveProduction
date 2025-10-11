@@ -23,7 +23,7 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GraduationCap, Users, BookOpen, Award, Clock, Plus, Search, Filter, Calendar, FileText, Heart, DollarSign, Bus, Shield, Info, AlertTriangle, CheckCircle2, XCircle, Loader2, BarChart3, UserCheck, Settings, MapPin, Phone, Mail, Home, CreditCard, CreditCard as Edit2, Eye, MoreVertical, User } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../../../../lib/supabase';
@@ -35,6 +35,8 @@ import { StatusBadge } from '../../../../../components/shared/StatusBadge';
 import { toast } from '../../../../../components/shared/Toast';
 import StudentForm from '../../../../../components/forms/StudentForm';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 // Student data interface
 interface StudentData {
@@ -343,20 +345,71 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   // Apply client-side filtering
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         student.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.student_code?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesGrade = filterGrade === 'all' || student.grade_level === filterGrade;
       const matchesSchool = filterSchool === 'all' || student.school_id === filterSchool;
-      const matchesStatus = filterStatus === 'all' || 
+      const matchesStatus = filterStatus === 'all' ||
         (filterStatus === 'active' && student.is_active) ||
         (filterStatus === 'inactive' && !student.is_active);
-      
+
       return matchesSearch && matchesGrade && matchesSchool && matchesStatus;
     });
   }, [students, searchTerm, filterGrade, filterSchool, filterStatus]);
+
+  const {
+    page: studentsPage,
+    rowsPerPage: studentsRowsPerPage,
+    totalPages: studentsTotalPages,
+    totalCount: studentsTotalCount,
+    paginatedItems: paginatedStudents,
+    start: studentsStart,
+    end: studentsEnd,
+    goToPage: goToStudentsPage,
+    nextPage: nextStudentsPage,
+    previousPage: previousStudentsPage,
+    changeRowsPerPage: changeStudentsRowsPerPage,
+  } = usePagination(filteredStudents);
+
+  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+
+  const currentPageStudentIds = useMemo(() => paginatedStudents.map(student => student.id), [paginatedStudents]);
+  const areAllCurrentStudentsSelected = currentPageStudentIds.length > 0 &&
+    currentPageStudentIds.every(id => selectedStudents.includes(id));
+  const isSomeCurrentStudentsSelected = currentPageStudentIds.some(id => selectedStudents.includes(id));
+
+  useEffect(() => {
+    if (!headerCheckboxRef.current) return;
+    headerCheckboxRef.current.indeterminate = isSomeCurrentStudentsSelected && !areAllCurrentStudentsSelected;
+  }, [areAllCurrentStudentsSelected, isSomeCurrentStudentsSelected]);
+
+  const handleSelectStudent = (studentId: string, checked: boolean) => {
+    setSelectedStudents(prev => {
+      if (checked) {
+        if (prev.includes(studentId)) {
+          return prev;
+        }
+        return [...prev, studentId];
+      }
+      return prev.filter(id => id !== studentId);
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedStudents(prev => {
+        const next = new Set(prev);
+        currentPageStudentIds.forEach(id => next.add(id));
+        return Array.from(next);
+      });
+      return;
+    }
+
+    setSelectedStudents(prev => prev.filter(id => !currentPageStudentIds.includes(id)));
+  };
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
@@ -721,9 +774,20 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                 <FeatureCard icon={MapPin} title="Branch & Grade" description="Student's assigned branch and grade level" color="orange" />
                 <FeatureCard icon={Users} title="Class & Sections" description="Manage class and section assignments" color="teal" />
                 <FeatureCard icon={UserCheck} title="Assigned Teachers" description="View teachers assigned to student's classes" color="pink" />
-              </div>
-            </div>
-          </TabsContent>
+          </div>
+          <PaginationControls
+            page={studentsPage}
+            rowsPerPage={studentsRowsPerPage}
+            totalCount={studentsTotalCount}
+            totalPages={studentsTotalPages}
+            onPageChange={goToStudentsPage}
+            onNextPage={nextStudentsPage}
+            onPreviousPage={previousStudentsPage}
+            onRowsPerPageChange={changeStudentsRowsPerPage}
+            showingRange={{ start: studentsStart, end: studentsEnd }}
+          />
+        </div>
+      </TabsContent>
 
           <TabsContent value="list">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -817,13 +881,12 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                     <tr>
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         <input
+                          ref={headerCheckboxRef}
                           type="checkbox"
-                          checked={
-                            filteredStudents.length > 0 &&
-                            selectedStudents.length === filteredStudents.length
-                          }
+                          checked={areAllCurrentStudentsSelected}
+                          aria-checked={areAllCurrentStudentsSelected ? 'true' : (isSomeCurrentStudentsSelected ? 'mixed' : 'false')}
                           onChange={(e) => handleSelectAll(e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                         />
                       </th>
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Student</th>
@@ -851,7 +914,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                       </tr>
                     )}
 
-                    {!isLoadingStudents && filteredStudents.length === 0 && !studentsError && (
+                    {!isLoadingStudents && studentsTotalCount === 0 && !studentsError && (
                       <tr>
                         <td colSpan={6} className="px-3 py-12 text-center text-gray-500 dark:text-gray-400">
                           <Users className="w-10 h-10 mx-auto mb-3 text-gray-400" />
@@ -861,20 +924,20 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                       </tr>
                     )}
 
-                    {filteredStudents.map(student => (
+                    {paginatedStudents.map(student => (
                       <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                         <td className="p-3">
                           <input
                             type="checkbox"
                             checked={selectedStudents.includes(student.id)}
                             onChange={(e) => handleSelectStudent(student.id, e.target.checked)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                           />
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center">
-                              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center">
+                              <Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             </div>
                             <div>
                               <div className="font-medium text-gray-900 dark:text-white">{student.name || 'Unnamed Student'}</div>
