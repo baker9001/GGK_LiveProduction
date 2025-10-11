@@ -315,16 +315,6 @@ export default function SubtopicsTable() {
       });
     }
   }, [editingSubtopic]);
-      });
-
-      setSubtopics(formattedSubtopics);
-    } catch (error) {
-      console.error('Error fetching subtopics:', error);
-      toast.error('Failed to fetch subtopics');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchFilterUnits = async (subjectId: string) => {
     try {

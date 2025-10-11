@@ -122,7 +122,12 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                       size="icon"
                       className="shadow-lg"
                       title="Delete Attachment"
-                      onClick={() => onDelete(attachment.id)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('🗑️ Delete button clicked in AttachmentDisplay:', attachment.id);
+                        onDelete(attachment.id);
+                      }}
                     >
                       <Trash2 className="h-5 w-5" />
                     </Button>
