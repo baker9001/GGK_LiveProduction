@@ -73,17 +73,17 @@ export const MODULE_SUBMENUS: SubMenuItem[] = [
         moduleKey: 'system-admin',
         children: [
           {
-            id: 'questions-setup',
-            label: 'Questions Setup',
-            path: '/app/system-admin/learning/practice-management/questions-setup',
-            icon: 'ClipboardList',
-            moduleKey: 'system-admin'
-          },
-          {
             id: 'papers-setup',
             label: 'Papers Setup',
             path: '/app/system-admin/learning/practice-management/papers-setup',
             icon: 'FileText',
+            moduleKey: 'system-admin'
+          },
+          {
+            id: 'questions-setup',
+            label: 'Questions Setup',
+            path: '/app/system-admin/learning/practice-management/questions-setup',
+            icon: 'ClipboardList',
             moduleKey: 'system-admin'
           }
         ]
