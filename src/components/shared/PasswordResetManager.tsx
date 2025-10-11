@@ -143,10 +143,10 @@ export function PasswordResetManager({
             )}
 
             {timeRemaining > 0 && (
-              <div className="mb-3 p-3 bg-blue-100 dark:bg-blue-900/30 rounded-md border border-blue-300 dark:border-blue-700">
+              <div className="mb-3 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-md border border-[#99C93B] dark:border-blue-700">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 animate-pulse" />
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <Clock className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775] animate-pulse" />
+                  <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                     Please wait {formatTime(timeRemaining)} before requesting another reset
                   </p>
                 </div>

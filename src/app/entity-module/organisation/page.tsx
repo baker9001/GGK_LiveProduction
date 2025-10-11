@@ -659,7 +659,7 @@ export default function OrganizationManagement() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 animate-spin text-[#99C93B] mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Loading Organization
           </h2>
@@ -731,8 +731,8 @@ export default function OrganizationManagement() {
         </div>
         <div className="flex items-center gap-2">
           {(isEntityAdmin || isSubEntityAdmin) && (
-            <div className="flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <Crown className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <div className="flex items-center gap-1 px-3 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 rounded-lg">
+              <Crown className="w-4 h-4 text-[#5D7E23] dark:text-purple-400" />
               <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                 Full Access
               </span>
@@ -765,8 +765,8 @@ export default function OrganizationManagement() {
                 {memoizedStats.total_branches}
               </p>
             </div>
-            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <div className="w-10 h-10 bg-[#E8F5DC] dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-[#5D7E23] dark:text-purple-400" />
             </div>
           </div>
         </div>
@@ -779,8 +779,8 @@ export default function OrganizationManagement() {
                 {memoizedStats.total_teachers}
               </p>
             </div>
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="w-10 h-10 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-[#99C93B] dark:text-[#AAD775]" />
             </div>
           </div>
         </div>
@@ -807,8 +807,8 @@ export default function OrganizationManagement() {
                 {memoizedStats.total_users}
               </p>
             </div>
-            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-              <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="w-10 h-10 bg-[#E8F5DC] dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+              <User className="w-5 h-5 text-[#5D7E23] dark:text-indigo-400" />
             </div>
           </div>
         </div>
@@ -1035,7 +1035,7 @@ export default function OrganizationManagement() {
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#99C93B]" />
               </div>
             }
           >

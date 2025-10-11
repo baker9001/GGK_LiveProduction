@@ -182,8 +182,8 @@ export function GradeHierarchyTree({
         {/* Branch Header - CLICKABLE */}
         <div 
           className={cn(
-            "flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 transition-colors",
-            hasGrades && "cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30"
+            "flex items-center justify-between p-3 bg-[#E8F5DC] dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700 transition-colors",
+            hasGrades && "cursor-pointer hover:bg-[#E8F5DC] dark:hover:bg-purple-900/30"
           )}
         >
           <div 
@@ -205,8 +205,8 @@ export function GradeHierarchyTree({
 
             {/* Branch Icon and Info */}
             <div className="flex items-center gap-3 flex-1">
-              <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <MapPin className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <div className="w-8 h-8 bg-[#E8F5DC] dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-[#5D7E23] dark:text-purple-400" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -336,8 +336,8 @@ export function GradeHierarchyTree({
 
             {/* School Icon and Info */}
             <div className="flex items-center gap-3 flex-1">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <School className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="w-10 h-10 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-lg flex items-center justify-center">
+                <School className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -484,7 +484,7 @@ export function GradeHierarchyTree({
                       ({grade.grade_code})
                     </span>
                   )}
-                  <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+                  <span className="text-xs px-2 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
                     Order: {grade.grade_order}
                   </span>
                   <StatusBadge status={grade.status} size="xs" />

@@ -26,14 +26,14 @@ import { Loader2 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 relative overflow-hidden group',
+  'inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99C93B]/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 relative overflow-hidden group',
   {
     variants: {
       variant: {
         default: cn(
-          'bg-gradient-to-r from-[#8CC63F] to-[#7AB635] text-white shadow-md',
-          'hover:from-[#7AB635] hover:to-[#6DA52F] hover:shadow-xl hover:shadow-[#8CC63F]/30 hover:-translate-y-0.5',
-          'dark:shadow-[#8CC63F]/20 dark:hover:shadow-[#8CC63F]/40',
+          'bg-gradient-to-r from-[#99C93B] to-[#7AB635] text-white shadow-md',
+          'hover:from-[#7AB635] hover:to-[#5D7E23] hover:shadow-xl hover:shadow-[#99C93B]/30 hover:-translate-y-0.5',
+          'dark:shadow-[#99C93B]/20 dark:hover:shadow-[#99C93B]/40',
           'before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100',
           'after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent after:-translate-x-full after:transition-transform after:duration-700 hover:after:translate-x-full'
         ),
@@ -50,19 +50,19 @@ const buttonVariants = cva(
           'before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
         outline: cn(
-          'border-2 border-[#8CC63F] bg-transparent text-[#8CC63F] shadow-sm',
-          'hover:bg-[#8CC63F]/10 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#7AB635]',
-          'dark:border-[#8CC63F] dark:text-[#8CC63F] dark:hover:bg-[#8CC63F]/20',
-          'before:absolute before:inset-0 before:bg-gradient-to-r before:from-[#8CC63F]/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
+          'border-2 border-[#99C93B] bg-transparent text-[#5D7E23] shadow-sm',
+          'hover:bg-[#99C93B]/10 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#7AB635]',
+          'dark:border-[#99C93B] dark:text-[#99C93B] dark:hover:bg-[#99C93B]/20',
+          'before:absolute before:inset-0 before:bg-gradient-to-r before:from-[#99C93B]/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
         ghost: cn(
           'text-gray-700 dark:text-gray-300',
-          'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] hover:shadow-md hover:-translate-y-0.5',
+          'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-[#99C93B] dark:hover:text-[#99C93B] hover:shadow-md hover:-translate-y-0.5',
           'before:absolute before:inset-0 before:bg-gradient-to-r before:from-gray-100/50 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
         link: cn(
-          'text-[#8CC63F] underline-offset-4 hover:underline hover:text-[#7AB635]',
-          'dark:text-[#8CC63F] dark:hover:text-[#9ED050] hover:shadow-sm'
+          'text-[#99C93B] underline-offset-4 hover:underline hover:text-[#7AB635]',
+          'dark:text-[#99C93B] dark:hover:text-[#AAD775] hover:shadow-sm'
         ),
         success: cn(
           'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md',
@@ -75,10 +75,10 @@ const buttonVariants = cva(
           'before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
         report: cn(
-          'bg-white dark:bg-gray-800 text-[#8CC63F] border-2 border-[#8CC63F] shadow-sm',
-          'hover:bg-[#8CC63F]/5 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#7AB635]',
-          'dark:border-[#8CC63F] dark:text-[#8CC63F] dark:hover:bg-[#8CC63F]/10',
-          'before:absolute before:inset-0 before:bg-gradient-to-r before:from-[#8CC63F]/5 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
+          'bg-white dark:bg-gray-800 text-[#99C93B] border-2 border-[#99C93B] shadow-sm',
+          'hover:bg-[#99C93B]/5 hover:shadow-lg hover:-translate-y-0.5 hover:border-[#7AB635]',
+          'dark:border-[#99C93B] dark:text-[#99C93B] dark:hover:bg-[#99C93B]/10',
+          'before:absolute before:inset-0 before:bg-gradient-to-r before:from-[#99C93B]/5 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100'
         ),
       },
       size: {

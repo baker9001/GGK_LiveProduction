@@ -129,7 +129,7 @@ export function FileUploader({
         className={cn(
           "flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-6 transition-colors",
           dragActive 
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
+            ? "border-[#99C93B] bg-[#E8F5DC] dark:bg-[#5D7E23]/20" 
             : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500",
           disabled && "opacity-50 cursor-not-allowed"
         )}
@@ -149,7 +149,7 @@ export function FileUploader({
         
         {selectedFile ? (
           <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg w-full">
-            <File className="h-6 w-6 text-blue-500 dark:text-blue-400" />
+            <File className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775]" />
             <div className="flex-1 truncate">
               <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                 {selectedFile.name}

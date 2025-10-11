@@ -134,7 +134,7 @@ const ExtractionRulesPanel: React.FC<{
       >
         <div className="flex w-full items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <Shield className="h-5 w-5 text-[#5D7E23] dark:text-purple-400" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">
               Extraction Rules Configuration
             </h3>
@@ -1168,7 +1168,7 @@ export default function PapersSetupPage() {
   if (isLoadingSession && !uploadedFile) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#99C93B]" />
       </div>
     );
   }
@@ -1185,7 +1185,7 @@ export default function PapersSetupPage() {
             <div className="flex flex-col items-center gap-4">
               <div className="relative h-14 w-14">
                 <div className="absolute inset-0 rounded-full border-4 border-blue-100 dark:border-blue-900/40" />
-                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
+                <div className="absolute inset-0 rounded-full border-4 border-[#99C93B] border-t-transparent animate-spin" />
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1240,7 +1240,7 @@ export default function PapersSetupPage() {
                       : 'Getting things ready'}
                   </p>
                 </div>
-                <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                <span className="text-sm font-semibold text-[#99C93B] dark:text-[#AAD775]">
                   {workflowProgress}%
                 </span>
               </div>

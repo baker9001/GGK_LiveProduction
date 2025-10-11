@@ -131,19 +131,19 @@ export function AdminAuditLogsPanel({
       case 'admin_created':
         return <UserPlus className="h-4 w-4 text-green-600 dark:text-green-400" />;
       case 'admin_modified':
-        return <Edit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+        return <Edit2 className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775]" />;
       case 'admin_deleted':
         return <UserMinus className="h-4 w-4 text-red-600 dark:text-red-400" />;
       case 'permission_granted':
-        return <Key className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
+        return <Key className="h-4 w-4 text-[#5D7E23] dark:text-purple-400" />;
       case 'permission_revoked':
         return <XCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />;
       case 'scope_assigned':
-        return <Building2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />;
+        return <Building2 className="h-4 w-4 text-[#5D7E23] dark:text-indigo-400" />;
       case 'scope_removed':
         return <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />;
       case 'hierarchy_changed':
-        return <Shield className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />;
+        return <Shield className="h-4 w-4 text-[#99C93B] dark:text-cyan-400" />;
       default:
         return <AlertCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />;
     }
@@ -158,7 +158,7 @@ export function AdminAuditLogsPanel({
         return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
       case 'admin_modified':
       case 'hierarchy_changed':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+        return 'bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]';
       case 'admin_deleted':
       case 'permission_revoked':
       case 'scope_removed':
@@ -324,7 +324,7 @@ export function AdminAuditLogsPanel({
                 // TODO: Show metadata in a modal or expandable section
                 console.log('Show metadata:', row.metadata);
               }}
-              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+              className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] underline"
             >
               View Details
             </button>
@@ -564,7 +564,7 @@ export function AdminAuditLogsPanel({
               </div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <div className="text-2xl font-bold text-[#99C93B] dark:text-[#AAD775]">
                 {auditLogs.filter(log => 
                   ['admin_modified', 'hierarchy_changed'].includes(log.action_type)
                 ).length}

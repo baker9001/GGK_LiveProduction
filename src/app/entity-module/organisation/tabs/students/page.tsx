@@ -549,7 +549,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
   if (isAccessControlLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#99C93B]" />
         <span className="ml-2 text-gray-600 dark:text-gray-400">
           Checking permissions...
         </span>
@@ -582,7 +582,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              <GraduationCap className="w-8 h-8 text-[#99C93B] dark:text-[#AAD775]" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -614,27 +614,27 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
 
         {/* Access Control Information */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-2">
-              <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <Shield className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">
                 Your Access Level
               </h3>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-blue-700 dark:text-blue-300">Level:</span>
+                <span className="text-sm text-[#5D7E23] dark:text-[#AAD775]">Level:</span>
                 <span className="font-medium text-blue-900 dark:text-blue-100">
                   {accessInfo.level}
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-blue-700 dark:text-blue-300">Scope:</span>
+                <span className="text-sm text-[#5D7E23] dark:text-[#AAD775]">Scope:</span>
                 <span className="font-medium text-blue-900 dark:text-blue-100">
                   {accessInfo.scope}
                 </span>
               </div>
-              <p className="text-xs text-blue-600 dark:text-blue-400 pt-2 border-t border-blue-200 dark:border-blue-700">
+              <p className="text-xs text-[#99C93B] dark:text-[#AAD775] pt-2 border-t border-[#99C93B]/30 dark:border-blue-700">
                 {accessInfo.description}
               </p>
             </div>
@@ -692,7 +692,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
               {/* Statistics Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                  <div className="text-3xl font-bold text-[#99C93B] dark:text-[#AAD775] mb-1">
                     {summaryStats.total}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">Total Students</div>
@@ -710,7 +710,7 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
                   <div className="text-sm text-gray-600 dark:text-gray-400">New This Month</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                  <div className="text-3xl font-bold text-[#5D7E23] dark:text-purple-400 mb-1">
                     {availableGrades.length}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">Grade Levels</div>
@@ -1027,49 +1027,49 @@ export default function StudentsTab({ companyId, refreshData }: StudentsTabProps
       </div>
 
       {/* Development Status */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-        <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-3">
+      <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-6">
+        <div className="flex items-center gap-2 text-[#5D7E23] dark:text-[#AAD775] mb-3">
           <Clock className="w-5 h-5" />
           <span className="font-semibold">Development Status</span>
         </div>
-        <p className="text-sm text-blue-600 dark:text-blue-400 mb-4">
+        <p className="text-sm text-[#99C93B] dark:text-[#AAD775] mb-4">
           Student management is operational with comprehensive access control. Features status:
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Student listing and filtering ✓</span>
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Student listing and filtering ✓</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Scope-based access control ✓</span>
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Scope-based access control ✓</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Multi-tab interface ✓</span>
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Multi-tab interface ✓</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-blue-600 dark:text-blue-400">Student registration forms ✓</span>
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Student registration forms ✓</span>
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Academic records management</span>
+              <Clock className="w-4 h-4 text-[#99C93B]" />
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Academic records management</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Attendance tracking</span>
+              <Clock className="w-4 h-4 text-[#99C93B]" />
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Attendance tracking</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Parent portal integration</span>
+              <Clock className="w-4 h-4 text-[#99C93B]" />
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Parent portal integration</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-blue-600 dark:text-blue-400">Advanced analytics dashboard</span>
+              <Clock className="w-4 h-4 text-[#99C93B]" />
+              <span className="text-[#99C93B] dark:text-[#AAD775]">Advanced analytics dashboard</span>
             </div>
           </div>
         </div>

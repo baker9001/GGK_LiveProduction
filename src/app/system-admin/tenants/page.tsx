@@ -21,7 +21,7 @@ export default function TenantsPage() {
           </div>
           <button
             onClick={() => setShowDiagnostics(!showDiagnostics)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#99C93B] dark:text-[#AAD775] hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-lg transition-colors"
           >
             <AlertCircle className="w-4 h-4" />
             {showDiagnostics ? 'Hide' : 'Show'} Diagnostics

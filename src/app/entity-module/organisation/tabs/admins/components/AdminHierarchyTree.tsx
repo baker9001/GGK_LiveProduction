@@ -60,13 +60,13 @@ export function AdminHierarchyTree({
       case 'entity_admin':
         return {
           label: 'Entity Admin',
-          color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-700',
+          color: 'bg-[#E8F5DC] text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-700',
           icon: <Crown className="w-3 h-3" />
         };
       case 'sub_entity_admin':
         return {
           label: 'Sub Admin',
-          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-700',
+          color: 'bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775] border-[#99C93B]/30 dark:border-blue-700',
           icon: <Shield className="w-3 h-3" />
         };
       case 'school_admin':
@@ -342,11 +342,11 @@ export function AdminHierarchyTree({
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1">
-              <Crown className="w-3 h-3 text-purple-500" />
+              <Crown className="w-3 h-3 text-[#5D7E23]" />
               <span className="text-gray-600 dark:text-gray-400">Entity</span>
             </div>
             <div className="flex items-center gap-1">
-              <Shield className="w-3 h-3 text-blue-500" />
+              <Shield className="w-3 h-3 text-[#99C93B]" />
               <span className="text-gray-600 dark:text-gray-400">Sub</span>
             </div>
             <div className="flex items-center gap-1">
@@ -385,14 +385,14 @@ export function AdminHierarchyTree({
                 collectNodeIds(hierarchyTree);
                 setExpandedNodes(allNodeIds);
               }}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+              className="text-xs text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] font-medium"
             >
               Expand All
             </button>
             <span className="text-gray-300 dark:text-gray-600">|</span>
             <button
               onClick={() => setExpandedNodes(new Set())}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+              className="text-xs text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] font-medium"
             >
               Collapse All
             </button>

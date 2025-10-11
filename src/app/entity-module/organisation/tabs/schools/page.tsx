@@ -975,14 +975,14 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
 
           {/* Permission notices */}
           {!canAccessAll && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="mb-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <Info className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775] mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  <p className="text-sm font-medium text-[#5D7E23] dark:text-[#AAD775]">
                     Limited Scope Access
                   </p>
-                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  <p className="text-sm text-[#99C93B] dark:text-[#AAD775] mt-1">
                     As a {adminLevelDisplay}, you're viewing schools within your assigned scope.
                     {isSchoolAdmin && ' You can manage the schools you are assigned to.'}
                     {isBranchAdmin && ' You can view schools that contain your assigned branches (read-only).'}
@@ -1024,11 +1024,11 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Total Students</p>
-                  <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
+                  <p className="text-xl font-semibold text-[#99C93B] dark:text-[#AAD775]">
                     {stats.students.toLocaleString()}
                   </p>
                 </div>
-                <Users className="w-8 h-8 text-blue-400" />
+                <Users className="w-8 h-8 text-[#AAD775]" />
               </div>
             </div>
             
@@ -1146,23 +1146,23 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                     <div className="grid grid-cols-3 gap-3 mb-6">
                       <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-900/30 rounded-xl border border-purple-200 dark:border-purple-800">
                         <div className="flex items-center justify-center mb-1">
-                          <MapPin className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          <MapPin className="w-5 h-5 text-[#5D7E23] dark:text-purple-400" />
                         </div>
                         <div className="text-xl font-bold text-purple-700 dark:text-purple-300">
                           {school.branch_count || 0}
                         </div>
-                        <div className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                        <div className="text-xs font-medium text-[#5D7E23] dark:text-purple-400">
                           Branches
                         </div>
                       </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-900/30 rounded-xl border border-[#99C93B]/30 dark:border-blue-800">
                         <div className="flex items-center justify-center mb-1">
-                          <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          <Users className="w-5 h-5 text-[#99C93B] dark:text-[#AAD775]" />
                         </div>
-                        <div className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                        <div className="text-xl font-bold text-[#5D7E23] dark:text-[#AAD775]">
                           {school.student_count || 0}
                         </div>
-                        <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                        <div className="text-xs font-medium text-[#99C93B] dark:text-[#AAD775]">
                           Students
                         </div>
                       </div>
@@ -1326,13 +1326,13 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4 text-purple-500" />
+                              <MapPin className="w-4 h-4 text-[#5D7E23]" />
                               <span className="font-medium">{school.branch_count || 0}</span>
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-1">
-                              <Users className="w-4 h-4 text-blue-500" />
+                              <Users className="w-4 h-4 text-[#99C93B]" />
                               <span className="font-medium">{school.student_count || 0}</span>
                             </div>
                           </td>

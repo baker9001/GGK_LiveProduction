@@ -48,11 +48,11 @@ export function ProgressBar({
     
     // Use specified color
     const colorMap = {
-      blue: 'bg-blue-500 dark:bg-blue-400',
+      blue: 'bg-[#99C93B] dark:bg-blue-400',
       green: 'bg-green-500 dark:bg-green-400',
       red: 'bg-red-500 dark:bg-red-400',
       yellow: 'bg-yellow-500 dark:bg-yellow-400',
-      purple: 'bg-purple-500 dark:bg-purple-400'
+      purple: 'bg-[#E8F5DC]0 dark:bg-purple-400'
     };
     
     return colorMap[color];

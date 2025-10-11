@@ -748,7 +748,7 @@ export default function MaterialManagementPage() {
       accessorKey: 'type',
       enableSorting: true,
       cell: (row: Material) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
           {row.type}
         </span>
       ),
@@ -789,7 +789,7 @@ export default function MaterialManagementPage() {
     <div className="flex items-center justify-end space-x-2">
       <button
         onClick={() => setPreviewMaterial(row)}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-full transition-colors"
         title={row.type === 'video' ? 'Stream Video' : 'Preview'}
       >
         <Eye className="h-4 w-4" />
@@ -815,7 +815,7 @@ export default function MaterialManagementPage() {
           setEditingMaterial(row);
           setIsFormOpen(true);
         }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-full transition-colors"
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
@@ -1082,7 +1082,7 @@ export default function MaterialManagementPage() {
                 id="file"
                 accept={ALL_ACCEPTED_TYPES}
                 onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50"
+                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#E8F5DC] dark:file:bg-blue-900/30 file:text-[#5D7E23] dark:file:text-blue-300 hover:file:bg-[#E8F5DC] dark:hover:file:bg-blue-900/50"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {getFileTypeHints(formState.type)}
@@ -1093,7 +1093,7 @@ export default function MaterialManagementPage() {
                 </p>
               )}
               {uploadedFile && (
-                <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                <div className="text-xs text-[#99C93B] dark:text-[#AAD775] space-y-1">
                   <p>Selected: {uploadedFile.name}</p>
                   <p>Size: {formatFileSize(uploadedFile.size)}</p>
                   <p>Type: {uploadedFile.type || 'Unknown'}</p>

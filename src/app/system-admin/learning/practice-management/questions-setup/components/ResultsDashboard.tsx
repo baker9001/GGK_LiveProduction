@@ -252,7 +252,7 @@ export function ResultsDashboard({
   const getGrade = (percentage: number) => {
     if (percentage >= 90) return { grade: 'A+', color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900/30' };
     if (percentage >= 80) return { grade: 'A', color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900/30' };
-    if (percentage >= 70) return { grade: 'B', color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30' };
+    if (percentage >= 70) return { grade: 'B', color: 'text-[#99C93B]', bgColor: 'bg-[#E8F5DC] dark:bg-[#5D7E23]/30' };
     if (percentage >= 60) return { grade: 'C', color: 'text-yellow-600', bgColor: 'bg-yellow-100 dark:bg-yellow-900/30' };
     if (percentage >= 50) return { grade: 'D', color: 'text-orange-600', bgColor: 'bg-orange-100 dark:bg-orange-900/30' };
     return { grade: 'F', color: 'text-red-600', bgColor: 'bg-red-100 dark:bg-red-900/30' };
@@ -391,7 +391,7 @@ export function ResultsDashboard({
                         {question.type.toUpperCase()}
                       </span>
                       {question.topic_name && (
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded">
+                        <span className="px-2 py-1 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] rounded">
                           {question.topic_name}
                         </span>
                       )}
@@ -465,16 +465,16 @@ export function ResultsDashboard({
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
                       {question.hint && (
                         <div className="flex items-start space-x-2">
-                          <HelpCircle className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <HelpCircle className="h-4 w-4 text-[#99C93B] mt-0.5" />
                           <div>
-                            <span className="font-medium text-blue-700 dark:text-blue-300">Hint: </span>
+                            <span className="font-medium text-[#5D7E23] dark:text-[#AAD775]">Hint: </span>
                             <span className="text-gray-700 dark:text-gray-300">{question.hint}</span>
                           </div>
                         </div>
                       )}
                       {question.explanation && (
                         <div className="flex items-start space-x-2">
-                          <AlertCircle className="h-4 w-4 text-purple-500 mt-0.5" />
+                          <AlertCircle className="h-4 w-4 text-[#5D7E23] mt-0.5" />
                           <div>
                             <span className="font-medium text-purple-700 dark:text-purple-300">Explanation: </span>
                             <span className="text-gray-700 dark:text-gray-300">{question.explanation}</span>
@@ -497,7 +497,7 @@ export function ResultsDashboard({
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 text-center">
-          <Award className="h-20 w-20 mx-auto text-blue-500 mb-4" />
+          <Award className="h-20 w-20 mx-auto text-[#99C93B] mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Exam Completed!
           </h1>
@@ -517,7 +517,7 @@ export function ResultsDashboard({
             </div>
             
             <div>
-              <div className="text-6xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+              <div className="text-6xl font-bold text-[#99C93B] dark:text-[#AAD775] mb-2">
                 {stats.percentage.toFixed(1)}%
               </div>
               <p className="text-gray-600 dark:text-gray-400">Overall Score</p>
@@ -544,7 +544,7 @@ export function ResultsDashboard({
                   {formatTime(timeElapsed)}
                 </p>
               </div>
-              <Clock className="h-8 w-8 text-blue-500" />
+              <Clock className="h-8 w-8 text-[#99C93B]" />
             </div>
           </div>
           
@@ -561,7 +561,7 @@ export function ResultsDashboard({
                   {stats.attemptedQuestions}/{stats.totalQuestions} questions
                 </p>
               </div>
-              <Target className="h-8 w-8 text-purple-500" />
+              <Target className="h-8 w-8 text-[#5D7E23]" />
             </div>
           </div>
           

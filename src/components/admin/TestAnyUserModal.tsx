@@ -328,8 +328,8 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
 
   const getUserTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      admin: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-      teacher: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      admin: 'bg-[#E8F5DC] text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+      teacher: 'bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]',
       student: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
       entity: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
     };
@@ -370,7 +370,7 @@ export function TestAnyUserModal({ isOpen, onClose }: TestAnyUserModalProps) {
                 placeholder="Search by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#99C93B]"
               />
             </div>
             

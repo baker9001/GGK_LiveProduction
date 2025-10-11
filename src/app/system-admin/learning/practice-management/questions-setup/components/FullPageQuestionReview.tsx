@@ -257,7 +257,7 @@ export function FullPageQuestionReview({
             
             {/* Paper Info */}
             <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#99C93B] dark:text-[#AAD775]">
                 <FileText className="h-4 w-4" />
               </div>
               <div>
@@ -415,7 +415,7 @@ export function FullPageQuestionReview({
                         placeholder="Search questions... (Ctrl+F)"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]"
                       />
                     </div>
 
@@ -426,7 +426,7 @@ export function FullPageQuestionReview({
                         className={cn(
                           "flex-1 px-2 py-1 text-xs font-medium rounded transition-colors",
                           navigatorView === 'all'
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                            ? "bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]"
                             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                         )}
                       >
@@ -489,7 +489,7 @@ export function FullPageQuestionReview({
                           className={cn(
                             "w-full h-10 flex items-center justify-center rounded transition-all duration-200",
                             isActive
-                              ? "bg-blue-500 text-white shadow-sm"
+                              ? "bg-[#99C93B] text-white shadow-sm"
                               : validation.isValid
                                 ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/30"
                                 : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/30"
@@ -517,7 +517,7 @@ export function FullPageQuestionReview({
                             className={cn(
                               "w-full p-3 rounded-lg border transition-all duration-200 text-left",
                               isActive
-                                ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 shadow-sm ring-2 ring-blue-500"
+                                ? "bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B] dark:border-blue-700 shadow-sm ring-2 ring-[#99C93B]"
                                 : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-sm"
                             )}
                           >
@@ -526,7 +526,7 @@ export function FullPageQuestionReview({
                               <div className="flex items-center space-x-2">
                                 <span className={cn(
                                   "font-semibold text-sm flex items-center",
-                                  isActive ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"
+                                  isActive ? "text-[#5D7E23] dark:text-[#AAD775]" : "text-gray-700 dark:text-gray-300"
                                 )}>
                                   {getQuestionIcon(question.type)}
                                   <span className="ml-1">Q{originalIndex + 1}</span>

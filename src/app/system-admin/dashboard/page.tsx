@@ -68,7 +68,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Licenses</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">892</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">86% utilization</p>
+              <p className="text-xs text-[#99C93B] dark:text-[#AAD775] mt-2">86% utilization</p>
             </div>
             <Key className="h-8 w-8 text-gray-400" />
           </div>

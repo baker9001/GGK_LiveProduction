@@ -3,16 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --brand-accent: #7dc242;
-  --brand-accent-strong: #4f8c1f;
-  --brand-accent-soft: #e8f5dc;
+  --brand-accent: #99C93B;
+  --brand-accent-strong: #5D7E23;
+  --brand-accent-soft: #E8F5DC;
   --brand-accent-contrast: #ffffff;
-  --brand-accent-muted-contrast: #123116;
+  --brand-accent-muted-contrast: #283413;
 }
 
 .dark {
-  --brand-accent-contrast: #0f2610;
-  --brand-accent-muted-contrast: #f1f7ed;
+  --brand-accent-contrast: #283413;
+  --brand-accent-muted-contrast: #F5FAE8;
 }
 
 .brand-select {
@@ -39,6 +39,10 @@
 .brand-select option:hover {
   background-color: var(--brand-accent);
   color: var(--brand-accent-contrast);
+}
+
+.brand-select:hover:not(:disabled) {
+  border-color: var(--brand-accent-strong);
 }
 
 .dark .brand-select {
@@ -84,7 +88,7 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 10px 15px -10px rgb(15 118 110 / 0.35);
+  box-shadow: 0 10px 15px -10px rgba(93, 126, 35, 0.35);
 }
 
 .brand-pagination-badge__value {
@@ -93,7 +97,7 @@
 
 .dark .brand-pagination-badge {
   color: var(--brand-accent-contrast);
-  box-shadow: 0 10px 15px -10px rgb(148 210 101 / 0.45);
+  box-shadow: 0 10px 15px -10px rgba(153, 201, 59, 0.45);
 }
 
 .brand-pagination-summary {

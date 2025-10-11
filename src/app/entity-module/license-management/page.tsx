@@ -224,7 +224,7 @@ export default function EntityLicenseManagementPage() {
       cell: (row: EntityLicense) => (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <Key className="h-4 w-4 text-blue-500" />
+            <Key className="h-4 w-4 text-[#99C93B]" />
             <span className="font-semibold text-gray-900 dark:text-white">
               {row.subject_name}
             </span>
@@ -384,9 +384,9 @@ export default function EntityLicenseManagementPage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-2">
-              <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <Building2 className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">
                 Assigned Scope
               </h3>
@@ -395,7 +395,7 @@ export default function EntityLicenseManagementPage() {
               <div className="text-sm text-gray-700 dark:text-gray-300">
                 <strong>Coverage:</strong> {accessInfo.scopeDetails}
               </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t border-blue-200 dark:border-blue-700">
+              <p className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t border-[#99C93B]/30 dark:border-blue-700">
                 You can assign licenses to students within your assigned scope
               </p>
             </div>
@@ -458,7 +458,7 @@ export default function EntityLicenseManagementPage() {
               <div className="text-sm text-gray-600 dark:text-gray-400">Active Licenses</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 text-center">
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+              <div className="text-3xl font-bold text-[#99C93B] dark:text-[#AAD775] mb-1">
                 {usageStats?.total_used || 0}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">Students Assigned</div>

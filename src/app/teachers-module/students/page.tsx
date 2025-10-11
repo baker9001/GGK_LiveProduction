@@ -13,14 +13,14 @@ export default function StudentsPage() {
         </p>
       </div>
 
-      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg p-6 mb-8">
         <div className="flex items-center">
-          <Users className="h-8 w-8 text-blue-600 dark:text-blue-400 mr-4" />
+          <Users className="h-8 w-8 text-[#99C93B] dark:text-[#AAD775] mr-4" />
           <div>
             <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
               Student Management
             </h2>
-            <p className="text-blue-700 dark:text-blue-300">
+            <p className="text-[#5D7E23] dark:text-[#AAD775]">
               Access student rosters, monitor attendance, track progress, and communicate with students in your classes.
             </p>
           </div>
@@ -30,7 +30,7 @@ export default function StudentsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Users className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
+            <Users className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775] mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Student Roster
             </h3>
@@ -75,7 +75,7 @@ export default function StudentsPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <UserPlus className="h-6 w-6 text-cyan-600 dark:text-cyan-400 mr-3" />
+            <UserPlus className="h-6 w-6 text-[#99C93B] dark:text-cyan-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Student Progress
             </h3>

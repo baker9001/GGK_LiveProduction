@@ -127,23 +127,23 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
         {actionType === 'EXPAND' && (
           <>
             {/* Current License Information */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+            <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg p-4 mb-4">
               <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Current License Information</h4>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-blue-700 dark:text-blue-300 font-medium">Total Quantity:</span>
+                  <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Total Quantity:</span>
                   <span className="ml-2 text-blue-900 dark:text-blue-100">{license.total_quantity}</span>
                 </div>
                 <div>
-                  <span className="text-blue-700 dark:text-blue-300 font-medium">Used:</span>
+                  <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Used:</span>
                   <span className="ml-2 text-blue-900 dark:text-blue-100">{license.used_quantity}</span>
                 </div>
                 <div>
-                  <span className="text-blue-700 dark:text-blue-300 font-medium">Available:</span>
+                  <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Available:</span>
                   <span className="ml-2 text-blue-900 dark:text-blue-100">{license.total_quantity - license.used_quantity}</span>
                 </div>
                 <div>
-                  <span className="text-blue-700 dark:text-blue-300 font-medium">Expires:</span>
+                  <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Expires:</span>
                   <span className="ml-2 text-blue-900 dark:text-blue-100">{dayjs(license.end_date).format('MMM D, YYYY')}</span>
                 </div>
               </div>

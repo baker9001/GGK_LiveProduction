@@ -620,7 +620,7 @@ export function PDFSnippingTool({
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
-          <Scissors className="h-5 w-5 mr-2 text-blue-500 dark:text-blue-400" />
+          <Scissors className="h-5 w-5 mr-2 text-[#99C93B] dark:text-[#AAD775]" />
           PDF Snipping Tool
         </h3>
         <button
@@ -732,7 +732,7 @@ export function PDFSnippingTool({
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="h-12 w-12 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+            <div className="h-12 w-12 border-4 border-t-blue-500 border-[#99C93B]/30 rounded-full animate-spin"></div>
             <p className="ml-4 text-gray-600 dark:text-gray-400">Loading PDF...</p>
           </div>
         ) : !pdfDocument || pdfLoadingError ? (
@@ -784,7 +784,7 @@ export function PDFSnippingTool({
               {selectionRect && (
                 <div
                   ref={selectionRef}
-                  className="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-10 pointer-events-none"
+                  className="absolute border-2 border-[#99C93B] bg-[#99C93B] bg-opacity-10 pointer-events-none"
                   style={{
                     left: `${selectionRect.x}px`,
                     top: `${selectionRect.y}px`,

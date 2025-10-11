@@ -250,7 +250,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
               }}
               loading={
                 <div className="flex flex-col items-center justify-center p-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#99C93B]"></div>
                   <p className="mt-4 text-gray-600 dark:text-gray-400">Loading PDF...</p>
                 </div>
               }
@@ -288,8 +288,8 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
       const encodedUrl = encodeURIComponent(fileUrl);
       return (
         <div className="h-full flex flex-col">
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-b dark:border-gray-700">
-            <p className="text-sm text-blue-800 dark:text-blue-300">
+          <div className="p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-b dark:border-gray-700">
+            <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
               Microsoft Office document preview powered by Office Online
             </p>
           </div>
@@ -363,7 +363,7 @@ export const MaterialPreview: React.FC<MaterialPreviewProps> = ({
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center justify-center w-full px-4 py-2 bg-[#99C93B] text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 Open in New Tab
               </a>

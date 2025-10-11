@@ -565,10 +565,10 @@ export function StudentFormContent({
                 </p>
                 
                 {/* Info message */}
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <div className="p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
-                    <div className="text-xs text-blue-700 dark:text-blue-300">
+                    <Info className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775] mt-0.5" />
+                    <div className="text-xs text-[#5D7E23] dark:text-[#AAD775]">
                       <p className="font-medium mb-1">Subject Enrollment Information</p>
                       <ul className="space-y-0.5">
                         <li>• Students can be enrolled in multiple subjects</li>
@@ -591,9 +591,9 @@ export function StudentFormContent({
     return (
       <div className="space-y-4">
         {/* Parent Information Section */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+        <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <Users className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
             <h4 className="font-medium text-blue-900 dark:text-blue-100">Parent Information</h4>
           </div>
           

@@ -318,7 +318,7 @@ export function SearchableMultiSelect({
                   "w-full pl-8 pr-2 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
                   isGreenTheme 
                     ? "focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                    : "focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    : "focus:outline-none focus:ring-2 focus:ring-[#99C93B]"
                 )}
                 placeholder="Search..."
                 value={searchTerm}
@@ -344,7 +344,7 @@ export function SearchableMultiSelect({
                     safeSelectedValues.includes(option.value) && (
                       isGreenTheme 
                         ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20'
-                        : 'bg-blue-50 dark:bg-blue-900/30'
+                        : 'bg-[#E8F5DC] dark:bg-[#5D7E23]/30'
                     )
                   )}
                   onClick={() => handleSelect(option.value)}
@@ -353,7 +353,7 @@ export function SearchableMultiSelect({
                     safeSelectedValues.includes(option.value) 
                       ? isGreenTheme
                         ? "text-[#7AB635] font-medium" // Darker green for better contrast
-                        : "text-blue-600 dark:text-blue-400 font-medium"
+                        : "text-[#99C93B] dark:text-[#AAD775] font-medium"
                       : "text-gray-900 dark:text-white"
                   )}>
                     {option.label}
@@ -414,14 +414,14 @@ export function SearchableMultiSelect({
             'min-h-[38px] w-full rounded-md border px-3 py-2 text-sm transition-colors duration-200',
             isGreenTheme 
               ? 'focus:outline-none focus:ring-2 focus:ring-[#8CC63F] focus:border-[#8CC63F]'
-              : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+              : 'focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]',
             'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
             disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
             error ? 'border-red-300 dark:border-red-600' : 'border-gray-300 dark:border-gray-600',
             isOpen && (
               isGreenTheme 
                 ? 'ring-2 ring-[#8CC63F] border-[#8CC63F]'
-                : 'ring-2 ring-blue-500 border-blue-500'
+                : 'ring-2 ring-[#99C93B] border-[#99C93B]'
             ),
             'cursor-pointer flex items-center justify-between'
           )}
@@ -447,7 +447,7 @@ export function SearchableMultiSelect({
                     "inline-flex items-center rounded px-2 py-0.5 text-sm font-medium",
                     isGreenTheme
                       ? "bg-[#8CC63F]/15 text-[#5A8A2C] dark:bg-[#8CC63F]/25 dark:text-[#8CC63F]" // Improved contrast
-                      : "bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
+                      : "bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]"
                   )}
                 >
                   {option.label}
@@ -458,7 +458,7 @@ export function SearchableMultiSelect({
                         "ml-1 hover:opacity-75",
                         isGreenTheme
                           ? "text-[#5A8A2C] dark:text-[#8CC63F]" // Matching text color
-                          : "text-blue-600 dark:text-blue-400"
+                          : "text-[#99C93B] dark:text-[#AAD775]"
                       )}
                       onClick={(e) => handleRemove(option.value, e)}
                       aria-label={`Remove ${option.label}`}

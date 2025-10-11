@@ -141,7 +141,7 @@ export function TabsTrigger({
       case 'error':
         return <AlertCircle className="h-3.5 w-3.5 mr-1.5 text-red-500 dark:text-red-400" />;
       case 'active':
-        return <Loader2 className="h-3.5 w-3.5 mr-1.5 text-[#8CC63F] animate-spin" />;
+        return <Loader2 className="h-3.5 w-3.5 mr-1.5 text-[#99C93B] animate-spin" />;
       default:
         return null;
     }
@@ -150,10 +150,10 @@ export function TabsTrigger({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105 hover:-translate-y-0.5 relative overflow-hidden',
+        'inline-flex items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold ring-offset-white transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99C93B]/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transform hover:scale-105 hover:-translate-y-0.5 relative overflow-hidden',
         isActive
-          ? 'bg-gradient-to-r from-[#8CC63F] via-[#9ED050] to-[#7AB635] text-white shadow-xl shadow-[#8CC63F]/30 border border-[#8CC63F]/40 dark:shadow-[#8CC63F]/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300'
-          : 'text-gray-600 dark:text-gray-400 hover:text-[#8CC63F] dark:hover:text-[#8CC63F] hover:bg-gradient-to-r hover:from-white hover:to-gray-50 dark:hover:from-gray-700 dark:hover:to-gray-600 hover:shadow-lg hover:border-[#8CC63F]/30 border border-gray-200/50 dark:border-gray-600/50 backdrop-blur-sm',
+          ? 'bg-gradient-to-r from-[#99C93B] via-[#AAD775] to-[#7AB635] text-white shadow-xl shadow-[#99C93B]/30 border border-[#99C93B]/40 dark:shadow-[#99C93B]/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-white/20 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300'
+          : 'text-gray-600 dark:text-gray-400 hover:text-[#99C93B] dark:hover:text-[#99C93B] hover:bg-gradient-to-r hover:from-white hover:to-gray-50 dark:hover:from-gray-700 dark:hover:to-gray-600 hover:shadow-lg hover:border-[#99C93B]/30 border border-gray-200/50 dark:border-gray-600/50 backdrop-blur-sm',
         disabled && 'opacity-50 cursor-not-allowed hover:scale-100',
         className
       )}
@@ -191,7 +191,7 @@ export function TabsContent({
   return (
     <div
       className={cn(
-        'mt-4 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8CC63F]/50 focus-visible:ring-offset-2',
+        'mt-4 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99C93B]/50 focus-visible:ring-offset-2',
         'animate-in fade-in-50 slide-in-from-bottom-2 duration-500 ease-out',
         className
       )}
@@ -205,7 +205,7 @@ export function TabsContent({
 
 // Optional: Export color presets for consistent theming
 export const TabColors = {
-  primary: '#8CC63F', // Your main green
-  primaryDark: '#7AB635', // Darker shade for gradient
-  primaryLight: '#9ED050', // Lighter shade for hover
+  primary: '#99C93B', // Brand light green
+  primaryDark: '#5D7E23', // Brand dark green
+  primaryLight: '#AAD775', // Lighter shade for hover
 } as const;

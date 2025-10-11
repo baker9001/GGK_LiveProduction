@@ -469,8 +469,8 @@ export default function TeacherProfilePage() {
   const getExperienceBadgeColor = (years?: number) => {
     if (!years || years === 0) return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     if (years < 2) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-    if (years < 5) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-    if (years < 10) return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+    if (years < 5) return 'bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]';
+    if (years < 10) return 'bg-[#E8F5DC] text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
     return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
   };
 
@@ -608,14 +608,14 @@ export default function TeacherProfilePage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <BookOpen className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775]" />
               <div>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Specializations
                 </p>
-                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                <p className="text-lg font-bold text-[#99C93B] dark:text-[#AAD775]">
                   {profileData.specialization?.length || 0} subjects
                 </p>
               </div>
@@ -624,12 +624,12 @@ export default function TeacherProfilePage() {
 
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <Calendar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <Calendar className="h-6 w-6 text-[#5D7E23] dark:text-purple-400" />
               <div>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Hire Date
                 </p>
-                <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                <p className="text-lg font-bold text-[#5D7E23] dark:text-purple-400">
                   {profileData.hire_date 
                     ? new Date(profileData.hire_date).toLocaleDateString()
                     : 'Not set'
@@ -1000,7 +1000,7 @@ export default function TeacherProfilePage() {
             </div>
 
             {isChangingPassword && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 space-y-4">
+              <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     id="new_password"

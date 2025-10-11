@@ -458,7 +458,7 @@ export function ValidatedInput({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -509,7 +509,7 @@ export function ValidatedInput({
           key={`${name}-info-${index}`} 
           id={`${name}-info`}
           className={cn(
-            "mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center",
+            "mt-1 text-xs text-[#99C93B] dark:text-[#AAD775] flex items-center",
             infoClassName
           )}
         >
@@ -602,7 +602,7 @@ export function ValidatedTextarea({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -653,7 +653,7 @@ export function ValidatedTextarea({
           key={`${name}-info-${index}`} 
           id={`${name}-info`}
           className={cn(
-            "mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center",
+            "mt-1 text-xs text-[#99C93B] dark:text-[#AAD775] flex items-center",
             infoClassName
           )}
         >
@@ -748,7 +748,7 @@ export function ValidatedSelect({
         onBlur={onBlur}
         className={cn(
           "w-full px-3 py-2 border rounded-md shadow-sm text-sm transition-colors duration-200",
-          "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+          "focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]",
           "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100",
           hasError 
             ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" 
@@ -806,7 +806,7 @@ export function ValidatedSelect({
           key={`${name}-info-${index}`} 
           id={`${name}-info`}
           className={cn(
-            "mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center",
+            "mt-1 text-xs text-[#99C93B] dark:text-[#AAD775] flex items-center",
             infoClassName
           )}
         >
@@ -830,10 +830,10 @@ export function FormStatus({ className }: FormStatusProps) {
   if (isSubmitting) {
     return (
       <div className={cn(
-        "p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-md flex items-center",
+        "p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 text-[#5D7E23] dark:text-[#AAD775] rounded-md flex items-center",
         className
       )}>
-        <div className="h-4 w-4 border-2 border-blue-600 dark:border-blue-400 border-t-transparent dark:border-t-transparent rounded-full animate-spin mr-2"></div>
+        <div className="h-4 w-4 border-2 border-[#99C93B] dark:border-blue-400 border-t-transparent dark:border-t-transparent rounded-full animate-spin mr-2"></div>
         Submitting...
       </div>
     );
@@ -920,7 +920,7 @@ export function SubmitButton({ loadingText = "Submitting...", children, ...props
       disabled={isSubmitting}
       className={cn(
         "inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm",
-        "text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+        "text-white bg-[#99C93B] hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#99C93B]",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         props.className
       )}
@@ -974,7 +974,7 @@ export function PasswordStrength({ password, className }: PasswordStrengthProps)
     if (strength === 0) return 'bg-red-500 dark:bg-red-600';
     if (strength === 1) return 'bg-orange-500 dark:bg-orange-600';
     if (strength === 2) return 'bg-yellow-500 dark:bg-yellow-600';
-    if (strength === 3) return 'bg-blue-500 dark:bg-blue-600';
+    if (strength === 3) return 'bg-[#99C93B] dark:bg-[#99C93B]';
     return 'bg-green-500 dark:bg-green-600';
   };
   

@@ -228,11 +228,11 @@ export default function StudentLicensesPage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-[#99C93B] dark:text-[#AAD775]">
               {licenses.length}
             </div>
-            <div className="text-sm text-blue-700 dark:text-blue-300 flex items-center justify-center gap-1 mt-1">
+            <div className="text-sm text-[#5D7E23] dark:text-[#AAD775] flex items-center justify-center gap-1 mt-1">
               <Award className="w-4 h-4" />
               Total Licenses
             </div>

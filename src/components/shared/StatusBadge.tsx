@@ -99,14 +99,14 @@ export const StatusBadge = memo(({
       
       case 'planned':
         return {
-          color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-700',
+          color: 'bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] border-[#99C93B]/30 dark:border-blue-700',
           icon: <Calendar className="w-3 h-3" />,
           pulse: false
         };
       
       case 'completed':
         return {
-          color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 border-purple-200 dark:border-purple-700',
+          color: 'bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 border-purple-200 dark:border-purple-700',
           icon: <CheckCircle2 className="w-3 h-3" />,
           pulse: false
         };

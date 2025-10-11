@@ -453,7 +453,7 @@ export default function LearningPathPage() {
                         <BookOpen className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-0.5">Provider</p>
+                        <p className="text-xs font-medium text-[#99C93B] dark:text-[#AAD775] uppercase tracking-wide mb-0.5">Provider</p>
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{subject.providerName}</p>
                       </div>
                     </div>

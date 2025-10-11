@@ -636,7 +636,7 @@ export default function QuestionsSetupPage() {
     if (isLoading) {
       return (
         <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#99C93B]" />
         </div>
       );
     }
@@ -688,7 +688,7 @@ export default function QuestionsSetupPage() {
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Review and manage exam questions
-            {isQAMode && <span className="ml-2 text-blue-600 dark:text-blue-400">(QA Mode)</span>}
+            {isQAMode && <span className="ml-2 text-[#99C93B] dark:text-[#AAD775]">(QA Mode)</span>}
           </p>
         </div>
       </div>

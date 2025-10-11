@@ -45,9 +45,9 @@ export function LicenseHistoryDisplay({ licenseId }: LicenseHistoryDisplayProps)
   const getRowClassName = (action: LicenseAction) => {
     switch (action.action_type) {
       case 'EXPAND':
-        return 'bg-blue-50/80 hover:bg-blue-50 dark:bg-blue-900/20 dark:hover:bg-blue-900/30';
+        return 'bg-[#E8F5DC]/80 hover:bg-[#E8F5DC] dark:bg-[#5D7E23]/20 dark:hover:bg-blue-900/30';
       case 'EXTEND':
-        return 'bg-purple-50/80 hover:bg-purple-50 dark:bg-purple-900/20 dark:hover:bg-purple-900/30';
+        return 'bg-[#E8F5DC]/80 hover:bg-[#E8F5DC] dark:bg-purple-900/20 dark:hover:bg-purple-900/30';
       case 'RENEW':
         return 'bg-green-50/80 hover:bg-green-50 dark:bg-green-900/20 dark:hover:bg-green-900/30';
       default:
@@ -64,13 +64,13 @@ export function LicenseHistoryDisplay({ licenseId }: LicenseHistoryDisplayProps)
         <div className="flex items-center">
           <History className={cn(
             "h-4 w-4 mr-2",
-            row.action_type === 'EXPAND' && "text-blue-500 dark:text-blue-400",
-            row.action_type === 'EXTEND' && "text-purple-500 dark:text-purple-400",
+            row.action_type === 'EXPAND' && "text-[#99C93B] dark:text-[#AAD775]",
+            row.action_type === 'EXTEND' && "text-[#5D7E23] dark:text-purple-400",
             row.action_type === 'RENEW' && "text-green-500 dark:text-green-400"
           )} />
           <span className={cn(
             "font-medium",
-            row.action_type === 'EXPAND' && "text-blue-700 dark:text-blue-300",
+            row.action_type === 'EXPAND' && "text-[#5D7E23] dark:text-[#AAD775]",
             row.action_type === 'EXTEND' && "text-purple-700 dark:text-purple-300",
             row.action_type === 'RENEW' && "text-green-700 dark:text-green-300"
           )}>

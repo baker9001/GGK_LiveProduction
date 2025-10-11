@@ -398,8 +398,8 @@ export function QuestionsStep({
       {/* Info Banner with Selection Mode Toggle */}
       <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50/50 to-white p-6 dark:border-gray-800 dark:from-gray-900 dark:to-gray-800 shadow-sm">
         <div className="flex items-start gap-4">
-          <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-            <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="p-3 rounded-lg bg-[#E8F5DC] dark:bg-[#5D7E23]/30">
+            <FileText className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775]" />
           </div>
           <div className="flex-1">
             <div className="flex items-start justify-between gap-4">
@@ -811,7 +811,7 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
             </div>
           )}
           {question.year && (
-            <span className="text-xs font-medium px-3 py-1 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            <span className="text-xs font-medium px-3 py-1 rounded-lg bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]">
               {question.year}
             </span>
           )}
@@ -860,12 +860,12 @@ function QuestionCard({ question, isSelected, onAdd, onPreview }: QuestionCardPr
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3 flex-wrap">
           {question.topic_name && (
             <>
-              <span className="px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium">{question.topic_name}</span>
+              <span className="px-3 py-1.5 rounded-lg bg-[#E8F5DC] text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium">{question.topic_name}</span>
               {question.subtopic_name && <span className="text-gray-400">›</span>}
             </>
           )}
           {question.subtopic_name && (
-            <span className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 font-medium">{question.subtopic_name}</span>
+            <span className="px-3 py-1.5 rounded-lg bg-[#E8F5DC] text-[#5D7E23] dark:bg-purple-900/20 dark:text-purple-400 font-medium">{question.subtopic_name}</span>
           )}
         </div>
       )}
@@ -973,7 +973,7 @@ function SelectedQuestionCard({
                   size="icon-sm"
                   onClick={onPreview}
                   aria-label="Preview question"
-                  className="hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                  className="hover:bg-[#E8F5DC] dark:hover:bg-blue-900/30"
                 >
                   <Eye className="h-4 w-4" />
                 </IconButton>
@@ -1063,7 +1063,7 @@ function SelectedQuestionCard({
                 <span className="font-medium">{question.sub_questions_count} part{question.sub_questions_count !== 1 ? 's' : ''}</span>
               )}
               {question.topic_name && (
-                <span className="truncate px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium text-xs">{question.topic_name}</span>
+                <span className="truncate px-2.5 py-1 rounded-lg bg-[#E8F5DC] text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-medium text-xs">{question.topic_name}</span>
               )}
             </div>
           )}

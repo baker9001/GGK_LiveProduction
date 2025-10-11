@@ -307,7 +307,7 @@ export function PaperCard({
     <>
       <div className={cn(
         "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-200",
-        expanded && "ring-2 ring-blue-500 dark:ring-blue-400"
+        expanded && "ring-2 ring-[#99C93B] dark:ring-blue-400"
       )}>
         {/* Paper Header */}
         <div 
@@ -315,7 +315,7 @@ export function PaperCard({
           onClick={toggleExpanded}
         >
           <div className="flex items-center space-x-4">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#99C93B] dark:text-[#AAD775]">
               <FileText className="h-5 w-5" />
             </div>
             <div>
@@ -355,7 +355,7 @@ export function PaperCard({
                   </span>
                 )}
                 {questionsNeedingSubtopics > 0 && (
-                  <span className="ml-2 text-sm font-normal text-purple-600 dark:text-purple-400">
+                  <span className="ml-2 text-sm font-normal text-[#5D7E23] dark:text-purple-400">
                     ({questionsNeedingSubtopics} need subtopics)
                   </span>
                 )}
@@ -392,7 +392,7 @@ export function PaperCard({
                 variant="outline"
                 onClick={handleOpenFullPageReview}
                 leftIcon={<FileText className="h-3 w-3" />}
-                className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B]/30 dark:border-blue-800 text-[#5D7E23] dark:text-[#AAD775] hover:bg-[#E8F5DC] dark:hover:bg-blue-900/30"
               >
                 Full Review
               </Button>
@@ -481,7 +481,7 @@ export function PaperCard({
                       onStartTestMode();
                     }}
                     leftIcon={<Play className="h-3 w-3" />}
-                    className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                    className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B]/30 dark:border-blue-800 text-[#5D7E23] dark:text-[#AAD775] hover:bg-[#E8F5DC] dark:hover:bg-blue-900/30"
                     disabled={!allConfirmed}
                     title={!allConfirmed ? "Confirm all questions first" : "Start test mode"}
                   >
@@ -562,9 +562,9 @@ export function PaperCard({
                 
                 {/* Batch Actions */}
                 {showQAActions && selectedQuestions.size > 0 && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg p-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      <span className="text-sm font-medium text-[#5D7E23] dark:text-blue-200">
                         {selectedQuestions.size} question{selectedQuestions.size > 1 ? 's' : ''} selected
                       </span>
                       <div className="flex items-center space-x-2">
@@ -573,7 +573,7 @@ export function PaperCard({
                           variant="default"
                           onClick={handleBatchConfirm}
                           leftIcon={<CircleCheck className="h-3 w-3" />}
-                          className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white"
+                          className="bg-[#99C93B] hover:bg-blue-700 dark:bg-[#99C93B] dark:hover:bg-blue-700 text-white"
                         >
                           Confirm Selected
                         </Button>
@@ -613,10 +613,10 @@ export function PaperCard({
                 )}
                 
                 {/* Statistics Summary */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg p-3">
                   <div className="grid grid-cols-4 gap-4 text-center">
                     <div>
-                      <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      <div className="text-xl font-bold text-[#99C93B] dark:text-[#AAD775]">
                         {paper.questions.length}
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">Total Questions</div>
@@ -736,7 +736,7 @@ export function PaperCard({
                           className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                         >
                           {selectedQuestions.has(question.id) ? (
-                            <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            <CheckSquare className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
                           ) : (
                             <Square className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                           )}

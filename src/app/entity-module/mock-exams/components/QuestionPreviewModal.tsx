@@ -262,7 +262,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
           <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-800 dark:bg-gray-900/50">
             <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
               {displayQuestion.question_number && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5DC] px-2.5 py-1 font-medium text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]">
                   <Tag className="h-3 w-3" />
                   Q{displayQuestion.question_number}
                 </span>
@@ -279,7 +279,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                 </span>
               )}
               {(displayQuestion.difficulty_level || displayQuestion.difficulty) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5DC] px-2.5 py-1 font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
                   {displayQuestion.difficulty_level || displayQuestion.difficulty}
                 </span>
               )}
@@ -415,12 +415,12 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
                                 </span>
                               )}
                               {subQ.type && (
-                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                <span className="text-xs px-2 py-1 rounded-full bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]">
                                   {subQ.type}
                                 </span>
                               )}
                               {hasAttachments && (
-                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[#E8F5DC] text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
                                   <ImageIcon className="h-3 w-3" />
                                   {subQ.attachments.length} attachment{subQ.attachments.length !== 1 ? 's' : ''}
                                 </span>
@@ -447,7 +447,7 @@ export function QuestionPreviewModal({ question, isOpen, onClose }: QuestionPrev
           {(displayQuestion.hint_text || displayQuestion.hint || displayQuestion.questions_hints?.[0]?.hint_text) && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Hint</h4>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+              <div className="rounded-lg border border-[#99C93B]/30 bg-[#E8F5DC] p-4 dark:border-blue-800 dark:bg-[#5D7E23]/20">
                 <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
                   {displayQuestion.hint_text || displayQuestion.hint || displayQuestion.questions_hints?.[0]?.hint_text}
                 </p>

@@ -1085,7 +1085,7 @@ export default function UsersTab() {
           setEditingUser(row);
           setIsEditFormOpen(true);
         }}
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+        className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-full transition-colors"
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />
@@ -1391,8 +1391,8 @@ export default function UsersTab() {
             />
           </FormField>
 
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+          <div className="p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-md border border-[#99C93B]/30 dark:border-blue-800">
+            <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
               The user will receive an email invitation with a secure link to set up their password. 
               The invitation will expire in 7 days.
             </p>

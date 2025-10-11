@@ -170,7 +170,7 @@ function FilterDropdown({
                 "focus:outline-none focus:ring-2",
                 isGreenTheme 
                   ? "focus:ring-[#8CC63F] focus:border-[#8CC63F]"
-                  : "focus:ring-blue-500 focus:border-blue-500"
+                  : "focus:ring-[#99C93B] focus:border-[#99C93B]"
               )}
               placeholder="Search..."
               value={searchTerm}
@@ -191,7 +191,7 @@ function FilterDropdown({
                     option.value === value 
                       ? isGreenTheme 
                         ? 'bg-[#8CC63F]/10 dark:bg-[#8CC63F]/20 text-[#8CC63F]' 
-                        : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#99C93B] dark:text-[#AAD775]'
                       : 'text-gray-900 dark:text-white'
                   )}
                   onClick={() => {
@@ -229,7 +229,7 @@ function FilterDropdown({
             'focus:outline-none focus:ring-1',
             isGreenTheme 
               ? 'focus:ring-[#8CC63F] focus:border-[#8CC63F]'
-              : 'focus:ring-blue-500 focus:border-blue-500',
+              : 'focus:ring-[#99C93B] focus:border-[#99C93B]',
             'text-sm text-gray-900 dark:text-gray-100 transition-colors duration-200',
             disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed'
           )}

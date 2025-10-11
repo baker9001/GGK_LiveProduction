@@ -1778,7 +1778,7 @@ export default function CompaniesTab() {
             {row.name}
           </span>
           {row.admin_count && row.admin_count > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#E8F5DC] text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
               {row.admin_count} admin{row.admin_count > 1 ? 's' : ''}
             </span>
           )}
@@ -1961,7 +1961,7 @@ export default function CompaniesTab() {
                 resetAdminForm();
                 setIsAdminFormOpen(true);
               }}
-              className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+              className="p-1.5 text-[#5D7E23] hover:text-purple-700 hover:bg-[#E8F5DC] dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
               title="Add Tenant Admin"
             >
               <UserPlus className="h-4 w-4" />
@@ -1972,7 +1972,7 @@ export default function CompaniesTab() {
                 setEditingCompany(company);
                 setIsFormOpen(true);
               }}
-              className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              className="p-1.5 text-[#99C93B] hover:text-[#5D7E23] hover:bg-[#E8F5DC] dark:text-[#AAD775] dark:hover:text-[#AAD775] dark:hover:bg-[#5D7E23]/20 rounded-lg transition-colors"
               title="Edit Company"
             >
               <Edit className="h-4 w-4" />
@@ -2292,24 +2292,24 @@ export default function CompaniesTab() {
           )}
 
           {editingAdmin && (
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+            <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-md border border-[#99C93B]/30 dark:border-blue-800">
+              <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                 <strong>Note:</strong> To change the user's password, use the password reset option from the admins list.
               </p>
             </div>
           )}
 
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="p-4 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg">
             <div className="flex items-start gap-2">
-              <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <Shield className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775] mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
                   Company Administrator Access
                 </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                <p className="text-xs text-[#5D7E23] dark:text-[#AAD775] mt-1">
                   This user will be set as a company administrator with full access to:
                 </p>
-                <ul className="text-xs text-blue-700 dark:text-blue-300 mt-2 list-disc list-inside space-y-1">
+                <ul className="text-xs text-[#5D7E23] dark:text-[#AAD775] mt-2 list-disc list-inside space-y-1">
                   <li>Manage company settings and data</li>
                   <li>Access all company modules</li>
                   <li>Manage other company users</li>
@@ -2369,8 +2369,8 @@ export default function CompaniesTab() {
                   </div>
                 )}
 
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                <div className="p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-md border border-[#99C93B]/30 dark:border-blue-800">
+                  <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                     <Shield className="h-4 w-4 inline mr-1" />
                     Password will be updated in both authentication system and database.
                   </p>
@@ -2636,7 +2636,7 @@ export default function CompaniesTab() {
                                       sendEmail: false
                                     });
                                   }}
-                                  className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                  className="p-2 text-[#5D7E23] hover:text-purple-700 hover:bg-[#E8F5DC] dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                                   title="Change password"
                                 >
                                   <Key className="h-5 w-5" />
@@ -2652,7 +2652,7 @@ export default function CompaniesTab() {
                                   setIsAdminFormOpen(true);
                                   setReturnToViewAfterAdd(true);
                                 }}
-                                className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                className="p-2 text-[#99C93B] hover:text-[#5D7E23] hover:bg-[#E8F5DC] dark:text-[#AAD775] dark:hover:text-[#AAD775] dark:hover:bg-[#5D7E23]/20 rounded-lg transition-colors"
                                 title="Edit Admin"
                               >
                                 <Edit className="h-5 w-5" />

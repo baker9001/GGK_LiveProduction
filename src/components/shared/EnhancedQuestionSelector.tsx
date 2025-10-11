@@ -542,7 +542,7 @@ export function EnhancedQuestionSelector({
                                 </span>
                               )}
                               {hasSubQuestions && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
                                   {question.parts?.length} part{question.parts?.length !== 1 ? 's' : ''}
                                 </span>
                               )}
@@ -701,7 +701,7 @@ export function EnhancedQuestionSelector({
                               {hasSubQuestions && (
                                 <button
                                   onClick={() => toggleQuestionExpansion(question.id)}
-                                  className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                  className="text-xs px-2 py-0.5 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] hover:bg-blue-200 dark:hover:bg-[#5D7E23]/50 transition-colors"
                                 >
                                   {isExpanded ? 'Hide' : 'Show'} {question.parts?.length} part{question.parts?.length !== 1 ? 's' : ''}
                                 </button>

@@ -544,26 +544,26 @@ export function AdminCreationForm({
       <div className="space-y-6">
         {/* ENHANCED: Invitation Process Notice - Only for new users */}
         {!isEditing && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-800">
-                  <Send className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-[#E8F5DC] dark:bg-blue-800">
+                  <Send className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
                 </div>
               </div>
               <div className="ml-4">
                 <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
                   Secure Invitation Process
                 </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                   The administrator will receive an invitation email with a secure link to:
                 </p>
-                <ul className="mt-2 text-sm text-blue-600 dark:text-blue-400 list-disc list-inside space-y-1">
+                <ul className="mt-2 text-sm text-[#99C93B] dark:text-[#AAD775] list-disc list-inside space-y-1">
                   <li>Set their own secure password</li>
                   <li>Verify their email address</li>
                   <li>Activate their account</li>
                 </ul>
-                <p className="mt-2 text-xs text-blue-500 dark:text-blue-400">
+                <p className="mt-2 text-xs text-[#99C93B] dark:text-[#AAD775]">
                   The invitation link expires in 24 hours for security.
                 </p>
               </div>
@@ -762,10 +762,10 @@ export function AdminCreationForm({
               </h3>
             </div>
             
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+            <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-3">
               <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <AlertCircle className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775] mr-2" />
+                <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                   {formData.admin_level === 'school_admin' 
                     ? 'Assign schools this administrator can manage'
                     : 'Assign branches this administrator can manage'}

@@ -429,10 +429,10 @@ export function AttachmentManager({
               className={cn(
                 "transition-all",
                 showSnippingTool 
-                  ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                  ? "bg-[#99C93B] hover:bg-blue-700 text-white" 
                   : needsFigure() && attachments.length === 0
                     ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                    : "bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B]/30 dark:border-blue-800 text-[#5D7E23] dark:text-[#AAD775] hover:bg-[#E8F5DC] dark:hover:bg-blue-900/30"
               )}
               title={
                 !pdfDataUrl 
@@ -477,13 +477,13 @@ export function AttachmentManager({
           className={cn(
             "border-2 border-dashed rounded-lg p-8 text-center transition-all",
             isDragging 
-              ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" 
+              ? "border-blue-400 bg-[#E8F5DC] dark:bg-[#5D7E23]/20" 
               : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
           )}
         >
           <Upload className={cn(
             "h-8 w-8 mx-auto mb-2",
-            isDragging ? "text-blue-500" : "text-gray-400"
+            isDragging ? "text-[#99C93B]" : "text-gray-400"
           )} />
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {isDragging 
@@ -498,18 +498,18 @@ export function AttachmentManager({
       
       {/* Inline PDF Snipping Tool */}
       {showSnippingTool && pdfDataUrl && (
-        <div className="border-2 border-blue-300 dark:border-blue-700 rounded-lg overflow-hidden animate-in slide-in-from-top-2 duration-300">
+        <div className="border-2 border-[#99C93B] dark:border-blue-700 rounded-lg overflow-hidden animate-in slide-in-from-top-2 duration-300">
           {/* Tool Header */}
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 p-3 border-b border-blue-200 dark:border-blue-800">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 p-3 border-b border-[#99C93B]/30 dark:border-blue-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2">
-                  <Scissors className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  <Scissors className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775]" />
+                  <span className="text-sm font-medium text-[#5D7E23] dark:text-blue-200">
                     PDF Snipping Tool
                   </span>
                   {pdfFileName && (
-                    <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded">
+                    <span className="text-xs text-[#99C93B] dark:text-[#AAD775] bg-[#E8F5DC] dark:bg-blue-900/50 px-2 py-0.5 rounded">
                       {pdfFileName}
                     </span>
                   )}
@@ -530,7 +530,7 @@ export function AttachmentManager({
                 {/* Quick Actions */}
                 <button
                   onClick={handleChangePdf}
-                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center space-x-1 px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
+                  className="text-xs text-[#99C93B] hover:text-[#5D7E23] dark:text-[#AAD775] dark:hover:text-[#AAD775] flex items-center space-x-1 px-2 py-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/50 rounded"
                   title="Load different PDF"
                 >
                   <RefreshCw className="h-3 w-3" />
@@ -539,7 +539,7 @@ export function AttachmentManager({
                 
                 <button
                   onClick={() => setShowSnippingTool(false)}
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
+                  className="text-[#99C93B] hover:text-[#5D7E23] dark:text-[#AAD775] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/50 rounded"
                   title="Close snipping tool"
                 >
                   <X className="h-4 w-4" />
@@ -548,16 +548,16 @@ export function AttachmentManager({
             </div>
             
             {/* Instructions */}
-            <div className="mt-2 flex items-start space-x-2 text-xs text-blue-700 dark:text-blue-300">
+            <div className="mt-2 flex items-start space-x-2 text-xs text-[#5D7E23] dark:text-[#AAD775]">
               <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
               <span>Click and drag to select areas. Use zoom controls for precision. Multiple snips allowed.</span>
             </div>
 
             {recentSnips.length > 0 && (
-              <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-2">
+              <div className="mt-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 border border-[#99C93B]/30 dark:border-blue-800 rounded-md p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Recent snips (session)</p>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400">Tap to preview</span>
+                  <p className="text-xs font-medium text-[#5D7E23] dark:text-blue-200">Recent snips (session)</p>
+                  <span className="text-[10px] text-[#99C93B] dark:text-[#AAD775]">Tap to preview</span>
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {recentSnips.map((snip, index) => (
@@ -565,7 +565,7 @@ export function AttachmentManager({
                       key={index}
                       type="button"
                       onClick={() => window.open(snip, '_blank', 'noopener,noreferrer')}
-                      className="relative flex-shrink-0 w-16 h-16 rounded-md border border-blue-200 dark:border-blue-700 overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400/70"
+                      className="relative flex-shrink-0 w-16 h-16 rounded-md border border-[#99C93B]/30 dark:border-blue-700 overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400/70"
                       title={`Open snip ${index + 1} in new tab`}
                     >
                       <img
@@ -665,7 +665,7 @@ export function AttachmentManager({
                 const images = attachments.filter(a => a.file_type.startsWith('image/'));
                 images.forEach(img => window.open(img.file_url, '_blank'));
               }}
-              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center space-x-1"
+              className="text-xs text-[#99C93B] hover:text-[#5D7E23] dark:text-[#AAD775] dark:hover:text-[#AAD775] flex items-center space-x-1"
             >
               <ZoomIn className="h-3 w-3" />
               <span>Open all</span>

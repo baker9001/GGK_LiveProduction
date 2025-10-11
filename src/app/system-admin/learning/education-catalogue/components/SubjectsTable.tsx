@@ -461,7 +461,7 @@ export default function SubjectsTable() {
             />
           </FormField>
 
-          <div className="p-3 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+          <div className="p-3 text-sm text-[#99C93B] dark:text-[#AAD775] bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-md border border-[#99C93B]/30 dark:border-blue-800">
             <p>The subject will be saved as: <strong>[Name] - [Code]</strong> (e.g., Physics - 0625)</p>
           </div>
 

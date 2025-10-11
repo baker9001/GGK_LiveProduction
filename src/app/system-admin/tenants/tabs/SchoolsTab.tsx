@@ -517,19 +517,19 @@ export default function SchoolsTab() {
           {/* Enhanced Statistics Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             {/* Branches */}
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center border border-purple-200 dark:border-purple-800">
-              <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+            <div className="bg-[#E8F5DC] dark:bg-purple-900/20 rounded-lg p-3 text-center border border-purple-200 dark:border-purple-800">
+              <div className="text-lg font-bold text-[#5D7E23] dark:text-purple-400">
                 {row.branches_count || 0}
               </div>
               <div className="text-xs text-purple-700 dark:text-purple-300">Branches</div>
             </div>
             
             {/* Students */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center border border-blue-200 dark:border-blue-800">
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+            <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg p-3 text-center border border-[#99C93B]/30 dark:border-blue-800">
+              <div className="text-lg font-bold text-[#99C93B] dark:text-[#AAD775]">
                 {row.students_count || 0}
               </div>
-              <div className="text-xs text-blue-700 dark:text-blue-300">Students</div>
+              <div className="text-xs text-[#5D7E23] dark:text-[#AAD775]">Students</div>
             </div>
             
             {/* Teachers */}
@@ -541,8 +541,8 @@ export default function SchoolsTab() {
             </div>
             
             {/* Admin Users */}
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 text-center border border-indigo-200 dark:border-indigo-800">
-              <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+            <div className="bg-[#E8F5DC] dark:bg-indigo-900/20 rounded-lg p-3 text-center border border-indigo-200 dark:border-indigo-800">
+              <div className="text-lg font-bold text-[#5D7E23] dark:text-indigo-400">
                 {row.admin_users_count || 0}
               </div>
               <div className="text-xs text-indigo-700 dark:text-indigo-300 flex items-center justify-center gap-1">
@@ -563,8 +563,8 @@ export default function SchoolsTab() {
             </div>
             
             {/* Class Sections */}
-            <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-3 text-center border border-teal-200 dark:border-teal-800">
-              <div className="text-lg font-bold text-teal-600 dark:text-teal-400">
+            <div className="bg-[#E8F5DC] dark:bg-teal-900/20 rounded-lg p-3 text-center border border-teal-200 dark:border-teal-800">
+              <div className="text-lg font-bold text-[#99C93B] dark:text-teal-400">
                 {row.class_sections_count || 0}
               </div>
               <div className="text-xs text-teal-700 dark:text-teal-300 flex items-center justify-center gap-1">

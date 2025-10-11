@@ -358,7 +358,7 @@ export function CorrectAnswersDisplay({
                     </span>
                   )}
                   {answer.context && (
-                    <span className="text-blue-600 dark:text-blue-400">
+                    <span className="text-[#99C93B] dark:text-[#AAD775]">
                       {getContextTypeLabel(answer.context.type)}: {answer.context.label || answer.context.value}
                     </span>
                   )}

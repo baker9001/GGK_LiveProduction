@@ -39,9 +39,9 @@ const RESOURCE_CATEGORIES = [
     description: 'Complete Cambridge & Edexcel past papers from 2010-2024 with mark schemes',
     count: '15,000+',
     color: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-700',
-    textColor: 'text-blue-700 dark:text-blue-300',
+    bgColor: 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20',
+    borderColor: 'border-[#99C93B]/30 dark:border-blue-700',
+    textColor: 'text-[#5D7E23] dark:text-[#AAD775]',
     items: [
       'Cambridge IGCSE Papers',
       'Edexcel International Papers',
@@ -99,7 +99,7 @@ const RESOURCE_CATEGORIES = [
     description: 'Concise revision notes following Cambridge & Edexcel syllabi',
     count: '2,000+',
     color: 'from-purple-500 to-purple-600',
-    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    bgColor: 'bg-[#E8F5DC] dark:bg-purple-900/20',
     borderColor: 'border-purple-200 dark:border-purple-700',
     textColor: 'text-purple-700 dark:text-purple-300',
     items: [
@@ -118,7 +118,7 @@ const RESOURCE_CATEGORIES = [
     description: 'Virtual labs, simulations, and calculators for hands-on learning',
     count: '800+',
     color: 'from-indigo-500 to-indigo-600',
-    bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+    bgColor: 'bg-[#E8F5DC] dark:bg-indigo-900/20',
     borderColor: 'border-indigo-200 dark:border-indigo-700',
     textColor: 'text-indigo-700 dark:text-indigo-300',
     items: [

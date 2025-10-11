@@ -58,8 +58,8 @@ export function ClassSectionFormItem({
       {/* Header with Remove Button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <div className="w-8 h-8 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-lg flex items-center justify-center">
+            <Users className="w-4 h-4 text-[#99C93B] dark:text-[#AAD775]" />
           </div>
           <h4 className="font-medium text-gray-900 dark:text-white">
             Section {index + 1}

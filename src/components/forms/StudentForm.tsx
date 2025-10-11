@@ -586,16 +586,16 @@ export function StudentForm({
     >
       <div className="space-y-6">
         {/* Form Header */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="w-12 h-12 bg-[#E8F5DC] dark:bg-blue-800 rounded-full flex items-center justify-center">
+              <GraduationCap className="w-6 h-6 text-[#99C93B] dark:text-[#AAD775]" />
             </div>
             <div>
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">
                 {isEditing ? 'Student Information Update' : 'New Student Registration'}
               </h3>
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+              <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
                 {isEditing 
                   ? 'Update student information and academic details'
                   : 'Complete student registration with academic and contact information'

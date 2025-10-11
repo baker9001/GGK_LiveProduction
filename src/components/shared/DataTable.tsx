@@ -159,8 +159,8 @@ export function DataTable<T>({
     <div className={cn('bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200', className)} role="region" aria-label={ariaLabel}>
       {/* Bulk actions */}
       {selectedRows.size > 0 && onDelete && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 border-b border-blue-200 dark:border-blue-800 flex items-center justify-between">
-          <span className="text-sm text-blue-700 dark:text-blue-300">
+        <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 px-4 py-2 border-b border-[#99C93B]/30 dark:border-[#99C93B]/50 flex items-center justify-between">
+          <span className="text-sm text-[#5D7E23] dark:text-[#E8F5DC]">
             {selectedRows.size} {selectedRows.size === 1 ? 'item' : 'items'} selected
           </span>
           <Button
@@ -177,7 +177,7 @@ export function DataTable<T>({
       {/* Loading indicator */}
       {isFetching && (
         <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 flex items-center justify-center z-10">
-          <div className="h-8 w-8 border-4 border-t-blue-500 border-blue-200 rounded-full animate-spin"></div>
+          <div className="h-8 w-8 border-4 border-t-[#99C93B] border-[#E8F5DC] rounded-full animate-spin"></div>
         </div>
       )}
       
@@ -197,7 +197,7 @@ export function DataTable<T>({
                   <input
                     id="select-all-checkbox"
                     type="checkbox"
-                    className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:bg-gray-700"
+                    className="h-4 w-4 text-[#99C93B] rounded border-gray-300 dark:border-gray-600 focus:ring-[#99C93B] dark:bg-gray-700"
                     checked={allRowsSelected}
                     ref={input => input && (input.indeterminate = someRowsSelected)}
                     onChange={toggleSelectAll}
@@ -213,7 +213,7 @@ export function DataTable<T>({
                   scope="col"
                   className={cn(
                     'px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider',
-                    column.enableSorting !== false && 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                    column.enableSorting !== false && 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:ring-offset-2'
                   )}
                   tabIndex={column.enableSorting !== false ? 0 : -1}
                   role={column.enableSorting !== false ? "button" : undefined}
@@ -299,7 +299,7 @@ export function DataTable<T>({
                     key={rowKey}
                     className={cn(
                       'transition-colors duration-200',
-                      isSelected && 'bg-blue-50 dark:bg-blue-900/20',
+                      isSelected && 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20',
                       getRowClassName?.(row),
                       !getRowClassName?.(row) && 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     )}
@@ -310,7 +310,7 @@ export function DataTable<T>({
                       <div className="flex items-center justify-center">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:bg-gray-700"
+                          className="h-4 w-4 text-[#99C93B] rounded border-gray-300 dark:border-gray-600 focus:ring-[#99C93B] dark:bg-gray-700"
                           aria-label={`Select row ${rowKey}`}
                           checked={isSelected}
                           onChange={() => toggleRowSelection(rowKey)}
@@ -343,7 +343,7 @@ export function DataTable<T>({
                             {onEdit && (
                               <button
                                 onClick={() => onEdit(row)}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+                                className="text-[#99C93B] dark:text-[#99C93B] hover:text-[#7AB635] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-full transition-colors"
                                 aria-label={`Edit row ${rowKey}`}
                                 title="Edit"
                               >
