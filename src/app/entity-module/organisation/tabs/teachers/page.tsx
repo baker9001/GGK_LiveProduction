@@ -35,6 +35,8 @@ import { userCreationService } from '../../../../../services/userCreationService
 import { cn } from '../../../../../lib/utils';
 import { QuickPasswordResetButton } from '../../../../../components/shared/QuickPasswordResetButton';
 import { PasswordResetManager } from '../../../../../components/shared/PasswordResetManager';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 // ===== INTERFACES =====
 interface TeacherData {
@@ -1916,7 +1918,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
   // ===== FILTERING =====
   const filteredTeachers = useMemo(() => {
     return teachers.filter(teacher => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         teacher.teacher_code?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1932,10 +1934,64 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
       
       const matchesSpecialization = filterSpecialization === 'all' ||
         teacher.specialization?.includes(filterSpecialization);
-      
+
       return matchesSearch && matchesStatus && matchesSchool && matchesSpecialization;
     });
   }, [teachers, searchTerm, filterStatus, filterSchool, filterSpecialization]);
+
+  const {
+    page: teachersPage,
+    rowsPerPage: teachersRowsPerPage,
+    totalPages: teachersTotalPages,
+    totalCount: teachersTotalCount,
+    paginatedItems: paginatedTeachers,
+    start: teachersStart,
+    end: teachersEnd,
+    goToPage: goToTeachersPage,
+    nextPage: nextTeachersPage,
+    previousPage: previousTeachersPage,
+    changeRowsPerPage: changeTeachersRowsPerPage,
+  } = usePagination(filteredTeachers);
+
+  const currentTeacherIds = useMemo(
+    () => paginatedTeachers.map(teacher => teacher.id),
+    [paginatedTeachers]
+  );
+
+  const teacherSelectAllRef = useRef<HTMLInputElement | null>(null);
+  const areAllTeachersSelected = currentTeacherIds.length > 0 &&
+    currentTeacherIds.every(id => selectedTeachers.includes(id));
+  const isSomeTeachersSelected = currentTeacherIds.some(id => selectedTeachers.includes(id));
+
+  useEffect(() => {
+    if (!teacherSelectAllRef.current) return;
+    teacherSelectAllRef.current.indeterminate = isSomeTeachersSelected && !areAllTeachersSelected;
+  }, [areAllTeachersSelected, isSomeTeachersSelected]);
+
+  const handleTeacherSelect = (teacherId: string, checked: boolean) => {
+    setSelectedTeachers(prev => {
+      if (checked) {
+        if (prev.includes(teacherId)) {
+          return prev;
+        }
+        return [...prev, teacherId];
+      }
+      return prev.filter(id => id !== teacherId);
+    });
+  };
+
+  const handleSelectAllTeachers = (checked: boolean) => {
+    if (checked) {
+      setSelectedTeachers(prev => {
+        const next = new Set(prev);
+        currentTeacherIds.forEach(id => next.add(id));
+        return Array.from(next);
+      });
+      return;
+    }
+
+    setSelectedTeachers(prev => prev.filter(id => !currentTeacherIds.includes(id)));
+  };
 
   // ===== STATISTICS =====
   const summaryStats = useMemo(() => {
@@ -2180,7 +2236,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             <Loader2 className="h-8 w-8 animate-spin text-[#8CC63F]" />
             <span className="ml-2 text-gray-600 dark:text-gray-400">Loading teachers...</span>
           </div>
-        ) : filteredTeachers.length === 0 ? (
+        ) : teachersTotalCount === 0 ? (
           <div className="text-center p-8 text-gray-500 dark:text-gray-400">
             <GraduationCap className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <h3 className="text-lg font-medium mb-2">No Teachers Found</h3>
@@ -2206,19 +2262,12 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 <tr className="border-b border-gray-200 dark:border-gray-700">
                   <th className="text-left p-3" scope="col">
                     <input
+                      ref={teacherSelectAllRef}
                       type="checkbox"
-                      checked={
-                        selectedTeachers.length === filteredTeachers.length &&
-                        filteredTeachers.length > 0
-                      }
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTeachers(filteredTeachers.map(t => t.id));
-                        } else {
-                          setSelectedTeachers([]);
-                        }
-                      }}
-                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                      checked={areAllTeachersSelected}
+                      aria-checked={areAllTeachersSelected ? 'true' : (isSomeTeachersSelected ? 'mixed' : 'false')}
+                      onChange={(e) => handleSelectAllTeachers(e.target.checked)}
+                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
                       aria-label="Select all teachers"
                     />
                   </th>
@@ -2232,7 +2281,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 </tr>
               </thead>
               <tbody>
-                {filteredTeachers.map((teacher) => (
+                {paginatedTeachers.map((teacher) => (
                   <tr 
                     key={teacher.id} 
                     className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -2241,14 +2290,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       <input
                         type="checkbox"
                         checked={selectedTeachers.includes(teacher.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedTeachers([...selectedTeachers, teacher.id]);
-                          } else {
-                            setSelectedTeachers(selectedTeachers.filter(id => id !== teacher.id));
-                          }
-                        }}
-                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                        onChange={(e) => handleTeacherSelect(teacher.id, e.target.checked)}
+                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
                         aria-label={`Select ${teacher.name}`}
                       />
                     </td>
@@ -2421,6 +2464,17 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={teachersPage}
+            rowsPerPage={teachersRowsPerPage}
+            totalCount={teachersTotalCount}
+            totalPages={teachersTotalPages}
+            onPageChange={goToTeachersPage}
+            onNextPage={nextTeachersPage}
+            onPreviousPage={previousTeachersPage}
+            onRowsPerPageChange={changeTeachersRowsPerPage}
+            showingRange={{ start: teachersStart, end: teachersEnd }}
+          />
         )}
       </div>
 
