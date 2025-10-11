@@ -312,7 +312,7 @@ export default function StudentLearningMaterialsPage() {
               {/* Thumbnail/Icon Section */}
               {viewMode === 'grid' ? (
                 <div className="relative aspect-video w-full bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 overflow-hidden">
-                  {material.type === 'video' && material.thumbnail_url ? (
+                  {material.thumbnail_url ? (
                     <>
                       <img
                         src={material.thumbnail_url}
@@ -322,12 +322,12 @@ export default function StudentLearningMaterialsPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-16 h-16 rounded-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                          <Video className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                          <MaterialTypeIcon type={material.type} />
                         </div>
                       </div>
                       <div className="absolute top-3 right-3">
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-black/60 text-white backdrop-blur-sm">
-                          Video
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-black/60 text-white backdrop-blur-sm capitalize">
+                          {material.type}
                         </span>
                       </div>
                     </>
@@ -341,7 +341,7 @@ export default function StudentLearningMaterialsPage() {
                 </div>
               ) : (
                 <div className="w-24 h-24 flex-shrink-0 ml-4 my-4 relative">
-                  {material.type === 'video' && material.thumbnail_url ? (
+                  {material.thumbnail_url ? (
                     <>
                       <img
                         src={material.thumbnail_url}
@@ -349,7 +349,7 @@ export default function StudentLearningMaterialsPage() {
                         className="w-full h-full object-cover rounded-lg"
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-lg">
-                        <Video className="h-8 w-8 text-white" />
+                        <MaterialTypeIcon type={material.type} />
                       </div>
                     </>
                   ) : (

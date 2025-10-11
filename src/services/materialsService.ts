@@ -171,6 +171,7 @@ export async function getMaterialsForTeacher(
         status,
         created_at,
         created_by,
+        thumbnail_url,
         data_structures (
           id,
           regions (name),
@@ -226,9 +227,19 @@ export async function getMaterialsForTeacher(
         fileUrl = '';
       }
 
+      // Get thumbnail URL if exists
+      let thumbnailUrl = null;
+      if (material.thumbnail_url) {
+        const { data: thumbData } = supabase.storage
+          .from('thumbnails')
+          .getPublicUrl(material.thumbnail_url);
+        thumbnailUrl = thumbData.publicUrl;
+      }
+
       return {
         ...material,
         file_url: fileUrl,
+        thumbnail_url: thumbnailUrl,
         grade_levels: null // Removed since table doesn't have grade_id
       };
     });
@@ -236,6 +247,53 @@ export async function getMaterialsForTeacher(
     return formattedMaterials;
   } catch (error) {
     console.error('Error fetching teacher materials:', error);
+    throw error;
+  }
+}
+
+/**
+ * Uploads a thumbnail image to storage
+ */
+export async function uploadThumbnail(
+  file: File,
+  materialId?: string
+): Promise<string> {
+  try {
+    const uniquePrefix = Math.random().toString(36).slice(2);
+    const timestamp = Date.now();
+    const ext = file.name.split('.').pop();
+    const fileName = materialId
+      ? `material_${materialId}_${timestamp}.${ext}`
+      : `temp_${uniquePrefix}_${timestamp}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from('thumbnails')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type
+      });
+
+    if (error) throw error;
+    return data.path;
+  } catch (error) {
+    console.error('Error uploading thumbnail:', error);
+    throw error;
+  }
+}
+
+/**
+ * Deletes a thumbnail from storage
+ */
+export async function deleteThumbnail(thumbnailPath: string): Promise<void> {
+  try {
+    const { error } = await supabase.storage
+      .from('thumbnails')
+      .remove([thumbnailPath]);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting thumbnail:', error);
     throw error;
   }
 }

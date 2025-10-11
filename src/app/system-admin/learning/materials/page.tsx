@@ -40,6 +40,7 @@ type Material = {
   size: number;
   status: 'active' | 'inactive';
   created_at: string;
+  thumbnail_url?: string | null;
   data_structure_name: string;
   region_name: string;
   program_name: string;
@@ -109,6 +110,8 @@ export default function MaterialManagementPage() {
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedThumbnail, setUploadedThumbnail] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [materialsToDelete, setMaterialsToDelete] = useState<Material[]>([]);
@@ -229,6 +232,7 @@ export default function MaterialManagementPage() {
           size,
           status,
           created_at,
+          thumbnail_url,
           data_structures (
             id,
             regions (name),
@@ -267,10 +271,20 @@ export default function MaterialManagementPage() {
         const { data: urlData } = supabase.storage
           .from('materials_files')
           .getPublicUrl(material.file_path);
-        
+
+        // Generate thumbnail URL if exists
+        let thumbnailUrl = null;
+        if (material.thumbnail_url) {
+          const { data: thumbData } = supabase.storage
+            .from('thumbnails')
+            .getPublicUrl(material.thumbnail_url);
+          thumbnailUrl = thumbData.publicUrl;
+        }
+
         return {
           ...material,
           file_url: urlData.publicUrl,
+          thumbnail_url: thumbnailUrl,
           data_structure_name: `${material.data_structures?.regions?.name || 'Unknown'} - ${material.data_structures?.programs?.name || 'Unknown'} - ${material.data_structures?.providers?.name || 'Unknown'} - ${material.data_structures?.edu_subjects?.name || 'Unknown'}`,
           region_name: material.data_structures?.regions?.name || 'Unknown',
           program_name: material.data_structures?.programs?.name || 'Unknown',
@@ -409,6 +423,24 @@ export default function MaterialManagementPage() {
     return data.path;
   };
 
+  const handleThumbnailUpload = async (file: File): Promise<string> => {
+    const uniquePrefix = Math.random().toString(36).slice(2);
+    const timestamp = Date.now();
+    const ext = file.name.split('.').pop();
+    const fileName = `material_${uniquePrefix}_${timestamp}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from('thumbnails')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type
+      });
+
+    if (error) throw error;
+    return data.path;
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormErrors({});
@@ -421,17 +453,18 @@ export default function MaterialManagementPage() {
       let fileUrl = editingMaterial?.file_url || '';
       let mimeType = editingMaterial?.mime_type || '';
       let fileSize = editingMaterial?.size || 0;
+      let thumbnailPath = editingMaterial?.thumbnail_url || null;
 
       if (uploadedFile) {
         mimeType = uploadedFile.type || getMimeTypeFromExtension(uploadedFile.name);
         fileSize = uploadedFile.size;
-        
+
         console.log('File details before upload:', {
           name: uploadedFile.name,
           type: mimeType,
           size: fileSize
         });
-        
+
         if (editingMaterial?.file_path) {
           await supabase.storage
             .from('materials_files')
@@ -445,6 +478,17 @@ export default function MaterialManagementPage() {
         fileUrl = data.publicUrl;
       }
 
+      // Handle thumbnail upload
+      if (uploadedThumbnail) {
+        // Delete old thumbnail if exists
+        if (editingMaterial?.thumbnail_url) {
+          await supabase.storage
+            .from('thumbnails')
+            .remove([editingMaterial.thumbnail_url]);
+        }
+        thumbnailPath = await handleThumbnailUpload(uploadedThumbnail);
+      }
+
       if (!filePath) {
         throw new Error('File is required');
       }
@@ -455,6 +499,7 @@ export default function MaterialManagementPage() {
         file_url: fileUrl,
         mime_type: mimeType,
         size: fileSize,
+        thumbnail_url: thumbnailPath,
         created_by: user?.id,
         unit_id: validatedData.unit_id && validatedData.unit_id !== '' ? validatedData.unit_id : null,
         topic_id: validatedData.topic_id && validatedData.topic_id !== '' ? validatedData.topic_id : null,
@@ -485,6 +530,8 @@ export default function MaterialManagementPage() {
       setIsFormOpen(false);
       setEditingMaterial(null);
       setUploadedFile(null);
+      setUploadedThumbnail(null);
+      setThumbnailPreview(null);
       setFormErrors({});
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1097,6 +1144,57 @@ export default function MaterialManagementPage() {
                   <p>Selected: {uploadedFile.name}</p>
                   <p>Size: {formatFileSize(uploadedFile.size)}</p>
                   <p>Type: {uploadedFile.type || 'Unknown'}</p>
+                </div>
+              )}
+            </div>
+          </FormField>
+
+          <FormField
+            id="thumbnail"
+            label="Thumbnail (Optional)"
+            error={formErrors.thumbnail}
+          >
+            <div className="space-y-3">
+              <input
+                type="file"
+                id="thumbnail"
+                accept=".jpg,.jpeg,.png,.webp,.gif"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setUploadedThumbnail(file);
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      setThumbnailPreview(reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  } else {
+                    setThumbnailPreview(null);
+                  }
+                }}
+                className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 dark:file:bg-emerald-900/30 file:text-emerald-700 dark:file:text-emerald-300 hover:file:bg-emerald-100 dark:hover:file:bg-emerald-900/50"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Upload a preview image (JPG, PNG, WEBP - Max 5MB). Recommended for videos and visual content.
+              </p>
+              {editingMaterial?.thumbnail_url && !thumbnailPreview && !uploadedThumbnail && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Current thumbnail:</p>
+                  <img
+                    src={editingMaterial.thumbnail_url}
+                    alt="Current thumbnail"
+                    className="w-32 h-20 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-700"
+                  />
+                </div>
+              )}
+              {thumbnailPreview && (
+                <div className="mt-2">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">New thumbnail preview:</p>
+                  <img
+                    src={thumbnailPreview}
+                    alt="Thumbnail preview"
+                    className="w-32 h-20 object-cover rounded-lg border-2 border-emerald-300 dark:border-emerald-700"
+                  />
                 </div>
               )}
             </div>
