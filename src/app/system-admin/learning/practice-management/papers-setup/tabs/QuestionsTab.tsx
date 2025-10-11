@@ -115,6 +115,68 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+const normalizeText = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().replace(/\s+/g, ' ').toLowerCase();
+};
+
+const isExactTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  return normalizedA !== '' && normalizedA === normalizedB;
+};
+
+const isLooseTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  if (!normalizedA || !normalizedB) return false;
+  return normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA);
+};
+
+const findUniqueMatch = <T,>(
+  items: T[],
+  candidate: any,
+  getters: Array<(item: T) => any>
+): T | null => {
+  const normalizedCandidate = normalizeText(candidate);
+  if (!normalizedCandidate) return null;
+
+  for (const getter of getters) {
+    const exactMatches = items.filter(item => isExactTextMatch(getter(item), candidate));
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+  }
+
+  for (const getter of getters) {
+    const looseMatches = items.filter(item => isLooseTextMatch(getter(item), candidate));
+    if (looseMatches.length === 1) {
+      return looseMatches[0];
+    }
+  }
+
+  return null;
+};
+
+const extractNameCandidates = (value: any): string[] => {
+  if (value === null || value === undefined) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(item => extractNameCandidates(item))
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[,/]/)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+  }
+
+  return [String(value)];
+};
+
 interface ExtractionRules {
   forwardSlashHandling: boolean;
   lineByLineProcessing: boolean;
@@ -523,85 +585,190 @@ export function QuestionsTab({
       questions.forEach((q, index) => {
         // Check if parsed data has mapping information
         const originalQuestion = parsedData.questions?.[index];
-        if (originalQuestion) {
-          // Try to find matching unit/chapter
-          let chapterId = '';
-          if (originalQuestion.unit || originalQuestion.chapter) {
-            const unitName = originalQuestion.unit || originalQuestion.chapter;
-            const matchingUnit = units.find(u => 
-              u.name.toLowerCase().includes(unitName.toLowerCase()) ||
-              unitName.toLowerCase().includes(u.name.toLowerCase())
-            );
-            if (matchingUnit) {
-              chapterId = matchingUnit.id;
-            }
-          }
-
-          // Try to find matching topics
-          const topicIds: string[] = [];
-          const topicIdsFromSubtopics: string[] = [];
-          
-          if (originalQuestion.topic || originalQuestion.topics) {
-            const topicNames = Array.isArray(originalQuestion.topics) 
-              ? originalQuestion.topics 
-              : [originalQuestion.topic].filter(Boolean);
-            
-            topicNames.forEach((topicName: string) => {
-              const matchingTopic = topics.find(t => 
-                t.name.toLowerCase().includes(topicName.toLowerCase()) ||
-                topicName.toLowerCase().includes(t.name.toLowerCase())
-              );
-              if (matchingTopic && !topicIds.includes(matchingTopic.id)) {
-                topicIds.push(matchingTopic.id);
-              }
-            });
-          }
-
-          // Try to find matching subtopics
-          const subtopicIds: string[] = [];
-          if (originalQuestion.subtopic || originalQuestion.subtopics) {
-            const subtopicNames = Array.isArray(originalQuestion.subtopics) 
-              ? originalQuestion.subtopics 
-              : [originalQuestion.subtopic].filter(Boolean);
-            
-            subtopicNames.forEach((subtopicName: string) => {
-              const matchingSubtopic = subtopics.find(s => 
-                s.name.toLowerCase().includes(subtopicName.toLowerCase()) ||
-                subtopicName.toLowerCase().includes(s.name.toLowerCase())
-              );
-              if (matchingSubtopic) {
-                if (!subtopicIds.includes(matchingSubtopic.id)) {
-                  subtopicIds.push(matchingSubtopic.id);
-                }
-                
-                // Also add the parent topic if not already added
-                if (matchingSubtopic.topic_id && !topicIds.includes(matchingSubtopic.topic_id) && !topicIdsFromSubtopics.includes(matchingSubtopic.topic_id)) {
-                  topicIdsFromSubtopics.push(matchingSubtopic.topic_id);
-                }
-              }
-            });
-          }
-          
-          // Combine topic IDs from direct matches and subtopic parents
-          const allTopicIds = [...topicIds, ...topicIdsFromSubtopics];
-
-          mappings[q.id] = {
-            chapter_id: chapterId,
-            topic_ids: allTopicIds,
-            subtopic_ids: subtopicIds
-          };
-        } else {
+        if (!originalQuestion) {
           mappings[q.id] = {
             chapter_id: '',
             topic_ids: [],
             subtopic_ids: []
           };
+          return;
         }
+
+        const toId = (value: any): string => (value === null || value === undefined ? '' : String(value));
+
+        const matchUnit = (candidate: any) =>
+          findUniqueMatch(units, candidate, [
+            (unit: any) => unit.name,
+            (unit: any) => unit.code,
+            (unit: any) => unit.short_name,
+            (unit: any) => unit.display_name
+          ]);
+
+        const matchTopicInList = (availableTopics: any[], name: string) =>
+          findUniqueMatch(availableTopics, name, [
+            (topic: any) => topic.name,
+            (topic: any) => topic.code,
+            (topic: any) => topic.alias
+          ]);
+
+        const matchSubtopicInList = (availableSubtopics: any[], name: string) =>
+          findUniqueMatch(availableSubtopics, name, [
+            (subtopic: any) => subtopic.name,
+            (subtopic: any) => subtopic.code,
+            (subtopic: any) => subtopic.alias
+          ]);
+
+        const unitCandidates = [
+          originalQuestion.unit,
+          originalQuestion.chapter,
+          originalQuestion.unit_name,
+          originalQuestion.chapter_name,
+          originalQuestion.unit?.name,
+          q.original_unit
+        ];
+
+        let chapterId = '';
+        for (const candidate of unitCandidates) {
+          const match = matchUnit(candidate);
+          if (match) {
+            chapterId = toId(match.id);
+            break;
+          }
+        }
+
+        const topicIdSet = new Set<string>();
+        const subtopicIdSet = new Set<string>();
+
+        const topicNames = [
+          ...extractNameCandidates(originalQuestion.topics),
+          ...extractNameCandidates(originalQuestion.topic),
+          ...extractNameCandidates(q.original_topics),
+          ...extractNameCandidates(q.topic)
+        ];
+
+        const subtopicNames = [
+          ...extractNameCandidates(originalQuestion.subtopics),
+          ...extractNameCandidates(originalQuestion.subtopic),
+          ...extractNameCandidates(q.original_subtopics),
+          ...extractNameCandidates(q.subtopic)
+        ];
+
+        const ensureUnitFromTopic = (topic: any) => {
+          if (!topic) return;
+          const topicUnitId = toId(topic.unit_id);
+          if (!topicUnitId) return;
+          if (!chapterId) {
+            chapterId = topicUnitId;
+          }
+        };
+
+        const considerTopic = (name: string) => {
+          if (!name) return;
+
+          const availableTopics = chapterId
+            ? topics.filter(t => toId(t.unit_id) === chapterId)
+            : topics;
+
+          let match = matchTopicInList(availableTopics, name);
+
+          if (!match && !chapterId) {
+            match = matchTopicInList(topics, name);
+          }
+
+          if (match) {
+            const matchUnitId = toId(match.unit_id);
+            if (chapterId && matchUnitId && matchUnitId !== chapterId) {
+              return;
+            }
+
+            ensureUnitFromTopic(match);
+
+            const topicId = toId(match.id);
+            if (topicId) {
+              topicIdSet.add(topicId);
+            }
+          }
+        };
+
+        const considerSubtopic = (name: string) => {
+          if (!name) return;
+
+          const relatedSubtopics = topicIdSet.size > 0
+            ? subtopics.filter(s => topicIdSet.has(toId(s.topic_id)))
+            : [];
+
+          let match = matchSubtopicInList(relatedSubtopics, name);
+
+          if (!match) {
+            match = matchSubtopicInList(subtopics, name);
+          }
+
+          if (!match) return;
+
+          const parentTopic = topics.find(t => toId(t.id) === toId(match.topic_id));
+          if (!parentTopic) return;
+
+          const parentUnitId = toId(parentTopic.unit_id);
+          if (chapterId && parentUnitId && parentUnitId !== chapterId) {
+            return;
+          }
+
+          ensureUnitFromTopic(parentTopic);
+
+          const parentTopicId = toId(parentTopic.id);
+          if (parentTopicId) {
+            topicIdSet.add(parentTopicId);
+          }
+
+          const subtopicId = toId(match.id);
+          if (subtopicId) {
+            subtopicIdSet.add(subtopicId);
+          }
+        };
+
+        subtopicNames.forEach(considerSubtopic);
+        topicNames.forEach(considerTopic);
+        subtopicNames.forEach(considerSubtopic);
+
+        if (!chapterId && topicIdSet.size > 0) {
+          const inferredTopic = topics.find(t => toId(t.id) === Array.from(topicIdSet)[0]);
+          if (inferredTopic) {
+            chapterId = toId(inferredTopic.unit_id);
+          }
+        }
+
+        if (chapterId) {
+          const validTopicIds = Array.from(topicIdSet).filter(topicId => {
+            const topic = topics.find(t => toId(t.id) === topicId);
+            return topic && toId(topic.unit_id) === chapterId;
+          });
+          topicIdSet.clear();
+          validTopicIds.forEach(id => topicIdSet.add(id));
+
+          const validSubtopicIds = Array.from(subtopicIdSet).filter(subtopicId => {
+            const subtopic = subtopics.find(s => toId(s.id) === subtopicId);
+            if (!subtopic) return false;
+            const parentTopic = topics.find(t => toId(t.id) === toId(subtopic.topic_id));
+            if (!parentTopic || toId(parentTopic.unit_id) !== chapterId) {
+              return false;
+            }
+            topicIdSet.add(toId(parentTopic.id));
+            return true;
+          });
+          subtopicIdSet.clear();
+          validSubtopicIds.forEach(id => subtopicIdSet.add(id));
+        }
+
+        mappings[q.id] = {
+          chapter_id: chapterId,
+          topic_ids: Array.from(topicIdSet),
+          subtopic_ids: Array.from(subtopicIdSet)
+        };
       });
-      
+
       console.log('Final question mappings:', mappings);
       console.log('Sample mapping for first question:', mappings[questions[0]?.id]);
-      
+
       setQuestionMappings(mappings);
     }
   }, [academicStructureLoaded, parsedData, questions, units, topics, subtopics]);
