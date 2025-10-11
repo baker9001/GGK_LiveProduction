@@ -30,7 +30,11 @@ import {
   Search,
   Settings,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Download,
+  ExternalLink,
+  GraduationCap,
+  ListChecks
 } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -41,11 +45,110 @@ import { useAnswerValidation } from '@/hooks/useAnswerValidation';
 import DynamicAnswerField from '@/components/shared/DynamicAnswerField';
 import { ResultsDashboard } from './ResultsDashboard';
 
+interface AttachmentAsset {
+  id: string;
+  file_url: string;
+  file_name: string;
+  file_type: string;
+}
+
+interface CorrectAnswer {
+  answer: string;
+  marks?: number;
+  alternative_id?: number | string;
+  linked_alternatives?: Array<number | string>;
+  alternative_type?: string;
+  context?: Record<string, unknown> | null;
+  unit?: string;
+  measurement_details?: Record<string, unknown> | null;
+  accepts_equivalent_phrasing?: boolean;
+  error_carried_forward?: boolean;
+  answer_requirement?: string;
+  total_alternatives?: number;
+}
+
 interface QuestionOption {
   id: string;
   option_text: string;
   is_correct: boolean;
   order: number;
+}
+
+const deriveOptionLabel = (orderIndex: number): string => {
+  const alphabetLength = 26;
+  let index = Math.max(orderIndex, 0);
+  let label = '';
+
+  do {
+    label = String.fromCharCode(65 + (index % alphabetLength)) + label;
+    index = Math.floor(index / alphabetLength) - 1;
+  } while (index >= 0);
+
+  return label;
+};
+
+type AnswerSource = {
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string | null;
+  options?: QuestionOption[];
+} | null | undefined;
+
+const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] => {
+  if (!source) {
+    return [];
+  }
+
+  if (source.correct_answers && source.correct_answers.length > 0) {
+    return source.correct_answers.map(answer => ({ ...answer }));
+  }
+
+  const normalisedAnswers: CorrectAnswer[] = [];
+
+  if (source.correct_answer) {
+    normalisedAnswers.push({
+      answer: String(source.correct_answer).trim()
+    });
+  }
+
+  if (source.options && source.options.length > 0) {
+    source.options.forEach((option, index) => {
+      if (!option?.is_correct) {
+        return;
+      }
+
+      const orderIndex = typeof option.order === 'number' && option.order > 0 ? option.order - 1 : index;
+      const label = deriveOptionLabel(orderIndex);
+      const optionText = option.option_text?.trim() || option.id || `Option ${label}`;
+      const formattedAnswer = `${label}. ${optionText}`.trim();
+
+      if (!normalisedAnswers.some(existing => existing.answer === formattedAnswer)) {
+        normalisedAnswers.push({
+          answer: formattedAnswer,
+          alternative_id: option.id
+        });
+      }
+    });
+  }
+
+  return normalisedAnswers;
+};
+
+interface SubPart {
+  id: string;
+  subpart_label?: string;
+  question_description: string;
+  marks: number;
+  answer_format?: string;
+  answer_requirement?: string;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
+  options?: QuestionOption[];
+  attachments?: AttachmentAsset[];
+  hint?: string;
+  explanation?: string;
+  requires_manual_marking?: boolean;
+  marking_criteria?: string;
+  type?: 'mcq' | 'tf' | 'descriptive';
 }
 
 interface SubQuestion {
@@ -60,15 +163,17 @@ interface SubQuestion {
   topic_name?: string;
   unit_name?: string;
   subtopics?: Array<{ id: string; name: string }>;
+  answer_format?: string;
+  answer_requirement?: string;
   options?: QuestionOption[];
-  attachments: Array<{
-    id: string;
-    file_url: string;
-    file_name: string;
-    file_type: string;
-  }>;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
+  attachments?: AttachmentAsset[];
   hint?: string;
   explanation?: string;
+  requires_manual_marking?: boolean;
+  marking_criteria?: string;
+  subparts?: SubPart[];
 }
 
 interface Question {
@@ -82,14 +187,16 @@ interface Question {
   subtopic_names?: string[];
   options?: QuestionOption[];
   parts: SubQuestion[];
+  answer_format?: string;
+  answer_requirement?: string;
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string;
+  total_alternatives?: number;
   hint?: string;
   explanation?: string;
-  attachments?: Array<{
-    id: string;
-    file_url: string;
-    file_name: string;
-    file_type: string;
-  }>;
+  requires_manual_marking?: boolean;
+  marking_criteria?: string;
+  attachments?: AttachmentAsset[];
 }
 
 interface SimulationPaper {
@@ -103,14 +210,16 @@ interface SimulationPaper {
 
 interface ExamSimulationProps {
   paper: SimulationPaper;
-  onExit: () => void;
+  onExit: (result?: unknown) => void;
   isQAMode?: boolean;
+  onPaperStatusChange?: (status: string) => void;
 }
 
 interface UserAnswer {
   questionId: string;
   partId?: string;
-  answer: any;
+  subpartId?: string;
+  answer: unknown;
   isCorrect?: boolean;
   marksAwarded?: number;
   timeSpent?: number;
@@ -120,7 +229,310 @@ interface UserAnswer {
   }>;
 }
 
-export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulationProps) {
+const formatAnswerRequirement = (requirement?: string): string | null => {
+  if (!requirement) return null;
+  switch (requirement) {
+    case 'any_one_from':
+      return 'Any one response from the acceptable answers';
+    case 'any_two_from':
+      return 'Any two responses from the acceptable answers';
+    case 'any_three_from':
+      return 'Any three responses from the acceptable answers';
+    case 'both_required':
+      return 'All listed responses are required';
+    case 'all_required':
+      return 'Every listed response is required';
+    case 'alternative_methods':
+      return 'Alternative methods accepted when working is clear';
+    case 'acceptable_variations':
+      return 'Acceptable phrasing variations allowed';
+    default:
+      return requirement;
+  }
+};
+
+const romanNumerals = [
+  'i',
+  'ii',
+  'iii',
+  'iv',
+  'v',
+  'vi',
+  'vii',
+  'viii',
+  'ix',
+  'x',
+  'xi',
+  'xii'
+];
+
+const formatSubpartLabel = (index: number) => {
+  return romanNumerals[index] ? `(${romanNumerals[index]})` : `Subpart ${index + 1}`;
+};
+
+const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attachments }) => {
+  const [previewAttachment, setPreviewAttachment] = React.useState<AttachmentAsset | null>(null);
+
+  if (!attachments || attachments.length === 0) {
+    return null;
+  }
+
+  const closePreview = () => setPreviewAttachment(null);
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {attachments.map((attachment, index) => {
+          const isImage = attachment.file_type?.startsWith('image/');
+          const id = attachment.id || `${attachment.file_url}-${index}`;
+
+          return (
+            <div
+              key={id}
+              className="group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow"
+            >
+              <div className="relative">
+                {isImage ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAttachment(attachment)}
+                    className="w-full bg-gray-50 dark:bg-gray-950"
+                  >
+                    <img
+                      src={attachment.file_url}
+                      alt={attachment.file_name || 'Attachment preview'}
+                      className="w-full h-48 object-contain mix-blend-normal"
+                    />
+                  </button>
+                ) : (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-950">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
+                        <FileText className="h-6 w-6 text-gray-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {attachment.file_name || 'Attachment'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {attachment.file_type || 'Unknown file type'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {isImage && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAttachment(attachment)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                      aria-label="Preview attachment"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  <a
+                    href={attachment.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200"
+                    aria-label="Open attachment in new tab"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                  <a
+                    href={attachment.file_url}
+                    download={attachment.file_name || undefined}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200"
+                    aria-label="Download attachment"
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {attachment.file_name || 'Attachment'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {attachment.file_type || 'Attachment'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {previewAttachment && previewAttachment.file_type?.startsWith('image/') && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          onClick={closePreview}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-5xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closePreview}
+              className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-700 hover:text-red-500"
+              aria-label="Close preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={previewAttachment.file_url}
+              alt={previewAttachment.file_name || 'Attachment preview'}
+              className="max-h-[90vh] w-full rounded-xl object-contain shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+interface TeacherInsightsProps {
+  correctAnswers?: CorrectAnswer[];
+  answerRequirement?: string;
+  markingCriteria?: string | string[] | Record<string, unknown>;
+  requiresManualMarking?: boolean;
+  label?: string;
+}
+
+const TeacherInsights: React.FC<TeacherInsightsProps> = ({
+  correctAnswers,
+  answerRequirement,
+  markingCriteria,
+  requiresManualMarking,
+  label
+}) => {
+  const hasAnswers = (correctAnswers?.length || 0) > 0;
+  const requirementText = formatAnswerRequirement(answerRequirement);
+  const hasRequirement = Boolean(requirementText);
+
+  const normalisedCriteria = (() => {
+    if (!markingCriteria) return [] as string[];
+    if (Array.isArray(markingCriteria)) return markingCriteria.filter(Boolean).map(String);
+    if (typeof markingCriteria === 'string') return [markingCriteria];
+    if (typeof markingCriteria === 'object') {
+      return Object.entries(markingCriteria).map(([key, value]) => `${key}: ${value}`);
+    }
+    return [] as string[];
+  })();
+
+  const hasCriteria = normalisedCriteria.length > 0;
+  const showPanel = hasAnswers || hasRequirement || hasCriteria || requiresManualMarking;
+
+  if (!showPanel) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+      <div className="flex items-start space-x-3">
+        <GraduationCap className="h-5 w-5 text-amber-600 dark:text-amber-300 mt-0.5" />
+        <div className="space-y-3">
+          <div>
+            <h4 className="font-semibold text-amber-900 dark:text-amber-100">
+              {label ? `${label} • ` : ''}IGCSE Teacher Review
+            </h4>
+            <p className="text-xs text-amber-700 dark:text-amber-200">
+              Preview the full marking guidance before publishing to students.
+            </p>
+          </div>
+
+          {hasRequirement && (
+            <div className="flex items-start space-x-2 text-sm text-amber-800 dark:text-amber-100">
+              <Target className="h-4 w-4 mt-0.5" />
+              <span>
+                <span className="font-medium">Answer expectation:</span> {requirementText}
+              </span>
+            </div>
+          )}
+
+          {hasAnswers && (
+            <div>
+              <div className="flex items-center space-x-2 text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
+                <ListChecks className="h-4 w-4" />
+                <span>Acceptable answers & mark allocation</span>
+              </div>
+              <ul className="space-y-2 text-sm text-amber-800 dark:text-amber-100">
+                {correctAnswers!.map((answer, index) => (
+                  <li key={index} className="bg-white/60 dark:bg-amber-900/40 rounded-md p-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-semibold text-amber-900 dark:text-amber-50">
+                        Response {index + 1}:
+                      </span>
+                      {answer.marks !== undefined && (
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-200">
+                          {answer.marks} mark{answer.marks !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-amber-900 dark:text-amber-50">
+                      {answer.answer || '—'}
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-amber-700 dark:text-amber-200">
+                      {answer.unit && (
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded-full">
+                          Unit: {answer.unit}
+                        </span>
+                      )}
+                      {answer.accepts_equivalent_phrasing && (
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded-full">
+                          Accepts equivalent phrasing
+                        </span>
+                      )}
+                      {answer.error_carried_forward && (
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded-full">
+                          ECF permitted
+                        </span>
+                      )}
+                      {answer.context?.label && (
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded-full">
+                          Context: {answer.context.label}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {hasCriteria && (
+            <div className="space-y-1 text-sm text-amber-800 dark:text-amber-100">
+              <div className="flex items-center space-x-2 font-medium text-amber-900 dark:text-amber-50">
+                <Award className="h-4 w-4" />
+                <span>Marking guidance</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1">
+                {normalisedCriteria.map((criterion, index) => (
+                  <li key={index}>{criterion}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {requiresManualMarking && (
+            <div className="flex items-start space-x-2 text-sm text-amber-800 dark:text-amber-100">
+              <HelpCircle className="h-4 w-4 mt-0.5" />
+              <span>
+                Manual review needed. Double-check the worked solution and method marks before finalising grades.
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusChange }: ExamSimulationProps) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, UserAnswer>>({});
   const [timeElapsed, setTimeElapsed] = useState(0);
@@ -139,6 +551,20 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
   
   const currentQuestion = paper.questions[currentQuestionIndex];
   const examDuration = paper.duration ? parseInt(paper.duration) * 60 : 0; // Convert to seconds
+
+  useEffect(() => {
+    if (isQAMode) {
+      setShowHints(true);
+      setShowExplanations(true);
+      setExamMode('review');
+    }
+  }, [isQAMode]);
+
+  useEffect(() => {
+    if (isQAMode && onPaperStatusChange) {
+      onPaperStatusChange('qa_preview');
+    }
+  }, [isQAMode, onPaperStatusChange]);
   
   // Timer effect
   useEffect(() => {
@@ -295,35 +721,61 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
     });
   };
   
-  const handleAnswerChange = (questionId: string, partId: string | undefined, answer: any) => {
-    const key = partId ? `${questionId}-${partId}` : questionId;
-    const startTime = questionStartTimes[questionId] || Date.now();
+  const handleAnswerChange = (
+    questionId: string,
+    partId: string | undefined,
+    subpartId: string | undefined,
+    answer: unknown
+  ) => {
+    const key = subpartId
+      ? `${questionId}-${partId}-${subpartId}`
+      : partId
+        ? `${questionId}-${partId}`
+        : questionId;
+    const startKey = subpartId
+      ? key
+      : partId
+        ? `${questionId}-${partId}`
+        : questionId;
+    const startTime = questionStartTimes[startKey] || Date.now();
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
-    
+
+    if (!questionStartTimes[startKey]) {
+      setQuestionStartTimes(prev => ({
+        ...prev,
+        [startKey]: Date.now()
+      }));
+    }
+
     // Find the question and part to validate
     const question = paper.questions.find(q => q.id === questionId);
     if (!question) return;
-    
+
     let questionToValidate;
-    if (partId) {
+    if (subpartId && partId) {
+      questionToValidate = question.parts
+        .find(p => p.id === partId)?.subparts
+        ?.find(sp => sp.id === subpartId);
+    } else if (partId) {
       questionToValidate = question.parts.find(p => p.id === partId);
     } else {
       questionToValidate = question;
     }
-    
+
     if (!questionToValidate) return;
-    
+
     // Validate the answer
     const validation = validateAnswer(questionToValidate, answer);
-    
+
     setUserAnswers(prev => ({
       ...prev,
       [key]: {
         questionId,
         partId,
+        subpartId,
         answer,
         isCorrect: validation.isCorrect,
-        marksAwarded: validation.score * (questionToValidate.marks || 0),
+        marksAwarded: (validation.score || 0) * (questionToValidate.marks || 0),
         timeSpent,
         partialCredit: validation.partialCredit
       }
@@ -346,15 +798,38 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
   
   const getQuestionStatus = (questionId: string, parts: SubQuestion[]) => {
     if (parts.length > 0) {
+      let anyAnswered = false;
+
       const allPartsAnswered = parts.every(part => {
+        if (part.subparts && part.subparts.length > 0) {
+          const subpartCompletion = part.subparts.map(subpart => {
+            const key = `${questionId}-${part.id}-${subpart.id}`;
+            const answered = userAnswers[key]?.answer !== undefined && userAnswers[key]?.answer !== '';
+            if (answered) {
+              anyAnswered = true;
+            }
+            return answered;
+          });
+          return subpartCompletion.every(Boolean);
+        }
+
         const key = `${questionId}-${part.id}`;
-        return userAnswers[key]?.answer !== undefined && userAnswers[key]?.answer !== '';
+        const answered = userAnswers[key]?.answer !== undefined && userAnswers[key]?.answer !== '';
+        if (answered) {
+          anyAnswered = true;
+        }
+        return answered;
       });
-      return allPartsAnswered ? 'answered' : 'partial';
-    } else {
-      const answer = userAnswers[questionId];
-      return answer?.answer !== undefined && answer?.answer !== '' ? 'answered' : 'unanswered';
+
+      if (allPartsAnswered) {
+        return 'answered';
+      }
+
+      return anyAnswered ? 'partial' : 'unanswered';
     }
+
+    const answer = userAnswers[questionId];
+    return answer?.answer !== undefined && answer?.answer !== '' ? 'answered' : 'unanswered';
   };
   
   const getAnsweredCount = () => {
@@ -714,36 +1189,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                           Reference Materials:
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {currentQuestion.attachments.map(attachment => (
-                            <div key={attachment.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                              {attachment.file_type.startsWith('image/') ? (
-                                <img 
-                                  src={attachment.file_url} 
-                                  alt={attachment.file_name}
-                                  className="w-full h-auto"
-                                />
-                              ) : (
-                                <div className="p-4 flex items-center space-x-3">
-                                  <FileText className="h-8 w-8 text-gray-400" />
-                                  <div>
-                                    <p className="font-medium text-gray-900 dark:text-white">
-                                      {attachment.file_name}
-                                    </p>
-                                    <a 
-                                      href={attachment.file_url} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                                    >
-                                      Open file
-                                    </a>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                        <AttachmentGallery attachments={currentQuestion.attachments} />
                       </div>
                     )}
                     
@@ -766,36 +1212,47 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                         <DynamicAnswerField
                           question={{
                             ...currentQuestion,
-                            options: currentQuestion.options?.map(opt => ({
-                              label: opt.id,
+                            subject: paper.subject,
+                            options: currentQuestion.options?.map((opt, optionIndex) => ({
+                              label: String.fromCharCode(65 + optionIndex),
                               text: opt.option_text,
                               is_correct: opt.is_correct
                             }))
                           }}
                           value={userAnswers[currentQuestion.id]?.answer}
-                          onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, answer)}
+                          onChange={(answer) => handleAnswerChange(currentQuestion.id, undefined, undefined, answer)}
                           disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                           showHints={showHints}
                           showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                          mode={examMode}
+                          mode={isQAMode ? 'review' : examMode}
                         />
                       </div>
                     )}
-                    
+
+                    {isQAMode && (
+                      <TeacherInsights
+                        correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
+                        answerRequirement={currentQuestion.answer_requirement}
+                        markingCriteria={currentQuestion.marking_criteria}
+                        requiresManualMarking={currentQuestion.requires_manual_marking}
+                        label="Main question"
+                      />
+                    )}
+
                     {/* Sub-questions */}
                     {currentQuestion.parts.length > 0 && (
                       <div className="space-y-6">
-                        {currentQuestion.parts.map((part, partIndex) => (
-                          <div key={part.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                            <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-medium text-gray-900 dark:text-white">
-                                  {part.part_label || `Part ${String.fromCharCode(97 + partIndex)}`}
-                                </h4>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {part.marks} mark{part.marks !== 1 ? 's' : ''}
-                                  </span>
+                        {currentQuestion.parts.map((part, partIndex) => {
+                          const partLabel = part.part_label || `Part ${String.fromCharCode(65 + partIndex)}`;
+                          return (
+                            <div key={part.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                              <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-medium text-gray-900 dark:text-white">{partLabel}</h4>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      {part.marks} mark{part.marks !== 1 ? 's' : ''}
+                                    </span>
                                   {part.difficulty && (
                                     <span className={cn(
                                       "px-2 py-1 rounded-full text-xs font-medium",
@@ -816,7 +1273,16 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                                   {part.question_description}
                                 </p>
                               </div>
-                              
+
+                              {part.attachments && part.attachments.length > 0 && (
+                                <div className="mb-4">
+                                  <h5 className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2">
+                                    Supporting resources
+                                  </h5>
+                                  <AttachmentGallery attachments={part.attachments} />
+                                </div>
+                              )}
+
                               {/* Part Hint */}
                               {showHints && part.hint && (
                                 <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
@@ -830,20 +1296,116 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                               <DynamicAnswerField
                                 question={{
                                   ...part,
+                                  subject: paper.subject,
                                   options: part.options?.map(opt => ({
-                                    label: opt.id,
+                                    label: opt.option_text || opt.id,
                                     text: opt.option_text,
                                     is_correct: opt.is_correct
                                   }))
                                 }}
                                 value={userAnswers[`${currentQuestion.id}-${part.id}`]?.answer}
-                                onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, answer)}
+                                onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, undefined, answer)}
                                 disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                 showHints={showHints}
                                 showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                mode={examMode}
+                                mode={isQAMode ? 'review' : examMode}
                               />
-                              
+
+                              {isQAMode && (
+                                <TeacherInsights
+                                  correctAnswers={buildNormalisedCorrectAnswers(part)}
+                                  answerRequirement={part.answer_requirement}
+                                  markingCriteria={part.marking_criteria}
+                                  requiresManualMarking={part.requires_manual_marking}
+                                  label={partLabel}
+                                />
+                              )}
+
+                              {part.subparts && part.subparts.length > 0 && (
+                                <div className="mt-6 space-y-4">
+                                  {part.subparts.map((subpart, subIndex) => {
+                                    const subpartLabel = subpart.subpart_label || formatSubpartLabel(subIndex);
+                                    const answerKey = `${currentQuestion.id}-${part.id}-${subpart.id}`;
+
+                                    return (
+                                      <div
+                                        key={subpart.id}
+                                        className="border border-dashed border-gray-200 dark:border-gray-700 rounded-lg"
+                                      >
+                                        <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                          <h5 className="text-sm font-medium text-gray-900 dark:text-gray-100">{subpartLabel}</h5>
+                                          <span className="text-xs text-gray-600 dark:text-gray-300">
+                                            {subpart.marks} mark{subpart.marks !== 1 ? 's' : ''}
+                                          </span>
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                          <p className="text-sm text-gray-900 dark:text-gray-100">
+                                            {subpart.question_description}
+                                          </p>
+
+                                          {subpart.attachments && subpart.attachments.length > 0 && (
+                                            <AttachmentGallery attachments={subpart.attachments} />
+                                          )}
+
+                                          {showHints && subpart.hint && (
+                                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                                              <div className="flex items-start space-x-2">
+                                                <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                                <p className="text-sm text-blue-800 dark:text-blue-200">{subpart.hint}</p>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          <DynamicAnswerField
+                                            question={{
+                                              ...subpart,
+                                              id: subpart.id,
+                                              type: subpart.type || 'descriptive',
+                                              subject: paper.subject,
+                                              options: subpart.options?.map((opt, optIndex) => ({
+                                                label: opt?.option_text || opt?.id || String.fromCharCode(65 + optIndex),
+                                                text: opt?.option_text || opt?.label || '',
+                                                is_correct: opt?.is_correct
+                                              }))
+                                            }}
+                                            value={userAnswers[answerKey]?.answer}
+                                            onChange={(answer) => handleAnswerChange(currentQuestion.id, part.id, subpart.id, answer)}
+                                            disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
+                                            showHints={showHints}
+                                            showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
+                                            mode={isQAMode ? 'review' : examMode}
+                                          />
+
+                                          {isQAMode && (
+                                            <TeacherInsights
+                                              correctAnswers={buildNormalisedCorrectAnswers(subpart)}
+                                              answerRequirement={subpart.answer_requirement}
+                                              markingCriteria={subpart.marking_criteria}
+                                              requiresManualMarking={subpart.requires_manual_marking}
+                                              label={`${partLabel} ${subpartLabel}`}
+                                            />
+                                          )}
+
+                                          {showExplanations && subpart.explanation && (
+                                            <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
+                                              <div className="flex items-start space-x-2">
+                                                <BookOpen className="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5" />
+                                                <div>
+                                                  <h6 className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                                                    Explanation
+                                                  </h6>
+                                                  <p className="text-xs text-purple-800 dark:text-purple-200">{subpart.explanation}</p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
                               {/* Part Explanation */}
                               {showExplanations && part.explanation && (
                                 <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
@@ -858,7 +1420,8 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                               )}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                     
