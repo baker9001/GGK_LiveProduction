@@ -125,75 +125,113 @@ export function useQuestionMutations() {
 
   // Update correct answers with context support
   const updateCorrectAnswers = useMutation({
-    mutationFn: async ({ 
-      questionId, 
-      isSubQuestion, 
-      correctAnswers 
+    mutationFn: async ({
+      questionId,
+      isSubQuestion,
+      correctAnswers
     }: UpdateCorrectAnswersParams) => {
-      // First, delete existing correct answers
-      const deleteQuery = isSubQuestion
-        ? supabase.from('question_correct_answers').delete().eq('sub_question_id', questionId)
-        : supabase.from('question_correct_answers').delete().eq('question_id', questionId);
-      
-      const { error: deleteError } = await deleteQuery;
-      if (deleteError) throw deleteError;
-      
-      // Then insert new correct answers if any
-      if (correctAnswers.length > 0) {
-        const answersToInsert = correctAnswers.map(ca => ({
-          [isSubQuestion ? 'sub_question_id' : 'question_id']: questionId,
-          answer: ca.answer,
-          marks: ca.marks || 1,
-          alternative_id: ca.alternative_id || 1,
-          context_type: ca.context?.type || null,
-          context_value: ca.context?.value || null,
-          context_label: ca.context?.label || null
-        }));
-        
-        const { error: insertError } = await supabase
-          .from('question_correct_answers')
-          .insert(answersToInsert);
-        
-        if (insertError) throw insertError;
-      }
+      try {
+        // First, delete existing correct answers with better error handling
+        const deleteQuery = isSubQuestion
+          ? supabase.from('question_correct_answers').delete().eq('sub_question_id', questionId)
+          : supabase.from('question_correct_answers').delete().eq('question_id', questionId);
 
-      // Update the answer_requirement and total_alternatives fields
-      const table = isSubQuestion ? 'sub_questions' : 'questions_master_admin';
-      let answerRequirement = 'single_choice';
-      
-      if (correctAnswers.length > 1) {
-        // Determine answer requirement based on number of answers
-        const uniqueMarks = new Set(correctAnswers.map(ca => ca.marks || 1));
-        
-        if (uniqueMarks.size === 1 && uniqueMarks.has(1)) {
-          // All answers have the same mark value of 1
-          if (correctAnswers.length === 2) {
-            answerRequirement = 'both_required';
-          } else if (correctAnswers.length <= 5) {
-            answerRequirement = `any_${Math.min(correctAnswers.length - 1, 3)}_from`;
-          } else {
-            answerRequirement = 'alternative_methods';
-          }
-        } else {
-          // Different mark values or not all 1
-          answerRequirement = 'all_required';
+        const { error: deleteError, count } = await deleteQuery;
+
+        if (deleteError) {
+          console.error('Delete error details:', {
+            message: deleteError.message,
+            details: deleteError.details,
+            hint: deleteError.hint,
+            code: deleteError.code
+          });
+          throw new Error(`Failed to delete existing answers: ${deleteError.message}`);
         }
+
+        console.log(`Deleted ${count || 0} existing answers for ${isSubQuestion ? 'sub-question' : 'question'} ${questionId}`);
+
+        // Then insert new correct answers if any
+        if (correctAnswers.length > 0) {
+          const answersToInsert = correctAnswers.map(ca => ({
+            [isSubQuestion ? 'sub_question_id' : 'question_id']: questionId,
+            answer: ca.answer,
+            marks: ca.marks || 1,
+            alternative_id: ca.alternative_id || 1,
+            context_type: ca.context?.type || null,
+            context_value: ca.context?.value || null,
+            context_label: ca.context?.label || null
+          }));
+
+          const { error: insertError, data: insertedData } = await supabase
+            .from('question_correct_answers')
+            .insert(answersToInsert)
+            .select();
+
+          if (insertError) {
+            console.error('Insert error details:', {
+              message: insertError.message,
+              details: insertError.details,
+              hint: insertError.hint,
+              code: insertError.code
+            });
+            throw new Error(`Failed to insert new answers: ${insertError.message}`);
+          }
+
+          console.log(`Inserted ${insertedData?.length || 0} new answers`);
+        }
+
+        // Update the answer_requirement and total_alternatives fields
+        const table = isSubQuestion ? 'sub_questions' : 'questions_master_admin';
+        let answerRequirement = 'single_choice';
+
+        if (correctAnswers.length > 1) {
+          // Determine answer requirement based on number of answers
+          const uniqueMarks = new Set(correctAnswers.map(ca => ca.marks || 1));
+
+          if (uniqueMarks.size === 1 && uniqueMarks.has(1)) {
+            // All answers have the same mark value of 1
+            if (correctAnswers.length === 2) {
+              answerRequirement = 'both_required';
+            } else if (correctAnswers.length <= 5) {
+              answerRequirement = `any_${Math.min(correctAnswers.length - 1, 3)}_from`;
+            } else {
+              answerRequirement = 'alternative_methods';
+            }
+          } else {
+            // Different mark values or not all 1
+            answerRequirement = 'all_required';
+          }
+        }
+
+        const { error: updateError } = await supabase
+          .from(table)
+          .update({
+            answer_requirement: answerRequirement,
+            total_alternatives: correctAnswers.length,
+            // Also update the simple correct_answer field for backward compatibility
+            correct_answer: correctAnswers[0]?.answer || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', questionId);
+
+        if (updateError) {
+          console.error('Update error details:', {
+            message: updateError.message,
+            details: updateError.details,
+            hint: updateError.hint,
+            code: updateError.code
+          });
+          throw new Error(`Failed to update question metadata: ${updateError.message}`);
+        }
+
+        return { success: true };
+      } catch (error) {
+        // Re-throw with more context
+        if (error instanceof Error) {
+          throw error;
+        }
+        throw new Error('An unknown error occurred while updating correct answers');
       }
-
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({
-          answer_requirement: answerRequirement,
-          total_alternatives: correctAnswers.length,
-          // Also update the simple correct_answer field for backward compatibility
-          correct_answer: correctAnswers[0]?.answer || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', questionId);
-
-      if (updateError) throw updateError;
-      
-      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
@@ -202,7 +240,8 @@ export function useQuestionMutations() {
     },
     onError: (error) => {
       console.error('Error updating correct answers:', error);
-      toast.error('Failed to update correct answers');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update correct answers';
+      toast.error(errorMessage);
     }
   });
   
