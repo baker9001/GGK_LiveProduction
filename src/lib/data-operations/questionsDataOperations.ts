@@ -97,6 +97,75 @@ const normalizeId = (value: any): string => {
   return String(value);
 };
 
+const normalizeText = (value: any): string => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().replace(/\s+/g, ' ').toLowerCase();
+};
+
+const isExactTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  return normalizedA !== '' && normalizedA === normalizedB;
+};
+
+const isLooseTextMatch = (a: any, b: any): boolean => {
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  if (!normalizedA || !normalizedB) return false;
+  return normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA);
+};
+
+const findUniqueMatch = <T>(
+  items: T[],
+  candidate: any,
+  getters: Array<(item: T) => any>
+): T | null => {
+  const normalizedCandidate = normalizeText(candidate);
+  if (!normalizedCandidate) return null;
+
+  for (const getter of getters) {
+    const exactMatches = items.filter(item => isExactTextMatch(getter(item), candidate));
+    if (exactMatches.length === 1) {
+      return exactMatches[0];
+    }
+  }
+
+  for (const getter of getters) {
+    const looseMatches = items.filter(item => isLooseTextMatch(getter(item), candidate));
+    if (looseMatches.length === 1) {
+      return looseMatches[0];
+    }
+  }
+
+  return null;
+};
+
+const extractNameCandidates = (value: any): string[] => {
+  if (value === null || value === undefined) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .flatMap(item => extractNameCandidates(item))
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[,/]/)
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+  }
+
+  return [String(value)];
+};
+
+const arraysEqualNormalized = (a: any[] = [], b: any[] = []): boolean => {
+  if (a.length !== b.length) return false;
+  const normalizedA = a.map(item => normalizeId(item)).sort();
+  const normalizedB = b.map(item => normalizeId(item)).sort();
+  return normalizedA.every((value, index) => value === normalizedB[index]);
+};
+
 export const getUUIDFromMapping = (value: any): string | null => {
   if (!value) return null;
   if (typeof value === 'string' && value.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
@@ -982,166 +1051,222 @@ export const autoMapQuestions = (
 
   questions.forEach((question: any) => {
     const existingMapping = updatedMappings[question.id] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
-    let hasChanges = false;
+    const originalUnitId = normalizeId(existingMapping.chapter_id);
 
-    let unitId = normalizeId(existingMapping.chapter_id);
-    if (!unitId && question.unit) {
-      const matchingUnit = units.find((u: any) =>
-        u.name?.toLowerCase() === question.unit.toLowerCase() ||
-        normalizeId(u.code) === normalizeId(question.unit)
-      );
-      if (matchingUnit) {
-        unitId = normalizeId(matchingUnit.id);
-        hasChanges = true;
+    const resolveUnit = (candidate: any) => {
+      if (!candidate) return null;
+
+      const directMatch = units.find((u: any) => normalizeId(u.id) === normalizeId(candidate));
+      if (directMatch) return directMatch;
+
+      return findUniqueMatch(units, candidate, [
+        (u: any) => u.name,
+        (u: any) => u.code,
+        (u: any) => u.short_name,
+        (u: any) => u.display_name
+      ]);
+    };
+
+    const matchTopicInList = (availableTopics: any[], name: string) =>
+      findUniqueMatch(availableTopics, name, [
+        (topic: any) => topic.name,
+        (topic: any) => topic.code,
+        (topic: any) => topic.alias
+      ]);
+
+    const matchSubtopicInList = (availableSubtopics: any[], name: string) =>
+      findUniqueMatch(availableSubtopics, name, [
+        (subtopic: any) => subtopic.name,
+        (subtopic: any) => subtopic.code,
+        (subtopic: any) => subtopic.alias
+      ]);
+
+    let unitId = originalUnitId;
+
+    if (!unitId) {
+      const unitCandidates = [
+        question.unit,
+        question.original_unit,
+        question.chapter,
+        question.original_chapter
+      ];
+
+      for (const candidate of unitCandidates) {
+        const match = resolveUnit(candidate);
+        if (match) {
+          unitId = normalizeId(match.id);
+          break;
+        }
       }
     }
 
+    let topicIds = Array.isArray(existingMapping.topic_ids)
+      ? existingMapping.topic_ids.map((id: any) => normalizeId(id)).filter(Boolean)
+      : [];
+    let subtopicIds = Array.isArray(existingMapping.subtopic_ids)
+      ? existingMapping.subtopic_ids.map((id: any) => normalizeId(id)).filter(Boolean)
+      : [];
+
+    const topicIdSet = new Set(topicIds);
+    const subtopicIdSet = new Set(subtopicIds);
+
+    const questionTopicNames = [
+      ...extractNameCandidates(question.topics),
+      ...extractNameCandidates(question.original_topics),
+      ...extractNameCandidates(question.topic)
+    ];
+
+    const questionSubtopicNames = [
+      ...extractNameCandidates(question.subtopics),
+      ...extractNameCandidates(question.original_subtopics),
+      ...extractNameCandidates(question.subtopic)
+    ];
+
     if (unitId) {
-      // Filter topics by unit_id - edu_topics table uses unit_id as foreign key
-      const unitTopics = topics.filter((t: any) => {
-        return normalizeId(t.unit_id) === unitId;
+      const validTopicIds = Array.from(topicIdSet).filter(topicId => {
+        const topic = topics.find((t: any) => normalizeId(t.id) === topicId);
+        return topic && normalizeId(topic.unit_id) === unitId;
       });
 
-      // Debug logging for topic filtering
-      if (unitTopics.length === 0 && topics.length > 0) {
-        console.warn('No topics found for unit:', {
-          unitId,
-          totalTopics: topics.length,
-          sampleTopic: topics[0],
-          topicUnitIds: topics.slice(0, 3).map((t: any) => ({ id: t.id, name: t.name, unit_id: t.unit_id }))
-        });
+      if (validTopicIds.length !== topicIdSet.size) {
+        topicIdSet.clear();
+        validTopicIds.forEach(id => topicIdSet.add(id));
       }
+    }
 
-      let topicIds: string[] = Array.isArray(existingMapping.topic_ids)
-        ? existingMapping.topic_ids.map((id: any) => normalizeId(id))
-        : [];
-      let subtopicIds: string[] = Array.isArray(existingMapping.subtopic_ids)
-        ? existingMapping.subtopic_ids.map((id: any) => normalizeId(id))
-        : [];
+    const ensureUnitFromTopic = (topic: any) => {
+      if (!topic) return;
+      const topicUnitId = normalizeId(topic.unit_id);
+      if (!topicUnitId) return;
 
-      const questionTopics = ensureArray(question.topics || question.original_topics || question.topic);
-
-      if (questionTopics.length > 0) {
-        questionTopics.forEach((topicName: any) => {
-          if (!topicName) return;
-          const matchingTopic = unitTopics.find((t: any) =>
-            t.name?.toLowerCase() === topicName.toLowerCase() ||
-            t.code === topicName ||
-            t.name?.toLowerCase().includes(topicName.toLowerCase()) ||
-            topicName.toLowerCase().includes(t.name?.toLowerCase() || '')
-          );
-          if (matchingTopic) {
-            const matchingTopicId = normalizeId(matchingTopic.id);
-            if (!topicIds.includes(matchingTopicId)) {
-              topicIds.push(matchingTopicId);
-              hasChanges = true;
-            }
-          }
-        });
+      if (!unitId) {
+        unitId = topicUnitId;
       }
+    };
 
-      if (topicIds.length === 0 && (question.topic || question.original_topics)) {
-        const fallbackTopics = ensureArray(question.topic || question.original_topics);
-        fallbackTopics.forEach((topicName: any) => {
-          if (!topicName) return;
-          const matchingTopic = unitTopics.find((t: any) => t.name?.toLowerCase() === topicName.toLowerCase());
-          if (matchingTopic) {
-            const matchingTopicId = normalizeId(matchingTopic.id);
-            if (!topicIds.includes(matchingTopicId)) {
-              topicIds.push(matchingTopicId);
-              hasChanges = true;
-            }
-          }
-        });
-      }
+    if (!unitId && topicIdSet.size > 0) {
+      const existingTopic = topics.find((t: any) => normalizeId(t.id) === Array.from(topicIdSet)[0]);
+      ensureUnitFromTopic(existingTopic);
+    }
 
-      if (topicIds.length === 0 && (question.question_description || question.question_text)) {
-        const questionContent = (question.question_description || question.question_text || '').toLowerCase();
+    const considerTopicMatch = (topicName: string) => {
+      if (!topicName) return;
 
-        unitTopics.forEach((topic: any) => {
-          const topicKeywords = topic.name.toLowerCase().split(/\s+/);
-          const hasMatch = topicKeywords.some((keyword: string) =>
-            keyword.length > 3 && questionContent.includes(keyword)
-          );
+      const topicsForUnit = unitId
+        ? topics.filter((t: any) => normalizeId(t.unit_id) === unitId)
+        : topics;
 
-          if (hasMatch) {
-            const topicId = normalizeId(topic.id);
-            if (!topicIds.includes(topicId)) {
-              topicIds.push(topicId);
-              hasChanges = true;
-            }
-          }
-        });
-      }
+      let match = matchTopicInList(topicsForUnit, topicName);
 
-      const questionSubtopics = ensureArray(question.subtopics || question.original_subtopics || question.subtopic);
-
-      if (topicIds.length > 0) {
-        // Filter subtopics by topic_id - edu_subtopics table uses topic_id as foreign key
-        const topicSubtopics = subtopics.filter((s: any) =>
-          topicIds.includes(normalizeId(s.topic_id))
-        );
-
-        questionSubtopics.forEach((subtopicName: any) => {
-          if (!subtopicName) return;
-          const matchingSubtopic = topicSubtopics.find((s: any) =>
-            s.name?.toLowerCase() === subtopicName.toLowerCase() ||
-            s.name?.toLowerCase().includes(subtopicName.toLowerCase()) ||
-            subtopicName.toLowerCase().includes(s.name?.toLowerCase() || '')
-          );
-          if (matchingSubtopic) {
-            const matchingSubtopicId = normalizeId(matchingSubtopic.id);
-            if (!subtopicIds.includes(matchingSubtopicId)) {
-              subtopicIds.push(matchingSubtopicId);
-              hasChanges = true;
-            }
-
-            // Ensure parent topic is included
-            const parentTopicId = normalizeId(matchingSubtopic.topic_id);
-            if (parentTopicId && !topicIds.includes(parentTopicId)) {
-              topicIds.push(parentTopicId);
-            }
-          }
-        });
-
-        if (subtopicIds.length === 0 && (question.question_description || question.question_text)) {
-          const questionContent = (question.question_description || question.question_text || '').toLowerCase();
-
-          topicSubtopics.forEach((subtopic: any) => {
-            const subtopicKeywords = subtopic.name.toLowerCase().split(/\s+/);
-            const hasMatch = subtopicKeywords.some((keyword: string) =>
-              keyword.length > 3 && questionContent.includes(keyword)
-            );
-
-            if (hasMatch) {
-              const subtopicId = normalizeId(subtopic.id);
-              if (!subtopicIds.includes(subtopicId)) {
-                subtopicIds.push(subtopicId);
-                hasChanges = true;
-              }
-
-              // Ensure parent topic is included
-              const parentTopicId = normalizeId(subtopic.topic_id);
-              if (parentTopicId && !topicIds.includes(parentTopicId)) {
-                topicIds.push(parentTopicId);
-              }
-            }
-          });
+      if (!match && !unitId) {
+        match = matchTopicInList(topics, topicName);
+        if (match) {
+          ensureUnitFromTopic(match);
         }
       }
 
-      if (hasChanges) {
-        updatedMappings[question.id] = {
-          chapter_id: unitId,
-          topic_ids: topicIds || [],
-          subtopic_ids: subtopicIds || []
-        };
-
-        if (!existingMapping.chapter_id) {
-          mappedCount++;
-        } else {
-          enhancedCount++;
+      if (match) {
+        const matchUnitId = normalizeId(match.unit_id);
+        if (unitId && matchUnitId && matchUnitId !== unitId) {
+          return;
         }
+
+        ensureUnitFromTopic(match);
+
+        const topicId = normalizeId(match.id);
+        topicIdSet.add(topicId);
+      }
+    };
+
+    const considerSubtopicMatch = (subtopicName: string) => {
+      if (!subtopicName) return;
+
+      const relatedSubtopics = topicIdSet.size > 0
+        ? subtopics.filter((s: any) => topicIdSet.has(normalizeId(s.topic_id)))
+        : [];
+
+      let match = matchSubtopicInList(relatedSubtopics, subtopicName);
+
+      if (!match) {
+        match = matchSubtopicInList(subtopics, subtopicName);
+      }
+
+      if (!match) return;
+
+      const parentTopicId = normalizeId(match.topic_id);
+      const parentTopic = topics.find((t: any) => normalizeId(t.id) === parentTopicId);
+      if (!parentTopic) return;
+
+      const parentUnitId = normalizeId(parentTopic.unit_id);
+      if (unitId && parentUnitId && parentUnitId !== unitId) {
+        return;
+      }
+
+      if (parentTopicId) {
+        topicIdSet.add(parentTopicId);
+      }
+
+      const subtopicId = normalizeId(match.id);
+      subtopicIdSet.add(subtopicId);
+    };
+
+    // Use subtopics first - they can uniquely identify the unit/topic hierarchy
+    questionSubtopicNames.forEach(name => considerSubtopicMatch(name));
+    questionTopicNames.forEach(name => considerTopicMatch(name));
+    // Re-run subtopic matching in case new topics unlocked more precise matches
+    questionSubtopicNames.forEach(name => considerSubtopicMatch(name));
+
+    if (!unitId && topicIdSet.size > 0) {
+      const inferredTopic = topics.find((t: any) => normalizeId(t.id) === Array.from(topicIdSet)[0]);
+      ensureUnitFromTopic(inferredTopic);
+    }
+
+    if (unitId) {
+      const validTopicIds = Array.from(topicIdSet).filter(topicId => {
+        const topic = topics.find((t: any) => normalizeId(t.id) === topicId);
+        return topic && normalizeId(topic.unit_id) === unitId;
+      });
+      if (validTopicIds.length !== topicIdSet.size) {
+        topicIdSet.clear();
+        validTopicIds.forEach(id => topicIdSet.add(id));
+      }
+
+      const validSubtopicIds = Array.from(subtopicIdSet).filter(subtopicId => {
+        const subtopic = subtopics.find((s: any) => normalizeId(s.id) === subtopicId);
+        if (!subtopic) return false;
+        const parentTopicId = normalizeId(subtopic.topic_id);
+        const parentTopic = topics.find((t: any) => normalizeId(t.id) === parentTopicId);
+        if (!parentTopic || normalizeId(parentTopic.unit_id) !== unitId) {
+          return false;
+        }
+        topicIdSet.add(parentTopicId);
+        return true;
+      });
+
+      if (validSubtopicIds.length !== subtopicIdSet.size) {
+        subtopicIdSet.clear();
+        validSubtopicIds.forEach(id => subtopicIdSet.add(id));
+      }
+    }
+
+    const finalMapping = {
+      chapter_id: unitId,
+      topic_ids: Array.from(topicIdSet),
+      subtopic_ids: Array.from(subtopicIdSet)
+    };
+
+    const mappingChanged =
+      normalizeId(existingMapping.chapter_id) !== unitId ||
+      !arraysEqualNormalized(existingMapping.topic_ids || [], finalMapping.topic_ids) ||
+      !arraysEqualNormalized(existingMapping.subtopic_ids || [], finalMapping.subtopic_ids);
+
+    if (mappingChanged) {
+      updatedMappings[question.id] = finalMapping;
+
+      if (!existingMapping.chapter_id && finalMapping.chapter_id) {
+        mappedCount++;
+      } else {
+        enhancedCount++;
       }
     }
   });
