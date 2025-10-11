@@ -1,7 +1,7 @@
 ///home/project/src/components/shared/PDFSnippingTool.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Scissors, Download, Check, FileUp, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
+import { X, Scissors, Check, FileUp, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from './Button';
 import { toast } from './Toast';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
@@ -18,6 +18,9 @@ interface PDFSnippingToolProps {
   className?: string;
   onLoadingChange?: (loading: boolean) => void;
   onErrorChange?: (isError: boolean, message: string | null) => void;
+  initialPage?: number;
+  initialScale?: number;
+  onViewStateChange?: (state: { page: number; scale: number }) => void;
 }
 
 export function PDFSnippingTool({
@@ -26,12 +29,18 @@ export function PDFSnippingTool({
   onClose,
   onLoadingChange,
   onErrorChange,
-  className
+  className,
+  initialPage,
+  initialScale,
+  onViewStateChange
 }: PDFSnippingToolProps) {
+  const DEFAULT_PAGE = 1;
+  const DEFAULT_SCALE = 1.5;
+
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => initialPage ?? DEFAULT_PAGE);
   const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1.5);
+  const [scale, setScale] = useState(() => initialScale ?? DEFAULT_SCALE);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number, y: number } | null>(null);
@@ -45,7 +54,23 @@ export function PDFSnippingTool({
   const selectionRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const renderTaskRef = useRef<any>(null);
-  
+  const lastPdfUrlRef = useRef<string | null>(null);
+  const initialViewStateRef = useRef<{ page: number; scale: number }>({
+    page: initialPage ?? DEFAULT_PAGE,
+    scale: initialScale ?? DEFAULT_SCALE
+  });
+  const hasAppliedInitialViewStateRef = useRef(false);
+  const lastEmittedViewStateRef = useRef<{ page: number; scale: number } | null>(null);
+
+  const clampPage = (value: number, total: number) => {
+    if (!Number.isFinite(value)) {
+      return DEFAULT_PAGE;
+    }
+    const rounded = Math.round(value);
+    const upperBound = Math.max(total, DEFAULT_PAGE);
+    return Math.min(Math.max(rounded, DEFAULT_PAGE), upperBound);
+  };
+
   // Main PDF loading and rendering function
   const loadAndRenderPdf = async (source: string | ArrayBuffer) => {
     try {
@@ -59,11 +84,14 @@ export function PDFSnippingTool({
       try {
         const loadingTask = pdfjsLib.getDocument(source);
         const pdf = await loadingTask.promise;
-        
+
         setPdfDocument(pdf);
         setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        
+        const desiredPage = clampPage(initialViewStateRef.current.page, pdf.numPages);
+        setCurrentPage(desiredPage);
+        setScale(initialViewStateRef.current.scale);
+        hasAppliedInitialViewStateRef.current = true;
+
         onErrorChange?.(false, null);
         setIsLoading(false);
         onLoadingChange?.(false);
@@ -122,6 +150,15 @@ export function PDFSnippingTool({
   // Load PDF from URL if provided
   useEffect(() => {
     if (pdfUrl) {
+      if (lastPdfUrlRef.current !== pdfUrl) {
+        lastPdfUrlRef.current = pdfUrl;
+        initialViewStateRef.current = {
+          page: initialPage ?? DEFAULT_PAGE,
+          scale: initialScale ?? DEFAULT_SCALE
+        };
+        hasAppliedInitialViewStateRef.current = false;
+      }
+
       const fetchAndLoadPdf = async () => {
         try {
           // Check if pdfUrl is a data URL or a regular URL
@@ -262,7 +299,30 @@ export function PDFSnippingTool({
       
       fetchAndLoadPdf();
     }
-  }, [pdfUrl]);
+  }, [pdfUrl, initialPage, initialScale]);
+
+  useEffect(() => {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
+      return;
+    }
+
+    if (typeof initialPage === 'number' && initialPage !== currentPage) {
+      const clamped = clampPage(initialPage, totalPages || initialPage);
+      if (clamped !== currentPage) {
+        setCurrentPage(clamped);
+      }
+    }
+  }, [initialPage, pdfDocument, totalPages, currentPage]);
+
+  useEffect(() => {
+    if (!pdfDocument || !hasAppliedInitialViewStateRef.current) {
+      return;
+    }
+
+    if (typeof initialScale === 'number' && Math.abs(initialScale - scale) > 0.001) {
+      setScale(initialScale);
+    }
+  }, [initialScale, pdfDocument, scale]);
   
   // Render the current page
   useEffect(() => {
@@ -338,6 +398,8 @@ export function PDFSnippingTool({
     if (!file) return;
 
     onLoadingChange?.(true);
+    initialViewStateRef.current = { page: DEFAULT_PAGE, scale: DEFAULT_SCALE };
+    hasAppliedInitialViewStateRef.current = false;
     // Reset error states
     setPdfLoadingError(false);
     setErrorMessage(null);
@@ -456,27 +518,63 @@ export function PDFSnippingTool({
   
   // Handle page navigation
   const goToPreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+    setCurrentPage(prev => {
+      if (prev <= 1) {
+        return prev;
+      }
       setSelectionRect(null);
-    }
+      return prev - 1;
+    });
   };
-  
+
   const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
+    setCurrentPage(prev => {
+      if (prev >= totalPages) {
+        return prev;
+      }
       setSelectionRect(null);
-    }
+      return prev + 1;
+    });
   };
-  
+
   // Handle zoom
   const zoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 3));
   };
-  
+
   const zoomOut = () => {
     setScale(prev => Math.max(prev - 0.25, 0.5));
   };
+
+  const resetView = () => {
+    setSelectionRect(null);
+    setScale(DEFAULT_SCALE);
+    setCurrentPage(DEFAULT_PAGE);
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+      containerRef.current.scrollLeft = 0;
+    }
+  };
+
+  useEffect(() => {
+    if (!pdfDocument) {
+      return;
+    }
+
+    const nextState = { page: currentPage, scale };
+
+    if (
+      !lastEmittedViewStateRef.current ||
+      lastEmittedViewStateRef.current.page !== nextState.page ||
+      Math.abs(lastEmittedViewStateRef.current.scale - nextState.scale) > 0.001
+    ) {
+      lastEmittedViewStateRef.current = nextState;
+      onViewStateChange?.(nextState);
+      initialViewStateRef.current = nextState;
+    }
+  }, [currentPage, scale, pdfDocument, onViewStateChange]);
+
+  const isDefaultView = currentPage === DEFAULT_PAGE && Math.abs(scale - DEFAULT_SCALE) < 0.001;
   
   // Capture the selection as an image
   const captureSelection = () => {
@@ -583,9 +681,18 @@ export function PDFSnippingTool({
               >
                 +
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={resetView}
+                disabled={isLoading || isDefaultView}
+                leftIcon={<RotateCcw className="h-4 w-4" />}
+              >
+                Reset view
+              </Button>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {/* PDF Upload Button */}
             <input

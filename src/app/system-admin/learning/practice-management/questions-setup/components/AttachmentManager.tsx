@@ -36,10 +36,13 @@ interface AttachmentManagerProps {
 }
 
 // Global PDF storage to share across all attachment managers
+const DEFAULT_SNIPPING_VIEW_STATE = { page: 1, scale: 1.5 } as const;
+
 const globalPdfStorage = {
   dataUrl: null as string | null,
   fileName: null as string | null,
-  loadedAt: null as Date | null
+  loadedAt: null as Date | null,
+  viewState: { ...DEFAULT_SNIPPING_VIEW_STATE }
 };
 
 export function AttachmentManager({
@@ -58,6 +61,9 @@ export function AttachmentManager({
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [recentSnips, setRecentSnips] = useState<string[]>([]);
+  const [snippingViewState, setSnippingViewState] = useState<{ page: number; scale: number }>(
+    () => ({ ...DEFAULT_SNIPPING_VIEW_STATE })
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -77,6 +83,9 @@ export function AttachmentManager({
     if (globalPdfStorage.dataUrl && !pdfDataUrl) {
       setPdfDataUrl(globalPdfStorage.dataUrl);
       setPdfFileName(globalPdfStorage.fileName);
+      if (globalPdfStorage.viewState) {
+        setSnippingViewState({ ...globalPdfStorage.viewState });
+      }
     }
   }, []);
   
@@ -186,23 +195,25 @@ export function AttachmentManager({
       toast.error('Please select a valid PDF file');
       return;
     }
-    
+
     setLoadingPdf(true);
-    
+    setSnippingViewState({ ...DEFAULT_SNIPPING_VIEW_STATE });
+
     // Convert PDF file to data URL
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      
+
       // Store globally for reuse
       globalPdfStorage.dataUrl = dataUrl;
       globalPdfStorage.fileName = file.name;
       globalPdfStorage.loadedAt = new Date();
-      
+      globalPdfStorage.viewState = { ...DEFAULT_SNIPPING_VIEW_STATE };
+
       setPdfDataUrl(dataUrl);
       setPdfFileName(file.name);
       setLoadingPdf(false);
-      
+
       // Auto-open snipping tool
       setShowSnippingTool(true);
       
@@ -337,11 +348,18 @@ export function AttachmentManager({
     globalPdfStorage.dataUrl = null;
     globalPdfStorage.fileName = null;
     globalPdfStorage.loadedAt = null;
+    globalPdfStorage.viewState = { ...DEFAULT_SNIPPING_VIEW_STATE };
     setPdfDataUrl(null);
     setPdfFileName(null);
     setShowSnippingTool(false);
+    setSnippingViewState({ ...DEFAULT_SNIPPING_VIEW_STATE });
     toast.info('PDF cleared');
   };
+
+  const handleSnippingViewStateChange = useCallback((state: { page: number; scale: number }) => {
+    setSnippingViewState(state);
+    globalPdfStorage.viewState = { ...state };
+  }, []);
   
   return (
     <div className="space-y-3">
@@ -534,8 +552,34 @@ export function AttachmentManager({
               <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
               <span>Click and drag to select areas. Use zoom controls for precision. Multiple snips allowed.</span>
             </div>
+
+            {recentSnips.length > 0 && (
+              <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Recent snips (session)</p>
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400">Tap to preview</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {recentSnips.map((snip, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => window.open(snip, '_blank', 'noopener,noreferrer')}
+                      className="relative flex-shrink-0 w-16 h-16 rounded-md border border-blue-200 dark:border-blue-700 overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400/70"
+                      title={`Open snip ${index + 1} in new tab`}
+                    >
+                      <img
+                        src={snip}
+                        alt={`Recent snip ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          
+
           {/* PDF Snipping Tool Component */}
           <div className="bg-white dark:bg-gray-900" style={{ maxHeight: '600px' }}>
             <PDFSnippingTool
@@ -543,6 +587,9 @@ export function AttachmentManager({
               onSnip={handleSnippingComplete}
               onClose={() => setShowSnippingTool(false)}
               className="!shadow-none !rounded-none"
+              initialPage={snippingViewState.page}
+              initialScale={snippingViewState.scale}
+              onViewStateChange={handleSnippingViewStateChange}
             />
           </div>
         </div>
