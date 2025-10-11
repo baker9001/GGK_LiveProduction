@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { supabase } from '../../../../../lib/supabase';
@@ -96,10 +96,132 @@ export default function SubtopicsTable() {
     status: []
   });
 
+  const fetchSubtopics = useCallback(async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('edu_subtopics')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (filters.topic_id) {
+        query = query.eq('topic_id', filters.topic_id);
+      } else if (filters.unit_id) {
+        const { data: topics } = await supabase
+          .from('edu_topics')
+          .select('id')
+          .eq('unit_id', filters.unit_id);
+
+        if (topics && topics.length > 0) {
+          query = query.in('topic_id', topics.map(t => t.id));
+        }
+      } else if (filters.subject_id) {
+        const { data: units } = await supabase
+          .from('edu_units')
+          .select('id')
+          .eq('subject_id', filters.subject_id);
+
+        if (units && units.length > 0) {
+          const { data: topics } = await supabase
+            .from('edu_topics')
+            .select('id')
+            .in('unit_id', units.map(u => u.id));
+
+          if (topics && topics.length > 0) {
+            query = query.in('topic_id', topics.map(t => t.id));
+          }
+        }
+      }
+
+      if (filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
+
+      const { data: subtopicsData, error } = await query;
+
+      if (error) throw error;
+
+      if (!subtopicsData || subtopicsData.length === 0) {
+        setSubtopics([]);
+        setLoading(false);
+        return;
+      }
+
+      const topicIds = [...new Set(subtopicsData.map(subtopic => subtopic.topic_id))];
+
+      const { data: topicsData, error: topicsError } = await supabase
+        .from('edu_topics')
+        .select('id, name, unit_id')
+        .in('id', topicIds);
+
+      if (topicsError) throw topicsError;
+
+      const unitIds = [...new Set(topicsData.map(topic => topic.unit_id))];
+
+      const { data: unitsData, error: unitsError } = await supabase
+        .from('edu_units')
+        .select('id, name, subject_id')
+        .in('id', unitIds);
+
+      if (unitsError) throw unitsError;
+
+      const subjectIds = [...new Set(unitsData.map(unit => unit.subject_id))];
+
+      const { data: subjectsData, error: subjectsError } = await supabase
+        .from('edu_subjects')
+        .select('id, name')
+        .in('id', subjectIds);
+
+      if (subjectsError) throw subjectsError;
+
+      const subjectsMap = new Map(subjectsData.map(subject => [subject.id, subject]));
+      const unitsMap = new Map(unitsData.map(unit => [unit.id, { ...unit, subject: subjectsMap.get(unit.subject_id) }]));
+      const topicsMap = new Map(topicsData.map(topic => [topic.id, { ...topic, unit: unitsMap.get(topic.unit_id) }]));
+
+      const formattedSubtopics = subtopicsData.map(subtopic => {
+        const topic = topicsMap.get(subtopic.topic_id);
+        const unit = topic?.unit;
+        const subject = unit?.subject;
+
+        return {
+          ...subtopic,
+          topic_name: topic?.name || 'Unknown Topic',
+          unit_name: unit?.name || 'Unknown Unit',
+          subject_name: subject?.name || 'Unknown Subject'
+        };
+      });
+
+      setSubtopics(formattedSubtopics);
+    } catch (error) {
+      console.error('Error fetching subtopics:', error);
+      toast.error('Failed to fetch subtopics');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  const fetchSubjects = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('edu_subjects')
+        .select('id, name')
+        .order('name');
+
+      if (error) throw error;
+      setSubjects(data || []);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+      toast.error('Failed to fetch subjects');
+    }
+  }, []);
+
   useEffect(() => {
     fetchSubtopics();
+  }, [fetchSubtopics]);
+
+  useEffect(() => {
     fetchSubjects();
-  }, []);
+  }, [fetchSubjects]);
 
   // Filter cascade effects
   useEffect(() => {
@@ -193,110 +315,6 @@ export default function SubtopicsTable() {
       });
     }
   }, [editingSubtopic]);
-
-  const fetchSubtopics = async () => {
-    try {
-      // First, fetch the subtopics
-      let query = supabase
-        .from('edu_subtopics')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (filters.topic_id) {
-        query = query.eq('topic_id', filters.topic_id);
-      } else if (filters.unit_id) {
-        // If only unit is selected, we need to get all topics for that unit
-        const { data: topics } = await supabase
-          .from('edu_topics')
-          .select('id')
-          .eq('unit_id', filters.unit_id);
-        
-        if (topics && topics.length > 0) {
-          query = query.in('topic_id', topics.map(t => t.id));
-        }
-      } else if (filters.subject_id) {
-        // If only subject is selected, we need to get all units for that subject
-        const { data: units } = await supabase
-          .from('edu_units')
-          .select('id')
-          .eq('subject_id', filters.subject_id);
-        
-        if (units && units.length > 0) {
-          const { data: topics } = await supabase
-            .from('edu_topics')
-            .select('id')
-            .in('unit_id', units.map(u => u.id));
-          
-          if (topics && topics.length > 0) {
-            query = query.in('topic_id', topics.map(t => t.id));
-          }
-        }
-      }
-
-      if (filters.status.length > 0) {
-        query = query.in('status', filters.status);
-      }
-
-      const { data: subtopicsData, error } = await query;
-
-      if (error) throw error;
-
-      if (!subtopicsData || subtopicsData.length === 0) {
-        setSubtopics([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get all topic IDs from the subtopics
-      const topicIds = [...new Set(subtopicsData.map(subtopic => subtopic.topic_id))];
-
-      // Fetch topics with their units
-      const { data: topicsData, error: topicsError } = await supabase
-        .from('edu_topics')
-        .select('id, name, unit_id')
-        .in('id', topicIds);
-
-      if (topicsError) throw topicsError;
-
-      // Get all unit IDs from the topics
-      const unitIds = [...new Set(topicsData.map(topic => topic.unit_id))];
-
-      // Fetch units with their subjects
-      const { data: unitsData, error: unitsError } = await supabase
-        .from('edu_units')
-        .select('id, name, subject_id')
-        .in('id', unitIds);
-
-      if (unitsError) throw unitsError;
-
-      // Get all subject IDs from the units
-      const subjectIds = [...new Set(unitsData.map(unit => unit.subject_id))];
-
-      // Fetch subjects
-      const { data: subjectsData, error: subjectsError } = await supabase
-        .from('edu_subjects')
-        .select('id, name, code, status')
-        .in('id', subjectIds);
-
-      if (subjectsError) throw subjectsError;
-
-      // Create lookup maps
-      const subjectMap = new Map(subjectsData.map(subject => [subject.id, subject]));
-      const unitMap = new Map(unitsData.map(unit => [unit.id, { ...unit, subject: subjectMap.get(unit.subject_id) }]));
-      const topicMap = new Map(topicsData.map(topic => [topic.id, { ...topic, unit: unitMap.get(topic.unit_id) }]));
-
-      // Map subtopics with their related data
-      const formattedSubtopics = subtopicsData.map(subtopic => {
-        const topic = topicMap.get(subtopic.topic_id);
-        const unit = topic?.unit;
-        const subject = unit?.subject;
-
-        return {
-          ...subtopic,
-          topic_name: topic?.name || 'Unknown Topic',
-          unit_name: unit?.name || 'Unknown Unit',
-          subject_name: subject?.name || 'Unknown Subject'
-        };
       });
 
       setSubtopics(formattedSubtopics);
@@ -305,22 +323,6 @@ export default function SubtopicsTable() {
       toast.error('Failed to fetch subtopics');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchSubjects = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('edu_subjects')
-        .select('id, name, code, status')
-        .eq('status', 'active')
-        .order('name');
-
-      if (error) throw error;
-      setSubjects(data || []);
-    } catch (error) {
-      console.error('Error fetching subjects:', error);
-      toast.error('Failed to fetch subjects');
     }
   };
 
@@ -583,7 +585,6 @@ export default function SubtopicsTable() {
             topic_id: '',
             status: []
           });
-          fetchSubtopics();
         }}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -594,7 +595,14 @@ export default function SubtopicsTable() {
               label: subject.name
             }))}
             selectedValues={filters.subject_id ? [filters.subject_id] : []}
-            onChange={(values) => setFilters({ ...filters, subject_id: values[0] || '', unit_id: '', topic_id: '' })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                subject_id: values[0] || '',
+                unit_id: '',
+                topic_id: ''
+              }))
+            }
             isMulti={false}
             placeholder="Select subject..."
           />
@@ -606,7 +614,13 @@ export default function SubtopicsTable() {
               label: unit.name
             }))}
             selectedValues={filters.unit_id ? [filters.unit_id] : []}
-            onChange={(values) => setFilters({ ...filters, unit_id: values[0] || '', topic_id: '' })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                unit_id: values[0] || '',
+                topic_id: ''
+              }))
+            }
             isMulti={false}
             disabled={!filters.subject_id}
             placeholder="Select unit..."
@@ -619,7 +633,12 @@ export default function SubtopicsTable() {
               label: topic.name
             }))}
             selectedValues={filters.topic_id ? [filters.topic_id] : []}
-            onChange={(values) => setFilters({ ...filters, topic_id: values[0] || '' })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                topic_id: values[0] || ''
+              }))
+            }
             isMulti={false}
             disabled={!filters.unit_id}
             placeholder="Select topic..."
@@ -632,7 +651,12 @@ export default function SubtopicsTable() {
               { value: 'inactive', label: 'Inactive' }
             ]}
             selectedValues={filters.status}
-            onChange={(values) => setFilters({ ...filters, status: values })}
+            onChange={(values) =>
+              setFilters(prev => ({
+                ...prev,
+                status: values
+              }))
+            }
             placeholder="Select status..."
           />
         </div>
