@@ -578,86 +578,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     };
   }, [isRunning, examMode, examDuration]);
   
-  // Track question start time
-  useEffect(() => {
-    if (currentQuestion && isRunning) {
-      const questionKey = currentQuestion.id;
-      if (!questionStartTimes[questionKey]) {
-        setQuestionStartTimes(prev => ({
-          ...prev,
-          [questionKey]: Date.now()
-        }));
-      }
-    }
-  }, [currentQuestionIndex, currentQuestion, isRunning, questionStartTimes]);
-  
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (showResults) {
-        return;
-      }
-
-      if (event.key === 'ArrowLeft' && currentQuestionIndex > 0) {
-        event.preventDefault();
-        goToPreviousQuestion();
-      } else if (event.key === 'ArrowRight' && currentQuestionIndex < totalQuestions - 1) {
-        event.preventDefault();
-        goToNextQuestion();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        handleExit();
-      } else if (event.key === 'F11') {
-        event.preventDefault();
-        toggleFullscreen();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentQuestionIndex, goToNextQuestion, goToPreviousQuestion, handleExit, showResults, toggleFullscreen, totalQuestions]);
-  
-  // Prevent page refresh during exam
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isRunning && !showResults) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isRunning, showResults]);
-  
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const startExam = () => {
-    setIsRunning(true);
-    setTimeElapsed(0);
-    setCurrentQuestionIndex(0);
-    setUserAnswers({});
-    setFlaggedQuestions(new Set());
-    setQuestionStartTimes({});
-  };
-  
-  const pauseExam = () => {
-    setIsRunning(false);
-  };
-  
-  const resumeExam = () => {
-    setIsRunning(true);
-  };
-  
+  // Navigation and control functions - MUST be defined before useEffects that use them
   const handleExit = useCallback(() => {
     if (isRunning && !showResults) {
       if (window.confirm('Are you sure you want to exit? Your progress will be lost.')) {
@@ -698,6 +619,86 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   const goToNextQuestion = useCallback(() => {
     setCurrentQuestionIndex(prevIndex => Math.min(prevIndex + 1, totalQuestions - 1));
   }, [totalQuestions]);
+
+  // Track question start time
+  useEffect(() => {
+    if (currentQuestion && isRunning) {
+      const questionKey = currentQuestion.id;
+      if (!questionStartTimes[questionKey]) {
+        setQuestionStartTimes(prev => ({
+          ...prev,
+          [questionKey]: Date.now()
+        }));
+      }
+    }
+  }, [currentQuestionIndex, currentQuestion, isRunning, questionStartTimes]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (showResults) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+        event.preventDefault();
+        goToPreviousQuestion();
+      } else if (event.key === 'ArrowRight' && currentQuestionIndex < totalQuestions - 1) {
+        event.preventDefault();
+        goToNextQuestion();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        handleExit();
+      } else if (event.key === 'F11') {
+        event.preventDefault();
+        toggleFullscreen();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentQuestionIndex, goToNextQuestion, goToPreviousQuestion, handleExit, showResults, toggleFullscreen, totalQuestions]);
+
+  // Prevent page refresh during exam
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isRunning && !showResults) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isRunning, showResults]);
+
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startExam = () => {
+    setIsRunning(true);
+    setTimeElapsed(0);
+    setCurrentQuestionIndex(0);
+    setUserAnswers({});
+    setFlaggedQuestions(new Set());
+    setQuestionStartTimes({});
+  };
+
+  const pauseExam = () => {
+    setIsRunning(false);
+  };
+
+  const resumeExam = () => {
+    setIsRunning(true);
+  };
   
   const toggleQuestionFlag = (questionId: string) => {
     setFlaggedQuestions(prev => {
@@ -1213,7 +1214,6 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                           showHints={showHints}
                           showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                          mode={isQAMode ? 'review' : examMode}
                           mode={isQAMode ? 'admin' : examMode}
                         />
                       </div>
@@ -1222,7 +1222,6 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                     {isQAMode && (
                       <TeacherInsights
                         correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
-                        correctAnswers={currentQuestion.correct_answers}
                         answerRequirement={currentQuestion.answer_requirement}
                         markingCriteria={currentQuestion.marking_criteria}
                         requiresManualMarking={currentQuestion.requires_manual_marking}
@@ -1299,14 +1298,12 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                 showHints={showHints}
                                 showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                mode={isQAMode ? 'review' : examMode}
                                 mode={isQAMode ? 'admin' : examMode}
                               />
 
                               {isQAMode && (
                                 <TeacherInsights
                                   correctAnswers={buildNormalisedCorrectAnswers(part)}
-                                  correctAnswers={part.correct_answers}
                                   answerRequirement={part.answer_requirement}
                                   markingCriteria={part.marking_criteria}
                                   requiresManualMarking={part.requires_manual_marking}
@@ -1366,14 +1363,12 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                             showHints={showHints}
                                             showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
-                                            mode={isQAMode ? 'review' : examMode}
                                             mode={isQAMode ? 'admin' : examMode}
                                           />
 
                                           {isQAMode && (
                                             <TeacherInsights
                                               correctAnswers={buildNormalisedCorrectAnswers(subpart)}
-                                              correctAnswers={subpart.correct_answers}
                                               answerRequirement={subpart.answer_requirement}
                                               markingCriteria={subpart.marking_criteria}
                                               requiresManualMarking={subpart.requires_manual_marking}
