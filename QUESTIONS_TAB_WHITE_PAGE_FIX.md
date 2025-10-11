@@ -214,6 +214,8 @@ window.testImportButton()
 
 - ✓ `src/components/shared/ErrorBoundary.tsx` (NEW)
 - ✓ `src/app/system-admin/learning/practice-management/papers-setup/tabs/QuestionsTabWrapper.tsx` (NEW)
+- ✓ `src/app/system-admin/learning/practice-management/papers-setup/tabs/components/FixIncompleteQuestionsButton.tsx` (NEW)
+- ✓ `src/app/system-admin/learning/practice-management/papers-setup/tabs/components/QuestionsReviewSection.tsx` (NEW)
 - ✓ `src/app/system-admin/learning/practice-management/papers-setup/tabs/QuestionsTab.tsx` (MODIFIED)
 - ✓ `src/app/system-admin/learning/practice-management/papers-setup/page.tsx` (MODIFIED)
 
