@@ -1357,7 +1357,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     <div className="space-y-2">
                       {allCorrectAnswers.map((ans, idx) => {
                         const correctOption = question.options?.find(opt =>
-                          opt.is_correct || ans.answer.includes(opt.label)
+                          opt.is_correct || (opt.label && ans.answer && ans.answer.includes(opt.label))
                         );
                         return (
                           <div key={idx} className="bg-white/60 dark:bg-amber-900/40 rounded-md p-3">

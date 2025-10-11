@@ -194,12 +194,35 @@ Lists other acceptable answer forms with blue-colored badges
 - [ ] Answer requirements accurately represented
 - [ ] No data loss during preview process
 
+## Bug Fixes Applied
+
+### White Screen Error Fix (Critical)
+**Issue:** When clicking "Preview & Test", a white page appeared with console error:
+```
+TypeError: Cannot read properties of undefined (reading 'includes')
+at DynamicAnswerField.tsx:1360
+```
+
+**Root Cause:** In the QA preview teacher insights panel, the code attempted to find the correct MCQ option by checking if `ans.answer.includes(opt.label)`, but `opt.label` could be undefined, causing the error.
+
+**Fix Applied:** Added null/undefined checks before calling `.includes()`:
+```typescript
+// Before (line 1360)
+opt.is_correct || ans.answer.includes(opt.label)
+
+// After
+opt.is_correct || (opt.label && ans.answer && ans.answer.includes(opt.label))
+```
+
+This ensures that both `opt.label` and `ans.answer` exist before attempting string comparison, preventing the TypeError and white screen.
+
 ## Build Status
 ✅ **Build Successful** - No errors or warnings
-- Total build time: 17.60s
+- Total build time: 19.85s
 - All TypeScript types validated
 - All components compiled successfully
 - Production build optimization completed
+- White screen error resolved ✅
 
 ## Files Modified
 
@@ -210,6 +233,7 @@ Lists other acceptable answer forms with blue-colored badges
    - Enhanced MCQ rendering with teacher review panel
    - Added answer variations display
    - Added Target icon import
+   - Fixed undefined check in correctOption finding logic (line 1360)
 
 2. **src/app/system-admin/learning/practice-management/questions-setup/components/ExamSimulation.tsx**
    - Changed mode from 'admin' to 'qa_preview' for isQAMode
