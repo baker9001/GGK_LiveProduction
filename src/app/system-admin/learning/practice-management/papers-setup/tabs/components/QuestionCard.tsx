@@ -34,7 +34,7 @@ interface QuestionCardProps {
   onCancel: () => void;
   onMappingUpdate: (field: string, value: any) => void;
   onAddAttachment: (partIndex?: number, subpartIndex?: number) => void;
-  onDeleteAttachment: (attachmentId: string) => void;
+  onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
   onUpdateQuestion: (updates: any) => void;
 }
 
@@ -264,6 +264,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             <AttachmentDisplay
               attachments={attachments}
               questionLabel={`Question ${question.question_number}`}
+              attachmentKey={question.id}
               requiresFigure={question.figure}
               pdfAvailable={!!pdfDataUrl}
               onAdd={() => onAddAttachment()}

@@ -16,7 +16,7 @@ interface QuestionPartDisplayProps {
   pdfDataUrl: string | null;
   isEditing: boolean;
   onAddAttachment: (partIndex: number, subpartIndex?: number) => void;
-  onDeleteAttachment: (attachmentId: string) => void;
+  onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
   onUpdatePart: (updates: any) => void;
 }
 
@@ -105,6 +105,7 @@ export const QuestionPartDisplay: React.FC<QuestionPartDisplayProps> = ({
           <AttachmentDisplay
             attachments={partAttachments}
             questionLabel={`Part (${part.part})`}
+            attachmentKey={partKey}
             requiresFigure={part.figure}
             pdfAvailable={!!pdfDataUrl}
             onAdd={() => onAddAttachment(partIndex)}

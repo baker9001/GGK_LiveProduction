@@ -9,16 +9,18 @@ import { cn } from '../../../../../../../lib/utils';
 interface AttachmentDisplayProps {
   attachments: any[];
   questionLabel: string;
+  attachmentKey: string;
   requiresFigure?: boolean;
   pdfAvailable?: boolean;
   onAdd: () => void;
-  onDelete: (attachmentId: string) => void;
+  onDelete: (attachmentKey: string, attachmentId: string) => void;
   isEditing?: boolean;
 }
 
 export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   attachments,
   questionLabel,
+  attachmentKey,
   requiresFigure = false,
   pdfAvailable = false,
   onAdd,
@@ -142,10 +144,12 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('🗑️ Delete button clicked in AttachmentDisplay:', attachment.id);
-                      console.log('📋 Calling onDelete with ID:', attachment.id);
-                      onDelete(attachment.id);
-                      console.log('✅ onDelete called successfully');
+                      console.log('🗑️ Delete button clicked in AttachmentDisplay');
+                      console.log('📋 Attachment Key:', attachmentKey);
+                      console.log('📋 Attachment ID:', attachment.id);
+                      console.log('📋 Calling onDelete with both parameters');
+                      onDelete(attachmentKey, attachment.id);
+                      console.log('✅ onDelete called successfully with key and id');
                     }}
                   >
                     <Trash2 className="h-5 w-5" />
