@@ -3222,12 +3222,14 @@ export function QuestionsTab({
               <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 Validation Errors
               </h3>
-              <button
-                onClick={() => setShowValidation(false)}
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 className="text-gray-400 hover:text-gray-500"
+                onClick={() => setShowValidation(false)}
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
             
             <div className="space-y-4">
@@ -3256,15 +3258,17 @@ export function QuestionsTab({
                             </p>
                           </div>
                         )}
-                        <button
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="mt-2 text-xs text-red-600 dark:text-red-400"
                           onClick={() => {
                             setShowValidation(false);
                             scrollToQuestion(questionId);
                           }}
-                          className="mt-2 text-xs text-red-600 dark:text-red-400 hover:underline"
                         >
                           Go to question →
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
