@@ -354,8 +354,8 @@ export function LicenseAssignmentModal({
       header: 'Student',
       cell: (row: StudentLicenseAssignment) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-full flex items-center justify-center">
-            <Users className="w-4 h-4 text-[#99C93B] dark:text-[#AAD775]" />
+          <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <div className="font-medium text-gray-900 dark:text-white">
@@ -474,7 +474,7 @@ export function LicenseAssignmentModal({
       >
         <div className="space-y-6">
           {/* License Information */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">
                 License Details
@@ -487,29 +487,29 @@ export function LicenseAssignmentModal({
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Subject:</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Subject:</span>
                 <div className="text-blue-900 dark:text-blue-100">{license.subject_name}</div>
               </div>
               <div>
-                <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Program:</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Program:</span>
                 <div className="text-blue-900 dark:text-blue-100">{license.program_name}</div>
               </div>
               <div>
-                <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Provider:</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Provider:</span>
                 <div className="text-blue-900 dark:text-blue-100">{license.provider_name}</div>
               </div>
               <div>
-                <span className="text-[#5D7E23] dark:text-[#AAD775] font-medium">Region:</span>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Region:</span>
                 <div className="text-blue-900 dark:text-blue-100">{license.region_name}</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-[#99C93B]/30 dark:border-blue-700">
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
               <div className="text-center">
-                <div className="text-2xl font-bold text-[#99C93B] dark:text-[#AAD775]">
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {license.total_quantity}
                 </div>
-                <div className="text-xs text-[#5D7E23] dark:text-[#AAD775]">Total</div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">Total</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -650,7 +650,7 @@ export function LicenseAssignmentModal({
           {activeTab === 'manage' && (
             <div className="space-y-4">
               {/* Status Legend */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                   <Info className="w-4 h-4" />
                   Status Legend
@@ -700,7 +700,7 @@ export function LicenseAssignmentModal({
 
               {isLoadingAssigned ? (
                 <div className="flex items-center justify-center p-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#99C93B]"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   <span className="ml-2 text-gray-600 dark:text-gray-400">Loading assigned students...</span>
                 </div>
               ) : assignedStudents.length === 0 ? (

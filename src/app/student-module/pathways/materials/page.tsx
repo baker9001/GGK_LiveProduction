@@ -43,7 +43,7 @@ function MaterialTypeIcon({ type }: { type: string }) {
 function SourceBadge({ sourceType }: { sourceType: 'global' | 'school' }) {
   if (sourceType === 'global') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
         <Globe className="h-3 w-3" />
         Global
       </span>

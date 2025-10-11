@@ -169,7 +169,7 @@ export function EditableField({
           <div
             className={cn(
               "flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer",
-              "bg-white dark:bg-gray-800 border-[#99C93B] dark:border-blue-400",
+              "bg-white dark:bg-gray-800 border-blue-500 dark:border-blue-400",
               className
             )}
             onClick={() => setShowDropdown(!showDropdown)}
@@ -193,14 +193,14 @@ export function EditableField({
                   key={option.value}
                   className={cn(
                     "flex items-center px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer",
-                    selectedValues.includes(option.value) && "bg-[#E8F5DC] dark:bg-[#5D7E23]/20"
+                    selectedValues.includes(option.value) && "bg-blue-50 dark:bg-blue-900/20"
                   )}
                   onClick={() => toggleSelection(option.value)}
                 >
                   <div className={cn(
                     "w-4 h-4 border rounded mr-3 flex items-center justify-center",
                     selectedValues.includes(option.value)
-                      ? "bg-[#99C93B] border-[#99C93B]"
+                      ? "bg-blue-500 border-blue-500"
                       : "border-gray-300 dark:border-gray-600"
                   )}>
                     {selectedValues.includes(option.value) && (
@@ -249,10 +249,10 @@ export function EditableField({
             rows={rows}
             className={cn(
               "flex-1 px-3 py-2 rounded-lg border resize-none",
-              "border-[#99C93B] dark:border-blue-400",
+              "border-blue-500 dark:border-blue-400",
               "bg-white dark:bg-gray-800",
               "text-gray-900 dark:text-white",
-              "focus:outline-none focus:ring-2 focus:ring-[#99C93B]",
+              "focus:outline-none focus:ring-2 focus:ring-blue-500",
               className
             )}
           />
@@ -264,10 +264,10 @@ export function EditableField({
             onKeyDown={handleKeyDown}
             className={cn(
               "flex-1 px-3 py-2 rounded-lg border",
-              "border-[#99C93B] dark:border-blue-400",
+              "border-blue-500 dark:border-blue-400",
               "bg-white dark:bg-gray-800",
               "text-gray-900 dark:text-white",
-              "focus:outline-none focus:ring-2 focus:ring-[#99C93B]",
+              "focus:outline-none focus:ring-2 focus:ring-blue-500",
               className
             )}
           >
@@ -290,10 +290,10 @@ export function EditableField({
             max={max}
             className={cn(
               "flex-1 px-3 py-2 rounded-lg border",
-              "border-[#99C93B] dark:border-blue-400",
+              "border-blue-500 dark:border-blue-400",
               "bg-white dark:bg-gray-800",
               "text-gray-900 dark:text-white",
-              "focus:outline-none focus:ring-2 focus:ring-[#99C93B]",
+              "focus:outline-none focus:ring-2 focus:ring-blue-500",
               className
             )}
           />

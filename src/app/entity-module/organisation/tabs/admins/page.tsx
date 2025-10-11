@@ -269,7 +269,7 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#99C93B] mx-auto mb-2"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
             <p className="text-gray-600 dark:text-gray-400">Loading permissions...</p>
           </div>
         </div>
@@ -303,8 +303,8 @@ export default function AdminsPage({ companyId }: AdminsPageProps) {
           
           {/* Show scope limitation notice for non-entity admins */}
           {(!isEntityAdmin && !isSubEntityAdmin) && (
-            <div className="mt-2 p-2 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-md">
-              <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 You can only view administrators within your assigned scope.
               </p>
             </div>

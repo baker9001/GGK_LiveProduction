@@ -165,7 +165,7 @@ const PASSWORD_MESSAGES: PasswordStrength[] = [
   { score: 1, label: 'Weak', description: 'Try adding numbers or symbols', color: 'bg-orange-500' },
   { score: 2, label: 'Okay', description: 'Almost there—add more variety', color: 'bg-amber-500' },
   { score: 3, label: 'Strong', description: 'Solid! This will keep you safe', color: 'bg-emerald-500' },
-  { score: 4, label: 'Epic', description: 'Legendary password energy', color: 'bg-[#99C93B]' }
+  { score: 4, label: 'Epic', description: 'Legendary password energy', color: 'bg-blue-500' }
 ];
 
 // ---------------------------------------------------------------------------
@@ -849,7 +849,7 @@ export default function StudentProfileSettingsPage() {
     <div className="p-6 space-y-6">
       {/* School Identity Banner */}
       {(profileData.schoolName || profileData.branchName) && (
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-[#99C93B]/20">
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-blue-500/20">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             {/* School Logo */}
             {profileData.schoolLogoUrl ? (
@@ -864,7 +864,7 @@ export default function StudentProfileSettingsPage() {
                       target.style.display = 'none';
                       const parent = target.parentElement;
                       if (parent) {
-                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#99C93B]"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>';
+                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>';
                       }
                     }}
                   />
@@ -873,7 +873,7 @@ export default function StudentProfileSettingsPage() {
             ) : (
               <div className="flex-shrink-0">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white shadow-lg p-3 ring-4 ring-white/30 flex items-center justify-center">
-                  <Building2 className="w-12 h-12 md:w-14 md:h-14 text-[#99C93B]" />
+                  <Building2 className="w-12 h-12 md:w-14 md:h-14 text-blue-600" />
                 </div>
               </div>
             )}
@@ -1257,7 +1257,7 @@ export default function StudentProfileSettingsPage() {
                 {!isEditingEmail && (
                   <button
                     onClick={() => setIsEditingEmail(true)}
-                    className="flex items-center gap-1 text-xs text-[#99C93B] dark:text-[#AAD775] hover:underline"
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     <Unlock className="w-3 h-3" />
                     Edit
@@ -1310,7 +1310,7 @@ export default function StudentProfileSettingsPage() {
                 {!isChangingPassword && !currentPassword && (
                   <button
                     onClick={() => setIsChangingPassword(true)}
-                    className="flex items-center gap-1 text-xs text-[#99C93B] dark:text-[#AAD775] hover:underline"
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     <Unlock className="w-3 h-3" />
                     Change

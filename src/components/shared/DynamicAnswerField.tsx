@@ -516,7 +516,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled && !isEditing}
           rows={3}
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
           placeholder="Enter answer"
         />
       );
@@ -528,7 +528,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled && !isEditing}
-        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
         placeholder="Enter answer"
       />
     );
@@ -554,17 +554,17 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       }
       
       return (
-        <div className="p-4 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg">
-          <p className="text-sm text-[#5D7E23] dark:text-[#AAD775] mb-2">
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
             Connection pattern:
           </p>
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded border">
               {adminCorrectAnswers[0]?.answer || 'First answer'}
             </span>
-            <LinkIcon className="w-4 h-4 text-[#99C93B] dark:text-[#AAD775]" />
-            <span className="font-medium text-[#5D7E23] dark:text-[#AAD775]">AND</span>
-            <LinkIcon className="w-4 h-4 text-[#99C93B] dark:text-[#AAD775]" />
+            <LinkIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="font-medium text-blue-700 dark:text-blue-300">AND</span>
+            <LinkIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span className="px-3 py-1 bg-white dark:bg-gray-800 rounded border">
               {adminCorrectAnswers[1]?.answer || 'Second answer'}
             </span>
@@ -577,7 +577,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (requirement.includes('any_')) {
       const requiredCount = getRequiredAnswerCount(requirement);
       return (
-        <div className="p-4 bg-[#E8F5DC] dark:bg-purple-900/20 rounded-lg">
+        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
           <p className="text-sm text-purple-700 dark:text-purple-300">
             Students must provide {requiredCount} answer{requiredCount > 1 ? 's' : ''} from the list of {adminCorrectAnswers.length} alternatives.
           </p>
@@ -788,14 +788,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
 
     return (
-      <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg">
-        <h4 className="text-sm font-medium text-[#5D7E23] dark:text-[#AAD775] mb-3">
+      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+        <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-3">
           Additional Context
         </h4>
         <div className="space-y-2">
           {contextRequirements.map((req, idx) => (
             <div key={idx} className="flex items-center gap-3">
-              <label className="text-sm text-[#99C93B] dark:text-[#AAD775] min-w-[100px]">
+              <label className="text-sm text-blue-600 dark:text-blue-400 min-w-[100px]">
                 {req.label || req.type}:
                 {req.required && <span className="text-red-500 ml-1">*</span>}
               </label>
@@ -854,14 +854,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     }
 
     return (
-      <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-purple-900/20 rounded-lg">
+      <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
         <h4 className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-3">
           Alternative Answer Groups
         </h4>
         <div className="space-y-3">
           {Object.entries(groupedAlternatives).map(([group, alternatives]) => (
             <div key={group} className="border-l-2 border-purple-300 dark:border-purple-600 pl-3">
-              <h5 className="text-xs font-medium text-[#5D7E23] dark:text-purple-400 mb-1">
+              <h5 className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">
                 {group.replace(/_/g, ' ').toUpperCase()}
               </h5>
               <div className="space-y-1">
@@ -1061,8 +1061,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             </div>
             
             {componentAnswers[component.id] && (
-              <div className="mt-2 p-2 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded">
-                <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
+              <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   Preview: {formatChemicalFormula(componentAnswers[component.id])}
                 </p>
               </div>
@@ -1090,8 +1090,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     return (
       <div className="space-y-2">
         {question.answer_requirement && (
-          <div className="mb-2 p-2 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg">
-            <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
+          <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
               <AlertCircle className="inline w-4 h-4 mr-1" />
               {getAnswerRequirementLabel(question.answer_requirement)}
             </p>
@@ -1117,8 +1117,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 labelClass = 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300';
               }
             } else {
-              buttonClass = 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B] dark:border-[#99C93B]';
-              labelClass = 'bg-blue-200 dark:bg-blue-800 text-[#5D7E23] dark:text-[#AAD775]';
+              buttonClass = 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-600';
+              labelClass = 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300';
             }
           } else if (shouldShowFeedback && isCorrect) {
             // Show correct answer even if not selected
@@ -1190,7 +1190,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 ? correctAnswer
                   ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-600 text-green-700 dark:text-green-300'
                   : 'bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-600 text-red-700 dark:text-red-300'
-                : 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B] dark:border-[#99C93B] text-[#5D7E23] dark:text-[#AAD775]'
+                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-600 text-blue-700 dark:text-blue-300'
               : shouldShowFeedback && correctAnswer
                 ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-600 text-green-600 dark:text-green-400'
                 : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-gray-400',
@@ -1212,7 +1212,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 ? !correctAnswer
                   ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-600 text-green-700 dark:text-green-300'
                   : 'bg-red-50 dark:bg-red-900/20 border-red-500 dark:border-red-600 text-red-700 dark:text-red-300'
-                : 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border-[#99C93B] dark:border-[#99C93B] text-[#5D7E23] dark:text-[#AAD775]'
+                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-600 text-blue-700 dark:text-blue-300'
               : shouldShowFeedback && !correctAnswer
                 ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-600 text-green-600 dark:text-green-400'
                 : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-gray-400',
@@ -1283,7 +1283,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     performValidation({ ...value, components: newAnswers });
                   }}
                   disabled={disabled}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
                   placeholder={`Enter ${component.label || component.type}`}
                 />
               )}
@@ -1316,7 +1316,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             className={cn(
               "w-full px-3 py-2 border rounded-lg",
               disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-              "focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:text-white"
+              "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
             )}
           />
           {renderCorrectAnswers()}
@@ -1341,7 +1341,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               }}
               disabled={disabled}
               placeholder="First item"
-              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
             />
             <span className="font-medium text-gray-600 dark:text-gray-400">
               {format === 'two_items_connected' ? 'AND' : '&'}
@@ -1358,7 +1358,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
               }}
               disabled={disabled}
               placeholder="Second item"
-              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
             />
           </div>
           {renderCorrectAnswers()}
@@ -1389,7 +1389,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 }}
                 disabled={disabled}
                 placeholder={`Enter answer for ${label}`}
-                className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-800 dark:text-white"
+                className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
               />
             </div>
           ))}
@@ -1439,7 +1439,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           className={cn(
             "w-full px-3 py-2 border rounded-lg",
             disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-            "focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:text-white"
+            "focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
           )}
         />
         {renderCorrectAnswers()}
@@ -1561,7 +1561,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
           {getSubjectIcon()}
           <span>{question.subject || 'General'}</span>
           {question.answer_format && (
-            <span className="px-2 py-0.5 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-xs">
+            <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded text-xs">
               {question.answer_format.replace(/_/g, ' ')}
             </span>
           )}
@@ -1571,7 +1571,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             </span>
           )}
           {mode === 'admin' && (
-            <span className="px-2 py-0.5 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] rounded text-xs">
+            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs">
               ADMIN MODE
             </span>
           )}

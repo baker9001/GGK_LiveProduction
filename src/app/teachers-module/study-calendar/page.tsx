@@ -15,7 +15,7 @@ export default function StudyCalendarPage() {
 
       <div className="bg-gradient-to-r from-violet-50 to-fuchsia-50 dark:from-violet-900/20 dark:to-fuchsia-900/20 border border-violet-200 dark:border-violet-800 rounded-lg p-6 mb-8">
         <div className="flex items-center">
-          <Calendar className="h-8 w-8 text-[#5D7E23] dark:text-violet-400 mr-4" />
+          <Calendar className="h-8 w-8 text-violet-600 dark:text-violet-400 mr-4" />
           <div>
             <h2 className="text-xl font-semibold text-violet-900 dark:text-violet-100 mb-2">
               Schedule & Calendar Management
@@ -30,7 +30,7 @@ export default function StudyCalendarPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <CalendarDays className="h-6 w-6 text-[#5D7E23] dark:text-violet-400 mr-3" />
+            <CalendarDays className="h-6 w-6 text-violet-600 dark:text-violet-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Class Schedule
             </h3>
@@ -75,7 +75,7 @@ export default function StudyCalendarPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Bell className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775] mr-3" />
+            <Bell className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Reminders & Alerts
             </h3>
@@ -90,7 +90,7 @@ export default function StudyCalendarPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <CalendarRange className="h-6 w-6 text-[#99C93B] dark:text-cyan-400 mr-3" />
+            <CalendarRange className="h-6 w-6 text-cyan-600 dark:text-cyan-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Academic Calendar
             </h3>

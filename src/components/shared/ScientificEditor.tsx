@@ -113,7 +113,7 @@ const SymbolPalette: React.FC<{
                   disabled={disabled}
                   className={cn(
                     "p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors",
-                    "focus:outline-none focus:ring-2 focus:ring-[#99C93B]",
+                    "focus:outline-none focus:ring-2 focus:ring-blue-500",
                     disabled && "opacity-50 cursor-not-allowed"
                   )}
                   title={`Insert ${symbol}`}
@@ -971,7 +971,7 @@ const ScientificEditor: React.FC<ScientificEditorProps> = ({
         className={cn(
           "w-full px-3 py-2 border rounded-lg font-mono text-sm",
           disabled ? 'bg-gray-100 dark:bg-gray-900' : 'bg-white dark:bg-gray-800',
-          "focus:outline-none focus:ring-2 focus:ring-[#99C93B]",
+          "focus:outline-none focus:ring-2 focus:ring-blue-500",
           "dark:text-white dark:border-gray-600"
         )}
       />

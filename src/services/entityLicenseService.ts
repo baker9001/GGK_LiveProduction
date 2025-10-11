@@ -1,278 +1,436 @@
-import { supabase } from '../lib/supabase';
+/**
+ * File: /src/services/entityLicenseService.ts
+ * 
+ * Entity License Management Service
+ * Handles license operations for entity-level administrators
+ * 
+ * Dependencies:
+ *   - @/lib/supabase
+ *   - @/utils/queryHelpers
+ * 
+ * Features:
+ *   - Scope-based license fetching
+ *   - Student license assignment/revocation
+ *   - License availability tracking
+ *   - Integration with system admin license management
+ */
+
+import { supabase } from '@/lib/supabase';
+import { queryActiveStudents } from '@/utils/queryHelpers';
 
 export interface EntityLicense {
   id: string;
-  license_id: string;
-  entity_id: string;
-  entity_type: string;
-  assigned_quantity: number;
+  company_id: string;
+  company_name: string;
+  region_name: string;
+  program_name: string;
+  provider_name: string;
+  subject_name: string;
+  total_quantity: number;
   used_quantity: number;
-  assigned_date: string;
-  status: 'active' | 'inactive';
-  created_at: string;
-  updated_at: string;
+  available_quantity: number;
+  start_date: string;
+  end_date: string;
+  status: string;
+  is_expired: boolean;
+  days_until_expiry: number;
+  assigned_students?: StudentLicenseAssignment[];
 }
 
 export interface StudentLicenseAssignment {
   id: string;
   student_id: string;
-  license_id: string;
-  entity_license_id: string;
-  assigned_date: string;
-  expiration_date?: string;
-  status: 'active' | 'expired' | 'revoked';
-  student?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    grade_level_id?: string;
-    school_id?: string;
-    branch_id?: string;
-  };
-}
-
-export interface AvailableStudent {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  grade_level_id?: string;
-  school_id?: string;
-  branch_id?: string;
-  school_name?: string;
+  student_name: string;
+  student_code: string;
+  student_email: string;
+  school_name: string;
   branch_name?: string;
-  grade_level_name?: string;
+  assigned_at: string;
+  assigned_by: string;
+  expires_at: string;
+  is_active: boolean;
+  status: string;
+  activated_on?: string;
+  valid_from_snapshot: string;
+  valid_to_snapshot: string;
 }
 
-export const EntityLicenseService = {
-  async getEntityLicenses(entityId: string): Promise<EntityLicense[]> {
-    const { data, error } = await supabase
-      .from('entity_licenses')
-      .select('*')
-      .eq('entity_id', entityId)
-      .order('created_at', { ascending: false });
+export interface LicenseAssignmentFilters {
+  school_ids?: string[];
+  branch_ids?: string[];
+  grade_level?: string;
+  search?: string;
+}
 
-    if (error) throw error;
-    return data || [];
-  },
-
-  async getAvailableStudents(
+export class EntityLicenseService {
+  /**
+   * Get licenses available to the admin's scope
+   */
+  static async getLicensesForScope(
     companyId: string,
-    scopeFilters: any,
-    searchTerm?: string,
-    gradeFilter?: string,
-    schoolFilter?: string
-  ): Promise<AvailableStudent[]> {
-    let query = supabase
-      .from('students')
-      .select(`
-        id,
-        first_name,
-        last_name,
-        email,
-        grade_level_id,
-        school_id,
-        branch_id,
-        schools:school_id(name),
-        branches:branch_id(name),
-        grade_levels:grade_level_id(name)
-      `);
+    scopeFilters: { school_ids?: string[]; branch_ids?: string[] }
+  ): Promise<EntityLicense[]> {
+    try {
+      const { data, error } = await supabase.rpc('get_available_licenses_for_scope', {
+        p_company_id: companyId,
+        p_school_ids: scopeFilters.school_ids || null,
+        p_branch_ids: scopeFilters.branch_ids || null
+      });
 
-    if (scopeFilters?.company_id) {
-      query = query.eq('company_id', scopeFilters.company_id);
+      if (error) throw error;
+
+      return (data || []).map((license: any) => ({
+        id: license.license_id,
+        company_id: companyId,
+        company_name: license.company_name,
+        region_name: license.region_name,
+        program_name: license.program_name,
+        provider_name: license.provider_name,
+        subject_name: license.subject_name,
+        total_quantity: license.total_quantity,
+        used_quantity: license.used_quantity,
+        available_quantity: license.available_quantity,
+        start_date: license.start_date,
+        end_date: license.end_date,
+        status: license.status,
+        is_expired: license.is_expired,
+        days_until_expiry: license.days_until_expiry
+      }));
+    } catch (error) {
+      console.error('Error fetching licenses for scope:', error);
+      throw error;
     }
+  }
 
-    if (searchTerm) {
-      query = query.or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
-    }
-
-    if (gradeFilter && gradeFilter !== 'all') {
-      query = query.eq('grade_level_id', gradeFilter);
-    }
-
-    if (schoolFilter && schoolFilter !== 'all') {
-      query = query.eq('school_id', schoolFilter);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    return (data || []).map((student: any) => ({
-      id: student.id,
-      first_name: student.first_name,
-      last_name: student.last_name,
-      email: student.email,
-      grade_level_id: student.grade_level_id,
-      school_id: student.school_id,
-      branch_id: student.branch_id,
-      school_name: student.schools?.name,
-      branch_name: student.branches?.name,
-      grade_level_name: student.grade_levels?.name
-    }));
-  },
-
-  async getStudentsForLicense(
+  /**
+   * Get students assigned to a specific license
+   */
+  static async getStudentsForLicense(
     licenseId: string,
-    entityId: string
+    companyId: string,
+    scopeFilters: { school_ids?: string[]; branch_ids?: string[] }
   ): Promise<StudentLicenseAssignment[]> {
-    const { data, error } = await supabase
-      .from('student_licenses')
-      .select(`
-        id,
-        student_id,
-        license_id,
-        entity_license_id,
-        assigned_date,
-        expiration_date,
-        status,
-        students:student_id(
+    try {
+      console.log('Fetching students for license:', {
+        licenseId,
+        companyId,
+        scopeFilters
+      });
+
+      const { data, error } = await supabase
+        .from('student_licenses')
+        .select(`
           id,
-          first_name,
-          last_name,
-          email,
-          grade_level_id,
-          school_id,
-          branch_id
-        )
-      `)
-      .eq('license_id', licenseId)
-      .order('assigned_date', { ascending: false });
+          student_id,
+          assigned_at,
+          assigned_by,
+          expires_at,
+          is_active,
+          students!inner (
+            id,
+            student_code,
+            school_id,
+            branch_id,
+            company_id,
+            users (
+              email,
+              raw_user_meta_data
+            ),
+            schools (
+              name
+            ),
+            branches (
+              name
+            )
+          )
+        `)
+        .eq('license_id', licenseId)
+        .eq('is_active', true);
 
-    if (error) throw error;
+      console.log('Query result:', {
+        success: !error,
+        recordCount: data?.length || 0,
+        error: error?.message
+      });
 
-    return (data || []).map((item: any) => ({
-      id: item.id,
-      student_id: item.student_id,
-      license_id: item.license_id,
-      entity_license_id: item.entity_license_id,
-      assigned_date: item.assigned_date,
-      expiration_date: item.expiration_date,
-      status: item.status,
-      student: item.students ? {
-        id: item.students.id,
-        first_name: item.students.first_name,
-        last_name: item.students.last_name,
-        email: item.students.email,
-        grade_level_id: item.students.grade_level_id,
-        school_id: item.students.school_id,
-        branch_id: item.students.branch_id
-      } : undefined
-    }));
-  },
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
 
-  async bulkAssignLicenses(
-    studentIds: string[],
+      if (!data || data.length === 0) {
+        console.warn('No student licenses found for license_id:', licenseId);
+        return [];
+      }
+
+      const mappedData = (data || []).map((assignment: any) => {
+        const student = assignment.students;
+        const user = student?.users;
+
+        return {
+          id: assignment.id,
+          student_id: assignment.student_id,
+          student_name: user?.raw_user_meta_data?.name ||
+                       user?.email?.split('@')[0] ||
+                       'Unknown Student',
+          student_code: student?.student_code || '',
+          student_email: user?.email || '',
+          school_name: student?.schools?.name || 'No School',
+          branch_name: student?.branches?.name,
+          assigned_at: assignment.assigned_at,
+          assigned_by: assignment.assigned_by,
+          expires_at: assignment.expires_at,
+          is_active: assignment.is_active,
+          status: assignment.is_active ? 'CONSUMED_ACTIVATED' : 'REVOKED',
+          activated_on: assignment.is_active ? assignment.assigned_at : undefined,
+          valid_from_snapshot: assignment.assigned_at,
+          valid_to_snapshot: assignment.expires_at
+        };
+      });
+
+      console.log('Mapped student licenses:', mappedData.length);
+      return mappedData;
+
+    } catch (error) {
+      console.error('Error fetching students for license:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available students for license assignment
+   */
+  static async getAvailableStudents(
+    companyId: string,
+    scopeFilters: { school_ids?: string[]; branch_ids?: string[] },
+    filters: LicenseAssignmentFilters = {}
+  ) {
+    try {
+      return await queryActiveStudents(companyId, {
+        school_ids: scopeFilters.school_ids,
+        branch_ids: scopeFilters.branch_ids,
+        grade_level: filters.grade_level,
+        search: filters.search
+      });
+    } catch (error) {
+      console.error('Error fetching available students:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Assign license to student
+   */
+  static async assignLicenseToStudent(
     licenseId: string,
-    entityLicenseId: string
-  ): Promise<{ successful: number; failed: number }> {
-    const results = { successful: 0, failed: 0 };
+    studentId: string,
+    assignedBy: string
+  ): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('assign_license_to_student', {
+        p_license_id: licenseId,
+        p_student_id: studentId,
+        p_assigned_by: assignedBy
+      });
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error('Error assigning license to student:', error);
+      return {
+        success: false,
+        message: 'Failed to assign license',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Revoke license from student
+   */
+  static async revokeLicenseFromStudent(
+    licenseId: string,
+    studentId: string
+  ): Promise<{ success: boolean; message: string; error?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('revoke_license_from_student', {
+        p_license_id: licenseId,
+        p_student_id: studentId
+      });
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error('Error revoking license from student:', error);
+      return {
+        success: false,
+        message: 'Failed to revoke license',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Bulk assign licenses to multiple students
+   */
+  static async bulkAssignLicenses(
+    licenseId: string,
+    studentIds: string[],
+    assignedBy: string
+  ): Promise<{
+    successful: number;
+    failed: number;
+    errors: string[];
+    assignmentIds: string[];
+  }> {
+    const results = {
+      successful: 0,
+      failed: 0,
+      errors: [] as string[],
+      assignmentIds: [] as string[]
+    };
 
     for (const studentId of studentIds) {
       try {
-        const { error } = await supabase
-          .from('student_licenses')
-          .insert([{
-            student_id: studentId,
-            license_id: licenseId,
-            entity_license_id: entityLicenseId,
-            assigned_date: new Date().toISOString(),
-            status: 'active'
-          }]);
-
-        if (error) {
-          results.failed++;
-        } else {
+        const result = await this.assignLicenseToStudent(licenseId, studentId, assignedBy);
+        if (result.success) {
           results.successful++;
+          if (result.assignment_id) {
+            results.assignmentIds.push(result.assignment_id);
+          }
+
+          // Send notification email asynchronously (don't wait for it)
+          if (result.assignment_id) {
+            this.sendLicenseNotification(result.assignment_id, 'assignment').catch(err => {
+              console.warn('Failed to send license notification:', err);
+            });
+          }
+        } else {
+          results.failed++;
+          results.errors.push(`Student ${studentId}: ${result.error || result.message}`);
         }
-      } catch {
+      } catch (error) {
         results.failed++;
+        results.errors.push(`Student ${studentId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
 
     return results;
-  },
-
-  async revokeLicenseFromStudent(
-    studentLicenseId: string
-  ): Promise<void> {
-    const { error } = await supabase
-      .from('student_licenses')
-      .update({ status: 'revoked' })
-      .eq('id', studentLicenseId);
-
-    if (error) throw error;
-  },
-
-  async assignLicenseToEntity(
-    licenseId: string,
-    entityId: string,
-    entityType: string,
-    quantity: number
-  ): Promise<EntityLicense> {
-    const { data, error } = await supabase
-      .from('entity_licenses')
-      .insert([{
-        license_id: licenseId,
-        entity_id: entityId,
-        entity_type: entityType,
-        assigned_quantity: quantity,
-        used_quantity: 0,
-        status: 'active'
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async updateEntityLicense(
-    id: string,
-    updates: Partial<EntityLicense>
-  ): Promise<EntityLicense> {
-    const { data, error } = await supabase
-      .from('entity_licenses')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
-
-  async deleteEntityLicense(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('entity_licenses')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
   }
-};
 
-export async function getEntityLicenses(entityId: string): Promise<EntityLicense[]> {
-  return EntityLicenseService.getEntityLicenses(entityId);
+  /**
+   * Activate a student license
+   */
+  static async activateStudentLicense(
+    licenseId: string,
+    studentId?: string
+  ): Promise<{ success: boolean; message: string; error?: string; activated_on?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('activate_student_license', {
+        p_license_id: licenseId,
+        p_student_id: studentId || null
+      });
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error('Error activating student license:', error);
+      return {
+        success: false,
+        message: 'Failed to activate license',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Send license notification email
+   */
+  static async sendLicenseNotification(
+    studentLicenseId: string,
+    notificationType: 'assignment' | 'expiry_warning' | 'activation_reminder'
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/send-license-notification`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            student_license_id: studentLicenseId,
+            notification_type: notificationType,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send notification');
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message
+      };
+    } catch (error) {
+      console.error('Error sending license notification:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Get license usage statistics for admin dashboard
+   */
+  static async getLicenseUsageStats(
+    companyId: string,
+    scopeFilters: { school_ids?: string[]; branch_ids?: string[] }
+  ) {
+    try {
+      const licenses = await this.getLicensesForScope(companyId, scopeFilters);
+      
+      const stats = {
+        total_licenses: licenses.length,
+        active_licenses: licenses.filter(l => !l.is_expired).length,
+        expired_licenses: licenses.filter(l => l.is_expired).length,
+        expiring_soon: licenses.filter(l => !l.is_expired && l.days_until_expiry <= 30).length,
+        total_capacity: licenses.reduce((sum, l) => sum + l.total_quantity, 0),
+        total_used: licenses.reduce((sum, l) => sum + l.used_quantity, 0),
+        total_available: licenses.reduce((sum, l) => sum + l.available_quantity, 0),
+        utilization_percentage: 0
+      };
+
+      if (stats.total_capacity > 0) {
+        stats.utilization_percentage = Math.round((stats.total_used / stats.total_capacity) * 100);
+      }
+
+      return stats;
+    } catch (error) {
+      console.error('Error calculating license usage stats:', error);
+      return {
+        total_licenses: 0,
+        active_licenses: 0,
+        expired_licenses: 0,
+        expiring_soon: 0,
+        total_capacity: 0,
+        total_used: 0,
+        total_available: 0,
+        utilization_percentage: 0
+      };
+    }
+  }
 }
 
-export async function assignLicenseToEntity(
-  licenseId: string,
-  entityId: string,
-  entityType: string,
-  quantity: number
-): Promise<EntityLicense> {
-  return EntityLicenseService.assignLicenseToEntity(licenseId, entityId, entityType, quantity);
-}
-
-export async function updateEntityLicense(
-  id: string,
-  updates: Partial<EntityLicense>
-): Promise<EntityLicense> {
-  return EntityLicenseService.updateEntityLicense(id, updates);
-}
-
-export async function deleteEntityLicense(id: string): Promise<void> {
-  return EntityLicenseService.deleteEntityLicense(id);
-}
+export default EntityLicenseService;

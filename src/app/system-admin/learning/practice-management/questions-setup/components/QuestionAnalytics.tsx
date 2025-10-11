@@ -128,7 +128,7 @@ export function QuestionAnalytics({ papers }: QuestionAnalyticsProps) {
                 {stats.totalPapers}
               </p>
             </div>
-            <FileText className="h-8 w-8 text-[#99C93B]" />
+            <FileText className="h-8 w-8 text-blue-500" />
           </div>
         </div>
         
@@ -145,7 +145,7 @@ export function QuestionAnalytics({ papers }: QuestionAnalyticsProps) {
                 {stats.totalMarks} total marks
               </p>
             </div>
-            <HelpCircle className="h-8 w-8 text-[#5D7E23]" />
+            <HelpCircle className="h-8 w-8 text-purple-500" />
           </div>
         </div>
         
@@ -246,7 +246,7 @@ export function QuestionAnalytics({ papers }: QuestionAnalyticsProps) {
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
-                      className="bg-[#99C93B] h-2 rounded-full transition-all duration-300"
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>

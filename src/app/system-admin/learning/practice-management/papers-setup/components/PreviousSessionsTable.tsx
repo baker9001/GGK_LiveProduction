@@ -219,7 +219,7 @@ export function PreviousSessionsTable({ onSelectSession, currentSessionId }: Pre
         
         return (
           <div className="flex items-center gap-2">
-            <FileJson className="h-4 w-4 text-[#99C93B]" />
+            <FileJson className="h-4 w-4 text-blue-500" />
             <span className="text-sm text-gray-900 dark:text-gray-100 truncate max-w-[200px]" title={getFileName(row)}>
               {getFileName(row)}
             </span>

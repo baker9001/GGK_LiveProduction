@@ -205,7 +205,7 @@ export function HierarchyVisualization({
               </span>
             )}
             {selectedGrades.length > 0 && (
-              <span className="px-2 py-1 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
+              <span className="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                 {selectedGrades.length} grades
               </span>
             )}

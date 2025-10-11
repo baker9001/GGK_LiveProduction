@@ -65,7 +65,7 @@ export function QuickActionToolbar({
       icon: BarChart3,
       label: 'Analytics',
       onClick: onShowAnalytics,
-      color: 'text-[#99C93B] hover:text-[#5D7E23] dark:text-[#AAD775] dark:hover:text-[#AAD775]'
+      color: 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300'
     },
     {
       icon: Upload,
@@ -77,7 +77,7 @@ export function QuickActionToolbar({
       icon: Download,
       label: 'Export',
       onClick: onBulkExport,
-      color: 'text-[#5D7E23] hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
+      color: 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
     },
     {
       icon: Wand2,
@@ -94,7 +94,7 @@ export function QuickActionToolbar({
     <div className="fixed bottom-6 right-6 z-40">
       {/* Selected Actions */}
       {selectedCount > 0 && onConfirmSelected && (
-        <div className="mb-3 bg-[#99C93B] text-white rounded-lg shadow-lg p-3 flex items-center space-x-3">
+        <div className="mb-3 bg-blue-600 text-white rounded-lg shadow-lg p-3 flex items-center space-x-3">
           <span className="text-sm font-medium">{selectedCount} selected</span>
           <Button
             size="sm"
@@ -122,7 +122,7 @@ export function QuickActionToolbar({
             {isExpanded ? (
               <X className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             ) : (
-              <Zap className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
+              <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             )}
           </button>
           

@@ -209,8 +209,8 @@ const GreenSearchableMultiSelect: React.FC<any> = ({ ...props }) => {
         .green-select-wrapper .multi-select-selected-item,
         .green-select-wrapper [data-selected="true"],
         .green-select-wrapper .selected-item,
-        .green-select-wrapper .bg-[#E8F5DC],
-        .green-select-wrapper .bg-[#E8F5DC] {
+        .green-select-wrapper .bg-blue-100,
+        .green-select-wrapper .bg-blue-50 {
           background-color: #8CC63F20 !important;
           border-color: #8CC63F !important;
           color: #7AB532 !important;
@@ -226,31 +226,31 @@ const GreenSearchableMultiSelect: React.FC<any> = ({ ...props }) => {
         /* Input field focus state */
         .green-select-wrapper input:focus,
         .green-select-wrapper input:focus-visible,
-        .green-select-wrapper .focus\\:ring-[#99C93B]:focus,
-        .green-select-wrapper .focus\\:border-[#99C93B]:focus {
+        .green-select-wrapper .focus\\:ring-blue-500:focus,
+        .green-select-wrapper .focus\\:border-blue-500:focus {
           border-color: #8CC63F !important;
           outline-color: #8CC63F !important;
           box-shadow: 0 0 0 3px rgba(140, 198, 63, 0.1) !important;
         }
         
         /* Dropdown container border when focused */
-        .green-select-wrapper .border-[#99C93B],
-        .green-select-wrapper .border-[#99C93B],
-        .green-select-wrapper .ring-[#99C93B] {
+        .green-select-wrapper .border-blue-500,
+        .green-select-wrapper .border-blue-300,
+        .green-select-wrapper .ring-blue-500 {
           border-color: #8CC63F !important;
         }
         
         /* Option hover state */
         .green-select-wrapper .multi-select-option:hover,
-        .green-select-wrapper .hover\\:bg-[#E8F5DC]:hover,
+        .green-select-wrapper .hover\\:bg-blue-50:hover,
         .green-select-wrapper .hover\\:bg-gray-100:hover {
           background-color: #8CC63F10 !important;
         }
         
         /* Selected option in dropdown */
         .green-select-wrapper .multi-select-option.selected,
-        .green-select-wrapper .bg-[#99C93B],
-        .green-select-wrapper .bg-[#99C93B],
+        .green-select-wrapper .bg-blue-500,
+        .green-select-wrapper .bg-blue-600,
         .green-select-wrapper [aria-selected="true"] {
           background-color: #8CC63F25 !important;
           color: #7AB532 !important;
@@ -267,9 +267,9 @@ const GreenSearchableMultiSelect: React.FC<any> = ({ ...props }) => {
         }
         
         /* Override any blue text colors */
-        .green-select-wrapper .text-[#99C93B],
-        .green-select-wrapper .text-[#99C93B],
-        .green-select-wrapper .text-[#5D7E23] {
+        .green-select-wrapper .text-blue-500,
+        .green-select-wrapper .text-blue-600,
+        .green-select-wrapper .text-blue-700 {
           color: #7AB532 !important;
         }
         
@@ -2119,8 +2119,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
             </div>
             <div className="text-sm text-gray-700 dark:text-gray-300">Inactive</div>
           </div>
-          <div className="text-center p-4 bg-[#E8F5DC] dark:bg-purple-900/20 rounded-lg">
-            <div className="text-2xl font-bold text-[#5D7E23] dark:text-purple-400">
+          <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
               {summaryStats.withSpecialization}
             </div>
             <div className="text-sm text-purple-700 dark:text-purple-300">Specialized</div>
@@ -2357,7 +2357,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         {teacher.subjects && teacher.subjects.length > 0 && (
                           <div className="flex items-center gap-1">
                             {teacher.subjects.slice(0, 2).map((subj, idx) => (
-                              <span key={subj.id} className="px-2 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">
+                              <span key={subj.id} className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded">
                                 {subj.name}
                               </span>
                             ))}
@@ -2621,9 +2621,9 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
               {/* Step 2: Academics */}
               {currentAssignmentStep === 2 && (
                 <div className="space-y-6">
-                  <div className="p-4 bg-[#E8F5DC] dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg">
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg">
                     <div className="flex items-start gap-2">
-                      <BookOpenCheck className="h-5 w-5 text-[#5D7E23] dark:text-purple-400 mt-0.5" />
+                      <BookOpenCheck className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
                       <div>
                         <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200">
                           Academic Programs
@@ -2820,7 +2820,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                         {getSelectedBranchNames().length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-2">
                             {getSelectedBranchNames().map((name, idx) => (
-                              <span key={idx} className="px-3 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
+                              <span key={idx} className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                                 {name}
                               </span>
                             ))}
@@ -2832,7 +2832,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                     {/* Academic Programs */}
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                       <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
-                        <BookOpenCheck className="w-4 h-4 mr-2 text-[#5D7E23]" />
+                        <BookOpenCheck className="w-4 h-4 mr-2 text-purple-600" />
                         Academic Programs
                       </h5>
                       <div className="space-y-2">
@@ -2855,7 +2855,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                           {getSelectedSubjectNames().length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {getSelectedSubjectNames().map((name, idx) => (
-                                <span key={idx} className="px-3 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
+                                <span key={idx} className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">
                                   {name}
                                 </span>
                               ))}
@@ -3063,7 +3063,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 {/* Professional Information */}
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                   <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                    <Briefcase className="w-5 h-5 mr-2 text-[#5D7E23]" />
+                    <Briefcase className="w-5 h-5 mr-2 text-purple-600" />
                     Professional Information
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -3082,7 +3082,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       <div className="mt-1 flex flex-wrap gap-2">
                         {viewingTeacher.specialization && viewingTeacher.specialization.length > 0 ? (
                           viewingTeacher.specialization.map((spec, idx) => (
-                            <span key={idx} className="px-3 py-1 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm rounded-full">
+                            <span key={idx} className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm rounded-full">
                               {spec}
                             </span>
                           ))
@@ -3126,7 +3126,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       {viewingTeacher.branches && viewingTeacher.branches.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {viewingTeacher.branches.map((branch) => (
-                            <span key={branch.id} className="px-3 py-1 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] text-sm rounded-full">
+                            <span key={branch.id} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm rounded-full">
                               {branch.name}
                             </span>
                           ))}
@@ -3141,7 +3141,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 {/* Academic Assignments */}
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                   <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                    <BookOpen className="w-5 h-5 mr-2 text-[#99C93B]" />
+                    <BookOpen className="w-5 h-5 mr-2 text-blue-600" />
                     Academic Assignments
                   </h3>
                   <div className="space-y-4">
@@ -3164,7 +3164,7 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                       {viewingTeacher.subjects && viewingTeacher.subjects.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {viewingTeacher.subjects.map((subj) => (
-                            <span key={subj.id} className="px-3 py-1 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] text-sm rounded-full">
+                            <span key={subj.id} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm rounded-full">
                               {subj.name} ({subj.code})
                             </span>
                           ))}
@@ -3521,8 +3521,8 @@ export default function TeachersTab({ companyId, refreshData }: TeachersTabProps
                 </>
               )}
 
-              <div className="p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg">
-                <p className="text-sm text-[#5D7E23] dark:text-[#AAD775]">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   💡 You can assign basic relationships here, or use the detailed Assignment Wizard after saving for more advanced configuration.
                 </p>
               </div>

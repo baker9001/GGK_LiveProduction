@@ -45,7 +45,7 @@ export default function LearningManagementPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Library className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775] mr-3" />
+            <Library className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Resource Library
             </h3>
@@ -90,7 +90,7 @@ export default function LearningManagementPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Target className="h-6 w-6 text-[#99C93B] dark:text-cyan-400 mr-3" />
+            <Target className="h-6 w-6 text-cyan-600 dark:text-cyan-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Learning Objectives
             </h3>
@@ -105,7 +105,7 @@ export default function LearningManagementPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <BookOpen className="h-6 w-6 text-[#99C93B] dark:text-teal-400 mr-3" />
+            <BookOpen className="h-6 w-6 text-teal-600 dark:text-teal-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Curriculum Mapping
             </h3>

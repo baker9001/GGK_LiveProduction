@@ -464,7 +464,7 @@ export default function TeacherMaterialsPage() {
       accessorKey: 'type',
       enableSorting: true,
       cell: (row: Material) => (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] capitalize">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 capitalize">
           {row.type}
         </span>
       )
@@ -500,7 +500,7 @@ export default function TeacherMaterialsPage() {
     <div className="flex items-center justify-end gap-2">
       <button
         onClick={() => setPreviewMaterial(row)}
-        className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded transition-colors"
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
         title={row.type === 'video' ? 'Stream Video' : 'Preview'}
       >
         <Eye className="h-4 w-4" />
@@ -537,7 +537,7 @@ export default function TeacherMaterialsPage() {
           });
           setIsFormOpen(true);
         }}
-        className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded transition-colors"
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
         title="Edit"
       >
         <Edit2 className="h-4 w-4" />

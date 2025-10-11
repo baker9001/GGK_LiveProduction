@@ -50,20 +50,20 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   return (
     <nav
       className={cn(
-        'px-4 py-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 border-t border-[#99C93B]/30 dark:border-[#99C93B]/50 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between',
+        'px-4 py-3 bg-emerald-50 dark:bg-emerald-900/30 border-t border-emerald-200 dark:border-emerald-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between',
         className,
       )}
       aria-label={ariaLabel}
     >
       <div className="flex items-center gap-3">
-        <label htmlFor="rows-per-page" className="text-sm font-medium text-[#5D7E23] dark:text-[#E8F5DC]">
+        <label htmlFor="rows-per-page" className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
           Rows per page
         </label>
         <div className="relative">
           <select
             id="rows-per-page"
             name="rows-per-page"
-            className="appearance-none block w-full rounded-md border border-[#99C93B] bg-white px-3 py-1.5 pr-10 text-sm font-medium text-[#5D7E23] shadow-sm transition focus:border-[#99C93B] focus:outline-none focus:ring-2 focus:ring-[#99C93B]/50 dark:border-[#5D7E23] dark:bg-[#283413] dark:text-[#E8F5DC]"
+            className="appearance-none block w-full rounded-md border border-emerald-300 bg-white px-3 py-1.5 pr-10 text-sm font-medium text-emerald-900 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-100"
             value={rowsPerPage}
             aria-label="Rows per page"
             onChange={(event) => onRowsPerPageChange?.(Number(event.target.value))}
@@ -74,17 +74,17 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
               </option>
             ))}
           </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-[#99C93B]">
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-emerald-600">
             <ChevronDownIcon />
           </div>
         </div>
-        <span className="hidden text-sm font-medium text-[#5D7E23] dark:text-[#E8F5DC] sm:inline">
+        <span className="hidden text-sm font-medium text-emerald-900 dark:text-emerald-100 sm:inline">
           Showing <span>{displayStart}</span> - <span>{displayEnd}</span> of <span>{totalCount}</span>
         </span>
       </div>
 
       <div className="flex items-center justify-between gap-3 sm:justify-end">
-        <span className="text-sm font-medium text-[#5D7E23] dark:text-[#E8F5DC] sm:hidden">
+        <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100 sm:hidden">
           Page {safePage} of {Math.max(resolvedTotalPages, 1)}
         </span>
         <div className="flex items-center gap-2">
@@ -99,12 +99,12 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
               }
             }}
             disabled={isFirstPage}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#99C93B] text-white shadow-sm transition hover:bg-[#7AB635] focus:outline-none focus:ring-2 focus:ring-[#99C93B]/50 disabled:cursor-not-allowed disabled:bg-[#D4EBBA] disabled:text-[#5D7E23]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-300 disabled:text-emerald-100"
             aria-label="Go to previous page"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="hidden text-sm font-semibold text-[#5D7E23] dark:text-[#E8F5DC] sm:inline">
+          <span className="hidden text-sm font-semibold text-emerald-900 dark:text-emerald-100 sm:inline">
             Page {safePage} of {Math.max(resolvedTotalPages, 1)}
           </span>
           <button
@@ -118,7 +118,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
               }
             }}
             disabled={isLastPage}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#99C93B] text-white shadow-sm transition hover:bg-[#7AB635] focus:outline-none focus:ring-2 focus:ring-[#99C93B]/50 disabled:cursor-not-allowed disabled:bg-[#D4EBBA] disabled:text-[#5D7E23]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-300 disabled:text-emerald-100"
             aria-label="Go to next page"
           >
             <ChevronRight className="h-4 w-4" />

@@ -142,7 +142,7 @@ function PasswordWithConfirmation() {
             onChange={passwordRegister.onChange}
             onBlur={passwordRegister.onBlur}
             className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm text-sm transition-colors duration-200
-              focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
               bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
               ${passwordHasError ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
             placeholder="Enter your password"
@@ -198,7 +198,7 @@ function PasswordWithConfirmation() {
             onChange={confirmPasswordRegister.onChange}
             onBlur={confirmPasswordRegister.onBlur}
             className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm text-sm transition-colors duration-200
-              focus:outline-none focus:ring-2 focus:ring-[#99C93B] focus:border-[#99C93B]
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
               bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
               ${confirmPasswordHasError ? "border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500" : "border-gray-300 dark:border-gray-600"}`}
             placeholder="Confirm your password"
@@ -340,13 +340,13 @@ function MultiStepFormExample() {
           {Array.from({ length: totalSteps }).map((_, index) => (
             <React.Fragment key={index}>
               {index > 0 && (
-                <div className={`flex-1 h-1 ${index < step ? 'bg-[#99C93B]' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+                <div className={`flex-1 h-1 ${index < step ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
               )}
               <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium ${
                 index + 1 === step 
-                  ? 'bg-[#99C93B] text-white' 
+                  ? 'bg-blue-500 text-white' 
                   : index + 1 < step 
-                    ? 'bg-[#99C93B] text-white' 
+                    ? 'bg-blue-500 text-white' 
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
               }`}>
                 {index + 1 < step ? (

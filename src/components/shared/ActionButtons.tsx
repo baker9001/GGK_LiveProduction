@@ -32,7 +32,7 @@ export function ActionButtons({
         <button
           onClick={onView}
           disabled={disabled}
-          className={`${buttonClasses} text-[#B2CACE] hover:bg-[#B2CACE]/10 dark:text-[#B2CACE] dark:hover:bg-[#B2CACE]/20 disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`${buttonClasses} text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed`}
           title="View details"
           aria-label="View details"
         >
@@ -44,7 +44,7 @@ export function ActionButtons({
         <button
           onClick={onEdit}
           disabled={disabled}
-          className={`${buttonClasses} text-[#99C93B] hover:bg-[#E8F5DC] dark:text-[#99C93B] dark:hover:bg-[#5D7E23]/20 disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`${buttonClasses} text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed`}
           title="Edit"
           aria-label="Edit"
         >

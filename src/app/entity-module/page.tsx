@@ -31,14 +31,14 @@ function DashboardPage() {
       </div>
 
       {/* Entity Management System Card */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg p-6 mb-8">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
         <div className="flex items-center">
-          <Building2 className="h-8 w-8 text-[#99C93B] dark:text-[#AAD775] mr-4" />
+          <Building2 className="h-8 w-8 text-blue-600 dark:text-blue-400 mr-4" />
           <div>
             <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
               Entity Management System
             </h2>
-            <p className="text-[#5D7E23] dark:text-[#AAD775]">
+            <p className="text-blue-700 dark:text-blue-300">
               This module provides comprehensive entity management capabilities including organizational structure, entity relationships, and administrative controls.
             </p>
           </div>
@@ -50,7 +50,7 @@ function DashboardPage() {
         {/* Organisation Management */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Building2 className="h-6 w-6 text-[#5D7E23] dark:text-indigo-400 mr-3" />
+            <Building2 className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Organisation Management
             </h3>
@@ -98,7 +98,7 @@ function DashboardPage() {
         {/* Profile Management */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <User className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775] mr-3" />
+            <User className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Profile Management
             </h3>
@@ -130,7 +130,7 @@ function DashboardPage() {
         {/* Configuration Management */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Settings className="h-6 w-6 text-[#5D7E23] dark:text-purple-400 mr-3" />
+            <Settings className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Configuration Management
             </h3>

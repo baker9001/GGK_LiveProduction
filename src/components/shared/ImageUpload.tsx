@@ -310,7 +310,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
               <div className="text-center">
                 <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-1" />
                 <p className="text-xs text-gray-500">Failed to load</p>
-                <p className="text-xs text-[#5D7E23] dark:text-purple-400 mt-1">Click to upload</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Click to upload</p>
               </div>
             </div>
           ) : (
@@ -366,7 +366,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
           variant="outline"
           className={cn(
             "w-24 h-24 flex flex-col items-center justify-center gap-2 border-2 border-dashed transition-all",
-            "hover:border-purple-400 hover:bg-[#E8F5DC] dark:hover:bg-purple-900/10",
+            "hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10",
             uploading && "opacity-50 cursor-not-allowed",
             !hasAuth && "opacity-50"
           )}
@@ -382,7 +382,7 @@ export function ImageUpload({ id, bucket, value, publicUrl, onChange, className 
         >
           {uploading ? (
             <>
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#99C93B]"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Uploading...
               </span>

@@ -588,11 +588,11 @@ export default function SystemAdminProfilePage() {
 
               {/* Quick Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:min-w-0 lg:flex-shrink-0">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 text-center border border-[#99C93B]/30 dark:border-blue-700">
-                  <div className="text-2xl font-bold text-[#99C93B] dark:text-[#AAD775]">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 text-center border border-blue-200 dark:border-blue-700">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                     {profileStats?.totalLogins || 0}
                   </div>
-                  <div className="text-xs text-[#5D7E23] dark:text-[#AAD775] font-medium">Total Logins</div>
+                  <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">Total Logins</div>
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl p-4 text-center border border-green-200 dark:border-green-700">
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -601,7 +601,7 @@ export default function SystemAdminProfilePage() {
                   <div className="text-xs text-green-700 dark:text-green-300 font-medium">Days Active</div>
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4 text-center border border-purple-200 dark:border-purple-700">
-                  <div className="text-2xl font-bold text-[#5D7E23] dark:text-purple-400">
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                     {profileStats?.permissionsCount || 0}
                   </div>
                   <div className="text-xs text-purple-700 dark:text-purple-300 font-medium">Permissions</div>
@@ -928,7 +928,7 @@ export default function SystemAdminProfilePage() {
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#E8F5DC]0 rounded-xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center">
                         <Shield className="h-5 w-5 text-white" />
                       </div>
                       <div>
@@ -945,7 +945,7 @@ export default function SystemAdminProfilePage() {
                   <div className="p-6 space-y-4">
                     <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl border border-purple-200 dark:border-purple-700">
                       <div className="flex items-center gap-3">
-                        <Crown className="h-6 w-6 text-[#5D7E23] dark:text-purple-400" />
+                        <Crown className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                         <div>
                           <div className="font-semibold text-gray-900 dark:text-white">
                             {userProfile.role}
@@ -966,7 +966,7 @@ export default function SystemAdminProfilePage() {
                         <div className="text-xs text-gray-600 dark:text-gray-400">Permissions</div>
                       </div>
                       <div className="text-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                        <div className="text-2xl font-bold text-[#99C93B] dark:text-[#AAD775]">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                           All
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">Access Level</div>
@@ -995,15 +995,15 @@ export default function SystemAdminProfilePage() {
 
                   <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 border border-[#99C93B]/30 dark:border-blue-700">
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
                         <div className="flex items-center justify-between mb-2">
-                          <Monitor className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775]" />
-                          <span className="text-xs font-medium text-[#5D7E23] dark:text-[#AAD775] bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded-full">
+                          <Monitor className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                          <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded-full">
                             ACTIVE
                           </span>
                         </div>
-                        <div className="text-2xl font-bold text-[#99C93B] dark:text-[#AAD775]">98.9%</div>
-                        <div className="text-sm text-[#5D7E23] dark:text-[#AAD775]">System Uptime</div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">98.9%</div>
+                        <div className="text-sm text-blue-700 dark:text-blue-300">System Uptime</div>
                       </div>
 
                       <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl p-4 border border-green-200 dark:border-green-700">
@@ -1019,12 +1019,12 @@ export default function SystemAdminProfilePage() {
 
                       <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl p-4 border border-purple-200 dark:border-purple-700">
                         <div className="flex items-center justify-between mb-2">
-                          <UserIcon className="h-6 w-6 text-[#5D7E23] dark:text-purple-400" />
+                          <UserIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                           <span className="text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-200 dark:bg-purple-800 px-2 py-1 rounded-full">
                             ADMIN
                           </span>
                         </div>
-                        <div className="text-2xl font-bold text-[#5D7E23] dark:text-purple-400">
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                           {profileStats?.permissionsCount || 15}
                         </div>
                         <div className="text-sm text-purple-700 dark:text-purple-300">Permissions</div>
@@ -1059,7 +1059,7 @@ export default function SystemAdminProfilePage() {
 
                   <Button
                     variant="outline"
-                    className="h-24 flex-col gap-2 hover:bg-[#99C93B] hover:text-white hover:border-[#99C93B] transition-all duration-300 transform hover:scale-105"
+                    className="h-24 flex-col gap-2 hover:bg-blue-500 hover:text-white hover:border-blue-500 transition-all duration-300 transform hover:scale-105"
                     onClick={() => setActiveTab('activity')}
                   >
                     <Activity className="h-6 w-6" />
@@ -1068,7 +1068,7 @@ export default function SystemAdminProfilePage() {
 
                   <Button
                     variant="outline"
-                    className="h-24 flex-col gap-2 hover:bg-[#E8F5DC]0 hover:text-white hover:border-[#99C93B] transition-all duration-300 transform hover:scale-105"
+                    className="h-24 flex-col gap-2 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all duration-300 transform hover:scale-105"
                     onClick={() => setActiveTab('preferences')}
                   >
                     <Settings className="h-6 w-6" />
@@ -1139,20 +1139,20 @@ export default function SystemAdminProfilePage() {
                       </div>
 
                       <div className="space-y-4">
-                        <div className="p-4 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-xl border border-[#99C93B]/30 dark:border-blue-700">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
                           <div className="flex items-center gap-2 mb-3">
-                            <Shield className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775]" />
+                            <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                             <h4 className="font-semibold text-blue-900 dark:text-blue-100">
                               Security Score
                             </h4>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex-1 bg-blue-200 dark:bg-blue-800 rounded-full h-2">
-                              <div className="bg-[#99C93B] dark:bg-blue-400 h-2 rounded-full" style={{ width: '85%' }}></div>
+                              <div className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full" style={{ width: '85%' }}></div>
                             </div>
-                            <span className="text-sm font-bold text-[#99C93B] dark:text-[#AAD775]">85%</span>
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">85%</span>
                           </div>
-                          <p className="text-xs text-[#5D7E23] dark:text-[#AAD775] mt-2">
+                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
                             Strong security posture. Consider enabling 2FA for maximum protection.
                           </p>
                         </div>
@@ -1214,8 +1214,8 @@ export default function SystemAdminProfilePage() {
 
                   <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-[#99C93B]/30 dark:border-blue-700">
-                        <Clock className="h-8 w-8 text-[#99C93B] dark:text-[#AAD775] mx-auto mb-2" />
+                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700">
+                        <Clock className="h-8 w-8 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
                         <div className="text-lg font-bold text-gray-900 dark:text-white">
                           {lastLoginFormatted}
                         </div>
@@ -1231,7 +1231,7 @@ export default function SystemAdminProfilePage() {
                       </div>
 
                       <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl border border-purple-200 dark:border-purple-700">
-                        <Globe className="h-8 w-8 text-[#5D7E23] dark:text-purple-400 mx-auto mb-2" />
+                        <Globe className="h-8 w-8 text-purple-600 dark:text-purple-400 mx-auto mb-2" />
                         <div className="text-lg font-bold text-gray-900 dark:text-white">
                           {profileStats?.activeSessionsCount || 1}
                         </div>
@@ -1281,7 +1281,7 @@ export default function SystemAdminProfilePage() {
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#E8F5DC]0 rounded-xl flex items-center justify-center">
+                      <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
                         <Settings className="h-5 w-5 text-white" />
                       </div>
                       <div>

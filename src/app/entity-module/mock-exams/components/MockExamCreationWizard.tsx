@@ -500,9 +500,9 @@ export function MockExamCreationWizard({
           {/* Step 0: Basic Info */}
           {currentStep === 0 && (
             <div className="space-y-6">
-              <div className="p-4 rounded-lg bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800">
+              <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                 <div className="flex items-start gap-3">
-                  <Info className="w-5 h-5 text-[#99C93B] dark:text-[#AAD775] flex-shrink-0 mt-0.5" />
+                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                   <div className="text-sm text-blue-900 dark:text-blue-100">
                     <p className="font-medium mb-1">Quick Start Tip</p>
                     <p>Choose a descriptive title that includes the year group, subject, and paper number for easy identification.</p>
@@ -778,9 +778,9 @@ export function MockExamCreationWizard({
           {/* Step 3: Teaching Team */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <div className="p-4 rounded-lg bg-[#E8F5DC] dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+              <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
                 <div className="flex items-start gap-3">
-                  <Users className="w-5 h-5 text-[#5D7E23] dark:text-purple-400 flex-shrink-0 mt-0.5" />
+                  <Users className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
                   <div className="text-sm text-purple-900 dark:text-purple-100">
                     <p className="font-medium mb-1">Teaching Team Selection</p>
                     <p>Assign lead teachers who will coordinate the mock exam. Additional invigilators can be added later.</p>
@@ -912,7 +912,7 @@ export function MockExamCreationWizard({
                             {getSelectedBranchNames.map((name, idx) => (
                               <span
                                 key={idx}
-                                className="inline-block px-2 py-1 rounded-md bg-[#E8F5DC] dark:bg-[#5D7E23]/20 text-[#5D7E23] dark:text-[#AAD775] text-xs border border-[#99C93B]/30 dark:border-blue-800"
+                                className="inline-block px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs border border-blue-200 dark:border-blue-800"
                               >
                                 {name}
                               </span>
@@ -929,7 +929,7 @@ export function MockExamCreationWizard({
                             {getSelectedYearGroupNames.map((name, idx) => (
                               <span
                                 key={idx}
-                                className="inline-block px-2 py-1 rounded-md bg-[#E8F5DC] dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs border border-purple-200 dark:border-purple-800"
+                                className="inline-block px-2 py-1 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs border border-purple-200 dark:border-purple-800"
                               >
                                 {name}
                               </span>

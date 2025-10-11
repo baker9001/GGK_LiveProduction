@@ -881,7 +881,7 @@ export default function BranchesTab() {
               id="company_id"
               value={formState.company_id}
               onChange={(e) => handleCompanyChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-700 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               disabled={!!editingBranch} // Disable company change when editing
             >
               <option value="">Select a company</option>
@@ -905,7 +905,7 @@ export default function BranchesTab() {
                 id="school_id"
                 value={formState.school_id}
                 onChange={(e) => handleSchoolChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-[#99C93B] dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 disabled={!!editingBranch} // Disable school change when editing
               >
                 <option value="">Select a school</option>
@@ -958,7 +958,7 @@ export default function BranchesTab() {
               )}
 
               {formState.company_id && !formState.school_id && schools.length > 0 && (
-                <div className="p-4 text-sm text-[#99C93B] dark:text-[#AAD775] bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-md">
+                <div className="p-4 text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-md">
                   <p className="font-medium mb-1">Step 2: Select School</p>
                   <p>Please select a school to continue with branch creation.</p>
                 </div>

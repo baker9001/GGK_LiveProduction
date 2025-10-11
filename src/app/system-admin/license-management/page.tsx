@@ -379,7 +379,7 @@ export default function LicenseManagementPage() {
         <div className="flex items-center">
           <button 
             onClick={() => toggleCompanyExpanded(row.id)}
-            className="mr-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[#99C93B]"
+            className="mr-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label={expandedCompanies[row.id] ? "Collapse" : "Expand"}
           >
             {expandedCompanies[row.id] ? 
@@ -388,7 +388,7 @@ export default function LicenseManagementPage() {
             }
           </button>
           <div className="flex items-center">
-            <Building className="h-5 w-5 text-[#99C93B] mr-2" />
+            <Building className="h-5 w-5 text-blue-500 mr-2" />
             <span className="font-medium">{row.company}</span>
           </div>
         </div>
@@ -400,7 +400,7 @@ export default function LicenseManagementPage() {
       accessorKey: 'licenseCount',
       enableSorting: true,
       cell: (row: CompanyLicenses) => (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
           {row.licenseCount}
         </span>
       )
@@ -503,7 +503,7 @@ export default function LicenseManagementPage() {
             setEditingLicense(row);
             setIsFormOpen(true);
           }}
-          className="text-[#99C93B] dark:text-[#AAD775] hover:text-[#5D7E23] dark:hover:text-[#AAD775] p-1 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 rounded-full transition-colors"
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
           title="Edit"
         >
           <Edit2 className="h-4 w-4" />
@@ -537,14 +537,14 @@ export default function LicenseManagementPage() {
                     setIsActionFormOpen(true);
                     setOpenActionMenu(null);
                   }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 hover:text-[#99C93B] dark:hover:text-[#AAD775] rounded-md flex items-center group/item transition-colors duration-200"
+                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 rounded-md flex items-center group/item transition-colors duration-200"
                 >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#99C93B] dark:text-[#AAD775] mr-3 group-hover/item:bg-[#E8F5DC] dark:group-hover/item:bg-blue-900/50">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mr-3 group-hover/item:bg-blue-100 dark:group-hover/item:bg-blue-900/50">
                     <ExternalLink className="h-4 w-4" />
                   </div>
                   <div>
                     <div className="font-medium">Expand License</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-[#99C93B] dark:group-hover/item:text-[#AAD775]">Add more licenses to this allocation</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-blue-500 dark:group-hover/item:text-blue-400">Add more licenses to this allocation</div>
                   </div>
                 </button>
                 
@@ -555,14 +555,14 @@ export default function LicenseManagementPage() {
                     setIsActionFormOpen(true);
                     setOpenActionMenu(null);
                   }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 hover:text-[#5D7E23] dark:hover:text-[#AAD775] rounded-md flex items-center group/item transition-colors duration-200"
+                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 dark:hover:text-purple-400 rounded-md flex items-center group/item transition-colors duration-200"
                 >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775] mr-3 group-hover/item:bg-[#E8F5DC] dark:group-hover/item:bg-[#5D7E23]/50">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 mr-3 group-hover/item:bg-purple-100 dark:group-hover/item:bg-purple-900/50">
                     <Calendar className="h-4 w-4" />
                   </div>
                   <div>
                     <div className="font-medium">Extend Validity</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-[#5D7E23] dark:group-hover/item:text-[#AAD775]">Extend the license expiration date</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-purple-500 dark:group-hover/item:text-purple-400">Extend the license expiration date</div>
                   </div>
                 </button>
                 
@@ -573,14 +573,14 @@ export default function LicenseManagementPage() {
                     setIsActionFormOpen(true);
                     setOpenActionMenu(null);
                   }}
-                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-[#E8F5DC] dark:hover:bg-[#5D7E23]/20 hover:text-[#99C93B] dark:hover:text-[#AAD775] rounded-md flex items-center group/item transition-colors duration-200"
+                  className="w-full text-left px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 dark:hover:text-green-400 rounded-md flex items-center group/item transition-colors duration-200"
                 >
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#99C93B] dark:text-[#AAD775] mr-3 group-hover/item:bg-[#E8F5DC] dark:group-hover/item:bg-[#5D7E23]/50">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 mr-3 group-hover/item:bg-green-100 dark:group-hover/item:bg-green-900/50">
                     <RefreshCw className="h-4 w-4" />
                   </div>
                   <div>
                     <div className="font-medium">Renew License</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-[#99C93B] dark:group-hover/item:text-[#AAD775]">Create a new license period</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 group-hover/item:text-green-500 dark:group-hover/item:text-green-400">Create a new license period</div>
                   </div>
                 </button>
 
@@ -666,7 +666,7 @@ export default function LicenseManagementPage() {
                   e.stopPropagation();
                   toggleExpansion(company.id);
                 }}
-                className="mr-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[#99C93B]"
+                className="mr-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label={expanded ? "Collapse" : "Expand"}
               >
                 {expanded ? 
@@ -675,13 +675,13 @@ export default function LicenseManagementPage() {
                 }
               </button>
               <div className="flex items-center">
-                <Building className="h-5 w-5 text-[#99C93B] mr-2" />
+                <Building className="h-5 w-5 text-blue-500 mr-2" />
                 <span className="font-medium text-gray-900 dark:text-white">{company.company}</span>
               </div>
             </div>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#E8F5DC] text-[#5D7E23] dark:bg-[#5D7E23]/30 dark:text-[#AAD775]">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
               {company.licenseCount}
             </span>
           </td>
@@ -861,7 +861,7 @@ export default function LicenseManagementPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-gray-900/20 transition-colors duration-200">
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 text-[#99C93B] animate-spin" />
+            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           </div>
         ) : companiesTotalCount === 0 ? (
           <div className="text-center py-12">

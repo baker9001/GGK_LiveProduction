@@ -269,12 +269,12 @@ export function AdminListTable({
       entity_admin: {
         label: 'Entity Admin',
         icon: <Crown className="h-3 w-3" />,
-        color: 'text-purple-700 bg-[#E8F5DC] border-purple-300 dark:text-purple-400 dark:bg-purple-900/30 dark:border-purple-700'
+        color: 'text-purple-700 bg-purple-100 border-purple-300 dark:text-purple-400 dark:bg-purple-900/30 dark:border-purple-700'
       },
       sub_entity_admin: {
         label: 'Sub Admin',
         icon: <Shield className="h-3 w-3" />,
-        color: 'text-[#5D7E23] bg-[#E8F5DC] border-[#99C93B] dark:text-[#AAD775] dark:bg-[#5D7E23]/30 dark:border-blue-700'
+        color: 'text-blue-700 bg-blue-100 border-blue-300 dark:text-blue-400 dark:bg-blue-900/30 dark:border-blue-700'
       },
       school_admin: {
         label: 'School Admin',
@@ -639,7 +639,7 @@ export function AdminListTable({
                   : undefined
               }
               className={cn(
-                "text-[#99C93B] hover:text-[#5D7E23] dark:text-[#AAD775] dark:hover:text-[#AAD775]",
+                "text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
                 !canInteract && "opacity-50 cursor-not-allowed"
               )}
             >
@@ -701,14 +701,14 @@ export function AdminListTable({
     <div className={cn("space-y-6", className)}>
       {/* Scope Notice for School Admins */}
       {isSchoolAdmin && (
-        <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-700 rounded-lg p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
           <div className="flex items-start gap-2">
-            <Info className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775] mt-0.5 flex-shrink-0" />
+            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-[#5D7E23] dark:text-[#AAD775]">
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 Limited Admin View
               </p>
-              <p className="text-sm text-[#99C93B] dark:text-[#AAD775] mt-1">
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                 As a School Administrator, you can only view and manage Branch Administrators within your assigned schools.
               </p>
             </div>
@@ -748,7 +748,7 @@ export function AdminListTable({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Entity</p>
-                <p className="text-xl font-bold text-[#5D7E23] dark:text-purple-400">
+                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
                   {summaryStats.byLevel.entity_admin}
                 </p>
               </div>
@@ -762,11 +762,11 @@ export function AdminListTable({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Sub Admin</p>
-                <p className="text-xl font-bold text-[#99C93B] dark:text-[#AAD775]">
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
                   {summaryStats.byLevel.sub_entity_admin}
                 </p>
               </div>
-              <Shield className="h-6 w-6 text-[#AAD775]" />
+              <Shield className="h-6 w-6 text-blue-400" />
             </div>
           </div>
         )}

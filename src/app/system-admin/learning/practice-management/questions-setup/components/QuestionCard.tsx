@@ -551,7 +551,7 @@ export function QuestionCard({
       <div className="p-6">
         <div className="mb-8">
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
-            <FileText className="h-5 w-5 mr-2 text-[#99C93B] dark:text-[#AAD775]" />
+            <FileText className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
             Question Description:
           </h4>
           <div className="space-y-4">
@@ -676,7 +676,7 @@ export function QuestionCard({
               <HelpCircle className="h-5 w-5 mr-2" />
               Hint:
             </h4>
-            <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 p-6 rounded-xl border border-[#99C93B]/30 dark:border-blue-800 shadow-sm">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm">
               <EditableField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
@@ -696,7 +696,7 @@ export function QuestionCard({
               <BookOpen className="h-5 w-5 mr-2" />
               Explanation:
             </h4>
-            <div className="bg-[#E8F5DC] dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800 shadow-sm">
               <EditableField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
@@ -735,8 +735,8 @@ export function QuestionCard({
               )}>
                 <div className="bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-700 dark:to-gray-700/50 p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-600">
                   <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 rounded-lg">
-                      <span className="text-[#99C93B] dark:text-[#AAD775] font-bold text-sm">
+                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">
                         {subQuestion.part_label?.slice(-1) || 'A'}
                       </span>
                     </div>
@@ -753,7 +753,7 @@ export function QuestionCard({
                       {subQuestion.marks} mark{subQuestion.marks !== 1 ? 's' : ''}
                     </span>
                     {subQuestion.answer_format && (
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-[#E8F5DC] dark:bg-[#5D7E23]/30 px-2 py-1 rounded-md">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md">
                         {getAnswerFormatLabel(subQuestion.answer_format)}
                       </span>
                     )}
@@ -942,7 +942,7 @@ export function QuestionCard({
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
                         Hint
                       </label>
-                      <div className="bg-[#E8F5DC] dark:bg-[#5D7E23]/20 p-3 rounded-lg border border-[#99C93B]/30 dark:border-blue-800">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                         <EditableField
                           value={subQuestion.hint || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'hint', value)}
@@ -960,7 +960,7 @@ export function QuestionCard({
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded inline-block">
                         Explanation
                       </label>
-                      <div className="bg-[#E8F5DC] dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
                         <EditableField
                           value={subQuestion.explanation || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'explanation', value)}

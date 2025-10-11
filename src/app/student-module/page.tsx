@@ -86,7 +86,7 @@ function DashboardPage() {
     <div className="p-6 space-y-6">
       {/* School Identity Banner */}
       {studentInfo?.schoolName && (
-        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-[#99C93B]/20">
+        <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 rounded-3xl shadow-xl p-6 md:p-8 border border-blue-500/20">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             {/* School Logo */}
             {studentInfo.schoolLogoUrl ? (
@@ -101,7 +101,7 @@ function DashboardPage() {
                       target.style.display = 'none';
                       const parent = target.parentElement;
                       if (parent) {
-                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-[#99C93B]"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>';
+                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg></div>';
                       }
                     }}
                   />
@@ -110,7 +110,7 @@ function DashboardPage() {
             ) : (
               <div className="flex-shrink-0">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white shadow-lg p-3 ring-4 ring-white/30 flex items-center justify-center">
-                  <Building2 className="w-12 h-12 md:w-14 md:h-14 text-[#99C93B]" />
+                  <Building2 className="w-12 h-12 md:w-14 md:h-14 text-blue-600" />
                 </div>
               </div>
             )}
@@ -174,7 +174,7 @@ function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <BookOpen className="h-6 w-6 text-[#5D7E23] dark:text-indigo-400 mr-3" />
+            <BookOpen className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               My Courses
             </h3>
@@ -219,7 +219,7 @@ function DashboardPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Key className="h-6 w-6 text-[#99C93B] dark:text-[#AAD775] mr-3" />
+            <Key className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               My Licenses
             </h3>
@@ -234,7 +234,7 @@ function DashboardPage() {
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center mb-4">
-            <Video className="h-6 w-6 text-[#5D7E23] dark:text-purple-400 mr-3" />
+            <Video className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Video Lessons
             </h3>

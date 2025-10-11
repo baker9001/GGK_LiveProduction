@@ -75,7 +75,7 @@ export function ToggleSwitch({
       off: 'bg-gray-200 dark:bg-gray-700'
     },
     blue: {
-      on: 'bg-[#99C93B] dark:bg-[#99C93B]',
+      on: 'bg-blue-600 dark:bg-blue-500',
       off: 'bg-gray-200 dark:bg-gray-700'
     },
     red: {

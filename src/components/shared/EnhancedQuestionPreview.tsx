@@ -128,7 +128,7 @@ export function EnhancedQuestionPreview({
               </span>
             )}
             {part.type && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                 {part.type.toUpperCase()}
               </span>
             )}
@@ -153,9 +153,9 @@ export function EnhancedQuestionPreview({
         )}
 
         {part.hint && (
-          <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg border border-[#99C93B]/30 dark:border-blue-800">
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</p>
-            <p className="text-sm text-[#5D7E23] dark:text-blue-200">{part.hint}</p>
+            <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
           </div>
         )}
 
@@ -277,12 +277,12 @@ export function EnhancedQuestionPreview({
                     </span>
                   )}
                   {question.type && (
-                    <span className="text-sm px-2 py-1 rounded-full bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]">
+                    <span className="text-sm px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                       {question.type.replace('_', ' ').toUpperCase()}
                     </span>
                   )}
                   {hasSubQuestions && (
-                    <span className="text-sm px-2 py-1 rounded-full bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                    <span className="text-sm px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
                       Multi-part ({question.parts?.length} parts)
                     </span>
                   )}
@@ -306,9 +306,9 @@ export function EnhancedQuestionPreview({
                 )}
 
                 {question.hint && (
-                  <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 rounded-lg border border-[#99C93B]/30 dark:border-blue-800">
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</p>
-                    <p className="text-sm text-[#5D7E23] dark:text-blue-200">{question.hint}</p>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">{question.hint}</p>
                   </div>
                 )}
 

@@ -423,15 +423,15 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
               {examMode === 'timed' && examDuration > 0 && (
                 <div className={cn(
                   "flex items-center space-x-2 px-4 py-2 rounded-lg",
-                  timeElapsed > examDuration * 0.8 ? "bg-red-100 dark:bg-red-900/20" : "bg-[#E8F5DC] dark:bg-[#5D7E23]/20"
+                  timeElapsed > examDuration * 0.8 ? "bg-red-100 dark:bg-red-900/20" : "bg-blue-100 dark:bg-blue-900/20"
                 )}>
                   <Clock className={cn(
                     "h-5 w-5",
-                    timeElapsed > examDuration * 0.8 ? "text-red-600 dark:text-red-400" : "text-[#99C93B] dark:text-[#AAD775]"
+                    timeElapsed > examDuration * 0.8 ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"
                   )} />
                   <span className={cn(
                     "font-mono text-lg font-semibold",
-                    timeElapsed > examDuration * 0.8 ? "text-red-700 dark:text-red-300" : "text-[#5D7E23] dark:text-[#AAD775]"
+                    timeElapsed > examDuration * 0.8 ? "text-red-700 dark:text-red-300" : "text-blue-700 dark:text-blue-300"
                   )}>
                     {formatTime(examDuration - timeElapsed)}
                   </span>
@@ -443,7 +443,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                 <span className="font-medium">{getAnsweredCount()}/{paper.questions.length}</span>
                 <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-[#99C93B] transition-all duration-300"
+                    className="h-full bg-blue-500 transition-all duration-300"
                     style={{ width: `${calculateProgress()}%` }}
                   />
                 </div>
@@ -473,7 +473,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                   </Button>
                   <Button
                     onClick={handleSubmitExam}
-                    className="bg-[#99C93B] hover:bg-blue-700 text-white"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     Submit Exam
                   </Button>
@@ -527,7 +527,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
                     examMode === 'practice' 
-                      ? "bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]" 
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
@@ -538,7 +538,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
                     examMode === 'timed' 
-                      ? "bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]" 
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
@@ -549,7 +549,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
                     examMode === 'review' 
-                      ? "bg-[#E8F5DC] dark:bg-[#5D7E23]/30 text-[#5D7E23] dark:text-[#AAD775]" 
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
@@ -597,7 +597,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                         onClick={() => goToQuestion(index)}
                         className={cn(
                           "relative p-3 rounded-lg text-sm font-medium transition-all hover:shadow-md",
-                          isCurrent && "ring-2 ring-[#99C93B]",
+                          isCurrent && "ring-2 ring-blue-500",
                           status === 'answered' && "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
                           status === 'partial' && "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
                           status === 'unanswered' && "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
@@ -734,7 +734,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                                       href={attachment.file_url} 
                                       target="_blank" 
                                       rel="noopener noreferrer"
-                                      className="text-[#99C93B] dark:text-[#AAD775] hover:underline"
+                                      className="text-blue-600 dark:text-blue-400 hover:underline"
                                     >
                                       Open file
                                     </a>
@@ -749,12 +749,12 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                     
                     {/* Hint */}
                     {showHints && currentQuestion.hint && (
-                      <div className="mb-6 p-4 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded-lg">
+                      <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <div className="flex items-start space-x-2">
-                          <HelpCircle className="h-5 w-5 text-[#99C93B] dark:text-[#AAD775] mt-0.5" />
+                          <HelpCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                           <div>
                             <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">Hint</h4>
-                            <p className="text-[#5D7E23] dark:text-blue-200">{currentQuestion.hint}</p>
+                            <p className="text-blue-800 dark:text-blue-200">{currentQuestion.hint}</p>
                           </div>
                         </div>
                       </div>
@@ -819,10 +819,10 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                               
                               {/* Part Hint */}
                               {showHints && part.hint && (
-                                <div className="mb-4 p-3 bg-[#E8F5DC] dark:bg-[#5D7E23]/20 border border-[#99C93B]/30 dark:border-blue-800 rounded">
+                                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
                                   <div className="flex items-start space-x-2">
-                                    <HelpCircle className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775] mt-0.5" />
-                                    <p className="text-sm text-[#5D7E23] dark:text-blue-200">{part.hint}</p>
+                                    <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">{part.hint}</p>
                                   </div>
                                 </div>
                               )}
@@ -846,9 +846,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                               
                               {/* Part Explanation */}
                               {showExplanations && part.explanation && (
-                                <div className="mt-4 p-3 bg-[#E8F5DC] dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
+                                <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded">
                                   <div className="flex items-start space-x-2">
-                                    <BookOpen className="h-4 w-4 text-[#5D7E23] dark:text-purple-400 mt-0.5" />
+                                    <BookOpen className="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5" />
                                     <div>
                                       <h5 className="font-medium text-purple-900 dark:text-purple-100 mb-1">Explanation</h5>
                                       <p className="text-sm text-purple-800 dark:text-purple-200">{part.explanation}</p>
@@ -864,9 +864,9 @@ export function ExamSimulation({ paper, onExit, isQAMode = false }: ExamSimulati
                     
                     {/* Main Question Explanation */}
                     {showExplanations && currentQuestion.explanation && (
-                      <div className="mt-6 p-4 bg-[#E8F5DC] dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                      <div className="mt-6 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
                         <div className="flex items-start space-x-2">
-                          <BookOpen className="h-5 w-5 text-[#5D7E23] dark:text-purple-400 mt-0.5" />
+                          <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
                           <div>
                             <h4 className="font-medium text-purple-900 dark:text-purple-100 mb-1">Explanation</h4>
                             <p className="text-purple-800 dark:text-purple-200">{currentQuestion.explanation}</p>

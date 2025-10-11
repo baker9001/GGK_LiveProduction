@@ -407,10 +407,10 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
       case 'company':
         return {
           icon: Building2,
-          bgColor: 'bg-[#99C93B]',
-          cardBg: 'bg-[#E8F5DC] dark:bg-blue-900/10',
-          borderColor: 'border-[#99C93B]/30 dark:border-blue-800',
-          iconBg: 'bg-[#99C93B]',
+          bgColor: 'bg-blue-500',
+          cardBg: 'bg-blue-50 dark:bg-blue-900/10',
+          borderColor: 'border-blue-200 dark:border-blue-800',
+          iconBg: 'bg-blue-500',
           title: 'CEO',
           nameField: 'ceo_name',
           stats: [
@@ -441,10 +441,10 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
       case 'branch':
         return {
           icon: MapPin,
-          bgColor: 'bg-[#E8F5DC]0',
-          cardBg: 'bg-[#E8F5DC] dark:bg-purple-900/10',
+          bgColor: 'bg-purple-500',
+          cardBg: 'bg-purple-50 dark:bg-purple-900/10',
           borderColor: 'border-purple-300 dark:border-purple-700',
-          iconBg: 'bg-[#E8F5DC]0',
+          iconBg: 'bg-purple-500',
           title: 'Branch Head',
           nameField: 'branch_head_name',
           stats: [
@@ -472,10 +472,10 @@ const OrgCard = memo(React.forwardRef<HTMLDivElement, {
       case 'section':
         return {
           icon: BookOpen,
-          bgColor: 'bg-[#E8F5DC]0',
-          cardBg: 'bg-[#E8F5DC] dark:bg-indigo-900/10',
+          bgColor: 'bg-indigo-500',
+          cardBg: 'bg-indigo-50 dark:bg-indigo-900/10',
           borderColor: 'border-indigo-200 dark:border-indigo-800',
-          iconBg: 'bg-[#E8F5DC]0',
+          iconBg: 'bg-indigo-500',
           title: 'Teacher',
           nameField: 'section_teacher',
           stats: [
@@ -649,11 +649,11 @@ const LevelTabs = ({ visibleLevels, onToggleLevel }: {
     }
     
     const colorMap: Record<string, string> = {
-      blue: 'bg-[#99C93B] text-white',
+      blue: 'bg-blue-500 text-white',
       green: 'bg-green-500 text-white',
-      purple: 'bg-[#E8F5DC]0 text-white',
+      purple: 'bg-purple-500 text-white',
       orange: 'bg-orange-500 text-white',
-      indigo: 'bg-[#E8F5DC]0 text-white'
+      indigo: 'bg-indigo-500 text-white'
     };
     return colorMap[color] || colorMap.blue;
   };

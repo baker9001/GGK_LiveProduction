@@ -182,7 +182,7 @@ export function DynamicAnswerDisplay({
             {getAnswerIcon()}
             Correct Answer{question.correct_answers.length > 1 ? 's' : ''}
             {question.answer_format && (
-              <span className="text-xs px-2 py-0.5 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
                 {question.answer_format.replace(/_/g, ' ')}
               </span>
             )}
@@ -261,7 +261,7 @@ export function DynamicAnswerDisplay({
             {getAnswerIcon()}
             Correct Answer
             {question.answer_format && (
-              <span className="text-xs px-2 py-0.5 bg-[#E8F5DC] dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
+              <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
                 {question.answer_format.replace(/_/g, ' ')}
               </span>
             )}
@@ -302,7 +302,7 @@ export function DynamicAnswerDisplay({
                 value=""
                 onChange={(e) => onUpdate('correct_answer', e.target.value)}
                 placeholder="Enter correct answer..."
-                className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:ring-2 focus:ring-[#99C93B] focus:border-transparent dark:bg-gray-700 dark:text-white"
+                className="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
               />
               <div className="text-xs text-gray-500">
                 Tip: For multiple acceptable answers, use the "Add Alternative" button

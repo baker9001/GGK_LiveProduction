@@ -43,9 +43,9 @@ const IGCSE_SUBJECTS = [
     resources: ['10+ Years Past Papers', 'Video Solutions', 'Topic Tests', 'Mock Exams'],
     passRate: '96%',
     color: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-[#E8F5DC] dark:bg-[#5D7E23]/20',
-    borderColor: 'border-[#99C93B]/30 dark:border-blue-700',
-    textColor: 'text-[#5D7E23] dark:text-[#AAD775]'
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    borderColor: 'border-blue-200 dark:border-blue-700',
+    textColor: 'text-blue-700 dark:text-blue-300'
   },
   {
     id: 'physics',
@@ -58,7 +58,7 @@ const IGCSE_SUBJECTS = [
     resources: ['Animated Concepts', 'Virtual Labs', 'Past Papers', 'Formula Sheets'],
     passRate: '94%',
     color: 'from-purple-500 to-purple-600',
-    bgColor: 'bg-[#E8F5DC] dark:bg-purple-900/20',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
     borderColor: 'border-purple-200 dark:border-purple-700',
     textColor: 'text-purple-700 dark:text-purple-300'
   },
@@ -103,7 +103,7 @@ const IGCSE_SUBJECTS = [
     resources: ['Writing Templates', 'Speaking Practice', 'Model Essays', 'Past Papers'],
     passRate: '92%',
     color: 'from-indigo-500 to-indigo-600',
-    bgColor: 'bg-[#E8F5DC] dark:bg-indigo-900/20',
+    bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
     borderColor: 'border-indigo-200 dark:border-indigo-700',
     textColor: 'text-indigo-700 dark:text-indigo-300'
   },
@@ -148,7 +148,7 @@ const IGCSE_SUBJECTS = [
     resources: ['Business Plans', 'Financial Calculator', 'Case Studies', 'Past Papers'],
     passRate: '93%',
     color: 'from-teal-500 to-teal-600',
-    bgColor: 'bg-[#E8F5DC] dark:bg-teal-900/20',
+    bgColor: 'bg-teal-50 dark:bg-teal-900/20',
     borderColor: 'border-teal-200 dark:border-teal-700',
     textColor: 'text-teal-700 dark:text-teal-300'
   }

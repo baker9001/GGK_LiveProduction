@@ -1291,7 +1291,7 @@ export default function ImportedStructureReview({
           className={cn(
             "flex items-center gap-2 py-2 px-3 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer",
             depth > 0 && "ml-6",
-            isSelected && "bg-[#E8F5DC] dark:bg-[#5D7E23]/20"
+            isSelected && "bg-blue-50 dark:bg-blue-900/20"
           )}
           style={{ paddingLeft: `${depth * 1.5 + 0.75}rem` }}
         >
@@ -1342,7 +1342,7 @@ export default function ImportedStructureReview({
           )}
           
           <div className="flex items-center gap-2">
-            {entity.loading && <Loader2 className="h-4 w-4 animate-spin text-[#99C93B]" />}
+            {entity.loading && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
             {entity.error && (
               <div className="group relative">
                 <XCircle className="h-4 w-4 text-red-500" />
@@ -1361,7 +1361,7 @@ export default function ImportedStructureReview({
                     "p-1 rounded transition-colors",
                     isOfflineMode 
                       ? "text-gray-400 cursor-not-allowed" 
-                      : "text-[#99C93B] hover:bg-[#E8F5DC] dark:text-[#AAD775] dark:hover:bg-blue-900/30"
+                      : "text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
                   )}
                   title={isOfflineMode ? "Cannot create entities in offline mode" : "Create this entity"}
                   disabled={isOfflineMode}
@@ -1390,7 +1390,7 @@ export default function ImportedStructureReview({
     return (
       <div className={cn("bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 shadow-sm", className)}>
         <div className="flex flex-col items-center justify-center py-8">
-          <Loader2 className="h-8 w-8 text-[#99C93B] dark:text-[#AAD775] animate-spin mb-4" />
+          <Loader2 className="h-8 w-8 text-blue-500 dark:text-blue-400 animate-spin mb-4" />
           <p className="text-gray-600 dark:text-gray-400">
             {isOfflineMode ? "Attempting to connect to database..." : "Analyzing imported structure..."}
           </p>
@@ -1452,7 +1452,7 @@ export default function ImportedStructureReview({
             title="Select/Deselect All"
           >
             {selectedNodes.size > 0 ? (
-              <CheckSquare className="h-4 w-4 text-[#99C93B] dark:text-[#AAD775]" />
+              <CheckSquare className="h-4 w-4 text-blue-500 dark:text-blue-400" />
             ) : (
               <Square className="h-4 w-4 text-gray-400 dark:text-gray-500" />
             )}
@@ -1468,7 +1468,7 @@ export default function ImportedStructureReview({
               <select
                 value={selectedRegionId || ''}
                 onChange={(e) => handleRegionChange(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#99C93B]"
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select Region</option>
                 {availableRegions.map(region => (
@@ -1483,7 +1483,7 @@ export default function ImportedStructureReview({
             <select
               value={filterByType || ''}
               onChange={(e) => setFilterByType(e.target.value || null)}
-              className="px-3 py-1.5 pr-8 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-[#99C93B] cursor-pointer"
+              className="px-3 py-1.5 pr-8 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="">All Types</option>
               <option value="program">Programs</option>
@@ -1542,7 +1542,7 @@ export default function ImportedStructureReview({
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
             <div 
-              className="bg-[#99C93B] h-2 rounded-full transition-all duration-300"
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${(creationProgress.current / creationProgress.total) * 100}%` }}
             />
           </div>
@@ -1605,7 +1605,7 @@ export default function ImportedStructureReview({
               className={cn(
                 "flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition-colors",
                 filterByType === tab.id
-                  ? "border-[#99C93B] text-[#99C93B] dark:text-[#AAD775]"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               )}
             >

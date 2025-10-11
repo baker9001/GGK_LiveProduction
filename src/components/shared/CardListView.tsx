@@ -44,7 +44,7 @@ export function CardListView<T extends Record<string, any>>({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#99C93B]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -59,7 +59,7 @@ export function CardListView<T extends Record<string, any>>({
               className={`
                 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
                 ${viewMode === 'card'
-                  ? 'bg-[#99C93B] text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }
               `}
@@ -71,7 +71,7 @@ export function CardListView<T extends Record<string, any>>({
               className={`
                 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
                 ${viewMode === 'list'
-                  ? 'bg-[#99C93B] text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }
               `}
