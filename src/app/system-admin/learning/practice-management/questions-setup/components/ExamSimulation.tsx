@@ -1,34 +1,19 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/ExamSimulation.tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  Clock, 
-  CheckCircle as CircleCheck, 
-  XCircle, 
-  AlertCircle,
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CheckCircle as CircleCheck,
   Play,
   Pause,
-  RotateCcw,
   Flag,
-  Eye,
-  EyeOff,
   FileText,
   Award,
   Target,
-  TrendingUp,
-  BarChart3,
-  PieChart,
   HelpCircle,
   BookOpen,
-  Zap,
-  Home,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  Search,
-  Settings,
   Maximize2,
   Minimize2,
   Download,
@@ -38,7 +23,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/shared/Button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Tooltip } from '@/components/shared/Tooltip';
 import { cn } from '@/lib/utils';
 import { useAnswerValidation } from '@/hooks/useAnswerValidation';
@@ -73,6 +57,65 @@ interface QuestionOption {
   is_correct: boolean;
   order: number;
 }
+
+const deriveOptionLabel = (orderIndex: number): string => {
+  const alphabetLength = 26;
+  let index = Math.max(orderIndex, 0);
+  let label = '';
+
+  do {
+    label = String.fromCharCode(65 + (index % alphabetLength)) + label;
+    index = Math.floor(index / alphabetLength) - 1;
+  } while (index >= 0);
+
+  return label;
+};
+
+type AnswerSource = {
+  correct_answers?: CorrectAnswer[];
+  correct_answer?: string | null;
+  options?: QuestionOption[];
+} | null | undefined;
+
+const buildNormalisedCorrectAnswers = (source: AnswerSource): CorrectAnswer[] => {
+  if (!source) {
+    return [];
+  }
+
+  if (source.correct_answers && source.correct_answers.length > 0) {
+    return source.correct_answers.map(answer => ({ ...answer }));
+  }
+
+  const normalisedAnswers: CorrectAnswer[] = [];
+
+  if (source.correct_answer) {
+    normalisedAnswers.push({
+      answer: String(source.correct_answer).trim()
+    });
+  }
+
+  if (source.options && source.options.length > 0) {
+    source.options.forEach((option, index) => {
+      if (!option?.is_correct) {
+        return;
+      }
+
+      const orderIndex = typeof option.order === 'number' && option.order > 0 ? option.order - 1 : index;
+      const label = deriveOptionLabel(orderIndex);
+      const optionText = option.option_text?.trim() || option.id || `Option ${label}`;
+      const formattedAnswer = `${label}. ${optionText}`.trim();
+
+      if (!normalisedAnswers.some(existing => existing.answer === formattedAnswer)) {
+        normalisedAnswers.push({
+          answer: formattedAnswer,
+          alternative_id: option.id
+        });
+      }
+    });
+  }
+
+  return normalisedAnswers;
+};
 
 interface SubPart {
   id: string;
@@ -488,9 +531,10 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   const [questionStartTimes, setQuestionStartTimes] = useState<Record<string, number>>({});
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const { validateAnswer, calculateScore } = useAnswerValidation();
+  const { validateAnswer } = useAnswerValidation();
   
   const currentQuestion = paper.questions[currentQuestionIndex];
+  const totalQuestions = paper.questions.length;
   const examDuration = paper.duration ? parseInt(paper.duration) * 60 : 0; // Convert to seconds
 
   useEffect(() => {
@@ -549,27 +593,29 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   
   // Keyboard navigation
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (showResults) return;
-      
-      if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
-        e.preventDefault();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (showResults) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+        event.preventDefault();
         goToPreviousQuestion();
-      } else if (e.key === 'ArrowRight' && currentQuestionIndex < paper.questions.length - 1) {
-        e.preventDefault();
+      } else if (event.key === 'ArrowRight' && currentQuestionIndex < totalQuestions - 1) {
+        event.preventDefault();
         goToNextQuestion();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
         handleExit();
-      } else if (e.key === 'F11') {
-        e.preventDefault();
+      } else if (event.key === 'F11') {
+        event.preventDefault();
         toggleFullscreen();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentQuestionIndex, paper.questions.length, showResults]);
+  }, [currentQuestionIndex, goToNextQuestion, goToPreviousQuestion, handleExit, showResults, toggleFullscreen, totalQuestions]);
   
   // Prevent page refresh during exam
   useEffect(() => {
@@ -612,7 +658,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     setIsRunning(true);
   };
   
-  const handleExit = () => {
+  const handleExit = useCallback(() => {
     if (isRunning && !showResults) {
       if (window.confirm('Are you sure you want to exit? Your progress will be lost.')) {
         onExit();
@@ -620,35 +666,38 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     } else {
       onExit();
     }
-  };
-  
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+  }, [isRunning, onExit, showResults]);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else if (document.exitFullscreen) {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch {
+      setIsFullscreen(Boolean(document.fullscreenElement));
     }
-  };
-  
-  const goToQuestion = (index: number) => {
-    if (index >= 0 && index < paper.questions.length) {
-      setCurrentQuestionIndex(index);
-    }
-  };
-  
-  const goToPreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-    }
-  };
-  
-  const goToNextQuestion = () => {
-    if (currentQuestionIndex < paper.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-    }
-  };
+  }, []);
+
+  const goToQuestion = useCallback((index: number) => {
+    setCurrentQuestionIndex(prevIndex => {
+      if (index >= 0 && index < totalQuestions) {
+        return index;
+      }
+      return prevIndex;
+    });
+  }, [totalQuestions]);
+
+  const goToPreviousQuestion = useCallback(() => {
+    setCurrentQuestionIndex(prevIndex => Math.max(prevIndex - 1, 0));
+  }, []);
+
+  const goToNextQuestion = useCallback(() => {
+    setCurrentQuestionIndex(prevIndex => Math.min(prevIndex + 1, totalQuestions - 1));
+  }, [totalQuestions]);
   
   const toggleQuestionFlag = (questionId: string) => {
     setFlaggedQuestions(prev => {
@@ -781,7 +830,6 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   };
   
   const calculateProgress = () => {
-    const totalQuestions = paper.questions.length;
     const answeredQuestions = getAnsweredCount();
     return totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
   };
@@ -1165,6 +1213,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                           disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                           showHints={showHints}
                           showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
+                          mode={isQAMode ? 'review' : examMode}
                           mode={isQAMode ? 'admin' : examMode}
                         />
                       </div>
@@ -1172,6 +1221,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
 
                     {isQAMode && (
                       <TeacherInsights
+                        correctAnswers={buildNormalisedCorrectAnswers(currentQuestion)}
                         correctAnswers={currentQuestion.correct_answers}
                         answerRequirement={currentQuestion.answer_requirement}
                         markingCriteria={currentQuestion.marking_criteria}
@@ -1249,11 +1299,13 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                 disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                 showHints={showHints}
                                 showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
+                                mode={isQAMode ? 'review' : examMode}
                                 mode={isQAMode ? 'admin' : examMode}
                               />
 
                               {isQAMode && (
                                 <TeacherInsights
+                                  correctAnswers={buildNormalisedCorrectAnswers(part)}
                                   correctAnswers={part.correct_answers}
                                   answerRequirement={part.answer_requirement}
                                   markingCriteria={part.marking_criteria}
@@ -1314,11 +1366,13 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                                             disabled={!isQAMode && (!isRunning && examMode !== 'practice')}
                                             showHints={showHints}
                                             showCorrectAnswer={examMode === 'review' || showExplanations || isQAMode}
+                                            mode={isQAMode ? 'review' : examMode}
                                             mode={isQAMode ? 'admin' : examMode}
                                           />
 
                                           {isQAMode && (
                                             <TeacherInsights
+                                              correctAnswers={buildNormalisedCorrectAnswers(subpart)}
                                               correctAnswers={subpart.correct_answers}
                                               answerRequirement={subpart.answer_requirement}
                                               markingCriteria={subpart.marking_criteria}

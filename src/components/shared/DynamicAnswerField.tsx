@@ -39,10 +39,28 @@ interface CorrectAnswer {
     label?: string;
   };
   unit?: string;
-  measurement_details?: any;
+  measurement_details?: Record<string, unknown> | null;
   accepts_equivalent_phrasing?: boolean;
   error_carried_forward?: boolean;
 }
+
+type AnswerPrimitive = string | number | boolean;
+
+interface StructuredAnswerValue {
+  main?: string;
+  components?: Record<string, AnswerPrimitive>;
+  context?: Record<string, string>;
+  units?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+type AnswerValue =
+  | AnswerPrimitive
+  | AnswerPrimitive[]
+  | StructuredAnswerValue
+  | CorrectAnswer[]
+  | null
+  | undefined;
 
 interface AnswerComponent {
   id: string;
@@ -109,9 +127,9 @@ interface AnswerFieldProps {
     figure?: boolean;
     attachments?: string[];
   };
-  value?: any;
-  onChange: (value: any) => void;
-  onValidate?: (value: any) => { isValid: boolean; errors: string[] };
+  value?: AnswerValue;
+  onChange: (value: AnswerValue) => void;
+  onValidate?: (value: AnswerValue) => { isValid: boolean; errors: string[] };
   disabled?: boolean;
   showHints?: boolean;
   showCorrectAnswer?: boolean;
@@ -140,15 +158,25 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [textAnswers, setTextAnswers] = useState<{ [key: string]: string }>({});
   const [contextAnswers, setContextAnswers] = useState<{ [key: string]: string }>({});
-  const [componentAnswers, setComponentAnswers] = useState<{ [key: string]: any }>({});
+  const [componentAnswers, setComponentAnswers] = useState<Record<string, AnswerPrimitive>>({});
   const [validation, setValidation] = useState<{ isValid: boolean; errors: string[] }>({ isValid: true, errors: [] });
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showAllCorrectAnswers, setShowAllCorrectAnswers] = useState(false);
   const [measurementUnits, setMeasurementUnits] = useState<{ [key: string]: string }>({});
-  
+
   // Admin mode states
   const [adminCorrectAnswers, setAdminCorrectAnswers] = useState<CorrectAnswer[]>([]);
   const [editingAnswerIndex, setEditingAnswerIndex] = useState<number | null>(null);
+
+  const getCurrentStructuredValue = useCallback((): StructuredAnswerValue => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as StructuredAnswerValue;
+    }
+    if (typeof value === 'string') {
+      return { main: value };
+    }
+    return {};
+  }, [value]);
 
   // Get subject icon
   const getSubjectIcon = () => {
@@ -213,23 +241,41 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   useEffect(() => {
     if (mode === 'admin' && question.correct_answers) {
       setAdminCorrectAnswers(question.correct_answers);
-    } else if (value) {
-      if (question.type === 'mcq') {
-        setSelectedOptions(Array.isArray(value) ? value : [value]);
-        setHasAnswered(true);
-      } else if (question.type === 'descriptive') {
-        if (typeof value === 'object') {
-          const { main, components, context, units, ...rest } = value;
-          setTextAnswers({ main, ...rest });
-          if (components) setComponentAnswers(components);
-          if (context) setContextAnswers(context);
-          if (units) setMeasurementUnits(units);
-        } else {
-          setTextAnswers({ main: value });
-        }
-      }
+      return;
     }
-  }, [value, question.type, mode, question.correct_answers]);
+
+    if (question.type === 'mcq') {
+      if (Array.isArray(value)) {
+        const selections = value.filter((entry): entry is string => typeof entry === 'string');
+        setSelectedOptions(selections);
+        setHasAnswered(selections.length > 0);
+      } else if (typeof value === 'string') {
+        setSelectedOptions(value ? [value] : []);
+        setHasAnswered(Boolean(value));
+      } else {
+        setSelectedOptions([]);
+        setHasAnswered(false);
+      }
+    } else if (question.type === 'descriptive') {
+      const structuredValue = getCurrentStructuredValue();
+      const { main, components, context, units, ...rest } = structuredValue;
+
+      const nextTextAnswers: Record<string, string> = {};
+      if (typeof main === 'string') {
+        nextTextAnswers.main = main;
+      }
+      Object.entries(rest).forEach(([key, entryValue]) => {
+        if (typeof entryValue === 'string') {
+          nextTextAnswers[key] = entryValue;
+        }
+      });
+
+      setTextAnswers(nextTextAnswers);
+      setComponentAnswers(components ?? {});
+      setContextAnswers(context ?? {});
+      setMeasurementUnits(units ?? {});
+    }
+  }, [getCurrentStructuredValue, mode, question.correct_answers, question.type, value]);
 
   // Admin mode handlers
   const handleAddCorrectAnswer = () => {
@@ -275,7 +321,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     onChange([...adminCorrectAnswers, newAnswer]);
   };
 
-  const handleUpdateCorrectAnswer = (index: number, field: keyof CorrectAnswer, value: any) => {
+  const handleUpdateCorrectAnswer = (
+    index: number,
+    field: keyof CorrectAnswer,
+    value: CorrectAnswer[keyof CorrectAnswer]
+  ) => {
     const updatedAnswers = [...adminCorrectAnswers];
     updatedAnswers[index] = { ...updatedAnswers[index], [field]: value };
     setAdminCorrectAnswers(updatedAnswers);
@@ -595,7 +645,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
   };
 
   // Enhanced validation with validation modes
-  const performValidation = (answers: any) => {
+  const performValidation = (answers: AnswerValue) => {
     const errors: string[] = [];
     
     if (mode === 'admin') {
@@ -696,6 +746,11 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
       onValidate(answers);
     }
   };
+
+  const buildStructuredValue = useCallback((updates: Partial<StructuredAnswerValue>) => ({
+    ...getCurrentStructuredValue(),
+    ...updates,
+  }), [getCurrentStructuredValue]);
 
   // MCQ Handler
   const handleMCQSelection = (option: string) => {
@@ -806,7 +861,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newContext = { ...contextAnswers, [req.type]: e.target.value };
                     setContextAnswers(newContext);
-                    onChange({ ...value, context: newContext });
+                    const nextValue = buildStructuredValue({ context: newContext });
+                    onChange(nextValue);
                   }}
                   disabled={disabled}
                   className="flex-1 px-3 py-1 border rounded-md bg-white dark:bg-gray-800 text-sm"
@@ -823,7 +879,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newContext = { ...contextAnswers, [req.type]: e.target.value };
                     setContextAnswers(newContext);
-                    onChange({ ...value, context: newContext });
+                    const nextValue = buildStructuredValue({ context: newContext });
+                    onChange(nextValue);
                   }}
                   placeholder={req.placeholder || `Enter ${req.label}`}
                   disabled={disabled}
@@ -909,8 +966,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                   setComponentAnswers(newAnswers);
-                  onChange({ ...value, components: newAnswers });
-                  performValidation({ ...value, components: newAnswers });
+                  const nextValue = buildStructuredValue({ components: newAnswers });
+                  onChange(nextValue);
+                  performValidation(nextValue);
                 }}
                 disabled={disabled}
                 className="flex-1 px-3 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -925,12 +983,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     step={0.01}
                     value={componentAnswers[`${component.id}_uncertainty`] || ''}
                     onChange={(e) => {
-                      const newAnswers = { 
-                        ...componentAnswers, 
-                        [`${component.id}_uncertainty`]: e.target.value 
+                      const newAnswers = {
+                        ...componentAnswers,
+                        [`${component.id}_uncertainty`]: e.target.value
                       };
                       setComponentAnswers(newAnswers);
-                      onChange({ ...value, components: newAnswers });
+                      const nextValue = buildStructuredValue({ components: newAnswers });
+                      onChange(nextValue);
+                      performValidation(nextValue);
                     }}
                     disabled={disabled}
                     className="w-20 px-2 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -944,7 +1004,8 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newUnits = { ...measurementUnits, [component.id]: e.target.value };
                   setMeasurementUnits(newUnits);
-                  onChange({ ...value, units: newUnits });
+                  const nextValue = buildStructuredValue({ units: newUnits });
+                  onChange(nextValue);
                 }}
                 disabled={disabled}
                 className="w-24 px-2 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -961,12 +1022,13 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 <select
                   value={contextAnswers[`${component.id}_instrument`] || ''}
                   onChange={(e) => {
-                    const newContext = { 
-                      ...contextAnswers, 
-                      [`${component.id}_instrument`]: e.target.value 
+                    const newContext = {
+                      ...contextAnswers,
+                      [`${component.id}_instrument`]: e.target.value
                     };
                     setContextAnswers(newContext);
-                    onChange({ ...value, context: newContext });
+                    const nextValue = buildStructuredValue({ context: newContext });
+                    onChange(nextValue);
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-1 text-sm border rounded-md bg-white dark:bg-gray-800"
@@ -1009,8 +1071,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                 onChange={(e) => {
                   const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                   setComponentAnswers(newAnswers);
-                  onChange({ ...value, components: newAnswers });
-                  performValidation({ ...value, components: newAnswers });
+                  const nextValue = buildStructuredValue({ components: newAnswers });
+                  onChange(nextValue);
+                  performValidation(nextValue);
                 }}
                 disabled={disabled}
                 className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-800"
@@ -1030,7 +1093,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                           const newValue = current + ' ' + state;
                           const newAnswers = { ...componentAnswers, [component.id]: newValue };
                           setComponentAnswers(newAnswers);
-                          onChange({ ...value, components: newAnswers });
+                          const nextValue = buildStructuredValue({ components: newAnswers });
+                          onChange(nextValue);
+                          performValidation(nextValue);
                         }}
                         disabled={disabled}
                         className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1047,12 +1112,14 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   type="text"
                   value={componentAnswers[`${component.id}_oxidation`] || ''}
                   onChange={(e) => {
-                    const newAnswers = { 
-                      ...componentAnswers, 
-                      [`${component.id}_oxidation`]: e.target.value 
+                    const newAnswers = {
+                      ...componentAnswers,
+                      [`${component.id}_oxidation`]: e.target.value
                     };
                     setComponentAnswers(newAnswers);
-                    onChange({ ...value, components: newAnswers });
+                    const nextValue = buildStructuredValue({ components: newAnswers });
+                    onChange(nextValue);
+                    performValidation(nextValue);
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-1 text-sm border rounded-md bg-white dark:bg-gray-800"
@@ -1083,8 +1150,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     if (mode === 'admin') {
       return renderAdminModeEditor();
     }
-    
+
     // Existing MCQ rendering logic...
+    const shouldExplainRequirement = showHints || mode !== 'exam';
     const shouldShowFeedback = (
       mode === 'review' ||
       mode === 'admin' ||
@@ -1094,7 +1162,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
     
     return (
       <div className="space-y-2">
-        {question.answer_requirement && (
+        {shouldExplainRequirement && question.answer_requirement && (
           <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-sm text-blue-700 dark:text-blue-300">
               <AlertCircle className="inline w-4 h-4 mr-1" />
@@ -1153,6 +1221,12 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
                     {shouldShowFeedback && isCorrect && (
                       <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                        <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                      </span>
+                    )}
+                    {shouldShowFeedback && isIncorrect && (
+                      <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+                        <X className="h-3.5 w-3.5" /> Incorrect selection
                         <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
                       </span>
                     )}
@@ -1217,6 +1291,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             <span>True</span>
             {shouldShowFeedback && correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
                 <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
@@ -1248,6 +1323,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             <span>False</span>
             {shouldShowFeedback && !correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
+                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
                 <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
@@ -1298,8 +1374,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(content) => {
                     const newAnswers = { ...componentAnswers, [component.id]: content };
                     setComponentAnswers(newAnswers);
-                    onChange({ ...value, components: newAnswers });
-                    performValidation({ ...value, components: newAnswers });
+                    const nextValue = buildStructuredValue({ components: newAnswers });
+                    onChange(nextValue);
+                    performValidation(nextValue);
                   }}
                   disabled={disabled}
                   subject={question.subject}
@@ -1313,8 +1390,9 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                   onChange={(e) => {
                     const newAnswers = { ...componentAnswers, [component.id]: e.target.value };
                     setComponentAnswers(newAnswers);
-                    onChange({ ...value, components: newAnswers });
-                    performValidation({ ...value, components: newAnswers });
+                    const nextValue = buildStructuredValue({ components: newAnswers });
+                    onChange(nextValue);
+                    performValidation(nextValue);
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
