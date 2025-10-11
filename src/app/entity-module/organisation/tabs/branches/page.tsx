@@ -25,6 +25,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useAccessControl } from '@/hooks/useAccessControl';
 import { BranchFormContent } from '@/components/forms/BranchFormContent';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 // ===== TYPE DEFINITIONS =====
 interface BranchData {
@@ -666,6 +668,27 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
     });
   }, [branches, searchTerm, filterStatus, filterSchool]);
 
+  const {
+    page: branchesPage,
+    rowsPerPage: branchesRowsPerPage,
+    totalPages: branchesTotalPages,
+    totalCount: branchesTotalCount,
+    paginatedItems: paginatedBranches,
+    start: branchesStart,
+    end: branchesEnd,
+    goToPage: goToBranchesPage,
+    nextPage: nextBranchesPage,
+    previousPage: previousBranchesPage,
+    changeRowsPerPage: changeBranchesRowsPerPage,
+  } = usePagination(filteredBranches);
+
+  const listViewBranches = viewMode === 'list' ? paginatedBranches : filteredBranches;
+
+  const currentBranchIds = useMemo(
+    () => (viewMode === 'list' ? paginatedBranches.map(branch => branch.id) : []),
+    [viewMode, paginatedBranches]
+  );
+
   // Bulk delete - must be defined AFTER filteredBranches
   const handleBulkDelete = useCallback(() => {
     if (selectedBranches.length === 0) return;
@@ -681,8 +704,11 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   }, [filteredBranches, selectedBranches]);
 
   const isAllSelected = viewMode === 'list' &&
-    filteredBranches.length > 0 &&
-    filteredBranches.every(branch => selectedBranches.includes(branch.id));
+    currentBranchIds.length > 0 &&
+    currentBranchIds.every(id => selectedBranches.includes(id));
+
+  const isSomeSelected = viewMode === 'list' &&
+    currentBranchIds.some(id => selectedBranches.includes(id));
 
   useEffect(() => {
     if (viewMode !== 'list') {
@@ -704,8 +730,8 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
   useEffect(() => {
     if (!selectAllRef.current) return;
 
-    selectAllRef.current.indeterminate = viewMode === 'list' && selectedBranches.length > 0 && !isAllSelected;
-  }, [selectedBranches, isAllSelected, viewMode]);
+    selectAllRef.current.indeterminate = viewMode === 'list' && isSomeSelected && !isAllSelected;
+  }, [isAllSelected, isSomeSelected, viewMode]);
 
   // Calculate stats
   const stats = useMemo(() => ({
@@ -1163,14 +1189,19 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                       ref={selectAllRef}
                       type="checkbox"
                       checked={isAllSelected}
+                      aria-checked={isAllSelected ? 'true' : (isSomeSelected ? 'mixed' : 'false')}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedBranches(filteredBranches.map(branch => branch.id));
+                          setSelectedBranches(prev => {
+                            const next = new Set(prev);
+                            paginatedBranches.forEach(branch => next.add(branch.id));
+                            return Array.from(next);
+                          });
                         } else {
-                          setSelectedBranches([]);
+                          setSelectedBranches(prev => prev.filter(id => !paginatedBranches.some(branch => branch.id === id)));
                         }
                       }}
-                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                      className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
                       aria-label="Select all branches"
                     />
                   </th>
@@ -1185,7 +1216,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredBranches.length === 0 ? (
+                {branchesTotalCount === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-12 text-center">
                       <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -1197,7 +1228,7 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                     </td>
                   </tr>
                 ) : (
-                  filteredBranches.map((branch) => {
+                  listViewBranches.map((branch) => {
                     const logoUrl = getBranchLogoUrl(branch.logo);
                     const canEdit = can('modify_branch') && !branch.readOnly;
 
@@ -1206,18 +1237,18 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
                         <td className="px-6 py-4">
                           <input
                             type="checkbox"
-                            checked={selectedBranches.includes(branch.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedBranches(prev => (prev.includes(branch.id) ? prev : [...prev, branch.id]));
-                              } else {
-                                setSelectedBranches(prev => prev.filter(id => id !== branch.id));
-                              }
-                            }}
-                            className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
-                            aria-label={`Select ${branch.name}`}
-                          />
-                        </td>
+                          checked={selectedBranches.includes(branch.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedBranches(prev => (prev.includes(branch.id) ? prev : [...prev, branch.id]));
+                            } else {
+                              setSelectedBranches(prev => prev.filter(id => id !== branch.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
+                          aria-label={`Select ${branch.name}`}
+                        />
+                      </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             {/* ENHANCED LOGO IN LIST VIEW */}
@@ -1314,6 +1345,17 @@ const BranchesTab = React.forwardRef<BranchesTabRef, BranchesTabProps>(({ compan
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={branchesPage}
+            rowsPerPage={branchesRowsPerPage}
+            totalCount={branchesTotalCount}
+            totalPages={branchesTotalPages}
+            onPageChange={goToBranchesPage}
+            onNextPage={nextBranchesPage}
+            onPreviousPage={previousBranchesPage}
+            onRowsPerPageChange={changeBranchesRowsPerPage}
+            showingRange={{ start: branchesStart, end: branchesEnd }}
+          />
         </div>
       )}
 

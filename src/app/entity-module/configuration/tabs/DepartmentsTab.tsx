@@ -35,12 +35,12 @@ import {
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
 import { useAccessControl } from '@/hooks/useAccessControl';
-import { DataTable } from '@/components/shared/DataTable';
 import { FilterCard } from '@/components/shared/FilterCard';
 import { SlideInForm } from '@/components/shared/SlideInForm';
 import { FormField, Input, Select, Textarea } from '@/components/shared/FormField';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Button } from '@/components/shared/Button';
+import { PaginationControls } from '@/components/shared/PaginationControls';
 import { SearchableMultiSelect } from '@/components/shared/SearchableMultiSelect';
 import { ToggleSwitch } from '@/components/shared/ToggleSwitch';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
@@ -50,6 +50,7 @@ import { cn } from '@/lib/utils';
 
 // Import PhoneInput directly (update path if needed)
 import { PhoneInput } from '@/components/shared/PhoneInput';
+import { usePagination } from '@/hooks/usePagination';
 
 // Enhanced Department interface with all fields
 interface Department {
@@ -1050,6 +1051,20 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
     return buildTree(departments);
   }, [departments, expandedDepartments]);
 
+  const {
+    page: departmentPage,
+    rowsPerPage: departmentRowsPerPage,
+    totalPages: departmentTotalPages,
+    totalCount: departmentTotalCount,
+    paginatedItems: paginatedDepartments,
+    start: departmentStart,
+    end: departmentEnd,
+    goToPage: goToDepartmentPage,
+    nextPage: nextDepartmentPage,
+    previousPage: previousDepartmentPage,
+    changeRowsPerPage: changeDepartmentRowsPerPage,
+  } = usePagination(hierarchicalDepartments);
+
   // Auto-expand parent departments when data loads
   useEffect(() => {
     if (departments && departments.length > 0) {
@@ -1925,7 +1940,7 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
                     </td>
                   </tr>
                 ) : (
-                  hierarchicalDepartments.map(dept => (
+                  paginatedDepartments.map(dept => (
                     <DepartmentTableRow
                       key={dept.id}
                       department={dept}
@@ -1944,6 +1959,17 @@ export function DepartmentsTab({ companyId }: DepartmentsTabProps) {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={departmentPage}
+            rowsPerPage={departmentRowsPerPage}
+            totalCount={departmentTotalCount}
+            totalPages={departmentTotalPages}
+            onPageChange={goToDepartmentPage}
+            onNextPage={nextDepartmentPage}
+            onPreviousPage={previousDepartmentPage}
+            onRowsPerPageChange={changeDepartmentRowsPerPage}
+            showingRange={{ start: departmentStart, end: departmentEnd }}
+          />
         </div>
       ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

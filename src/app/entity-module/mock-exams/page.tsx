@@ -34,6 +34,8 @@ import { SaveTemplateModal } from './components/SaveTemplateModal';
 import type { MockExamLifecycleStatus } from '../../../services/mockExamService';
 import { useMockExamTemplates, usePopularTemplates, useRecentTemplates, useCreateTemplate, useCreateTemplateFromExam, useIncrementTemplateUsage } from '../../../hooks/useMockExamTemplates';
 import { MockExamTemplateService, type MockExamTemplate } from '../../../services/mockExamTemplateService';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 interface MockExamTeacher {
   id: string;
@@ -509,6 +511,20 @@ export default function EntityMockExamsPage() {
 
     return sorted;
   }, [filters, transformedExams, gradeLevels, sortField, sortDirection]);
+
+  const {
+    page: examsPage,
+    rowsPerPage: examsRowsPerPage,
+    totalPages: examsTotalPages,
+    totalCount: examsTotalCount,
+    paginatedItems: paginatedExams,
+    start: examsStart,
+    end: examsEnd,
+    goToPage: goToExamsPage,
+    nextPage: nextExamsPage,
+    previousPage: previousExamsPage,
+    changeRowsPerPage: changeExamsRowsPerPage,
+  } = usePagination(filteredExams);
 
   useEffect(() => {
     if (selectedDataStructure) {
@@ -1156,7 +1172,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredExams.length === 0 && (
+              {examsTotalCount === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                     No mock exams match the current filters. Adjust filters or create a new mock.
@@ -1164,7 +1180,7 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                 </tr>
               )}
 
-              {filteredExams.map(exam => {
+              {paginatedExams.map(exam => {
                 const sectionsSummary = exam.sections.length > 0
                   ? exam.sections.join(', ')
                   : 'All sections';
@@ -1311,6 +1327,17 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={examsPage}
+          rowsPerPage={examsRowsPerPage}
+          totalCount={examsTotalCount}
+          totalPages={examsTotalPages}
+          onPageChange={goToExamsPage}
+          onNextPage={nextExamsPage}
+          onPreviousPage={previousExamsPage}
+          onRowsPerPageChange={changeExamsRowsPerPage}
+          showingRange={{ start: examsStart, end: examsEnd }}
+        />
       </div>
 
       {/* Extra spacing to ensure last row is fully visible with edit button */}

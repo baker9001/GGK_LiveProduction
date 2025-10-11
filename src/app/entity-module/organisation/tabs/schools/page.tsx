@@ -29,6 +29,8 @@ import { useAccessControl } from '@/hooks/useAccessControl';
 import { useUser } from '@/contexts/UserContext';
 import { getAuthenticatedUser } from '@/lib/auth';
 import { SchoolFormContent } from '@/components/forms/SchoolFormContent';
+import { PaginationControls } from '@/components/shared/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 // ===== INTERFACES =====
 interface SchoolData {
@@ -732,9 +734,32 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
       });
     }, [schools, searchTerm, filterStatus]);
 
+    const {
+      page: schoolsPage,
+      rowsPerPage: schoolsRowsPerPage,
+      totalPages: schoolsTotalPages,
+      totalCount: schoolsTotalCount,
+      paginatedItems: paginatedSchools,
+      start: schoolsStart,
+      end: schoolsEnd,
+      goToPage: goToSchoolsPage,
+      nextPage: nextSchoolsPage,
+      previousPage: previousSchoolsPage,
+      changeRowsPerPage: changeSchoolsRowsPerPage,
+    } = usePagination(displayedSchools);
+
+    const listViewSchools = viewMode === 'list' ? paginatedSchools : displayedSchools;
+
+    const currentListIds = useMemo(() =>
+      viewMode === 'list' ? paginatedSchools.map(school => school.id) : [],
+    [viewMode, paginatedSchools]);
+
     const isAllSelected = viewMode === 'list' &&
-      displayedSchools.length > 0 &&
-      displayedSchools.every(school => selectedSchools.includes(school.id));
+      currentListIds.length > 0 &&
+      currentListIds.every(id => selectedSchools.includes(id));
+
+    const isSomeSelected = viewMode === 'list' &&
+      currentListIds.some(id => selectedSchools.includes(id));
 
     useEffect(() => {
       if (viewMode !== 'list') {
@@ -756,8 +781,8 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
     useEffect(() => {
       if (!selectAllRef.current) return;
 
-      selectAllRef.current.indeterminate = viewMode === 'list' && selectedSchools.length > 0 && !isAllSelected;
-    }, [selectedSchools, isAllSelected, viewMode]);
+      selectAllRef.current.indeterminate = viewMode === 'list' && isSomeSelected && !isAllSelected;
+    }, [isAllSelected, isSomeSelected, viewMode]);
 
     // Calculate stats
     const stats = useMemo(() => ({
@@ -1200,14 +1225,19 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                         ref={selectAllRef}
                         type="checkbox"
                         checked={isAllSelected}
+                        aria-checked={isAllSelected ? 'true' : (isSomeSelected ? 'mixed' : 'false')}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedSchools(displayedSchools.map(school => school.id));
+                            setSelectedSchools(prev => {
+                              const next = new Set(prev);
+                              paginatedSchools.forEach(school => next.add(school.id));
+                              return Array.from(next);
+                            });
                           } else {
-                            setSelectedSchools([]);
+                            setSelectedSchools(prev => prev.filter(id => !paginatedSchools.some(school => school.id === id)));
                           }
                         }}
-                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                        className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
                         aria-label="Select all schools"
                       />
                     </th>
@@ -1222,7 +1252,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {displayedSchools.length === 0 ? (
+                  {schoolsTotalCount === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-6 py-12 text-center">
                         <School className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -1234,7 +1264,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                       </td>
                     </tr>
                   ) : (
-                    displayedSchools.map((school) => {
+                    listViewSchools.map((school) => {
                       const logoUrl = getSchoolLogoUrl(school.logo);
                       const canEdit = can('modify_school') && !school.readOnly;
 
@@ -1251,7 +1281,7 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                                   setSelectedSchools(prev => prev.filter(id => id !== school.id));
                                 }
                               }}
-                              className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F]"
+                              className="rounded border-gray-300 dark:border-gray-600 focus:ring-[#8CC63F] text-emerald-600"
                               aria-label={`Select ${school.name}`}
                             />
                           </td>
@@ -1348,6 +1378,17 @@ const SchoolsTab = React.forwardRef<SchoolsTabRef, SchoolsTabProps>(
                 </tbody>
               </table>
             </div>
+            <PaginationControls
+              page={schoolsPage}
+              rowsPerPage={schoolsRowsPerPage}
+              totalCount={schoolsTotalCount}
+              totalPages={schoolsTotalPages}
+              onPageChange={goToSchoolsPage}
+              onNextPage={nextSchoolsPage}
+              onPreviousPage={previousSchoolsPage}
+              onRowsPerPageChange={changeSchoolsRowsPerPage}
+              showingRange={{ start: schoolsStart, end: schoolsEnd }}
+            />
           </div>
         )}
 
