@@ -134,24 +134,22 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
                   >
                     <Eye className="h-5 w-5" />
                   </Button>
-                  {!isEditing && (
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="shadow-lg pointer-events-auto"
-                      title="Delete Attachment"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('🗑️ Delete button clicked in AttachmentDisplay:', attachment.id);
-                        console.log('📋 Calling onDelete with ID:', attachment.id);
-                        onDelete(attachment.id);
-                        console.log('✅ onDelete called successfully');
-                      }}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="shadow-lg pointer-events-auto"
+                    title="Delete Attachment"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('🗑️ Delete button clicked in AttachmentDisplay:', attachment.id);
+                      console.log('📋 Calling onDelete with ID:', attachment.id);
+                      onDelete(attachment.id);
+                      console.log('✅ onDelete called successfully');
+                    }}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
 
