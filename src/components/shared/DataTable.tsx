@@ -376,7 +376,10 @@ export function DataTable<T>({
           <select
             id="table-select"
             name="table-select"
-            className="block w-full py-1 pl-3 pr-8 text-sm rounded-md border border-[#7DC242]/60 focus:outline-none focus:ring-2 focus:ring-[#7DC242] focus:border-[#7DC242] bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className={cn(
+              'brand-select block w-full py-1 pl-3 pr-8 text-sm rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100',
+              'focus-visible:outline-none'
+            )}
             value={rowsPerPage}
             aria-label="Rows per page"
             onChange={(e) => {
@@ -393,16 +396,14 @@ export function DataTable<T>({
               <option
                 key={value}
                 value={value}
-                className="bg-[#B2CACE] text-gray-900"
-                style={{ backgroundColor: '#B2CACE', color: '#000000' }}
               >
                 {value} rows
               </option>
             ))}
           </select>
-          
+
           <div className="hidden sm:block ml-4">
-            <p className="text-sm text-gray-700 dark:text-gray-300">
+            <p className="text-sm brand-pagination-summary">
               Showing <span className="font-medium">{data.length > 0 ? startIndex + 1 : 0}</span> to{' '}
               <span className="font-medium">
                 {Math.min(pagination ? startIndex + data.length : endIndex, data.length)}
@@ -415,7 +416,7 @@ export function DataTable<T>({
         <div className="flex items-center space-x-2">
           <button
             type="button"
-            className="inline-flex items-center px-2 py-1 border border-[#7DC242] dark:border-[#7DC242] rounded-md bg-white dark:bg-gray-800 text-sm font-medium text-[#7DC242] dark:text-[#7DC242] hover:bg-[#7DC242]/10 dark:hover:bg-[#7DC242]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="brand-pagination-button inline-flex items-center px-2 py-1 rounded-md text-sm font-medium"
             aria-label="Go to previous page"
             title="Previous page"
             onClick={() => {
@@ -429,14 +430,15 @@ export function DataTable<T>({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          
-          <div className="text-sm font-semibold text-[#7DC242] dark:text-[#7DC242]">
-            Page {page} of {Math.max(1, totalPages)}
+
+          <div className="brand-pagination-badge text-sm" role="status" aria-live="polite">
+            Page <span className="brand-pagination-badge__value">{page}</span> of{' '}
+            <span className="brand-pagination-badge__value">{Math.max(1, totalPages)}</span>
           </div>
-          
+
           <button
             type="button"
-            className="inline-flex items-center px-2 py-1 border border-[#7DC242] dark:border-[#7DC242] rounded-md bg-white dark:bg-gray-800 text-sm font-medium text-[#7DC242] dark:text-[#7DC242] hover:bg-[#7DC242]/10 dark:hover:bg-[#7DC242]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="brand-pagination-button inline-flex items-center px-2 py-1 rounded-md text-sm font-medium"
             aria-label="Go to next page"
             title="Next page"
             onClick={() => {
