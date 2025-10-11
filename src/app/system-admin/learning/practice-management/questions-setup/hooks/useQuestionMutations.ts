@@ -318,22 +318,39 @@ export function useQuestionMutations() {
         .from('questions_attachments')
         .delete()
         .eq('id', attachmentId);
-      
+
       if (dbError) throw dbError;
-      
-      // Extract filename from URL and delete from storage
-      const urlParts = fileUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-      
-      const { error: storageError } = await supabase.storage
-        .from('questions-attachments')
-        .remove([fileName]);
-      
-      if (storageError) {
-        console.error('Error deleting from storage:', storageError);
-        // Don't throw - file might already be deleted
+
+      // Derive the storage path from the public URL so we can delete the file
+      let storagePath: string | null = null;
+
+      try {
+        const url = new URL(fileUrl);
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+        const bucketIndex = pathSegments.findIndex(segment => segment === 'questions-attachments');
+
+        if (bucketIndex !== -1 && bucketIndex < pathSegments.length - 1) {
+          storagePath = decodeURIComponent(pathSegments.slice(bucketIndex + 1).join('/'));
+        } else if (pathSegments.length > 0) {
+          storagePath = decodeURIComponent(pathSegments[pathSegments.length - 1]);
+        }
+      } catch (error) {
+        console.error('Error parsing attachment URL for deletion:', error);
       }
-      
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from('questions-attachments')
+          .remove([storagePath]);
+
+        if (storageError) {
+          console.error('Error deleting from storage:', storageError);
+          // Don't throw - file might already be deleted
+        }
+      } else {
+        console.warn('Unable to determine storage path for attachment deletion.');
+      }
+
       return { success: true };
     },
     onSuccess: () => {
