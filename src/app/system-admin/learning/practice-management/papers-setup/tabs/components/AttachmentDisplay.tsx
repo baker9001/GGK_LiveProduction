@@ -107,21 +107,25 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
 
                 {/* Hover Overlay with Actions */}
                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
-                  <button
-                    onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
-                    className="p-3 bg-white rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="bg-white text-gray-700 hover:text-[#8CC63F] hover:bg-white shadow-lg"
                     title="Preview Full Size"
+                    onClick={() => setPreviewImage(attachment.dataUrl || attachment.data || attachment.file_url)}
                   >
-                    <Eye className="h-5 w-5 text-gray-700" />
-                  </button>
+                    <Eye className="h-5 w-5" />
+                  </Button>
                   {!isEditing && (
-                    <button
-                      onClick={() => onDelete(attachment.id)}
-                      className="p-3 bg-red-600 rounded-lg hover:bg-red-700 transition-colors shadow-lg"
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="shadow-lg"
                       title="Delete Attachment"
+                      onClick={() => onDelete(attachment.id)}
                     >
-                      <Trash2 className="h-5 w-5 text-white" />
-                    </button>
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
                   )}
                 </div>
               </div>
@@ -144,12 +148,14 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
           onClick={() => setPreviewImage(null)}
         >
           <div className="relative max-w-6xl max-h-full">
-            <button
+            <Button
+              variant="secondary"
+              size="icon"
+              className="absolute -top-10 right-0 bg-white text-gray-700 hover:text-[#8CC63F]"
               onClick={() => setPreviewImage(null)}
-              className="absolute -top-10 right-0 p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
             >
-              <X className="h-5 w-5 text-gray-700" />
-            </button>
+              <X className="h-5 w-5" />
+            </Button>
             <img
               src={previewImage}
               alt="Preview"

@@ -126,21 +126,27 @@ const ExtractionRulesPanel: React.FC<{
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <button
+      <Button
+        variant="secondary"
+        size="lg"
+        className="w-full justify-between px-6 py-4 h-auto text-left"
         onClick={onToggle}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
       >
-        <div className="flex items-center gap-3">
-          <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Extraction Rules Configuration
-          </h3>
+        <div className="flex w-full items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              Extraction Rules Configuration
+            </h3>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-5 w-5 text-gray-500 transition-transform",
+              isExpanded && "transform rotate-180"
+            )}
+          />
         </div>
-        <ChevronDown className={cn(
-          "h-5 w-5 text-gray-500 transition-transform",
-          isExpanded && "transform rotate-180"
-        )} />
-      </button>
+      </Button>
 
       {isExpanded && (
         <div className="px-6 pb-6 space-y-6 border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -1281,18 +1287,24 @@ export default function PapersSetupPage() {
           {/* Previous Sessions */}
           <div id="previous-sessions" className="mt-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <button
+              <Button
+                variant="secondary"
+                size="lg"
+                className="w-full justify-between px-6 py-4 h-auto text-left rounded-t-lg"
                 onClick={() => setPreviousSessionsExpanded(!previousSessionsExpanded)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded-t-lg"
               >
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Previous Import Sessions
-                </h3>
-                <ChevronDown className={cn(
-                  "h-5 w-5 text-gray-500 transition-transform",
-                  previousSessionsExpanded && "transform rotate-180"
-                )} />
-              </button>
+                <div className="flex w-full items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    Previous Import Sessions
+                  </h3>
+                  <ChevronDown
+                    className={cn(
+                      "h-5 w-5 text-gray-500 transition-transform",
+                      previousSessionsExpanded && "transform rotate-180"
+                    )}
+                  />
+                </div>
+              </Button>
               
               {previousSessionsExpanded && (
                 <div className="border-t border-gray-200 dark:border-gray-700 p-6">

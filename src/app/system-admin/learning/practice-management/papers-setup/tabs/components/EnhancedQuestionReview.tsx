@@ -285,19 +285,22 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
                 onClick={() => onToggleExpanded(questionId)}
               >
                 <div className="flex items-center gap-3 flex-1">
-                  <button
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-gray-500 hover:text-[#8CC63F]"
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleExpanded(questionId);
                     }}
+                    aria-label={isExpanded ? 'Collapse question' : 'Expand question'}
                   >
                     {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                      <ChevronDown className="h-4 w-4" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-gray-500" />
+                      <ChevronRight className="h-4 w-4" />
                     )}
-                  </button>
+                  </Button>
 
                   <div className="flex items-center gap-2">
                     {/* Status Icon */}
@@ -454,18 +457,23 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
                                 className="w-full h-24 object-cover"
                               />
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                <button
+                                <Button
+                                  variant="secondary"
+                                  size="icon-sm"
+                                  className="bg-white text-gray-700 hover:text-[#8CC63F]"
                                   onClick={() => window.open(attachment.preview || attachment.url, '_blank')}
-                                  className="p-1 bg-white rounded hover:bg-gray-100 transition-colors"
+                                  aria-label="Preview attachment"
                                 >
-                                  <Eye className="h-4 w-4 text-gray-700" />
-                                </button>
-                                <button
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="icon-sm"
                                   onClick={() => onAttachmentDelete(attachmentKey, attachment.id || attachIdx.toString())}
-                                  className="p-1 bg-white rounded hover:bg-red-100 transition-colors"
+                                  aria-label="Delete attachment"
                                 >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </button>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           ))}
@@ -510,12 +518,15 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Snip Figure for Question {questions.find(q => (q.id || q.question_number.toString()) === snipModeQuestionId)?.question_number}
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-gray-500 hover:text-[#8CC63F]"
                 onClick={() => setSnipModeQuestionId(null)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                aria-label="Close snipping tool"
               >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
             <div className="p-4">
               <PDFSnippingTool
