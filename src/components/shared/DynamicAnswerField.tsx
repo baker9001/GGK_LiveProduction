@@ -1,17 +1,17 @@
 // src/components/shared/DynamicAnswerField.tsx
 
 import React, { useState, useEffect } from 'react';
-import { 
-  AlertCircle, 
-  Calculator, 
-  Beaker, 
-  Book, 
-  Globe, 
-  Music, 
-  Palette, 
+import {
+  AlertCircle,
+  Calculator,
+  Beaker,
+  Book,
+  Globe,
+  Music,
+  Palette,
   Check,
-  CircleCheck,
-  X, 
+  CheckCircle2,
+  X,
   ChevronRight,
   Ruler,
   FlaskConical,
@@ -1153,7 +1153,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
                     <span className="text-gray-700 dark:text-gray-300">{option.text}</span>
                     {shouldShowFeedback && isCorrect && (
                       <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                        <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
                       </span>
                     )}
                   </div>
@@ -1217,7 +1217,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             <span>True</span>
             {shouldShowFeedback && correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
             {shouldShowFeedback && value === true && !correctAnswer && (
@@ -1248,7 +1248,7 @@ const DynamicAnswerField: React.FC<AnswerFieldProps> = ({
             <span>False</span>
             {shouldShowFeedback && !correctAnswer && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300">
-                <CircleCheck className="h-3.5 w-3.5" /> Correct answer
+                <CheckCircle2 className="h-3.5 w-3.5" /> Correct answer
               </span>
             )}
             {shouldShowFeedback && value === false && correctAnswer && (
