@@ -78,8 +78,10 @@ export function validateAnswerStructure(
   if (context && context.trim().length > 0) {
     result.hasContext = true;
   } else {
+    // Context is helpful but optional for most answers. Treat this as informational so
+    // the pre-import validation doesn't surface it as a blocking warning that confuses users.
     result.issues.push({
-      severity: 'warning',
+      severity: 'info',
       message: 'No context provided - context helps students understand answer requirements',
       field: 'context',
       code: 'CONTEXT_MISSING'
