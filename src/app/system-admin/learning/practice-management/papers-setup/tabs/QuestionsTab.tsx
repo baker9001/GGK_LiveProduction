@@ -89,6 +89,7 @@ try {
 }
 
 // Import sub-components
+import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
@@ -3133,13 +3134,13 @@ export function QuestionsTab({
             )}
           </Button>
 
-          {/* <FixIncompleteQuestionsButton
+          <FixIncompleteQuestionsButton
             incompleteQuestions={questions || []}
             onFix={async (updatedQuestions) => {
               setQuestions(updatedQuestions);
               toast.success('Questions updated with complete data');
             }}
-          /> */}
+          />
 
           <Button
             variant="outline"
