@@ -48,7 +48,8 @@ export function PDFSnippingTool({
   const [pdfLoadingError, setPdfLoadingError] = useState(false);
   const [renderedPage, setRenderedPage] = useState<PDFPageProxy | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+  const [pageInputValue, setPageInputValue] = useState('');
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<HTMLDivElement>(null);
@@ -564,6 +565,41 @@ export function PDFSnippingTool({
     });
   };
 
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Allow empty string or numbers only
+    if (value === '' || /^\d+$/.test(value)) {
+      setPageInputValue(value);
+    }
+  };
+
+  const handleGoToPage = () => {
+    if (!pageInputValue || !totalPages) return;
+
+    const pageNum = parseInt(pageInputValue, 10);
+
+    if (isNaN(pageNum)) {
+      toast.error('Please enter a valid page number');
+      return;
+    }
+
+    if (pageNum < 1 || pageNum > totalPages) {
+      toast.error(`Please enter a page number between 1 and ${totalPages}`);
+      return;
+    }
+
+    setCurrentPage(pageNum);
+    setSelectionRect(null);
+    setPageInputValue('');
+    toast.success(`Navigated to page ${pageNum}`);
+  };
+
+  const handlePageInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleGoToPage();
+    }
+  };
+
   // Handle zoom
   const zoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 3));
@@ -708,6 +744,28 @@ export function PDFSnippingTool({
                 rightIcon={<ChevronRight className="h-4 w-4" />}
               >
                 Next
+              </Button>
+            </div>
+
+            {/* Go to Page Number */}
+            <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 pl-4">
+              <input
+                type="text"
+                value={pageInputValue}
+                onChange={handlePageInputChange}
+                onKeyDown={handlePageInputKeyDown}
+                placeholder="Go to page..."
+                disabled={isLoading || !pdfDocument}
+                className="w-28 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                onFocus={(e) => e.target.select()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGoToPage}
+                disabled={!pageInputValue || isLoading || !pdfDocument}
+              >
+                Go
               </Button>
             </div>
             
