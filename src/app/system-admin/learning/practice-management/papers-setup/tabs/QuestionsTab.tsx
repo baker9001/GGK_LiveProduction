@@ -89,8 +89,8 @@ try {
 }
 
 // Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+// import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton'; // Component file missing
+// import { QuestionsReviewSection } from './components/QuestionsReviewSection'; // Component file missing - TODO: Create this component
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
@@ -3134,13 +3134,13 @@ export function QuestionsTab({
             )}
           </Button>
 
-          <FixIncompleteQuestionsButton
+          {/* <FixIncompleteQuestionsButton
             incompleteQuestions={questions || []}
             onFix={async (updatedQuestions) => {
               setQuestions(updatedQuestions);
               toast.success('Questions updated with complete data');
             }}
-          />
+          /> */}
 
           <Button
             variant="outline"
@@ -3247,7 +3247,36 @@ export function QuestionsTab({
       )}
 
       {/* Questions Review Section */}
-      <QuestionsReviewSection
+      {/* TODO: QuestionsReviewSection component needs to be created */}
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-400 dark:border-yellow-600 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+          <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-100">
+            Questions Review Component Missing
+          </h3>
+        </div>
+        <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-4">
+          The QuestionsReviewSection component file is missing and needs to be created in:<br />
+          <code className="bg-yellow-100 dark:bg-yellow-900 px-2 py-1 rounded">
+            src/app/system-admin/learning/practice-management/papers-setup/tabs/components/QuestionsReviewSection.tsx
+          </code>
+        </p>
+        <div className="bg-white dark:bg-gray-800 rounded p-4 mb-4">
+          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+            <strong>Current State:</strong>
+          </p>
+          <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1">
+            <li>Total Questions: {questions.length}</li>
+            <li>Mapped Questions: {Object.keys(questionMappings).length}</li>
+            <li>Questions with Attachments: {Object.keys(attachments).length}</li>
+            <li>Validation Errors: {Object.keys(validationErrors).length}</li>
+          </ul>
+        </div>
+        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+          This component should render the questions list with editing, mapping, and attachment management capabilities.
+        </p>
+      </div>
+      {/* <QuestionsReviewSection
         questions={questions || []}
         mappings={questionMappings}
         dataStructureInfo={dataStructureInfo}
@@ -3408,7 +3437,7 @@ export function QuestionsTab({
             });
           }
         }}
-      />
+      /> */}
 
       {/* Import Progress */}
       {isImporting && (
