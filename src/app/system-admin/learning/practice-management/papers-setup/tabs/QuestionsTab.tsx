@@ -89,8 +89,8 @@ try {
 }
 
 // Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+// TODO: QuestionsReviewSection component needs to be created
+// import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
@@ -3091,14 +3091,6 @@ export function QuestionsTab({
             )}
           </Button>
 
-          <FixIncompleteQuestionsButton
-            incompleteQuestions={questions || []}
-            onFix={async (updatedQuestions) => {
-              setQuestions(updatedQuestions);
-              toast.success('Questions updated with complete data');
-            }}
-          />
-
           <Button
             variant="outline"
             onClick={handleStartSimulation}
@@ -3204,7 +3196,8 @@ export function QuestionsTab({
       )}
 
       {/* Questions Review Section */}
-      <QuestionsReviewSection
+      {/* TODO: QuestionsReviewSection component needs to be created - temporarily commented out */}
+      {/*<QuestionsReviewSection
         questions={questions || []}
         mappings={questionMappings}
         dataStructureInfo={dataStructureInfo}
@@ -3365,7 +3358,11 @@ export function QuestionsTab({
             });
           }
         }}
-      />
+      />*/}
+      <div className="text-center py-12 bg-yellow-50 dark:bg-yellow-900/10 border-2 border-yellow-200 dark:border-yellow-800 rounded-lg">
+        <p className="text-yellow-800 dark:text-yellow-200 font-medium">Questions review section temporarily disabled during rebuild</p>
+        <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">The figure upload fix has been applied. The review UI is being reconstructed.</p>
+      </div>
 
       {/* Import Progress */}
       {isImporting && (
