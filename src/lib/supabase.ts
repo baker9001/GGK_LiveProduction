@@ -127,15 +127,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Connection health check function
-export async function checkSupabaseConnection(): Promise<{ connected: boolean; error?: string }> {
+type ConnectionCheckResult = {
+  connected: boolean;
+  error?: string;
+  shouldRetry?: boolean;
+};
+
+export async function checkSupabaseConnection(): Promise<ConnectionCheckResult> {
   try {
     const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
     if (error && error.code !== 'PGRST116') {
       const errorMessage = error.message || 'Failed to connect to Supabase';
       console.warn('Supabase connection check failed:', error);
+      const shouldRetry =
+        error.code === 'PGRST301' || // RLS policy violation while auth session restores
+        error.code === '42501' ||
+        error.code === 'PGRST000' ||
+        /jwt|authentication|permission denied/i.test(errorMessage);
       return {
         connected: false,
-        error: errorMessage
+        error: errorMessage,
+        shouldRetry
       };
     }
     console.log('✅ Supabase connection successful');
@@ -148,9 +160,11 @@ export async function checkSupabaseConnection(): Promise<{ connected: boolean; e
     } catch (handledError: any) {
       errorMessage = handledError?.message || String(handledError);
       console.warn('❌ Supabase connection error:', errorMessage);
+      const shouldRetry = /access denied|authentication required/i.test(errorMessage);
       return {
         connected: false,
-        error: errorMessage
+        error: errorMessage,
+        shouldRetry
       };
     }
 
@@ -161,7 +175,8 @@ export async function checkSupabaseConnection(): Promise<{ connected: boolean; e
     console.warn('❌ Supabase connection error:', errorMessage);
     return {
       connected: false,
-      error: errorMessage
+      error: errorMessage,
+      shouldRetry: /authentication/i.test(errorMessage)
     };
   }
 }

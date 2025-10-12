@@ -73,7 +73,7 @@ const getDefaultScope = (userId: string, userEmail?: string): CompleteUserScope 
   userId,
   userType: 'entity',
   adminLevel: 'entity_admin',
-  companyId: 'offline-mode',
+  companyId: '',
   schoolIds: [],
   branchIds: [],
   isActive: true,
@@ -97,13 +97,10 @@ export function useAccessControl(): UseAccessControlResult {
   const [isOffline, setIsOffline] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionProbeStartRef = useRef<number>(Date.now());
 
-  // Retry connection function
-  const retryConnection = useCallback(async () => {
-    setError(null);
-    setHasError(false);
-    setRetryCount(0);
-    await fetchUserScope();
+  const resetConnectionProbe = useCallback(() => {
+    connectionProbeStartRef.current = Date.now();
   }, []);
 
   // Execute query with retry logic
@@ -159,20 +156,41 @@ export function useAccessControl(): UseAccessControlResult {
         return null;
       }
 
-      // Check connection first
-      const { connected: isConnected, error: connectionError } = await checkSupabaseConnection();
+      // Check connection first with grace period for auth restoration
+      const MAX_PROBE_ATTEMPTS = 5;
+      const PROBE_RETRY_BASE_DELAY = 500;
+      const CONNECTION_GRACE_PERIOD_MS = 5000;
 
-      if (!isConnected) {
-        console.warn('[useAccessControl] Supabase connection failed, using offline mode');
-        setIsOffline(true);
-        const fallbackScope = getDefaultScope(user.id, user.email);
-        setUserScope(fallbackScope);
-        setError(connectionError || 'Working in offline mode. Limited functionality available.');
-        setHasError(false); // Not a critical error
-        return fallbackScope;
+      let connectionError: string | undefined;
+      for (let attempt = 1; attempt <= MAX_PROBE_ATTEMPTS; attempt++) {
+        const { connected: isConnected, error: probeError, shouldRetry } = await checkSupabaseConnection();
+        connectionError = probeError;
+
+        if (isConnected) {
+          setIsOffline(false);
+          connectionError = undefined;
+          break;
+        }
+
+        const withinGracePeriod = Date.now() - connectionProbeStartRef.current < CONNECTION_GRACE_PERIOD_MS;
+        const retryable = shouldRetry || withinGracePeriod;
+
+        if (!retryable || attempt === MAX_PROBE_ATTEMPTS) {
+          console.warn('[useAccessControl] Supabase connection failed, using offline mode');
+          setIsOffline(true);
+          const fallbackScope = getDefaultScope(user.id, user.email);
+          setUserScope(fallbackScope);
+          setError(connectionError || 'Working in offline mode. Limited functionality available.');
+          setHasError(false); // Not a critical error
+          return fallbackScope;
+        }
+
+        const delay = PROBE_RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
+        console.warn(
+          `[useAccessControl] Connection probe attempt ${attempt} failed (${probeError ?? 'unknown error'}). Retrying in ${delay}ms...`
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      
-      setIsOffline(false);
 
       // Get the base user data with retry
       const { data: userData, error: userError } = await executeWithRetry(
@@ -445,6 +463,15 @@ export function useAccessControl(): UseAccessControlResult {
     }
   }, [user, executeWithRetry]);
 
+  // Retry connection function
+  const retryConnection = useCallback(async () => {
+    setError(null);
+    setHasError(false);
+    setRetryCount(0);
+    resetConnectionProbe();
+    await fetchUserScope();
+  }, [fetchUserScope, resetConnectionProbe]);
+
   // Effect to fetch user scope when user changes
   useEffect(() => {
     const loadUserScope = async () => {
@@ -454,6 +481,7 @@ export function useAccessControl(): UseAccessControlResult {
       }
 
       setIsLoading(true);
+      resetConnectionProbe();
       setHasError(false);
       setError(null);
 
@@ -496,7 +524,7 @@ export function useAccessControl(): UseAccessControlResult {
         clearTimeout(retryTimeoutRef.current);
       }
     };
-  }, [user?.id, isUserLoading, fetchUserScope, retryCount]);
+  }, [user?.id, isUserLoading, fetchUserScope, retryCount, resetConnectionProbe]);
 
   // Module access check
   const canAccessModule = useCallback((modulePath: string, userType?: UserType): boolean => {
