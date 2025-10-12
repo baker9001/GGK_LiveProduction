@@ -237,6 +237,7 @@ interface ProcessedQuestion {
   difficulty: string;
   status: string;
   figure: boolean;
+  figure_required?: boolean;
   attachments: string[];
   hint?: string;
   explanation?: string;
@@ -263,6 +264,7 @@ interface ProcessedPart {
   answer_format: string;
   answer_requirement?: string;
   figure?: boolean;
+  figure_required?: boolean;
   attachments?: string[];
   hint?: string;
   explanation?: string;
@@ -285,6 +287,7 @@ interface ProcessedSubpart {
   hint?: string;
   explanation?: string;
   figure?: boolean; // Add figure field to track requirement
+  figure_required?: boolean;
 }
 
 interface ProcessedAnswer {
@@ -467,6 +470,22 @@ export function QuestionsTab({
       console.warn('Error in requiresFigure:', error);
       return item?.figure || false;
     }
+  };
+
+  const resolveFigureFlag = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure === 'boolean') {
+      return item.figure;
+    }
+    return safeRequiresFigure(item);
+  };
+
+  const resolveFigureRequirement = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure_required === 'boolean') {
+      return item.figure_required;
+    }
+    return resolveFigureFlag(item);
   };
 
   // Helper function to parse answer requirement from mark scheme text
@@ -952,6 +971,9 @@ export function QuestionsTab({
       const answerRequirement = q.answer_requirement || 
         (q.correct_answers && q.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(q.correct_answers), q.marks) : undefined);
       
+      const figureFlag = resolveFigureFlag(q);
+      const figureRequired = resolveFigureRequirement(q);
+
       // Process main question with all available data
       const processedQuestion: ProcessedQuestion = {
         id: questionId,
@@ -963,7 +985,8 @@ export function QuestionsTab({
         subtopic: q.subtopic || q.subtopics?.[0] || '',
         difficulty: q.difficulty || determineQuestionDifficulty(q),
         status: 'pending',
-        figure: q.figure || safeRequiresFigure(q),
+        figure: figureFlag,
+        figure_required: figureRequired,
         attachments: ensureArray(q.attachments),
         hint: q.hint || '',
         explanation: q.explanation || '',
@@ -1063,9 +1086,12 @@ export function QuestionsTab({
     }
     
     // Parse answer requirement for parts
-    const answerRequirement = part.answer_requirement || 
+    const answerRequirement = part.answer_requirement ||
       (part.correct_answers && part.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks) : undefined);
-    
+
+    const partFigureFlag = resolveFigureFlag(part);
+    const partFigureRequired = resolveFigureRequirement(part);
+
     const processedPart: ProcessedPart = {
       id: partId, // FIXED: Include id in processed part
       part: part.part || String.fromCharCode(97 + partIndex), // a, b, c...
@@ -1073,14 +1099,15 @@ export function QuestionsTab({
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
-      figure: part.figure || safeRequiresFigure(part),
+      figure: partFigureFlag,
+      figure_required: partFigureRequired,
       attachments: ensureArray(part.attachments),
       hint: part.hint,
       explanation: part.explanation,
       subparts: [],
       correct_answers: [],
       options: [],
-      requires_manual_marking: part.requires_manual_marking || 
+      requires_manual_marking: part.requires_manual_marking ||
         ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
       marking_criteria: part.marking_criteria
     };
@@ -1119,6 +1146,9 @@ export function QuestionsTab({
     const answerRequirement = subpart.answer_requirement || 
       (subpart.correct_answers && subpart.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks) : undefined);
     
+    const subpartFigureFlag = resolveFigureFlag(subpart);
+    const subpartFigureRequired = resolveFigureRequirement(subpart);
+
     return {
       id: subpartId, // FIXED: Include id in processed subpart
       subpart: subpartLabel,
@@ -1130,7 +1160,8 @@ export function QuestionsTab({
       options: subpart.options ? processOptions(subpart.options) : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
-      figure: subpart.figure || safeRequiresFigure(subpart) // Add figure field to track requirement
+      figure: subpartFigureFlag,
+      figure_required: subpartFigureRequired
     };
   };
 
@@ -1837,13 +1868,11 @@ export function QuestionsTab({
         console.log(`Validating question ${question.id}`, {
           figure_required: (question as any).figure_required,
           figure: question.figure,
-          requiresFigure: safeRequiresFigure(question)
+          resolvedRequirement: resolveFigureRequirement(question)
         });
 
-        // Check if question requires figure - RESPECT THE TOGGLE!
-        // Only validate attachments if figure_required is not explicitly set to false
-        const shouldValidateFigure = (question as any).figure_required !== false &&
-                                     (question.figure || safeRequiresFigure(question));
+        // Check if question requires figure - RESPECT THE TOGGLE and JSON data!
+        const shouldValidateFigure = resolveFigureRequirement(question);
 
         if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
@@ -1861,8 +1890,7 @@ export function QuestionsTab({
             const partKey = generateAttachmentKey(question.id, partIndex);
 
             // RESPECT THE TOGGLE for parts too!
-            const shouldValidatePartFigure = (part as any).figure_required !== false &&
-                                            (part.figure || safeRequiresFigure(part));
+            const shouldValidatePartFigure = resolveFigureRequirement(part);
 
             if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
@@ -1877,8 +1905,7 @@ export function QuestionsTab({
                 if (!subpart) return; // Skip null/undefined subparts
 
                 // RESPECT THE TOGGLE for subparts too!
-                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
-                                                    (subpart.figure || safeRequiresFigure(subpart));
+                const shouldValidateSubpartFigure = resolveFigureRequirement(subpart);
 
                 if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
@@ -2125,15 +2152,16 @@ export function QuestionsTab({
       // Check for missing figures (warning only, don't block)
       const questionsNeedingFigures = questions.filter(q => {
         try {
-          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
+          const questionRequiresFigure = resolveFigureRequirement(q);
+          if (questionRequiresFigure && !attachments[q.id]?.length) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
             return q.parts.some((part: any, index: number) => {
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
-              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
-                     !attachments[partKey]?.length;
+              const partRequiresFigure = resolveFigureRequirement(part);
+              return partRequiresFigure && !attachments[partKey]?.length;
             });
           }
         } catch (err) {
