@@ -2518,7 +2518,12 @@ export function QuestionsTab({
       });
       
       // Call the import function with the correct signature
-      const result: ImportResult = await importQuestions(importParams);
+      const result: ImportResult = await importQuestions({
+        ...importParams,
+        onProgress: (current: number, total: number) => {
+          setImportProgress({ current, total });
+        }
+      });
       
       console.log('Import result:', result);
       
@@ -3668,9 +3673,15 @@ export function QuestionsTab({
             </h3>
             <div className="mb-4">
               <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all"
-                  style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  style={{
+                    width: `${
+                      importProgress.total > 0
+                        ? Math.min(100, (importProgress.current / importProgress.total) * 100)
+                        : 0
+                    }%`
+                  }}
                 />
               </div>
             </div>
@@ -3704,8 +3715,8 @@ export function QuestionsTab({
       {/* Inline Confirmation Dialog */}
       {pendingConfirmation && (
         <ConfirmationDialog
-          open={true}
-          onClose={() => {
+          isOpen={true}
+          onCancel={() => {
             console.log('📋 Confirmation dialog closed (cancel)');
             pendingConfirmation.resolve(false);
             setPendingConfirmation(null);
@@ -3719,14 +3730,14 @@ export function QuestionsTab({
           message={pendingConfirmation.message}
           confirmText={pendingConfirmation.confirmText}
           cancelText={pendingConfirmation.cancelText}
-          confirmVariant={pendingConfirmation.confirmVariant ?? 'primary'}
+          confirmVariant={pendingConfirmation.confirmVariant ?? 'default'}
         />
       )}
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
-        open={showConfirmDialog}
-        onClose={() => setShowConfirmDialog(false)}
+        isOpen={showConfirmDialog}
+        onCancel={() => setShowConfirmDialog(false)}
         onConfirm={confirmImport}
         title="Import Questions"
         message={
@@ -3765,7 +3776,7 @@ export function QuestionsTab({
           </div>
         }
         confirmText="Import"
-        confirmVariant="primary"
+        confirmVariant="default"
       />
 
       {/* Delete Attachment Confirmation */}
