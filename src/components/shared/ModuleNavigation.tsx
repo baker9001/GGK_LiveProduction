@@ -170,7 +170,7 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
                 key={module.id}
                 to={module.path}
                 className={cn(
-                  'group flex items-center rounded-lg p-2 transition-all duration-200 hover:bg-[#64BC46]/5 dark:hover:bg-[#64BC46]/10 hover:translate-x-1',
+                  'group relative flex items-center rounded-lg p-2 transition-all duration-200 hover:bg-[#64BC46]/5 dark:hover:bg-[#64BC46]/10 hover:translate-x-1',
                   isCurrentModule && 'bg-[#64BC46]/15 dark:bg-[#64BC46]/20',
                   !sidebarOpen && 'justify-center'
                 )}
@@ -196,7 +196,7 @@ export function ModuleNavigation({ sidebarOpen, className, activeModule }: Modul
 
                 {/* Active indicator */}
                 {isCurrentModule && (
-                  <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-[#64BC46] rounded-r-full"></div>
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#64BC46] rounded-r-full"></div>
                 )}
 
                 {/* Tooltip for collapsed sidebar */}
