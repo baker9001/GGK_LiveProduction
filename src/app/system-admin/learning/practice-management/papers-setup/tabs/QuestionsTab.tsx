@@ -79,15 +79,6 @@ import {
   type PreImportValidationResult
 } from '../../../../../../lib/extraction/preImportValidation';
 
-// Try to import validateQuestionsForImport if it exists
-let validateQuestionsForImport: any;
-try {
-  const dataOps = require('../../../../../../lib/data-operations/questionsDataOperations');
-  validateQuestionsForImport = dataOps.validateQuestionsForImport;
-} catch (e) {
-  console.warn('validateQuestionsForImport not available, using fallback validation');
-}
-
 // Import sub-components
 import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
@@ -100,6 +91,15 @@ import {
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
+
+// Try to import validateQuestionsForImport if it exists
+let validateQuestionsForImport: any;
+try {
+  const dataOps = require('../../../../../../lib/data-operations/questionsDataOperations');
+  validateQuestionsForImport = dataOps.validateQuestionsForImport;
+} catch (e) {
+  console.warn('validateQuestionsForImport not available, using fallback validation');
+}
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
