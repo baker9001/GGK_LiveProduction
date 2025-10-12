@@ -157,13 +157,17 @@ export default function AuthCallbackPage() {
           userRecord?.raw_user_meta_data?.name ||
           supabaseUser.user_metadata?.name ||
           (normalizedEmail ? normalizedEmail.split('@')[0] : 'User');
+        let avatarUrl: string | null =
+          userRecord?.raw_user_meta_data?.avatar_url ||
+          supabaseUser.user_metadata?.avatar_url ||
+          null;
 
         let resolvedRole: UserRole = mapUserTypeToRole(resolvedUserType);
 
         if (resolvedUserType === 'system') {
           const { data: adminUser, error: adminError } = await supabase
             .from('admin_users')
-            .select('role_id, roles!inner(name)')
+            .select('role_id, roles!inner(name), avatar_url')
             .eq('id', supabaseUser.id)
             .maybeSingle();
 
@@ -175,6 +179,10 @@ export default function AuthCallbackPage() {
             resolvedRole = getSystemRoleFromName(adminUser.roles.name);
           } else {
             resolvedRole = 'SSA';
+          }
+
+          if (adminUser?.avatar_url) {
+            avatarUrl = adminUser.avatar_url;
           }
         } else if (resolvedUserType === 'entity') {
           resolvedRole = 'ENTITY_ADMIN';
@@ -243,7 +251,8 @@ export default function AuthCallbackPage() {
           email: normalizedEmail,
           name: displayName,
           role: resolvedRole,
-          userType: resolvedUserType
+          userType: resolvedUserType,
+          avatarUrl
         };
 
         setAuthenticatedUser(authenticatedUser);

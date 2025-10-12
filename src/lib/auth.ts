@@ -18,6 +18,7 @@ export interface User {
   email: string;
   role: UserRole;
   userType?: string;
+  avatarUrl?: string | null;
 }
 
 const AUTH_STORAGE_KEY = 'ggk_authenticated_user';

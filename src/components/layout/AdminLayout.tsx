@@ -1,7 +1,8 @@
 // /src/components/layout/AdminLayout.tsx
 // SECURITY ENHANCED VERSION with module access validation
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
@@ -41,6 +42,8 @@ import { ModuleNavigation } from '../shared/ModuleNavigation';
 import { clearAuthenticatedUser, getCurrentUser, isInTestMode, getRealAdminUser } from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
+import { supabase } from '../../lib/supabase';
+import { getPublicUrl } from '../../lib/storageHelpers';
 
 // Icon mapping
 const iconMap: Record<string, LucideIcon> = {
@@ -70,6 +73,12 @@ interface AdminLayoutProps {
   moduleKey: string;
 }
 
+interface SidebarProfileData {
+  avatarPath: string | null;
+  name: string | null;
+  email: string | null;
+}
+
 export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const { user } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -85,6 +94,83 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   const navigate = useNavigate();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
+
+  const { data: sidebarProfile } = useQuery<SidebarProfileData>(
+    ['userSidebarProfile', user?.id],
+    async () => {
+      if (!user?.id) {
+        return {
+          avatarPath: user?.avatarUrl ?? null,
+          name: user?.name ?? null,
+          email: user?.email ?? null
+        };
+      }
+
+      let avatarPath: string | null = user?.avatarUrl ?? null;
+      let name: string | null = user?.name ?? null;
+      let email: string | null = user?.email ?? null;
+
+      try {
+        const { data: adminUser, error: adminError } = await supabase
+          .from('admin_users')
+          .select('avatar_url, name, email')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (adminError && adminError.code !== 'PGRST116') {
+          console.warn('[AdminLayout] Failed to load admin user profile:', adminError);
+        }
+
+        if (adminUser) {
+          avatarPath = adminUser.avatar_url ?? avatarPath;
+          name = adminUser.name ?? name;
+          email = adminUser.email ?? email;
+        }
+      } catch (error) {
+        console.warn('[AdminLayout] Unexpected error loading admin user profile:', error);
+      }
+
+      if (!avatarPath || !name || !email) {
+        try {
+          const { data: userRecord, error: userError } = await supabase
+            .from('users')
+            .select('raw_user_meta_data, email')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (userError && userError.code !== 'PGRST116') {
+            console.warn('[AdminLayout] Failed to load base user profile:', userError);
+          }
+
+          if (userRecord) {
+            const metadata = (userRecord.raw_user_meta_data ?? {}) as { avatar_url?: string; name?: string };
+            avatarPath = metadata.avatar_url ?? avatarPath;
+            name = metadata.name ?? name;
+            email = (userRecord as { email?: string }).email ?? email;
+          }
+        } catch (error) {
+          console.warn('[AdminLayout] Unexpected error loading base user profile:', error);
+        }
+      }
+
+      return {
+        avatarPath,
+        name,
+        email
+      };
+    },
+    {
+      enabled: !!user?.id
+    }
+  );
+
+  const displayName = sidebarProfile?.name ?? user?.name ?? 'User';
+  const displayEmail = sidebarProfile?.email ?? user?.email ?? 'user@example.com';
+  const avatarPath = sidebarProfile?.avatarPath ?? user?.avatarUrl ?? null;
+  const sidebarAvatarUrl = useMemo(() => {
+    return avatarPath ? getPublicUrl('avatars', avatarPath) : null;
+  }, [avatarPath]);
+  const displayInitial = displayName?.charAt(0)?.toUpperCase() || 'U';
 
   // SECURITY: Get current user for validation
   const currentUser = getCurrentUser();
@@ -433,12 +519,26 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         {sidebarOpen && (
           <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-[#64BC46] text-white flex items-center justify-center font-semibold text-sm">
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              <div
+                className={cn(
+                  'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden border border-gray-200 dark:border-gray-700',
+                  sidebarAvatarUrl ? 'bg-gray-100 dark:bg-gray-700' : 'bg-[#64BC46] text-white'
+                )}
+              >
+                {sidebarAvatarUrl ? (
+                  <img
+                    src={sidebarAvatarUrl}
+                    alt={`${displayName}'s avatar`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span>{displayInitial}</span>
+                )}
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{user?.name || 'User'}</p>
-                <p className="text-xs text-gray-500">{user?.email || 'user@example.com'}</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{displayName}</p>
+                <p className="text-xs text-gray-500">{displayEmail}</p>
               </div>
             </div>
           </div>
