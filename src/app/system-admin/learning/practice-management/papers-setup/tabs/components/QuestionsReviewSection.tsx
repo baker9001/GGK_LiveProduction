@@ -1,7 +1,8 @@
 import React from 'react';
-import { ChevronRight, Maximize2, Minimize2, AlertCircle } from 'lucide-react';
+import { ChevronRight, Maximize2, Minimize2, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../../../../../../../components/shared/Button';
 import { QuestionCard } from './QuestionCard';
+import { type ReviewStatus } from '../../../../../../../components/shared/QuestionReviewStatus';
 
 interface QuestionsReviewSectionProps {
   questions: any[];
@@ -44,6 +45,10 @@ interface QuestionsReviewSectionProps {
   confirmationStatus?: string;
   onSnippingComplete?: (dataUrl: string, fileName: string, questionId: string, partPath: string[]) => void;
   onUpdateAttachments?: (newAttachments: any) => void;
+  reviewStatuses?: Record<string, ReviewStatus>;
+  onToggleReview?: (questionId: string) => void;
+  reviewDisabled?: boolean;
+  reviewLoading?: boolean;
 }
 
 export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
@@ -70,6 +75,10 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
   onToggleFigureRequired,
   onExpandAll,
   onCollapseAll,
+  reviewStatuses,
+  onToggleReview,
+  reviewDisabled,
+  reviewLoading,
 }) => {
   // Safety checks
   if (!questions || questions.length === 0) {
@@ -94,12 +103,15 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
   const safeValidationErrors = validationErrors || {};
   const safeExpandedQuestions = expandedQuestions || new Set();
   const safeAttachments = attachments || {};
+  const safeReviewStatuses = reviewStatuses || {};
 
   const allExpanded = safeExpandedQuestions.size === questions.length;
   const errorCount = Object.keys(safeValidationErrors).length;
   const mappedCount = Object.values(safeMappings).filter((m: any) =>
     m?.chapter_id && m?.topic_ids && m.topic_ids.length > 0
   ).length;
+  const reviewedCount = questions.filter(q => safeReviewStatuses[q.id]?.isReviewed).length;
+  const allReviewed = questions.length > 0 && reviewedCount === questions.length;
 
   return (
     <div className="space-y-4">
@@ -133,9 +145,24 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
                 Errors
               </p>
             </div>
+            <div className="h-12 w-px bg-blue-200 dark:bg-blue-800" />
+            <div>
+              <p className={`text-2xl font-bold ${allReviewed ? 'text-green-900 dark:text-green-100' : 'text-blue-900 dark:text-blue-100'}`}>
+                {reviewedCount}
+              </p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Reviewed
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {reviewLoading && (
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Syncing review progress…</span>
+              </div>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -179,6 +206,7 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
           const mapping = safeMappings[question.id] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
           const questionAttachments = safeAttachments[question.id] || [];
           const questionValidationErrors = safeValidationErrors[question.id] || [];
+          const questionReviewStatus = safeReviewStatuses[question.id];
 
           const handleAddAttachment = (partIndex?: number, subpartIndex?: number) => {
             const partPath = [];
@@ -231,6 +259,9 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
               }}
               onUpdateQuestion={handleUpdateQuestion}
               onToggleFigureRequired={onToggleFigureRequired ? (required) => onToggleFigureRequired(question.id, required) : undefined}
+              reviewStatus={questionReviewStatus}
+              onToggleReview={onToggleReview}
+              reviewDisabled={reviewDisabled}
             />
           );
         })}
