@@ -2388,10 +2388,13 @@ export const validateQuestionsForImport = (
     }
     
     // Check if figure is required but no attachments (only if attachments object is provided)
+    // RESPECT THE TOGGLE: Only validate if figure_required is not explicitly set to false
     if (attachments) {
       const attachmentKey = questionId;
       const hasAttachments = attachments[attachmentKey]?.length > 0;
-      if (requiresFigure(question) && !hasAttachments) {
+      const shouldValidateFigure = (question as any).figure_required !== false && requiresFigure(question);
+
+      if (shouldValidateFigure && !hasAttachments) {
         questionErrors.push('Figure is required but no attachment added');
       }
     }

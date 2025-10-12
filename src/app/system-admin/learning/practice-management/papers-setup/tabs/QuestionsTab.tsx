@@ -1825,56 +1825,72 @@ export function QuestionsTab({
     setSimulationPaper(null);
   };
 
-  // FIXED: Updated validation function with proper error handling
+  // FIXED: Updated validation function with proper error handling and figure_required check
   const validateQuestionsWithAttachments = () => {
     const errors: Record<string, string[]> = {};
-    
+
     try {
       questions.forEach(question => {
         const questionErrors: string[] = [];
-        
+
         // Debug log for tracking
-        console.log(`Validating question ${question.id}`);
-        
-        // Check if question requires figure
-        if (question.figure || safeRequiresFigure(question)) {
+        console.log(`Validating question ${question.id}`, {
+          figure_required: (question as any).figure_required,
+          figure: question.figure,
+          requiresFigure: safeRequiresFigure(question)
+        });
+
+        // Check if question requires figure - RESPECT THE TOGGLE!
+        // Only validate attachments if figure_required is not explicitly set to false
+        const shouldValidateFigure = (question as any).figure_required !== false &&
+                                     (question.figure || safeRequiresFigure(question));
+
+        if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
           if (!questionAttachments || questionAttachments.length === 0) {
             questionErrors.push('Figure is required but no attachment added');
           }
         }
-        
+
         // Check parts for figure requirements
         if (question.parts && Array.isArray(question.parts)) {
           question.parts.forEach((part, partIndex) => {
             if (!part) return; // Skip null/undefined parts
-            
+
             // Generate the key that matches how it was stored
             const partKey = generateAttachmentKey(question.id, partIndex);
-            
-            if (part.figure || safeRequiresFigure(part)) {
+
+            // RESPECT THE TOGGLE for parts too!
+            const shouldValidatePartFigure = (part as any).figure_required !== false &&
+                                            (part.figure || safeRequiresFigure(part));
+
+            if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
               if (!partAttachments || partAttachments.length === 0) {
                 questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)}: Figure is required but no attachment added`);
               }
             }
-            
+
             // Check subparts - FIXED: Handle Roman numeral indexing properly
             if (part.subparts && Array.isArray(part.subparts)) {
               part.subparts.forEach((subpart, subpartIndex) => {
                 if (!subpart) return; // Skip null/undefined subparts
-                
-                if (subpart.figure || safeRequiresFigure(subpart)) {
+
+                // RESPECT THE TOGGLE for subparts too!
+                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
+                                                    (subpart.figure || safeRequiresFigure(subpart));
+
+                if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
                   const subpartKey = generateAttachmentKey(question.id, partIndex, subpartIndex);
-                  
+
                   // Check if attachment exists with primary key
                   const hasAttachment = attachments[subpartKey] && attachments[subpartKey].length > 0;
-                  
+
                   if (!hasAttachment) {
                     // Try alternative key formats
                     let found = false;
-                    
+
                     // Check all keys that might contain this subpart's attachment
                     Object.keys(attachments).forEach(key => {
                       if (key.startsWith(question.id) && key.includes(`p${partIndex}`) && key.includes(`s${subpartIndex}`)) {
@@ -1883,7 +1899,7 @@ export function QuestionsTab({
                         }
                       }
                     });
-                    
+
                     if (!found) {
                       const subpartLabel = subpart.subpart || `(${Roman[subpartIndex] || subpartIndex})`;
                       questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)} Subpart ${subpartLabel}: Figure is required but no attachment added`);
