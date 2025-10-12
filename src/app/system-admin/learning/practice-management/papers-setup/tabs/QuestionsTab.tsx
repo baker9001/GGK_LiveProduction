@@ -12,7 +12,7 @@
  * - Ensured attachment state synchronization
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
@@ -113,6 +113,18 @@ const answerFormatConfig = {
   code: { icon: Code, color: 'gray', label: 'Code', hint: 'Write programming code' },
   audio: { icon: Mic, color: 'red', label: 'Audio Recording', hint: 'Record audio response' },
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
+};
+
+type InlineConfirmationOptions = {
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  confirmVariant?: string;
+};
+
+type PendingConfirmationState = InlineConfirmationOptions & {
+  resolve: (value: boolean) => void;
 };
 
 const normalizeText = (value: any): string => {
@@ -237,6 +249,7 @@ interface ProcessedQuestion {
   difficulty: string;
   status: string;
   figure: boolean;
+  figure_required?: boolean;
   attachments: string[];
   hint?: string;
   explanation?: string;
@@ -263,6 +276,7 @@ interface ProcessedPart {
   answer_format: string;
   answer_requirement?: string;
   figure?: boolean;
+  figure_required?: boolean;
   attachments?: string[];
   hint?: string;
   explanation?: string;
@@ -285,6 +299,7 @@ interface ProcessedSubpart {
   hint?: string;
   explanation?: string;
   figure?: boolean; // Add figure field to track requirement
+  figure_required?: boolean;
 }
 
 interface ProcessedAnswer {
@@ -372,6 +387,7 @@ export function QuestionsTab({
   const [showSnippingTool, setShowSnippingTool] = useState(false);
   const [attachmentTarget, setAttachmentTarget] = useState<any>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmationState | null>(null);
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
@@ -396,6 +412,17 @@ export function QuestionsTab({
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
+
+  const requestInlineConfirmation = useCallback(
+    (options: InlineConfirmationOptions) =>
+      new Promise<boolean>(resolve => {
+        setPendingConfirmation({
+          ...options,
+          resolve,
+        });
+      }),
+    []
+  );
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -467,6 +494,22 @@ export function QuestionsTab({
       console.warn('Error in requiresFigure:', error);
       return item?.figure || false;
     }
+  };
+
+  const resolveFigureFlag = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure === 'boolean') {
+      return item.figure;
+    }
+    return safeRequiresFigure(item);
+  };
+
+  const resolveFigureRequirement = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure_required === 'boolean') {
+      return item.figure_required;
+    }
+    return resolveFigureFlag(item);
   };
 
   // Helper function to parse answer requirement from mark scheme text
@@ -952,6 +995,9 @@ export function QuestionsTab({
       const answerRequirement = q.answer_requirement || 
         (q.correct_answers && q.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(q.correct_answers), q.marks) : undefined);
       
+      const figureFlag = resolveFigureFlag(q);
+      const figureRequired = resolveFigureRequirement(q);
+
       // Process main question with all available data
       const processedQuestion: ProcessedQuestion = {
         id: questionId,
@@ -963,7 +1009,8 @@ export function QuestionsTab({
         subtopic: q.subtopic || q.subtopics?.[0] || '',
         difficulty: q.difficulty || determineQuestionDifficulty(q),
         status: 'pending',
-        figure: q.figure || safeRequiresFigure(q),
+        figure: figureFlag,
+        figure_required: figureRequired,
         attachments: ensureArray(q.attachments),
         hint: q.hint || '',
         explanation: q.explanation || '',
@@ -1063,9 +1110,12 @@ export function QuestionsTab({
     }
     
     // Parse answer requirement for parts
-    const answerRequirement = part.answer_requirement || 
+    const answerRequirement = part.answer_requirement ||
       (part.correct_answers && part.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks) : undefined);
-    
+
+    const partFigureFlag = resolveFigureFlag(part);
+    const partFigureRequired = resolveFigureRequirement(part);
+
     const processedPart: ProcessedPart = {
       id: partId, // FIXED: Include id in processed part
       part: part.part || String.fromCharCode(97 + partIndex), // a, b, c...
@@ -1073,14 +1123,15 @@ export function QuestionsTab({
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
-      figure: part.figure || safeRequiresFigure(part),
+      figure: partFigureFlag,
+      figure_required: partFigureRequired,
       attachments: ensureArray(part.attachments),
       hint: part.hint,
       explanation: part.explanation,
       subparts: [],
       correct_answers: [],
       options: [],
-      requires_manual_marking: part.requires_manual_marking || 
+      requires_manual_marking: part.requires_manual_marking ||
         ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
       marking_criteria: part.marking_criteria
     };
@@ -1119,6 +1170,9 @@ export function QuestionsTab({
     const answerRequirement = subpart.answer_requirement || 
       (subpart.correct_answers && subpart.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks) : undefined);
     
+    const subpartFigureFlag = resolveFigureFlag(subpart);
+    const subpartFigureRequired = resolveFigureRequirement(subpart);
+
     return {
       id: subpartId, // FIXED: Include id in processed subpart
       subpart: subpartLabel,
@@ -1130,7 +1184,8 @@ export function QuestionsTab({
       options: subpart.options ? processOptions(subpart.options) : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
-      figure: subpart.figure || safeRequiresFigure(subpart) // Add figure field to track requirement
+      figure: subpartFigureFlag,
+      figure_required: subpartFigureRequired
     };
   };
 
@@ -1837,13 +1892,11 @@ export function QuestionsTab({
         console.log(`Validating question ${question.id}`, {
           figure_required: (question as any).figure_required,
           figure: question.figure,
-          requiresFigure: safeRequiresFigure(question)
+          resolvedRequirement: resolveFigureRequirement(question)
         });
 
-        // Check if question requires figure - RESPECT THE TOGGLE!
-        // Only validate attachments if figure_required is not explicitly set to false
-        const shouldValidateFigure = (question as any).figure_required !== false &&
-                                     (question.figure || safeRequiresFigure(question));
+        // Check if question requires figure - RESPECT THE TOGGLE and JSON data!
+        const shouldValidateFigure = resolveFigureRequirement(question);
 
         if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
@@ -1861,8 +1914,7 @@ export function QuestionsTab({
             const partKey = generateAttachmentKey(question.id, partIndex);
 
             // RESPECT THE TOGGLE for parts too!
-            const shouldValidatePartFigure = (part as any).figure_required !== false &&
-                                            (part.figure || safeRequiresFigure(part));
+            const shouldValidatePartFigure = resolveFigureRequirement(part);
 
             if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
@@ -1877,8 +1929,7 @@ export function QuestionsTab({
                 if (!subpart) return; // Skip null/undefined subparts
 
                 // RESPECT THE TOGGLE for subparts too!
-                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
-                                                    (subpart.figure || safeRequiresFigure(subpart));
+                const shouldValidateSubpartFigure = resolveFigureRequirement(subpart);
 
                 if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
@@ -1977,13 +2028,23 @@ export function QuestionsTab({
 
           toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
 
-          const showFullReport = window.confirm(
-            `Extraction validation found ${preImportValidation.summary.totalErrors} errors.\n\n` +
-            `- Missing Answers: ${preImportValidation.summary.missingAnswers}\n` +
-            `- Invalid Alternatives: ${preImportValidation.summary.invalidAlternatives}\n` +
-            `- Invalid Operators: ${preImportValidation.summary.invalidOperators}\n\n` +
-            `Click OK to see full report in console, Cancel to fix errors.`
-          );
+          const showFullReport = await requestInlineConfirmation({
+            title: 'Extraction Validation Errors',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>Extraction validation found {preImportValidation.summary.totalErrors} errors.</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Missing Answers: {preImportValidation.summary.missingAnswers}</li>
+                  <li>Invalid Alternatives: {preImportValidation.summary.invalidAlternatives}</li>
+                  <li>Invalid Operators: {preImportValidation.summary.invalidOperators}</li>
+                </ul>
+                <p>View the full report in the console to review every issue.</p>
+              </div>
+            ),
+            confirmText: 'View Report',
+            cancelText: 'Fix Errors',
+            confirmVariant: 'primary',
+          });
 
           if (showFullReport) {
             console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
@@ -2088,9 +2149,18 @@ export function QuestionsTab({
       if (simulationRequired && !simulationResult?.completed) {
         console.warn('Simulation required but not completed');
         // For debugging, make this a warning instead of blocking
-        const proceedAnyway = window.confirm(
-          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
-        );
+        const proceedAnyway = await requestInlineConfirmation({
+          title: 'Simulation Recommended',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>Exam simulation is recommended but has not been completed.</p>
+              <p>Do you want to proceed with the import anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed Anyway',
+          cancelText: 'Go Back',
+          confirmVariant: 'primary',
+        });
         if (!proceedAnyway) {
           toast.warning('Please complete the exam simulation before importing');
           return;
@@ -2112,10 +2182,23 @@ export function QuestionsTab({
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
         // For debugging, make this optional
-        const proceedWithUnmapped = window.confirm(
-          `${unmappedQuestions.length} questions are not mapped to units/topics: ${unmappedNumbers}\n\nDo you want to proceed anyway?`
-        );
-        
+        const proceedWithUnmapped = await requestInlineConfirmation({
+          title: 'Unmapped Questions Detected',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>
+                {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} are not mapped to units/topics:
+                {' '}
+                {unmappedNumbers}
+              </p>
+              <p>Do you want to proceed anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed',
+          cancelText: 'Review Mapping',
+          confirmVariant: 'primary',
+        });
+
         if (!proceedWithUnmapped) {
           toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
           return;
@@ -2125,15 +2208,16 @@ export function QuestionsTab({
       // Check for missing figures (warning only, don't block)
       const questionsNeedingFigures = questions.filter(q => {
         try {
-          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
+          const questionRequiresFigure = resolveFigureRequirement(q);
+          if (questionRequiresFigure && !attachments[q.id]?.length) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
             return q.parts.some((part: any, index: number) => {
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
-              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
-                     !attachments[partKey]?.length;
+              const partRequiresFigure = resolveFigureRequirement(part);
+              return partRequiresFigure && !attachments[partKey]?.length;
             });
           }
         } catch (err) {
@@ -3402,6 +3486,26 @@ export function QuestionsTab({
             />
           </div>
         </div>
+      )}
+
+      {/* Inline Confirmation Dialog */}
+      {pendingConfirmation && (
+        <ConfirmationDialog
+          open={true}
+          onClose={() => {
+            pendingConfirmation.resolve(false);
+            setPendingConfirmation(null);
+          }}
+          onConfirm={() => {
+            pendingConfirmation.resolve(true);
+            setPendingConfirmation(null);
+          }}
+          title={pendingConfirmation.title}
+          message={pendingConfirmation.message}
+          confirmText={pendingConfirmation.confirmText}
+          cancelText={pendingConfirmation.cancelText}
+          confirmVariant={pendingConfirmation.confirmVariant ?? 'primary'}
+        />
       )}
 
       {/* Confirmation Dialog */}
