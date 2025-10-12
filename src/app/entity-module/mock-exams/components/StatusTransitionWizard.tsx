@@ -94,7 +94,7 @@ const ALLOWED_TRANSITIONS: Record<MockExamStatus, MockExamStatus[]> = {
   moderation: ['grading', 'analytics_released', 'cancelled'],
   analytics_released: ['completed', 'cancelled'],
   completed: [],
-  cancelled: [],
+  cancelled: ['draft'],
 };
 
 const DEFAULT_INSTRUCTION_AUDIENCES: MockExamInstructionRecord['audience'][] = [
