@@ -2305,6 +2305,16 @@ export function QuestionsTab({
     setEditingQuestion(null);
   };
 
+  const handleToggleFigureRequired = (questionId: string, required: boolean) => {
+    setQuestions(prev => prev.map(q => {
+      if (q.id === questionId || q.question_number.toString() === questionId) {
+        return { ...q, figure_required: required };
+      }
+      return q;
+    }));
+    toast.success(`Figure ${required ? 'marked as mandatory' : 'marked as optional'}`);
+  };
+
   const toggleQuestionExpanded = (questionId: string) => {
     setExpandedQuestions(prev => {
       const next = new Set(prev);
@@ -3255,6 +3265,7 @@ export function QuestionsTab({
         onImportConfirm={handleImportQuestions}
         onPrevious={onPrevious}
         onToggleExpanded={toggleQuestionExpanded}
+        onToggleFigureRequired={handleToggleFigureRequired}
         onExpandAll={() => {
           const allQuestionIds = questions.map(q => q.id);
           setExpandedQuestions(new Set(allQuestionIds));

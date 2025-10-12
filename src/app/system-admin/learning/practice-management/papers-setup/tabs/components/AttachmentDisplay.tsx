@@ -12,11 +12,13 @@ interface AttachmentDisplayProps {
   questionLabel: string;
   attachmentKey: string;
   requiresFigure?: boolean;
+  figureRequired?: boolean;
   pdfAvailable?: boolean;
   onAdd: () => void;
   onDelete: (attachmentKey: string, attachmentId: string) => void;
   isEditing?: boolean;
   showDeleteButton?: boolean;
+  onToggleFigureRequired?: () => void;
 }
 
 export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
@@ -24,11 +26,13 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   questionLabel,
   attachmentKey,
   requiresFigure = false,
+  figureRequired = true,
   pdfAvailable = false,
   onAdd,
   onDelete,
   isEditing = false,
   showDeleteButton = true,
+  onToggleFigureRequired,
 }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -40,7 +44,8 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   const [fadingOutId, setFadingOutId] = useState<string | null>(null);
 
   const hasAttachments = attachments && attachments.length > 0;
-  const showWarning = requiresFigure && !hasAttachments;
+  // Only show warning if figure is auto-detected AND marked as required
+  const showWarning = requiresFigure && figureRequired && !hasAttachments;
 
   const handlePreviewClick = (e: React.MouseEvent, imageUrl: string) => {
     e.preventDefault();
@@ -95,10 +100,31 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <Paperclip className="h-4 w-4" />
-          Attachments {requiresFigure && <span className="text-red-600">*</span>}
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <Paperclip className="h-4 w-4" />
+            Attachments {requiresFigure && figureRequired && <span className="text-red-600">*</span>}
+          </label>
+          {requiresFigure && onToggleFigureRequired && (
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={figureRequired}
+                    onChange={onToggleFigureRequired}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-[#8CC63F] transition-colors"></div>
+                  <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                </div>
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-[#8CC63F] transition-colors">
+                  {figureRequired ? 'Mandatory' : 'Optional'}
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
         {pdfAvailable ? (
           <Button
             variant="outline"

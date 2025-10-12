@@ -43,6 +43,7 @@ interface EnhancedQuestionReviewProps {
   onToggleExpanded: (questionId: string) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
+  onToggleFigureRequired?: (questionId: string, required: boolean) => void;
 }
 
 export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
@@ -61,7 +62,8 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
   onAttachmentDelete,
   onToggleExpanded,
   onExpandAll,
-  onCollapseAll
+  onCollapseAll,
+  onToggleFigureRequired
 }) => {
   const [snipModeQuestionId, setSnipModeQuestionId] = useState<string | null>(null);
 
@@ -79,7 +81,10 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
   const validateQuestion = (question: any, index: number): QuestionValidation => {
     const issues: ValidationIssue[] = [];
     const missingFields: string[] = [];
-    const needsFigure = detectsFigureReference(question);
+    // Check both auto-detection AND the figure_required field (default to true if not set)
+    const autoDetected = detectsFigureReference(question);
+    const figureRequired = question.figure_required !== undefined ? question.figure_required : true;
+    const needsFigure = autoDetected && figureRequired;
     const attachmentKey = `${question.id || question.question_number}`;
     const hasFigure = attachments[attachmentKey]?.length > 0;
 
@@ -398,19 +403,43 @@ export const EnhancedQuestionReview: React.FC<EnhancedQuestionReviewProps> = ({
                   </div>
 
                   {/* Figure Attachment Section */}
-                  {(validation.needsFigure || questionAttachments.length > 0) && (
+                  {(validation.needsFigure || questionAttachments.length > 0 || detectsFigureReference(question)) && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                          <Image className="h-4 w-4" />
-                          Figure Attachments
-                          {validation.needsFigure && !validation.hasFigure && (
-                            <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" />
-                              Required
-                            </span>
+                        <div className="flex items-center gap-3">
+                          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                            <Image className="h-4 w-4" />
+                            Figure Attachments
+                            {validation.needsFigure && !validation.hasFigure && (
+                              <span className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Required
+                              </span>
+                            )}
+                          </h4>
+                          {detectsFigureReference(question) && onToggleFigureRequired && (
+                            <div className="flex items-center gap-2 ml-2">
+                              <label className="flex items-center gap-2 cursor-pointer group">
+                                <div className="relative">
+                                  <input
+                                    type="checkbox"
+                                    checked={question.figure_required !== false}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      onToggleFigureRequired(questionId, e.target.checked);
+                                    }}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-10 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:bg-[#8CC63F] transition-colors"></div>
+                                  <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                </div>
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-[#8CC63F] transition-colors">
+                                  {question.figure_required !== false ? 'Mandatory' : 'Optional'}
+                                </span>
+                              </label>
+                            </div>
                           )}
-                        </h4>
+                        </div>
 
                         <div className="flex gap-2">
                           {pdfDataUrl && (

@@ -32,6 +32,7 @@ interface QuestionsReviewSectionProps {
   onImportConfirm: () => void;
   onPrevious: () => void;
   onToggleExpanded: (questionId: string) => void;
+  onToggleFigureRequired?: (questionId: string, required: boolean) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
   onPdfUpload: (file: File) => void;
@@ -66,6 +67,7 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
   onAttachmentUpload,
   onAttachmentDelete,
   onToggleExpanded,
+  onToggleFigureRequired,
   onExpandAll,
   onCollapseAll,
 }) => {
@@ -228,6 +230,7 @@ export const QuestionsReviewSection: React.FC<QuestionsReviewSectionProps> = ({
                 onAttachmentDelete(attachmentKey, attachmentId);
               }}
               onUpdateQuestion={handleUpdateQuestion}
+              onToggleFigureRequired={onToggleFigureRequired ? (required) => onToggleFigureRequired(question.id, required) : undefined}
             />
           );
         })}
