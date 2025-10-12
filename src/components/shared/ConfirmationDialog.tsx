@@ -7,10 +7,19 @@ import { cn } from '../../lib/utils';
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  confirmVariant?:
+    | 'default'
+    | 'secondary'
+    | 'destructive'
+    | 'outline'
+    | 'ghost'
+    | 'link'
+    | 'success'
+    | 'warning'
+    | 'report';
   onConfirm: () => void;
   onCancel: () => void;
   className?: string;
@@ -79,9 +88,13 @@ export function ConfirmationDialog({
         
         {/* Content */}
         <div className="px-6 py-4">
-          <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" />
-            <p className="text-gray-700 dark:text-gray-300">{message}</p>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            {typeof message === 'string' ? (
+              <p className="text-gray-700 dark:text-gray-300">{message}</p>
+            ) : (
+              <div className="text-gray-700 dark:text-gray-300 text-sm space-y-2">{message}</div>
+            )}
           </div>
         </div>
         

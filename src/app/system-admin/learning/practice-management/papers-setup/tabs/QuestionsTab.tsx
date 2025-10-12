@@ -12,7 +12,7 @@
  * - Ensured attachment state synchronization
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 // Import shared components
-import { Button } from '../../../../../../components/shared/Button';
+import { Button, type ButtonProps } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
 import { PDFSnippingTool } from '../../../../../../components/shared/PDFSnippingTool';
 import { ConfirmationDialog } from '../../../../../../components/shared/ConfirmationDialog';
@@ -113,6 +113,24 @@ const answerFormatConfig = {
   code: { icon: Code, color: 'gray', label: 'Code', hint: 'Write programming code' },
   audio: { icon: Mic, color: 'red', label: 'Audio Recording', hint: 'Record audio response' },
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
+};
+
+type InlineToastTone = 'info' | 'warning' | 'danger';
+
+type ToastConfirmationOptions = {
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  confirmVariant?: ButtonProps['variant'];
+  tone?: InlineToastTone;
+};
+
+type InlineToastConfirmationState = Required<Omit<ToastConfirmationOptions, 'tone' | 'confirmVariant'>> & {
+  tone: InlineToastTone;
+  confirmVariant: NonNullable<ButtonProps['variant']>;
+  id: string;
+  resolve: (confirmed: boolean) => void;
 };
 
 const normalizeText = (value: any): string => {
@@ -237,6 +255,7 @@ interface ProcessedQuestion {
   difficulty: string;
   status: string;
   figure: boolean;
+  figure_required?: boolean;
   attachments: string[];
   hint?: string;
   explanation?: string;
@@ -263,6 +282,7 @@ interface ProcessedPart {
   answer_format: string;
   answer_requirement?: string;
   figure?: boolean;
+  figure_required?: boolean;
   attachments?: string[];
   hint?: string;
   explanation?: string;
@@ -285,6 +305,7 @@ interface ProcessedSubpart {
   hint?: string;
   explanation?: string;
   figure?: boolean; // Add figure field to track requirement
+  figure_required?: boolean;
 }
 
 interface ProcessedAnswer {
@@ -397,6 +418,66 @@ export function QuestionsTab({
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
 
+  const [inlineConfirmation, setInlineConfirmation] = useState<InlineToastConfirmationState | null>(null);
+
+  const requestToastConfirmation = useCallback(
+    (options: ToastConfirmationOptions) =>
+      new Promise<boolean>(resolve => {
+        setInlineConfirmation(previous => {
+          if (previous) {
+            previous.resolve(false);
+          }
+
+          return {
+            id: `inline-toast-${Date.now()}`,
+            title: options.title,
+            message: options.message,
+            confirmText: options.confirmText ?? 'Confirm',
+            cancelText: options.cancelText ?? 'Cancel',
+            confirmVariant: options.confirmVariant ?? 'default',
+            tone: options.tone ?? 'warning',
+            resolve,
+          };
+        });
+      }),
+    []
+  );
+
+  const dismissInlineConfirmation = useCallback((confirmed: boolean) => {
+    setInlineConfirmation(current => {
+      if (current) {
+        current.resolve(confirmed);
+      }
+      return null;
+    });
+  }, []);
+
+  const inlineToneStyles: Record<InlineToastTone, {
+    Icon: React.ComponentType<{ className?: string }>;
+    iconClass: string;
+    borderClass: string;
+    badgeClass: string;
+  }> = {
+    info: {
+      Icon: Info,
+      iconClass: 'text-blue-500 dark:text-blue-400',
+      borderClass: 'border-blue-200 dark:border-blue-800',
+      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+    },
+    warning: {
+      Icon: AlertTriangle,
+      iconClass: 'text-amber-500 dark:text-amber-400',
+      borderClass: 'border-amber-200 dark:border-amber-800',
+      badgeClass: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+    },
+    danger: {
+      Icon: XCircle,
+      iconClass: 'text-red-500 dark:text-red-400',
+      borderClass: 'border-red-200 dark:border-red-800',
+      badgeClass: 'bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100',
+    },
+  };
+
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionsRef = useRef<Record<string, HTMLDivElement>>({});
@@ -467,6 +548,22 @@ export function QuestionsTab({
       console.warn('Error in requiresFigure:', error);
       return item?.figure || false;
     }
+  };
+
+  const resolveFigureFlag = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure === 'boolean') {
+      return item.figure;
+    }
+    return safeRequiresFigure(item);
+  };
+
+  const resolveFigureRequirement = (item: any): boolean => {
+    if (!item) return false;
+    if (typeof item.figure_required === 'boolean') {
+      return item.figure_required;
+    }
+    return resolveFigureFlag(item);
   };
 
   // Helper function to parse answer requirement from mark scheme text
@@ -952,6 +1049,9 @@ export function QuestionsTab({
       const answerRequirement = q.answer_requirement || 
         (q.correct_answers && q.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(q.correct_answers), q.marks) : undefined);
       
+      const figureFlag = resolveFigureFlag(q);
+      const figureRequired = resolveFigureRequirement(q);
+
       // Process main question with all available data
       const processedQuestion: ProcessedQuestion = {
         id: questionId,
@@ -963,7 +1063,8 @@ export function QuestionsTab({
         subtopic: q.subtopic || q.subtopics?.[0] || '',
         difficulty: q.difficulty || determineQuestionDifficulty(q),
         status: 'pending',
-        figure: q.figure || safeRequiresFigure(q),
+        figure: figureFlag,
+        figure_required: figureRequired,
         attachments: ensureArray(q.attachments),
         hint: q.hint || '',
         explanation: q.explanation || '',
@@ -1063,9 +1164,12 @@ export function QuestionsTab({
     }
     
     // Parse answer requirement for parts
-    const answerRequirement = part.answer_requirement || 
+    const answerRequirement = part.answer_requirement ||
       (part.correct_answers && part.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(part.correct_answers), part.marks) : undefined);
-    
+
+    const partFigureFlag = resolveFigureFlag(part);
+    const partFigureRequired = resolveFigureRequirement(part);
+
     const processedPart: ProcessedPart = {
       id: partId, // FIXED: Include id in processed part
       part: part.part || String.fromCharCode(97 + partIndex), // a, b, c...
@@ -1073,14 +1177,15 @@ export function QuestionsTab({
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
-      figure: part.figure || safeRequiresFigure(part),
+      figure: partFigureFlag,
+      figure_required: partFigureRequired,
       attachments: ensureArray(part.attachments),
       hint: part.hint,
       explanation: part.explanation,
       subparts: [],
       correct_answers: [],
       options: [],
-      requires_manual_marking: part.requires_manual_marking || 
+      requires_manual_marking: part.requires_manual_marking ||
         ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
       marking_criteria: part.marking_criteria
     };
@@ -1119,6 +1224,9 @@ export function QuestionsTab({
     const answerRequirement = subpart.answer_requirement || 
       (subpart.correct_answers && subpart.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(subpart.correct_answers), subpart.marks) : undefined);
     
+    const subpartFigureFlag = resolveFigureFlag(subpart);
+    const subpartFigureRequired = resolveFigureRequirement(subpart);
+
     return {
       id: subpartId, // FIXED: Include id in processed subpart
       subpart: subpartLabel,
@@ -1130,7 +1238,8 @@ export function QuestionsTab({
       options: subpart.options ? processOptions(subpart.options) : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
-      figure: subpart.figure || safeRequiresFigure(subpart) // Add figure field to track requirement
+      figure: subpartFigureFlag,
+      figure_required: subpartFigureRequired
     };
   };
 
@@ -1837,13 +1946,11 @@ export function QuestionsTab({
         console.log(`Validating question ${question.id}`, {
           figure_required: (question as any).figure_required,
           figure: question.figure,
-          requiresFigure: safeRequiresFigure(question)
+          resolvedRequirement: resolveFigureRequirement(question)
         });
 
-        // Check if question requires figure - RESPECT THE TOGGLE!
-        // Only validate attachments if figure_required is not explicitly set to false
-        const shouldValidateFigure = (question as any).figure_required !== false &&
-                                     (question.figure || safeRequiresFigure(question));
+        // Check if question requires figure - RESPECT THE TOGGLE and JSON data!
+        const shouldValidateFigure = resolveFigureRequirement(question);
 
         if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
@@ -1861,8 +1968,7 @@ export function QuestionsTab({
             const partKey = generateAttachmentKey(question.id, partIndex);
 
             // RESPECT THE TOGGLE for parts too!
-            const shouldValidatePartFigure = (part as any).figure_required !== false &&
-                                            (part.figure || safeRequiresFigure(part));
+            const shouldValidatePartFigure = resolveFigureRequirement(part);
 
             if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
@@ -1877,8 +1983,7 @@ export function QuestionsTab({
                 if (!subpart) return; // Skip null/undefined subparts
 
                 // RESPECT THE TOGGLE for subparts too!
-                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
-                                                    (subpart.figure || safeRequiresFigure(subpart));
+                const shouldValidateSubpartFigure = resolveFigureRequirement(subpart);
 
                 if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
@@ -1977,13 +2082,24 @@ export function QuestionsTab({
 
           toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
 
-          const showFullReport = window.confirm(
-            `Extraction validation found ${preImportValidation.summary.totalErrors} errors.\n\n` +
-            `- Missing Answers: ${preImportValidation.summary.missingAnswers}\n` +
-            `- Invalid Alternatives: ${preImportValidation.summary.invalidAlternatives}\n` +
-            `- Invalid Operators: ${preImportValidation.summary.invalidOperators}\n\n` +
-            `Click OK to see full report in console, Cancel to fix errors.`
-          );
+          const showFullReport = await requestToastConfirmation({
+            title: 'Extraction Validation Errors',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>Extraction validation found {preImportValidation.summary.totalErrors} errors.</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Missing Answers: {preImportValidation.summary.missingAnswers}</li>
+                  <li>Invalid Alternatives: {preImportValidation.summary.invalidAlternatives}</li>
+                  <li>Invalid Operators: {preImportValidation.summary.invalidOperators}</li>
+                </ul>
+                <p>View the full report in the console to review every issue.</p>
+              </div>
+            ),
+            confirmText: 'View Report',
+            cancelText: 'Fix Errors',
+            confirmVariant: 'default',
+            tone: 'danger',
+          });
 
           if (showFullReport) {
             console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
@@ -2088,9 +2204,19 @@ export function QuestionsTab({
       if (simulationRequired && !simulationResult?.completed) {
         console.warn('Simulation required but not completed');
         // For debugging, make this a warning instead of blocking
-        const proceedAnyway = window.confirm(
-          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
-        );
+        const proceedAnyway = await requestToastConfirmation({
+          title: 'Simulation Recommended',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>Exam simulation is recommended but has not been completed.</p>
+              <p>Do you want to proceed with the import anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed Anyway',
+          cancelText: 'Go Back',
+          confirmVariant: 'default',
+          tone: 'warning',
+        });
         if (!proceedAnyway) {
           toast.warning('Please complete the exam simulation before importing');
           return;
@@ -2112,10 +2238,24 @@ export function QuestionsTab({
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
         // For debugging, make this optional
-        const proceedWithUnmapped = window.confirm(
-          `${unmappedQuestions.length} questions are not mapped to units/topics: ${unmappedNumbers}\n\nDo you want to proceed anyway?`
-        );
-        
+        const proceedWithUnmapped = await requestToastConfirmation({
+          title: 'Unmapped Questions Detected',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>
+                {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} are not mapped to units/topics:
+                {' '}
+                {unmappedNumbers}
+              </p>
+              <p>Do you want to proceed anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed',
+          cancelText: 'Review Mapping',
+          confirmVariant: 'default',
+          tone: 'warning',
+        });
+
         if (!proceedWithUnmapped) {
           toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
           return;
@@ -2125,15 +2265,16 @@ export function QuestionsTab({
       // Check for missing figures (warning only, don't block)
       const questionsNeedingFigures = questions.filter(q => {
         try {
-          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
+          const questionRequiresFigure = resolveFigureRequirement(q);
+          if (questionRequiresFigure && !attachments[q.id]?.length) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
             return q.parts.some((part: any, index: number) => {
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
-              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
-                     !attachments[partKey]?.length;
+              const partRequiresFigure = resolveFigureRequirement(part);
+              return partRequiresFigure && !attachments[partKey]?.length;
             });
           }
         } catch (err) {
@@ -3020,7 +3161,70 @@ export function QuestionsTab({
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {inlineConfirmation && (() => {
+        const tone = inlineToneStyles[inlineConfirmation.tone];
+        const ToneIcon = tone.Icon;
+
+        return (
+          <div className="fixed bottom-6 right-6 z-50 w-full max-w-md animate-in slide-in-from-bottom-5">
+            <div
+              className={cn(
+                'rounded-xl border bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:bg-gray-900',
+                tone.borderClass
+              )}
+              role="alert"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'mt-1 flex h-9 w-9 items-center justify-center rounded-full',
+                    tone.badgeClass
+                  )}
+                >
+                  <ToneIcon className={cn('h-5 w-5', tone.iconClass)} />
+                </div>
+                <div className="flex-1 space-y-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">
+                      {inlineConfirmation.title}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => dismissInlineConfirmation(false)}
+                      className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8CC63F] dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                      aria-label="Dismiss notification"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-300">
+                    {inlineConfirmation.message}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => dismissInlineConfirmation(false)}
+                    >
+                      {inlineConfirmation.cancelText}
+                    </Button>
+                    <Button
+                      variant={inlineConfirmation.confirmVariant}
+                      size="sm"
+                      onClick={() => dismissInlineConfirmation(true)}
+                    >
+                      {inlineConfirmation.confirmText}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="space-y-6">
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
 
@@ -3406,8 +3610,8 @@ export function QuestionsTab({
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
-        open={showConfirmDialog}
-        onClose={() => setShowConfirmDialog(false)}
+        isOpen={showConfirmDialog}
+        onCancel={() => setShowConfirmDialog(false)}
         onConfirm={confirmImport}
         title="Import Questions"
         message={
@@ -3446,14 +3650,14 @@ export function QuestionsTab({
           </div>
         }
         confirmText="Import"
-        confirmVariant="primary"
+        confirmVariant="default"
       />
 
       {/* Delete Attachment Confirmation */}
       {deleteAttachmentConfirm && (
         <ConfirmationDialog
-          open={true}
-          onClose={() => setDeleteAttachmentConfirm(null)}
+          isOpen={true}
+          onCancel={() => setDeleteAttachmentConfirm(null)}
           onConfirm={() => {
             if (deleteAttachmentConfirm) {
               handleDeleteAttachment(
@@ -3466,7 +3670,7 @@ export function QuestionsTab({
           title="Delete Attachment"
           message="Are you sure you want to delete this attachment?"
           confirmText="Delete"
-          confirmVariant="danger"
+          confirmVariant="destructive"
         />
       )}
 
@@ -3585,6 +3789,7 @@ export function QuestionsTab({
           )}
         </Button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
