@@ -12,7 +12,7 @@
  * - Ensured attachment state synchronization
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
@@ -113,6 +113,18 @@ const answerFormatConfig = {
   code: { icon: Code, color: 'gray', label: 'Code', hint: 'Write programming code' },
   audio: { icon: Mic, color: 'red', label: 'Audio Recording', hint: 'Record audio response' },
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
+};
+
+type InlineConfirmationOptions = {
+  title: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  confirmVariant?: string;
+};
+
+type PendingConfirmationState = InlineConfirmationOptions & {
+  resolve: (value: boolean) => void;
 };
 
 const normalizeText = (value: any): string => {
@@ -375,6 +387,7 @@ export function QuestionsTab({
   const [showSnippingTool, setShowSnippingTool] = useState(false);
   const [attachmentTarget, setAttachmentTarget] = useState<any>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmationState | null>(null);
   const [pdfFile, setPdfFile] = useState<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Record<string, any[]>>({});
@@ -399,6 +412,17 @@ export function QuestionsTab({
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
+
+  const requestInlineConfirmation = useCallback(
+    (options: InlineConfirmationOptions) =>
+      new Promise<boolean>(resolve => {
+        setPendingConfirmation({
+          ...options,
+          resolve,
+        });
+      }),
+    []
+  );
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2004,13 +2028,23 @@ export function QuestionsTab({
 
           toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
 
-          const showFullReport = window.confirm(
-            `Extraction validation found ${preImportValidation.summary.totalErrors} errors.\n\n` +
-            `- Missing Answers: ${preImportValidation.summary.missingAnswers}\n` +
-            `- Invalid Alternatives: ${preImportValidation.summary.invalidAlternatives}\n` +
-            `- Invalid Operators: ${preImportValidation.summary.invalidOperators}\n\n` +
-            `Click OK to see full report in console, Cancel to fix errors.`
-          );
+          const showFullReport = await requestInlineConfirmation({
+            title: 'Extraction Validation Errors',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>Extraction validation found {preImportValidation.summary.totalErrors} errors.</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Missing Answers: {preImportValidation.summary.missingAnswers}</li>
+                  <li>Invalid Alternatives: {preImportValidation.summary.invalidAlternatives}</li>
+                  <li>Invalid Operators: {preImportValidation.summary.invalidOperators}</li>
+                </ul>
+                <p>View the full report in the console to review every issue.</p>
+              </div>
+            ),
+            confirmText: 'View Report',
+            cancelText: 'Fix Errors',
+            confirmVariant: 'primary',
+          });
 
           if (showFullReport) {
             console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
@@ -2115,9 +2149,18 @@ export function QuestionsTab({
       if (simulationRequired && !simulationResult?.completed) {
         console.warn('Simulation required but not completed');
         // For debugging, make this a warning instead of blocking
-        const proceedAnyway = window.confirm(
-          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
-        );
+        const proceedAnyway = await requestInlineConfirmation({
+          title: 'Simulation Recommended',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>Exam simulation is recommended but has not been completed.</p>
+              <p>Do you want to proceed with the import anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed Anyway',
+          cancelText: 'Go Back',
+          confirmVariant: 'primary',
+        });
         if (!proceedAnyway) {
           toast.warning('Please complete the exam simulation before importing');
           return;
@@ -2139,10 +2182,23 @@ export function QuestionsTab({
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
         // For debugging, make this optional
-        const proceedWithUnmapped = window.confirm(
-          `${unmappedQuestions.length} questions are not mapped to units/topics: ${unmappedNumbers}\n\nDo you want to proceed anyway?`
-        );
-        
+        const proceedWithUnmapped = await requestInlineConfirmation({
+          title: 'Unmapped Questions Detected',
+          message: (
+            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+              <p>
+                {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} are not mapped to units/topics:
+                {' '}
+                {unmappedNumbers}
+              </p>
+              <p>Do you want to proceed anyway?</p>
+            </div>
+          ),
+          confirmText: 'Proceed',
+          cancelText: 'Review Mapping',
+          confirmVariant: 'primary',
+        });
+
         if (!proceedWithUnmapped) {
           toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
           return;
@@ -3430,6 +3486,26 @@ export function QuestionsTab({
             />
           </div>
         </div>
+      )}
+
+      {/* Inline Confirmation Dialog */}
+      {pendingConfirmation && (
+        <ConfirmationDialog
+          open={true}
+          onClose={() => {
+            pendingConfirmation.resolve(false);
+            setPendingConfirmation(null);
+          }}
+          onConfirm={() => {
+            pendingConfirmation.resolve(true);
+            setPendingConfirmation(null);
+          }}
+          title={pendingConfirmation.title}
+          message={pendingConfirmation.message}
+          confirmText={pendingConfirmation.confirmText}
+          cancelText={pendingConfirmation.cancelText}
+          confirmVariant={pendingConfirmation.confirmVariant ?? 'primary'}
+        />
       )}
 
       {/* Confirmation Dialog */}
