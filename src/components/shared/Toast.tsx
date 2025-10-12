@@ -1,62 +1,76 @@
 ///home/project/src/components/shared/Toast.tsx
 
-import { Toaster } from 'react-hot-toast';
-import { toast as hotToast } from 'react-hot-toast';
+import { Toaster, toast as hotToast } from 'react-hot-toast';
+import type { ToastOptions, Renderable, ValueOrFunction, Toast as HotToast } from 'react-hot-toast';
+import type { CSSProperties } from 'react';
+
+type ExtendedToastOptions = ToastOptions & {
+  style?: CSSProperties;
+};
+
+const mergeOptions = (
+  options: ExtendedToastOptions | undefined,
+  styleOverrides: CSSProperties
+): ToastOptions => ({
+  ...options,
+  style: {
+    ...styleOverrides,
+    ...(options?.style ?? {}),
+  },
+});
 
 export const toast = {
-  success: (message: string) => {
-    hotToast.success(message, {
-      style: {
-        background: '#F0FDF4',
-        color: '#166534',
-        border: '1px solid #BBF7D0',
-      },
-    });
+  success: (message: string, options?: ExtendedToastOptions) => {
+    hotToast.success(message, mergeOptions(options, {
+      background: '#F0FDF4',
+      color: '#166534',
+      border: '1px solid #BBF7D0',
+    }));
   },
-  error: (message: string) => {
-    hotToast.error(message, {
-      style: {
-        background: '#FEF2F2',
-        color: '#991B1B',
-        border: '1px solid #FECACA',
-      },
-    });
+  error: (message: string, options?: ExtendedToastOptions) => {
+    hotToast.error(message, mergeOptions(options, {
+      background: '#FEF2F2',
+      color: '#991B1B',
+      border: '1px solid #FECACA',
+    }));
   },
-  info: (message: string) => {
-    hotToast(message, {
-      icon: 'ℹ️',
-      style: {
-        background: '#EFF6FF',
-        color: '#1E40AF',
-        border: '1px solid #BFDBFE',
-      },
-    });
+  info: (message: string, options?: ExtendedToastOptions) => {
+    hotToast(message, mergeOptions({
+      ...options,
+      icon: options?.icon ?? 'ℹ️',
+    }, {
+      background: '#EFF6FF',
+      color: '#1E40AF',
+      border: '1px solid #BFDBFE',
+    }));
   },
-  warning: (message: string) => {
-    hotToast(message, {
-      icon: '⚠️',
-      style: {
-        background: '#FFFBEB',
-        color: '#92400E',
-        border: '1px solid #FEF3C7',
-      },
-    });
+  warning: (message: string, options?: ExtendedToastOptions) => {
+    hotToast(message, mergeOptions({
+      ...options,
+      icon: options?.icon ?? '⚠️',
+    }, {
+      background: '#FFFBEB',
+      color: '#92400E',
+      border: '1px solid #FEF3C7',
+    }));
   },
-  loading: (message: string) => {
-    return hotToast.loading(message, {
-      style: {
-        background: '#F3F4F6',
-        color: '#374151',
-        border: '1px solid #D1D5DB',
-      },
-    });
+  loading: (message: string, options?: ExtendedToastOptions) => {
+    return hotToast.loading(message, mergeOptions(options, {
+      background: '#F3F4F6',
+      color: '#374151',
+      border: '1px solid #D1D5DB',
+    }));
   },
   promise: hotToast.promise,
   dismiss: hotToast.dismiss,
+  custom: (
+    render: ValueOrFunction<Renderable, HotToast>,
+    options?: ToastOptions
+  ) => hotToast.custom(render, options),
   update: (toastId: string | number, options: any) => {
-    return hotToast(options.render, { 
+    return hotToast(options.render, {
       id: toastId,
-      ...options 
+      ...options,
     });
   },
 };
