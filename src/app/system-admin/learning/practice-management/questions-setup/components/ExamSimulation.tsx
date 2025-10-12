@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useAnswerValidation } from '@/hooks/useAnswerValidation';
 import DynamicAnswerField from '@/components/shared/DynamicAnswerField';
 import { ResultsDashboard } from './ResultsDashboard';
+import toast from 'react-hot-toast';
 
 interface AttachmentAsset {
   id: string;
@@ -56,6 +57,27 @@ interface QuestionOption {
   option_text: string;
   is_correct: boolean;
   order: number;
+}
+
+interface SimulationIssue {
+  questionId?: string;
+  type: 'info' | 'warning' | 'error';
+  message: string;
+}
+
+interface QAReviewResultPayload {
+  completed: boolean;
+  completedAt: string;
+  mode: 'qa_review';
+  flaggedQuestions: string[];
+  issues: SimulationIssue[];
+  recommendations: string[];
+  questionTimes: Record<string, number>;
+  score?: number;
+  timeElapsed: number;
+  answeredCount: number;
+  totalQuestions: number;
+  visitedQuestions: string[];
 }
 
 const deriveOptionLabel = (orderIndex: number): string => {
@@ -529,13 +551,32 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [questionStartTimes, setQuestionStartTimes] = useState<Record<string, number>>({});
-  
+  const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(() => {
+    const initialSet = new Set<string>();
+    if (paper.questions[0]?.id) {
+      initialSet.add(paper.questions[0].id);
+    }
+    return initialSet;
+  });
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { validateAnswer } = useAnswerValidation();
-  
+
   const currentQuestion = paper.questions[currentQuestionIndex];
   const totalQuestions = paper.questions.length;
   const examDuration = paper.duration ? parseInt(paper.duration) * 60 : 0; // Convert to seconds
+  const visitedCount = visitedQuestions.size;
+  const allQuestionsVisited = totalQuestions > 0 && visitedCount === totalQuestions;
+
+  const resetVisitedQuestions = useCallback(() => {
+    setVisitedQuestions(() => {
+      const initialSet = new Set<string>();
+      if (paper.questions[0]?.id) {
+        initialSet.add(paper.questions[0].id);
+      }
+      return initialSet;
+    });
+  }, [paper]);
 
   useEffect(() => {
     if (isQAMode) {
@@ -550,6 +591,26 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
       onPaperStatusChange('qa_preview');
     }
   }, [isQAMode, onPaperStatusChange]);
+
+  useEffect(() => {
+    resetVisitedQuestions();
+  }, [resetVisitedQuestions]);
+
+  useEffect(() => {
+    if (!currentQuestion) {
+      return;
+    }
+
+    setVisitedQuestions(prev => {
+      if (prev.has(currentQuestion.id)) {
+        return prev;
+      }
+
+      const updated = new Set(prev);
+      updated.add(currentQuestion.id);
+      return updated;
+    });
+  }, [currentQuestion]);
   
   // Timer effect
   useEffect(() => {
@@ -578,8 +639,88 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     };
   }, [isRunning, examMode, examDuration]);
   
+  const generateQAReviewResult = useCallback((): QAReviewResultPayload => {
+    const answeredLookup: Record<string, { answered: boolean; timeSpent: number }> = {};
+
+    Object.values(userAnswers).forEach(answer => {
+      if (!answer) {
+        return;
+      }
+
+      const baseQuestionId = answer.questionId;
+      const hasAnswer = answer.answer !== undefined && answer.answer !== '';
+      const existing = answeredLookup[baseQuestionId];
+      const timeSpent = typeof answer.timeSpent === 'number' ? answer.timeSpent : 0;
+
+      answeredLookup[baseQuestionId] = {
+        answered: existing ? existing.answered || hasAnswer : hasAnswer,
+        timeSpent: Math.max(existing?.timeSpent || 0, timeSpent)
+      };
+    });
+
+    let answeredCount = 0;
+    const questionTimes: Record<string, number> = {};
+
+    paper.questions.forEach(question => {
+      const summary = answeredLookup[question.id];
+      if (summary?.answered) {
+        answeredCount += 1;
+      }
+      if (summary && summary.timeSpent > 0) {
+        questionTimes[question.id] = summary.timeSpent;
+      }
+    });
+
+    const score = totalQuestions > 0
+      ? Math.round((answeredCount / totalQuestions) * 100)
+      : undefined;
+
+    const issues: SimulationIssue[] = [];
+    const recommendations: string[] = [];
+
+    return {
+      completed: true,
+      completedAt: new Date().toISOString(),
+      mode: 'qa_review',
+      flaggedQuestions: Array.from(flaggedQuestions),
+      issues,
+      recommendations,
+      questionTimes,
+      score,
+      timeElapsed,
+      answeredCount,
+      totalQuestions,
+      visitedQuestions: Array.from(visitedQuestions),
+    };
+  }, [flaggedQuestions, paper, timeElapsed, totalQuestions, userAnswers, visitedQuestions]);
+
+  const handleCompleteQAReview = useCallback(() => {
+    if (!allQuestionsVisited) {
+      toast.error('Review each question before completing the QA review.');
+      return;
+    }
+
+    const qaResult = generateQAReviewResult();
+    toast.success('QA review marked as complete.');
+    onExit(qaResult);
+  }, [allQuestionsVisited, generateQAReviewResult, onExit]);
+
   // Navigation and control functions - MUST be defined before useEffects that use them
   const handleExit = useCallback(() => {
+    if (isQAMode && !showResults) {
+      if (!allQuestionsVisited) {
+        if (window.confirm('You have not reviewed every question. Exit without completing the QA review?')) {
+          onExit();
+        }
+        return;
+      }
+
+      if (window.confirm('Use "Complete QA Review" to mark this simulation as finished. Exit without completing?')) {
+        onExit();
+      }
+      return;
+    }
+
     if (isRunning && !showResults) {
       if (window.confirm('Are you sure you want to exit? Your progress will be lost.')) {
         onExit();
@@ -587,7 +728,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     } else {
       onExit();
     }
-  }, [isRunning, onExit, showResults]);
+  }, [allQuestionsVisited, isQAMode, isRunning, onExit, showResults]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -690,6 +831,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     setUserAnswers({});
     setFlaggedQuestions(new Set());
     setQuestionStartTimes({});
+    resetVisitedQuestions();
   };
 
   const pauseExam = () => {
@@ -785,6 +927,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     setCurrentQuestionIndex(0);
     setFlaggedQuestions(new Set());
     setQuestionStartTimes({});
+    resetVisitedQuestions();
   };
   
   const getQuestionStatus = (questionId: string, parts: SubQuestion[]) => {
@@ -829,12 +972,12 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
       return status === 'answered';
     }).length;
   };
-  
+
   const calculateProgress = () => {
     const answeredQuestions = getAnsweredCount();
     return totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
   };
-  
+
   // Show results dashboard
   if (showResults) {
     return (
@@ -852,7 +995,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
       />
     );
   }
-  
+
   return (
     <div className={cn(
       "min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col",
@@ -871,18 +1014,18 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
               >
                 <X className="h-5 w-5" />
               </Button>
-              
+
               <div>
                 <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {paper.code} - {paper.subject}
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {examMode === 'practice' ? 'Practice Mode' : 
+                  {examMode === 'practice' ? 'Practice Mode' :
                    examMode === 'timed' ? 'Timed Exam' : 'Review Mode'}
                 </p>
               </div>
             </div>
-            
+
             {/* Center Section - Timer */}
             <div className="flex items-center space-x-6">
               {examMode === 'timed' && examDuration > 0 && (
@@ -902,21 +1045,44 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                   </span>
                 </div>
               )}
-              
+
               <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                 <span>Progress:</span>
                 <span className="font-medium">{getAnsweredCount()}/{paper.questions.length}</span>
                 <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-blue-500 transition-all duration-300"
                     style={{ width: `${calculateProgress()}%` }}
                   />
                 </div>
               </div>
+
+              {isQAMode && (
+                <StatusBadge
+                  status={allQuestionsVisited ? 'success' : 'warning'}
+                  text={`QA Reviewed ${visitedCount}/${totalQuestions}`}
+                />
+              )}
             </div>
-            
+
             {/* Right Section */}
             <div className="flex items-center space-x-3">
+              {isQAMode && (
+                <Tooltip
+                  content={allQuestionsVisited
+                    ? 'Mark the QA review as complete and return to the question setup.'
+                    : 'Visit every question to enable completion.'}
+                >
+                  <Button
+                    onClick={handleCompleteQAReview}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    disabled={!allQuestionsVisited}
+                  >
+                    Complete QA Review
+                  </Button>
+                </Tooltip>
+              )}
+
               {!isRunning && examMode !== 'review' && (
                 <Button
                   onClick={startExam}
@@ -991,8 +1157,8 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                   onClick={() => setExamMode('practice')}
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
-                    examMode === 'practice' 
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
+                    examMode === 'practice'
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
@@ -1002,8 +1168,8 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                   onClick={() => setExamMode('timed')}
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
-                    examMode === 'timed' 
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
+                    examMode === 'timed'
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
@@ -1013,15 +1179,28 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
                   onClick={() => setExamMode('review')}
                   className={cn(
                     "px-3 py-1 text-sm rounded-md transition-colors",
-                    examMode === 'review' 
-                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" 
+                    examMode === 'review'
+                      ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   )}
                 >
                   Review
                 </button>
               </div>
-              
+
+              {isQAMode && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40 rounded-md px-3 py-2">
+                  <p className="font-medium text-blue-700 dark:text-blue-200">
+                    QA review progress: {visitedCount}/{totalQuestions} questions opened
+                  </p>
+                  {!allQuestionsVisited && (
+                    <p>
+                      Open every question to enable the <span className="font-semibold">Complete QA Review</span> button.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Options */}
               <div className="space-y-2">
                 <label className="flex items-center space-x-2">
