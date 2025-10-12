@@ -401,3 +401,20 @@ export function useCreateMockExam() {
     },
   });
 }
+
+export function useDeleteMockExam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (examId: string) => {
+      return MockExamService.deleteMockExam(examId);
+    },
+    onSuccess: (_data, examId) => {
+      queryClient.invalidateQueries({ queryKey: ['mockExams'] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStats'] });
+      queryClient.invalidateQueries({ queryKey: ['mockExam', examId] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStatusHistory', examId] });
+      queryClient.invalidateQueries({ queryKey: ['mockExamStatusWizard', examId] });
+    },
+  });
+}

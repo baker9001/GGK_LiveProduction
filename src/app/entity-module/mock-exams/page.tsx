@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Copy, Save } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Copy, Save, Trash2, X } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -16,7 +16,8 @@ import {
   useTeachers,
   useCreateMockExam,
   useMockExamById,
-  useStatusHistory
+  useStatusHistory,
+  useDeleteMockExam
 } from '../../../hooks/useMockExams';
 import toast from 'react-hot-toast';
 import { Button, IconButton, ButtonGroup } from '../../../components/shared/Button';
@@ -31,6 +32,7 @@ import { StatusTransitionWizard } from './components/StatusTransitionWizard';
 import { MockExamCreationWizard } from './components/MockExamCreationWizard';
 import { TemplateLibraryModal } from './components/TemplateLibraryModal';
 import { SaveTemplateModal } from './components/SaveTemplateModal';
+import { ConfirmDeleteModal } from '../../../components/shared/ConfirmDeleteModal';
 import type { MockExamLifecycleStatus } from '../../../services/mockExamService';
 import { useMockExamTemplates, usePopularTemplates, useRecentTemplates, useCreateTemplate, useCreateTemplateFromExam, useIncrementTemplateUsage } from '../../../hooks/useMockExamTemplates';
 import { MockExamTemplateService, type MockExamTemplate } from '../../../services/mockExamTemplateService';
@@ -226,6 +228,8 @@ export default function EntityMockExamsPage() {
   const [isTemplateLibraryOpen, setIsTemplateLibraryOpen] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [saveTemplateExam, setSaveTemplateExam] = useState<MockExam | null>(null);
+  const [deleteConfirmExamId, setDeleteConfirmExamId] = useState<string | null>(null);
+  const [deleteModalExam, setDeleteModalExam] = useState<MockExam | null>(null);
 
   const { data: mockExams = [], isLoading: isLoadingExams, refetch: refetchExams } = useMockExams(
     companyId,
@@ -250,6 +254,7 @@ export default function EntityMockExamsPage() {
     formState.subjectId || undefined
   );
   const createMockExam = useCreateMockExam();
+  const deleteMockExam = useDeleteMockExam();
   const { data: statusHistory = [] } = useStatusHistory(selectedExam?.id);
 
   const { data: templates = [], isLoading: isLoadingTemplates } = useMockExamTemplates(companyId);
@@ -859,6 +864,38 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
     }
   };
 
+  const handleDeleteClick = (exam: MockExam) => {
+    if (exam.status !== 'draft') {
+      toast.error('Only draft exams can be deleted');
+      return;
+    }
+    setDeleteConfirmExamId(exam.id);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmExamId(null);
+  };
+
+  const handleConfirmDeleteStep1 = (exam: MockExam) => {
+    setDeleteModalExam(exam);
+    setDeleteConfirmExamId(null);
+  };
+
+  const handleDeleteExam = async () => {
+    if (!deleteModalExam) return;
+
+    try {
+      await deleteMockExam.mutateAsync(deleteModalExam.id);
+      toast.success('Mock exam deleted successfully');
+      setDeleteModalExam(null);
+      refetchExams();
+    } catch (error: any) {
+      console.error('Error deleting mock exam:', error);
+      const errorMessage = error?.message || 'Failed to delete mock exam. Please try again.';
+      toast.error(errorMessage);
+    }
+  };
+
   if (isLoadingExams) {
     return (
       <div className="p-6 space-y-6">
@@ -1185,8 +1222,11 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                   ? exam.sections.join(', ')
                   : 'All sections';
 
+                const isDeletePending = deleteConfirmExamId === exam.id;
+                const isDraft = exam.status === 'draft';
+
                 return (
-                  <tr key={exam.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
+                  <tr key={exam.id} className={`transition-colors ${isDeletePending ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-900/40'}`}>
                     <td className="px-6 py-6 align-top">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -1271,55 +1311,102 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
                       </div>
                     </td>
                     <td className="px-6 py-6 align-top">
-                      <div className="flex items-center justify-end gap-2">
-                        <ButtonGroup>
+                      {isDeletePending ? (
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-2 p-3 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 rounded-lg">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 text-sm">
+                              <p className="font-medium text-amber-900 dark:text-amber-100">
+                                Are you sure you want to delete this exam?
+                              </p>
+                              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                                This action cannot be undone.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCancelDelete}
+                              leftIcon={<X className="w-3.5 h-3.5" />}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleConfirmDeleteStep1(exam)}
+                              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                              className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+                            >
+                              Confirm Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <ButtonGroup>
+                            <IconButton
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setSelectedExam(exam)}
+                              aria-label="View exam details"
+                              tooltip="View details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </IconButton>
+                            <IconButton
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleEditExam(exam)}
+                              aria-label="Edit exam"
+                              tooltip="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </IconButton>
+                            <IconButton
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setSaveTemplateExam(exam)}
+                              aria-label="Save as template"
+                              tooltip="Save as template"
+                            >
+                              <Save className="w-4 h-4" />
+                            </IconButton>
+                            <IconButton
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleDownloadBriefingPack(exam)}
+                              aria-label="Download briefing pack"
+                              tooltip="Download briefing pack"
+                            >
+                              <Download className="w-4 h-4" />
+                            </IconButton>
+                            {isDraft && (
+                              <IconButton
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => handleDeleteClick(exam)}
+                                aria-label="Delete draft exam"
+                                tooltip="Delete draft exam"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </IconButton>
+                            )}
+                          </ButtonGroup>
                           <IconButton
-                            variant="ghost"
+                            variant="outline"
                             size="icon-sm"
-                            onClick={() => setSelectedExam(exam)}
-                            aria-label="View exam details"
-                            tooltip="View details"
+                            onClick={() => setStatusWizardExam({ id: exam.id, status: exam.status })}
+                            aria-label="Change status"
+                            tooltip="Open status wizard"
                           >
-                            <Eye className="w-4 h-4" />
+                            <RefreshCw className="w-4 h-4" />
                           </IconButton>
-                          <IconButton
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleEditExam(exam)}
-                            aria-label="Edit exam"
-                            tooltip="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </IconButton>
-                          <IconButton
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => setSaveTemplateExam(exam)}
-                            aria-label="Save as template"
-                            tooltip="Save as template"
-                          >
-                            <Save className="w-4 h-4" />
-                          </IconButton>
-                          <IconButton
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleDownloadBriefingPack(exam)}
-                            aria-label="Download briefing pack"
-                            tooltip="Download briefing pack"
-                          >
-                            <Download className="w-4 h-4" />
-                          </IconButton>
-                        </ButtonGroup>
-                        <IconButton
-                          variant="outline"
-                          size="icon-sm"
-                          onClick={() => setStatusWizardExam({ id: exam.id, status: exam.status })}
-                          aria-label="Change status"
-                          tooltip="Open status wizard"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </IconButton>
-                      </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1894,6 +1981,20 @@ Generated: ${dayjs().format('DD/MM/YYYY HH:mm')}
           isSaving={createTemplateFromExam.isPending}
         />
       )}
+
+      <ConfirmDeleteModal
+        isOpen={deleteModalExam !== null}
+        onClose={() => setDeleteModalExam(null)}
+        onConfirm={handleDeleteExam}
+        title={deleteModalExam?.title || ''}
+        examDetails={deleteModalExam ? {
+          subject: deleteModalExam.subject,
+          paper: deleteModalExam.paper,
+          scheduledDate: dayjs(deleteModalExam.scheduledStart).format('DD MMM YYYY, HH:mm'),
+          teacherCount: deleteModalExam.teachers.length
+        } : undefined}
+        isDeleting={deleteMockExam.isPending}
+      />
     </div>
   );
 }

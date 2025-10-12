@@ -1758,6 +1758,164 @@ export class MockExamService {
       throw error;
     }
   }
+
+  /**
+   * Delete a mock exam and all related records
+   * Only allows deletion of exams with 'draft' status
+   */
+  static async deleteMockExam(examId: string): Promise<void> {
+    try {
+      console.log('[MockExamService] Starting deletion for exam:', examId);
+
+      const { data: exam, error: examFetchError } = await supabase
+        .from('mock_exams')
+        .select('id, status, title')
+        .eq('id', examId)
+        .maybeSingle();
+
+      if (examFetchError) {
+        console.error('[MockExamService] Error fetching exam:', examFetchError);
+        throw new Error('Failed to fetch exam details');
+      }
+
+      if (!exam) {
+        throw new Error('Mock exam not found');
+      }
+
+      if (exam.status !== 'draft') {
+        throw new Error('Only draft exams can be deleted. This exam has status: ' + exam.status);
+      }
+
+      console.log('[MockExamService] Deleting related records for exam:', exam.title);
+
+      const { error: questionsError } = await supabase
+        .from('mock_exam_questions')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (questionsError) {
+        console.error('[MockExamService] Error deleting questions:', questionsError);
+        throw new Error('Failed to delete exam questions');
+      }
+
+      const { error: instructionsError } = await supabase
+        .from('mock_exam_instructions')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (instructionsError) {
+        console.error('[MockExamService] Error deleting instructions:', instructionsError);
+        throw new Error('Failed to delete exam instructions');
+      }
+
+      const { error: stageProgressError } = await supabase
+        .from('mock_exam_stage_progress')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (stageProgressError) {
+        console.error('[MockExamService] Error deleting stage progress:', stageProgressError);
+        throw new Error('Failed to delete exam stage progress');
+      }
+
+      const { error: statusHistoryError } = await supabase
+        .from('mock_exam_status_history')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (statusHistoryError) {
+        console.error('[MockExamService] Error deleting status history:', statusHistoryError);
+        throw new Error('Failed to delete exam status history');
+      }
+
+      const { error: studentsError } = await supabase
+        .from('mock_exam_students')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (studentsError) {
+        console.error('[MockExamService] Error deleting students:', studentsError);
+        throw new Error('Failed to delete exam students');
+      }
+
+      const { error: resultsError } = await supabase
+        .from('mock_exam_results')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (resultsError) {
+        console.error('[MockExamService] Error deleting results:', resultsError);
+        throw new Error('Failed to delete exam results');
+      }
+
+      const { error: teachersError } = await supabase
+        .from('mock_exam_teachers')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (teachersError) {
+        console.error('[MockExamService] Error deleting teachers:', teachersError);
+        throw new Error('Failed to delete exam teachers');
+      }
+
+      const { error: sectionsError } = await supabase
+        .from('mock_exam_sections')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (sectionsError) {
+        console.error('[MockExamService] Error deleting sections:', sectionsError);
+        throw new Error('Failed to delete exam sections');
+      }
+
+      const { error: gradeLevelsError } = await supabase
+        .from('mock_exam_grade_levels')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (gradeLevelsError) {
+        console.error('[MockExamService] Error deleting grade levels:', gradeLevelsError);
+        throw new Error('Failed to delete exam grade levels');
+      }
+
+      const { error: branchesError } = await supabase
+        .from('mock_exam_branches')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (branchesError) {
+        console.error('[MockExamService] Error deleting branches:', branchesError);
+        throw new Error('Failed to delete exam branches');
+      }
+
+      const { error: schoolsError } = await supabase
+        .from('mock_exam_schools')
+        .delete()
+        .eq('mock_exam_id', examId);
+
+      if (schoolsError) {
+        console.error('[MockExamService] Error deleting schools:', schoolsError);
+        throw new Error('Failed to delete exam schools');
+      }
+
+      console.log('[MockExamService] Deleting main exam record');
+
+      const { error: examDeleteError } = await supabase
+        .from('mock_exams')
+        .delete()
+        .eq('id', examId);
+
+      if (examDeleteError) {
+        console.error('[MockExamService] Error deleting exam:', examDeleteError);
+        throw new Error('Failed to delete mock exam');
+      }
+
+      console.log('[MockExamService] Successfully deleted exam:', exam.title);
+    } catch (error: any) {
+      console.error('[MockExamService] Delete operation failed:', error);
+      throw error;
+    }
+  }
 }
 
 export default MockExamService;
