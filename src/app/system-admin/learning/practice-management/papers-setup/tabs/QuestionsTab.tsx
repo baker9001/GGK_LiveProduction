@@ -26,10 +26,6 @@ import {
 // Import shared components
 import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
-import { useInlineNotifications } from '../../../../../../hooks/useInlineNotifications';
-import { InlineNotificationContainer } from '../../../../../../components/shared/InlineNotification';
-import { ReviewProgressCard } from './components/ReviewProgressCard';
-import { QuestionReviewCheckbox } from './components/QuestionReviewCheckbox';
 import { PDFSnippingTool } from '../../../../../../components/shared/PDFSnippingTool';
 import { ConfirmationDialog } from '../../../../../../components/shared/ConfirmationDialog';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
@@ -416,18 +412,6 @@ export function QuestionsTab({
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
-
-  // Inline notification system
-  const notify = useInlineNotifications();
-
-  // Review status tracking
-  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
-  const [questionReviewStatus, setQuestionReviewStatus] = useState<Record<string, {
-    isReviewed: boolean;
-    reviewedAt?: string;
-    hasIssues: boolean;
-  }>>({});
-  const [filterStatus, setFilterStatus] = useState<'all' | 'needs-review' | 'reviewed' | 'has-issues'>('all');
 
   const requestInlineConfirmation = useCallback(
     (options: InlineConfirmationOptions) =>
@@ -897,124 +881,6 @@ export function QuestionsTab({
       setSimulationResult(importSession.metadata.simulation_results);
     }
   }, [importSession]);
-
-  // Initialize review status tracking
-  useEffect(() => {
-    const initializeReviewSession = async () => {
-      if (!questions.length || !importSession?.id) return;
-
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Check for existing review session
-        const { data: existingSession } = await supabase
-          .from('question_import_review_sessions')
-          .select('*')
-          .eq('paper_import_session_id', importSession.id)
-          .eq('user_id', user.id)
-          .eq('status', 'in_progress')
-          .maybeSingle();
-
-        if (existingSession) {
-          setReviewSessionId(existingSession.id);
-
-          // Load existing review statuses
-          const { data: statuses } = await supabase
-            .from('question_import_review_status')
-            .select('*')
-            .eq('review_session_id', existingSession.id);
-
-          if (statuses) {
-            const statusMap: Record<string, any> = {};
-            statuses.forEach(status => {
-              statusMap[status.question_identifier] = {
-                isReviewed: status.is_reviewed,
-                reviewedAt: status.reviewed_at,
-                hasIssues: status.has_issues
-              };
-            });
-            setQuestionReviewStatus(statusMap);
-          }
-        } else {
-          // Create new review session
-          const { data: newSession, error } = await supabase
-            .from('question_import_review_sessions')
-            .insert({
-              paper_import_session_id: importSession.id,
-              user_id: user.id,
-              paper_id: existingPaperId,
-              total_questions: questions.length,
-              simulation_required: simulationRequired,
-              metadata: {
-                paper_title: paperMetadata.title,
-                subject: savedPaperDetails?.subject
-              }
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          setReviewSessionId(newSession.id);
-
-          // Initialize review statuses
-          const initialStatuses = questions.map(q => ({
-            review_session_id: newSession.id,
-            question_identifier: q.id,
-            question_number: q.question_number,
-            question_data: q,
-            is_reviewed: false,
-            has_issues: validationErrors[q.id]?.length > 0 || false,
-            issue_count: validationErrors[q.id]?.length || 0,
-            validation_status: validationErrors[q.id]?.length > 0 ? 'failed' : 'pending'
-          }));
-
-          await supabase
-            .from('question_import_review_status')
-            .insert(initialStatuses);
-
-          // Initialize local state
-          const statusMap: Record<string, any> = {};
-          questions.forEach(q => {
-            statusMap[q.id] = {
-              isReviewed: false,
-              hasIssues: validationErrors[q.id]?.length > 0 || false
-            };
-          });
-          setQuestionReviewStatus(statusMap);
-        }
-      } catch (error) {
-        console.error('Error initializing review session:', error);
-        notify.error('Failed to initialize review session', 'Please refresh and try again');
-      }
-    };
-
-    initializeReviewSession();
-  }, [questions.length, importSession?.id, existingPaperId, simulationRequired]);
-
-  // Update review status hasIssues when validation errors change
-  useEffect(() => {
-    if (reviewSessionId && questions.length > 0) {
-      const updatedStatus = { ...questionReviewStatus };
-      let hasChanges = false;
-
-      questions.forEach(q => {
-        const hasIssues = validationErrors[q.id]?.length > 0 || false;
-        if (updatedStatus[q.id] && updatedStatus[q.id].hasIssues !== hasIssues) {
-          updatedStatus[q.id] = {
-            ...updatedStatus[q.id],
-            hasIssues
-          };
-          hasChanges = true;
-        }
-      });
-
-      if (hasChanges) {
-        setQuestionReviewStatus(updatedStatus);
-      }
-    }
-  }, [validationErrors, questions, reviewSessionId]);
 
   const initializeFromParsedData = (data: any) => {
     try {
@@ -2115,112 +1981,6 @@ export function QuestionsTab({
     return errors;
   };
 
-  // Review status management functions
-  const handleToggleReview = async (questionId: string) => {
-    if (!reviewSessionId) {
-      notify.warning('Review session not initialized', 'Please refresh the page');
-      return;
-    }
-
-    const currentStatus = questionReviewStatus[questionId];
-    const newReviewedState = !currentStatus?.isReviewed;
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Update in database
-      const { error } = await supabase
-        .from('question_import_review_status')
-        .update({
-          is_reviewed: newReviewedState,
-          reviewed_at: newReviewedState ? new Date().toISOString() : null,
-          reviewed_by: newReviewedState ? user.id : null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('review_session_id', reviewSessionId)
-        .eq('question_identifier', questionId);
-
-      if (error) throw error;
-
-      // Update local state
-      setQuestionReviewStatus(prev => ({
-        ...prev,
-        [questionId]: {
-          ...prev[questionId],
-          isReviewed: newReviewedState,
-          reviewedAt: newReviewedState ? new Date().toISOString() : undefined
-        }
-      }));
-
-      notify.success(
-        newReviewedState ? 'Question marked as reviewed' : 'Review status removed',
-        undefined,
-        { duration: 2000 }
-      );
-    } catch (error) {
-      console.error('Error updating review status:', error);
-      notify.error('Failed to update review status', 'Please try again');
-    }
-  };
-
-  const handleMarkAllAsReviewed = async () => {
-    if (!reviewSessionId) {
-      notify.warning('Review session not initialized', 'Please refresh the page');
-      return;
-    }
-
-    const unreviewed = questions.filter(q => !questionReviewStatus[q.id]?.isReviewed);
-    if (unreviewed.length === 0) {
-      notify.info('All questions already reviewed');
-      return;
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Update all questions to reviewed
-      const updates = unreviewed.map(q => ({
-        review_session_id: reviewSessionId,
-        question_identifier: q.id,
-        is_reviewed: true,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: user.id,
-        updated_at: new Date().toISOString()
-      }));
-
-      for (const update of updates) {
-        await supabase
-          .from('question_import_review_status')
-          .update({
-            is_reviewed: update.is_reviewed,
-            reviewed_at: update.reviewed_at,
-            reviewed_by: update.reviewed_by,
-            updated_at: update.updated_at
-          })
-          .eq('review_session_id', reviewSessionId)
-          .eq('question_identifier', update.question_identifier);
-      }
-
-      // Update local state
-      const updatedStatus = { ...questionReviewStatus };
-      unreviewed.forEach(q => {
-        updatedStatus[q.id] = {
-          ...updatedStatus[q.id],
-          isReviewed: true,
-          reviewedAt: new Date().toISOString()
-        };
-      });
-      setQuestionReviewStatus(updatedStatus);
-
-      notify.success(`Marked ${unreviewed.length} questions as reviewed`);
-    } catch (error) {
-      console.error('Error marking all as reviewed:', error);
-      notify.error('Failed to mark all as reviewed', 'Please try again');
-    }
-  };
-
   // FIXED IMPORT FUNCTIONS with comprehensive error handling and fallbacks
   const handleImportQuestions = async () => {
     // Add visual feedback immediately
@@ -2231,29 +1991,15 @@ export function QuestionsTab({
     console.log('Data structure info loaded:', !!dataStructureInfo);
     console.log('Attachments:', Object.keys(attachments));
     console.log('Question mappings:', questionMappings);
-
+    
     // Show immediate feedback to user
-    notify.info('Starting import process...');
-
+    toast.info('Starting import process...', { duration: 1000 });
+    
     try {
-      // Check if all questions are reviewed
-      const reviewedCount = Object.values(questionReviewStatus).filter(s => s.isReviewed).length;
-      const allReviewed = reviewedCount === questions.length;
-
-      if (!allReviewed) {
-        const unreviewedCount = questions.length - reviewedCount;
-        notify.error(
-          'All questions must be reviewed before import',
-          `${unreviewedCount} question${unreviewedCount !== 1 ? 's' : ''} still need${unreviewedCount === 1 ? 's' : ''} to be reviewed`,
-          { duration: 5000 }
-        );
-        return;
-      }
-
       // Check prerequisites with detailed logging
       if (!existingPaperId) {
         console.error('No existing paper ID found');
-        notify.error('No paper selected', 'Please ensure a paper is created first');
+        toast.error('No paper selected. Please ensure a paper is created first.');
         return;
       }
       
@@ -3385,43 +3131,8 @@ export function QuestionsTab({
     );
   }
 
-  // Calculate review statistics
-  const reviewedCount = Object.values(questionReviewStatus).filter(s => s.isReviewed).length;
-  const questionsWithIssues = Object.values(questionReviewStatus).filter(s => s.hasIssues).length;
-  const allReviewed = reviewedCount === questions.length;
-  const validationErrorCount = Object.keys(validationErrors).length;
-  const canImport = allReviewed && validationErrorCount === 0;
-
-  // Filter questions based on status
-  const filteredQuestions = questions.filter(q => {
-    const status = questionReviewStatus[q.id];
-    if (filterStatus === 'all') return true;
-    if (filterStatus === 'reviewed') return status?.isReviewed;
-    if (filterStatus === 'needs-review') return !status?.isReviewed;
-    if (filterStatus === 'has-issues') return status?.hasIssues;
-    return true;
-  });
-
   return (
     <div className="space-y-6">
-      {/* Inline Notifications */}
-      <InlineNotificationContainer
-        notifications={notify.notifications}
-        onDismiss={notify.dismiss}
-        position="top"
-      />
-
-      {/* Review Progress Card */}
-      <ReviewProgressCard
-        totalQuestions={questions.length}
-        reviewedQuestions={reviewedCount}
-        questionsWithIssues={questionsWithIssues}
-        simulationCompleted={simulationResult?.completed || false}
-        simulationPassed={simulationResult?.completed && simulationResult.overallScore >= 70}
-        simulationScore={simulationResult?.overallScore}
-        validationErrorCount={validationErrorCount}
-      />
-
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
 
@@ -3466,175 +3177,99 @@ export function QuestionsTab({
         )}
       </div>
 
-      {/* Action Toolbar - Reorganized: Test → Review → Import */}
+      {/* Action Toolbar */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex flex-col gap-4">
-          {/* Top Row: Test & Tools */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Preview & Test Button - Priority 1 */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => handleAutoMapQuestions(true)}
+            disabled={autoMappingInProgress || !dataStructureInfo}
+          >
+            {autoMappingInProgress ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Mapping...
+              </>
+            ) : (
+              <>
+                <Database className="h-4 w-4 mr-2" />
+                Auto-Map Questions
+              </>
+            )}
+          </Button>
+
+          <FixIncompleteQuestionsButton
+            incompleteQuestions={questions || []}
+            onFix={async (updatedQuestions) => {
+              setQuestions(updatedQuestions);
+              toast.success('Questions updated with complete data');
+            }}
+          />
+
+          <Button
+            variant="outline"
+            onClick={handleStartSimulation}
+            disabled={questions.length === 0}
+            leftIcon={<PlayCircle className="h-4 w-4" />}
+            className={cn(
+              simulationRequired && !simulationResult?.completed && 
+              "border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+            )}
+            aria-label={simulationResult?.completed ? 'Re-run exam simulation' : 'Start exam preview and test'}
+            title={simulationRequired ? 'Simulation required before import' : 'Preview paper as student would see it'}
+          >
+            {simulationResult?.completed ? 'Re-run Simulation' : 'Preview & Test'}
+          </Button>
+
+          {simulationRequired && !simulationResult?.completed && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-orange-100 dark:bg-orange-900/20 rounded-full">
+              <TestTube className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <span className="text-sm text-orange-700 dark:text-orange-300">
+                Simulation required for {(() => {
+                  const reasons = [];
+                  if (questions.some(q => q.parts && q.parts.length > 0)) reasons.push('multi-part');
+                  if (questions.some(q => q.answer_requirement || (q.parts && q.parts.some((p: any) => p.answer_requirement)))) reasons.push('dynamic answer');
+                  if (questions.some(q => q.answer_format && ['calculation', 'equation', 'chemical_structure', 'diagram', 'table', 'graph'].includes(q.answer_format))) reasons.push('complex format');
+                  if (questions.length > 20) reasons.push('large paper');
+                  return reasons.join(', ');
+                })()}
+              </span>
+            </div>
+          )}
+
+          {Object.keys(validationErrors).length > 0 && (
             <Button
               variant="outline"
-              onClick={handleStartSimulation}
-              disabled={questions.length === 0}
-              leftIcon={<PlayCircle className="h-4 w-4" />}
-              className={cn(
-                simulationRequired && !simulationResult?.completed &&
-                "border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-              )}
-              aria-label={simulationResult?.completed ? 'Re-run exam simulation' : 'Start exam preview and test'}
-              title={simulationRequired ? 'Simulation required before import' : 'Preview paper as student would see it'}
-            >
-              {simulationResult?.completed ? 'Re-run Test' : 'Preview & Test'}
-            </Button>
-
-            {/* Review Action Buttons */}
-            <Button
-              variant="secondary"
-              onClick={handleMarkAllAsReviewed}
-              disabled={allReviewed || questions.length === 0}
-              leftIcon={<CheckCircle className="h-4 w-4" />}
-            >
-              Mark All Reviewed
-            </Button>
-
-            {/* Auto-Map Questions */}
-            <Button
-              variant="outline"
-              onClick={() => handleAutoMapQuestions(true)}
-              disabled={autoMappingInProgress || !dataStructureInfo}
               size="sm"
+              onClick={() => setShowValidation(true)}
+              className="text-red-600 border-red-300 hover:bg-red-50"
             >
-              {autoMappingInProgress ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Mapping...
-                </>
-              ) : (
-                <>
-                  <Database className="h-4 w-4 mr-2" />
-                  Auto-Map
-                </>
-              )}
+              <AlertCircle className="h-4 w-4 mr-2" />
+              View {Object.keys(validationErrors).length} Errors
             </Button>
+          )}
 
-            <FixIncompleteQuestionsButton
-              incompleteQuestions={questions || []}
-              onFix={async (updatedQuestions) => {
-                setQuestions(updatedQuestions);
-                notify.success('Questions updated with complete data');
-              }}
-            />
-
-            {simulationRequired && !simulationResult?.completed && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-orange-100 dark:bg-orange-900/20 rounded-full">
-                <TestTube className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-xs text-orange-700 dark:text-orange-300">
-                  Test required
-                </span>
+          <div className="ml-auto flex items-center gap-3">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {questions.length} questions
+            </div>
+            {Object.keys(validationErrors).length > 0 && (
+              <StatusBadge
+                status="warning"
+                text={`${Object.keys(validationErrors).length} issues`}
+              />
+            )}
+            {simulationResult && simulationResult.overallScore !== undefined && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Simulation Score: <span className="font-medium text-gray-900 dark:text-white">{simulationResult.overallScore}%</span>
               </div>
             )}
-
-            {Object.keys(validationErrors).length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowValidation(true)}
-                className="text-red-600 border-red-300 hover:bg-red-50"
-              >
-                <AlertCircle className="h-4 w-4 mr-2" />
-                View {Object.keys(validationErrors).length} Errors
-              </Button>
+            {simulationResult?.completed && (
+              <StatusBadge
+                status="success"
+                text="Simulation passed"
+              />
             )}
-          </div>
-
-          {/* Bottom Row: Filter Tabs & Import Button */}
-          <div className="flex items-center justify-between gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</span>
-              <button
-                onClick={() => setFilterStatus('all')}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-md transition-colors',
-                  filterStatus === 'all'
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                )}
-              >
-                All ({questions.length})
-              </button>
-              <button
-                onClick={() => setFilterStatus('needs-review')}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-md transition-colors',
-                  filterStatus === 'needs-review'
-                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                )}
-              >
-                Needs Review ({questions.length - reviewedCount})
-              </button>
-              <button
-                onClick={() => setFilterStatus('reviewed')}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-md transition-colors',
-                  filterStatus === 'reviewed'
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                )}
-              >
-                Reviewed ({reviewedCount})
-              </button>
-              <button
-                onClick={() => setFilterStatus('has-issues')}
-                className={cn(
-                  'px-3 py-1.5 text-sm rounded-md transition-colors',
-                  filterStatus === 'has-issues'
-                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 font-medium'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                )}
-              >
-                Has Issues ({questionsWithIssues})
-              </button>
-            </div>
-
-            {/* Import Button - Disabled until all reviewed */}
-            <Button
-              onClick={() => {
-                console.log('=== IMPORT BUTTON CLICKED ===');
-                handleImportQuestions().catch(error => {
-                  console.error('Error caught in button handler:', error);
-                  notify.error('Import failed', error?.message || 'Unknown error');
-                });
-              }}
-              disabled={!canImport || isImporting || questions.length === 0}
-              className="min-w-[180px]"
-              variant="primary"
-              title={
-                !allReviewed
-                  ? `Review all questions first (${reviewedCount}/${questions.length} reviewed)`
-                  : validationErrorCount > 0
-                  ? `Fix ${validationErrorCount} validation error${validationErrorCount !== 1 ? 's' : ''} first`
-                  : 'Import questions to database'
-              }
-            >
-              {isImporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Database className="h-4 w-4 mr-2" />
-                  Import Questions
-                  {!canImport && (
-                    <span className="ml-2 text-xs opacity-75">
-                      ({reviewedCount}/{questions.length})
-                    </span>
-                  )}
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>
@@ -3677,8 +3312,7 @@ export function QuestionsTab({
 
       {/* Questions Review Section */}
       <QuestionsReviewSection
-        questions={filteredQuestions}
-        allQuestions={questions || []}
+        questions={questions || []}
         mappings={questionMappings}
         dataStructureInfo={dataStructureInfo}
         units={units}
@@ -3693,8 +3327,6 @@ export function QuestionsTab({
         editingMetadata={editingMetadata}
         pdfDataUrl={pdfDataUrl}
         hasIncompleteQuestions={questions.some(q => !q.question_text || q.marks === 0)}
-        questionReviewStatus={questionReviewStatus}
-        onToggleReview={handleToggleReview}
         existingPaperId={existingPaperId}
         expandedQuestions={expandedQuestions}
         editingQuestion={editingQuestion}
