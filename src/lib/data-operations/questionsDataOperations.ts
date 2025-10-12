@@ -174,26 +174,19 @@ export const getUUIDFromMapping = (value: any): string | null => {
   return null;
 };
 
-// Auto-detection helper for UI hints only - NOT for enforcement
-// The JSON 'figure' field is the single source of truth for requirements
-export const detectsPossibleFigure = (item: any): boolean => {
+export const requiresFigure = (item: any): boolean => {
+  if (item.figure) return true;
+  
   const text = (item.question_description || item.question_text || '').toLowerCase();
   const tableIndicators = ['table', 'data below', 'following data', 'given data', 'refer to the table'];
   if (tableIndicators.some(indicator => text.includes(indicator))) return true;
-
+  
   const diagramIndicators = ['diagram', 'figure', 'chart', 'graph', 'structure', 'image', 'picture', 'illustration'];
   if (diagramIndicators.some(indicator => text.includes(indicator))) return true;
-
+  
   if (text.includes('results') && (text.includes('experiment') || text.includes('data'))) return true;
-
+  
   return false;
-};
-
-// Legacy alias for backward compatibility - will be removed
-export const requiresFigure = (item: any): boolean => {
-  // IMPORTANT: Only use JSON figure field for actual requirement
-  // Do NOT auto-detect for enforcement
-  return item.figure === true;
 };
 
 export const detectAnswerFormat = (questionText: string): string | null => {
@@ -2395,13 +2388,11 @@ export const validateQuestionsForImport = (
     }
     
     // Check if figure is required but no attachments (only if attachments object is provided)
-    // CRITICAL: Only use JSON 'figure' field as source of truth, NOT auto-detection
-    // Respect both the figure_required toggle AND the JSON figure field
+    // RESPECT THE TOGGLE: Only validate if figure_required is not explicitly set to false
     if (attachments) {
       const attachmentKey = questionId;
       const hasAttachments = attachments[attachmentKey]?.length > 0;
-      // Only validate if: 1) figure_required toggle is not false AND 2) JSON figure field is true
-      const shouldValidateFigure = (question as any).figure_required !== false && question.figure === true;
+      const shouldValidateFigure = (question as any).figure_required !== false && requiresFigure(question);
 
       if (shouldValidateFigure && !hasAttachments) {
         questionErrors.push('Figure is required but no attachment added');

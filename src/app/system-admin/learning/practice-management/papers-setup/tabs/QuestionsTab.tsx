@@ -89,8 +89,8 @@ try {
 }
 
 // Import sub-components
-// TODO: QuestionsReviewSection component needs to be created
-// import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
+import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
@@ -453,16 +453,19 @@ export function QuestionsTab({
     };
   }, [questions, questionMappings, attachments, dataStructureInfo, existingPaperId]);
 
-  // Helper to detect if question text suggests a figure might be needed (UI hint only)
-  // IMPORTANT: This is NOT used for validation - only the JSON 'figure' field is authoritative
-  const detectsPossibleFigureReference = (item: any): boolean => {
+  // Safe wrapper for requiresFigure function
+  const safeRequiresFigure = (item: any): boolean => {
     try {
+      if (typeof requiresFigure === 'function') {
+        return requiresFigure(item);
+      }
+      // Fallback logic if function is not available
+      if (item?.figure) return true;
       const text = (item?.question_text || item?.question || '').toLowerCase();
-      const keywords = ['figure', 'diagram', 'graph', 'image', 'chart', 'table', 'structure', 'shown'];
-      return keywords.some(keyword => text.includes(keyword));
+      return text.includes('figure') || text.includes('diagram') || text.includes('graph') || text.includes('image');
     } catch (error) {
-      console.warn('Error in figure detection:', error);
-      return false;
+      console.warn('Error in requiresFigure:', error);
+      return item?.figure || false;
     }
   };
 
@@ -960,9 +963,7 @@ export function QuestionsTab({
         subtopic: q.subtopic || q.subtopics?.[0] || '',
         difficulty: q.difficulty || determineQuestionDifficulty(q),
         status: 'pending',
-        // CRITICAL: Only use JSON figure field, do NOT auto-detect
-        figure: q.figure === true,
-        figure_required: q.figure_required !== false, // Default to true unless explicitly false
+        figure: q.figure || safeRequiresFigure(q),
         attachments: ensureArray(q.attachments),
         hint: q.hint || '',
         explanation: q.explanation || '',
@@ -1072,9 +1073,7 @@ export function QuestionsTab({
       marks: parseInt(part.marks || '0'),
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
-      // CRITICAL: Only use JSON figure field, do NOT auto-detect
-      figure: part.figure === true,
-      figure_required: part.figure_required !== false, // Default to true unless explicitly false
+      figure: part.figure || safeRequiresFigure(part),
       attachments: ensureArray(part.attachments),
       hint: part.hint,
       explanation: part.explanation,
@@ -1131,9 +1130,7 @@ export function QuestionsTab({
       options: subpart.options ? processOptions(subpart.options) : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
-      // CRITICAL: Only use JSON figure field, do NOT auto-detect
-      figure: subpart.figure === true,
-      figure_required: subpart.figure_required !== false // Default to true unless explicitly false
+      figure: subpart.figure || safeRequiresFigure(subpart) // Add figure field to track requirement
     };
   };
 
@@ -1843,10 +1840,10 @@ export function QuestionsTab({
           requiresFigure: safeRequiresFigure(question)
         });
 
-        // Check if question requires figure - RESPECT THE TOGGLE AND JSON!
-        // CRITICAL: Only use JSON 'figure' field, not auto-detection
-        // Only validate attachments if BOTH: 1) figure_required toggle is not false AND 2) JSON figure is true
-        const shouldValidateFigure = (question as any).figure_required !== false && question.figure === true;
+        // Check if question requires figure - RESPECT THE TOGGLE!
+        // Only validate attachments if figure_required is not explicitly set to false
+        const shouldValidateFigure = (question as any).figure_required !== false &&
+                                     (question.figure || safeRequiresFigure(question));
 
         if (shouldValidateFigure) {
           const questionAttachments = attachments[question.id];
@@ -1863,9 +1860,9 @@ export function QuestionsTab({
             // Generate the key that matches how it was stored
             const partKey = generateAttachmentKey(question.id, partIndex);
 
-            // RESPECT THE TOGGLE AND JSON for parts too!
-            // CRITICAL: Only use JSON 'figure' field, not auto-detection
-            const shouldValidatePartFigure = (part as any).figure_required !== false && part.figure === true;
+            // RESPECT THE TOGGLE for parts too!
+            const shouldValidatePartFigure = (part as any).figure_required !== false &&
+                                            (part.figure || safeRequiresFigure(part));
 
             if (shouldValidatePartFigure) {
               const partAttachments = attachments[partKey];
@@ -1879,9 +1876,9 @@ export function QuestionsTab({
               part.subparts.forEach((subpart, subpartIndex) => {
                 if (!subpart) return; // Skip null/undefined subparts
 
-                // RESPECT THE TOGGLE AND JSON for subparts too!
-                // CRITICAL: Only use JSON 'figure' field, not auto-detection
-                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false && subpart.figure === true;
+                // RESPECT THE TOGGLE for subparts too!
+                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
+                                                    (subpart.figure || safeRequiresFigure(subpart));
 
                 if (shouldValidateSubpartFigure) {
                   // Try multiple possible key formats for compatibility
@@ -2126,19 +2123,17 @@ export function QuestionsTab({
       }
       
       // Check for missing figures (warning only, don't block)
-      // CRITICAL: Only use JSON 'figure' field as source of truth
       const questionsNeedingFigures = questions.filter(q => {
         try {
-          // Check if question has figure field set to true and no attachments
-          if (q.figure === true && (q as any).figure_required !== false && !attachments[q.id]?.length) {
+          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
             return true;
           }
           if (q.parts && Array.isArray(q.parts)) {
             return q.parts.some((part: any, index: number) => {
               if (!part) return false;
               const partKey = generateAttachmentKey(q.id, index);
-              // Only check JSON figure field, not auto-detection
-              return part.figure === true && (part as any).figure_required !== false && !attachments[partKey]?.length;
+              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
+                     !attachments[partKey]?.length;
             });
           }
         } catch (err) {
@@ -3091,6 +3086,14 @@ export function QuestionsTab({
             )}
           </Button>
 
+          <FixIncompleteQuestionsButton
+            incompleteQuestions={questions || []}
+            onFix={async (updatedQuestions) => {
+              setQuestions(updatedQuestions);
+              toast.success('Questions updated with complete data');
+            }}
+          />
+
           <Button
             variant="outline"
             onClick={handleStartSimulation}
@@ -3196,8 +3199,7 @@ export function QuestionsTab({
       )}
 
       {/* Questions Review Section */}
-      {/* TODO: QuestionsReviewSection component needs to be created - temporarily commented out */}
-      {/*<QuestionsReviewSection
+      <QuestionsReviewSection
         questions={questions || []}
         mappings={questionMappings}
         dataStructureInfo={dataStructureInfo}
@@ -3358,11 +3360,7 @@ export function QuestionsTab({
             });
           }
         }}
-      />*/}
-      <div className="text-center py-12 bg-yellow-50 dark:bg-yellow-900/10 border-2 border-yellow-200 dark:border-yellow-800 rounded-lg">
-        <p className="text-yellow-800 dark:text-yellow-200 font-medium">Questions review section temporarily disabled during rebuild</p>
-        <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">The figure upload fix has been applied. The review UI is being reconstructed.</p>
-      </div>
+      />
 
       {/* Import Progress */}
       {isImporting && (
