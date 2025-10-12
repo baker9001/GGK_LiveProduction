@@ -150,6 +150,7 @@ export default function SignInPage() {
       let userType = 'user';
       let userName = authData.user.user_metadata?.name || normalizedEmail.split('@')[0];
       let userRole: UserRole = 'VIEWER';
+      let avatarUrl: string | null = null;
       
       // Fetch additional user data
       console.log('[Auth] Fetching user data from users table');
@@ -184,6 +185,7 @@ export default function SignInPage() {
         userId = userDataFetch.id;
         userType = userDataFetch.user_type || 'user';
         userName = userDataFetch.raw_user_meta_data?.name || userName;
+        avatarUrl = userDataFetch.raw_user_meta_data?.avatar_url ?? avatarUrl;
         
         // Update email_verified in custom table to match Supabase Auth
         if (!userDataFetch.email_verified && authData.user.email_confirmed_at) {
@@ -212,27 +214,32 @@ export default function SignInPage() {
             updated_at: new Date().toISOString(),
             raw_user_meta_data: authData.user.user_metadata
           }, { onConflict: 'id' });
-        
+
         userId = authData.user.id;
         userName = authData.user.user_metadata?.name || userName;
+        avatarUrl = authData.user.user_metadata?.avatar_url || avatarUrl;
       }
-      
+
       // Determine user role based on type
       switch (userType) {
         case 'system':
           const { data: adminUser } = await supabase
             .from('admin_users')
-            .select('role_id, roles!inner(name)')
+            .select('role_id, roles!inner(name), avatar_url')
             .eq('id', authData.user.id)
             .maybeSingle();
-          
+
           if (adminUser?.roles?.name) {
             userRole = getUserSystemRole(adminUser.roles.name);
           } else {
             userRole = 'SSA';
           }
+
+          if (adminUser?.avatar_url) {
+            avatarUrl = adminUser.avatar_url;
+          }
           break;
-          
+
         case 'entity':
           userRole = 'ENTITY_ADMIN';
           const { data: entityUser } = await supabase
@@ -253,11 +260,11 @@ export default function SignInPage() {
         case 'student':
           userRole = 'STUDENT';
           break;
-          
+
         default:
           userRole = 'VIEWER';
       }
-      
+
       // Update last login
       console.log('[Auth] Updating last login timestamp');
       const { error: updateError } = await supabase
@@ -280,7 +287,8 @@ export default function SignInPage() {
         email: normalizedEmail,
         name: userName,
         role: userRole,
-        userType: userType
+        userType: userType,
+        avatarUrl: avatarUrl
       };
       
       console.log('[Auth] User authenticated:', {
