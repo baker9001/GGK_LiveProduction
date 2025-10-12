@@ -115,13 +115,22 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+type InlineToastTone = 'info' | 'warning' | 'danger';
+
 type ToastConfirmationOptions = {
   title: string;
   message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   confirmVariant?: ButtonProps['variant'];
-  tone?: 'info' | 'warning' | 'danger';
+  tone?: InlineToastTone;
+};
+
+type InlineToastConfirmationState = Required<Omit<ToastConfirmationOptions, 'tone' | 'confirmVariant'>> & {
+  tone: InlineToastTone;
+  confirmVariant: NonNullable<ButtonProps['variant']>;
+  id: string;
+  resolve: (confirmed: boolean) => void;
 };
 
 const normalizeText = (value: any): string => {
@@ -409,87 +418,65 @@ export function QuestionsTab({
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
 
+  const [inlineConfirmation, setInlineConfirmation] = useState<InlineToastConfirmationState | null>(null);
+
   const requestToastConfirmation = useCallback(
-    ({
-      title,
-      message,
-      confirmText = 'Confirm',
-      cancelText = 'Cancel',
-      confirmVariant = 'default',
-      tone = 'warning',
-    }: ToastConfirmationOptions) =>
+    (options: ToastConfirmationOptions) =>
       new Promise<boolean>(resolve => {
-        const toneClasses = {
-          info: {
-            icon: 'text-blue-500 dark:text-blue-400',
-            border: 'border-blue-200 dark:border-blue-800',
-            badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-          },
-          warning: {
-            icon: 'text-amber-500 dark:text-amber-400',
-            border: 'border-amber-200 dark:border-amber-800',
-            badge: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
-          },
-          danger: {
-            icon: 'text-red-500 dark:text-red-400',
-            border: 'border-red-200 dark:border-red-800',
-            badge: 'bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100',
-          },
-        } as const;
+        setInlineConfirmation(previous => {
+          if (previous) {
+            previous.resolve(false);
+          }
 
-        const classes = toneClasses[tone] ?? toneClasses.warning;
-
-        const toastId = toast.custom(t => (
-          <div
-            className={`pointer-events-auto w-full max-w-md rounded-lg border bg-white p-4 shadow-lg transition-all dark:border-gray-700 dark:bg-gray-900 ${
-              t.visible ? 'animate-in slide-in-from-top-5' : 'animate-out fade-out'
-            } ${classes.border}`}
-          >
-            <div className="flex items-start gap-3">
-              <div className={`mt-1 flex h-8 w-8 items-center justify-center rounded-full ${classes.badge}`}>
-                <AlertTriangle className={`h-4 w-4 ${classes.icon}`} />
-              </div>
-              <div className="flex-1 space-y-3">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</p>
-                <div className="text-sm text-gray-600 dark:text-gray-300">{message}</div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      toast.dismiss(t.id);
-                      resolve(false);
-                    }}
-                  >
-                    {cancelText}
-                  </Button>
-                  <Button
-                    variant={confirmVariant}
-                    size="sm"
-                    onClick={() => {
-                      toast.dismiss(t.id);
-                      resolve(true);
-                    }}
-                  >
-                    {confirmText}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ), {
-          id: `toast-confirm-${Date.now()}`,
-          duration: Infinity,
-          position: 'top-right',
+          return {
+            id: `inline-toast-${Date.now()}`,
+            title: options.title,
+            message: options.message,
+            confirmText: options.confirmText ?? 'Confirm',
+            cancelText: options.cancelText ?? 'Cancel',
+            confirmVariant: options.confirmVariant ?? 'default',
+            tone: options.tone ?? 'warning',
+            resolve,
+          };
         });
-
-        // Ensure toast is visible immediately when created
-        if (!toastId) {
-          resolve(false);
-        }
       }),
     []
   );
+
+  const dismissInlineConfirmation = useCallback((confirmed: boolean) => {
+    setInlineConfirmation(current => {
+      if (current) {
+        current.resolve(confirmed);
+      }
+      return null;
+    });
+  }, []);
+
+  const inlineToneStyles: Record<InlineToastTone, {
+    Icon: React.ComponentType<{ className?: string }>;
+    iconClass: string;
+    borderClass: string;
+    badgeClass: string;
+  }> = {
+    info: {
+      Icon: Info,
+      iconClass: 'text-blue-500 dark:text-blue-400',
+      borderClass: 'border-blue-200 dark:border-blue-800',
+      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+    },
+    warning: {
+      Icon: AlertTriangle,
+      iconClass: 'text-amber-500 dark:text-amber-400',
+      borderClass: 'border-amber-200 dark:border-amber-800',
+      badgeClass: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100',
+    },
+    danger: {
+      Icon: XCircle,
+      iconClass: 'text-red-500 dark:text-red-400',
+      borderClass: 'border-red-200 dark:border-red-800',
+      badgeClass: 'bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100',
+    },
+  };
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -3174,7 +3161,70 @@ export function QuestionsTab({
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {inlineConfirmation && (() => {
+        const tone = inlineToneStyles[inlineConfirmation.tone];
+        const ToneIcon = tone.Icon;
+
+        return (
+          <div className="fixed bottom-6 right-6 z-50 w-full max-w-md animate-in slide-in-from-bottom-5">
+            <div
+              className={cn(
+                'rounded-xl border bg-white p-4 shadow-2xl ring-1 ring-black/5 dark:bg-gray-900',
+                tone.borderClass
+              )}
+              role="alert"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'mt-1 flex h-9 w-9 items-center justify-center rounded-full',
+                    tone.badgeClass
+                  )}
+                >
+                  <ToneIcon className={cn('h-5 w-5', tone.iconClass)} />
+                </div>
+                <div className="flex-1 space-y-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">
+                      {inlineConfirmation.title}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => dismissInlineConfirmation(false)}
+                      className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#8CC63F] dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                      aria-label="Dismiss notification"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-300">
+                    {inlineConfirmation.message}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => dismissInlineConfirmation(false)}
+                    >
+                      {inlineConfirmation.cancelText}
+                    </Button>
+                    <Button
+                      variant={inlineConfirmation.confirmVariant}
+                      size="sm"
+                      onClick={() => dismissInlineConfirmation(true)}
+                    >
+                      {inlineConfirmation.confirmText}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <div className="space-y-6">
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
 
@@ -3739,6 +3789,7 @@ export function QuestionsTab({
           )}
         </Button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
