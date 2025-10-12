@@ -1,196 +1,308 @@
-import React, { useMemo } from 'react';
-import { CheckCircle, XCircle, Database } from 'lucide-react';
-import { SearchableMultiSelect } from '../../../../../../../components/shared/SearchableMultiSelect';
+import React from 'react';
+import { BookOpen, FolderTree, Target, AlertCircle } from 'lucide-react';
 import { Select } from '../../../../../../../components/shared/Select';
-import { cn } from '../../../../../../../lib/utils';
+import { SearchableMultiSelect } from '../../../../../../../components/shared/SearchableMultiSelect';
 
 interface QuestionMappingControlsProps {
-  mapping: {
-    chapter_id?: string;
-    topic_ids?: string[];
-    subtopic_ids?: string[];
-  };
-  units: Array<{ id: string; name: string; subject_id?: string }>;
-  topics: Array<{ id: string; name: string; unit_id?: string; edu_unit_id?: string }>;
-  subtopics: Array<{ id: string; name: string; topic_id?: string; edu_topic_id?: string }>;
-  onMappingUpdate: (field: string, value: string | string[]) => void;
-  disabled?: boolean;
+  mapping: any;
+  dataStructureInfo: any;
+  units: any[];
+  topics: any[];
+  subtopics: any[];
+  onUpdate: (field: string, value: any) => void;
+  isDisabled?: boolean;
 }
 
 export const QuestionMappingControls: React.FC<QuestionMappingControlsProps> = ({
   mapping,
+  dataStructureInfo,
   units,
   topics,
   subtopics,
-  onMappingUpdate,
-  disabled = false
+  onUpdate,
+  isDisabled = false,
 }) => {
-  const selectedUnit = mapping?.chapter_id || '';
-  const selectedTopics = mapping?.topic_ids || [];
-  const selectedSubtopics = mapping?.subtopic_ids || [];
+  const normalizedChapterId = mapping?.chapter_id ? String(mapping.chapter_id) : '';
+  const normalizedTopicIds = Array.isArray(mapping?.topic_ids)
+    ? mapping.topic_ids.map((id: any) => String(id))
+    : [];
+  const normalizedSubtopicIds = Array.isArray(mapping?.subtopic_ids)
+    ? mapping.subtopic_ids.map((id: any) => String(id))
+    : [];
 
-  // Filter topics by selected unit
-  const filteredTopics = useMemo(() => {
-    if (!selectedUnit) return topics;
-    return topics.filter(topic =>
-      topic.unit_id === selectedUnit || topic.edu_unit_id === selectedUnit
-    );
-  }, [topics, selectedUnit]);
+  // Debug logging - verify topic data structure
+  React.useEffect(() => {
+    if (topics?.length > 0) {
+      console.log('QuestionMappingControls - Academic Structure Loaded:', {
+        mappingChapterId: normalizedChapterId,
+        normalizedTopicIds: normalizedTopicIds,
+        unitsCount: units?.length,
+        topicsCount: topics?.length,
+        topicsSample: topics?.slice(0, 2).map(t => ({
+          id: t.id,
+          name: t.name,
+          unit_id: t.unit_id // This is the correct foreign key field
+        })),
+        subtopicsCount: subtopics?.length
+      });
+    }
+  }, [mapping, units, topics, normalizedTopicIds, normalizedSubtopicIds]);
 
-  // Filter subtopics by selected topics
-  const filteredSubtopics = useMemo(() => {
-    if (selectedTopics.length === 0) return subtopics;
-    return subtopics.filter(subtopic =>
-      selectedTopics.includes(subtopic.topic_id || subtopic.edu_topic_id || '')
-    );
-  }, [subtopics, selectedTopics]);
+  const selectedUnit = units?.find(u => String(u.id) === normalizedChapterId);
 
-  // Check if question is mapped
-  const isMapped = selectedUnit && selectedTopics.length > 0;
+  // Filter topics based on selected unit - edu_topics table uses unit_id as foreign key
+  // ENHANCED: Also include topics that are already selected (to fix orphaned topics issue)
+  const availableTopics = React.useMemo(() => {
+    if (!normalizedChapterId) return topics || [];
 
-  // Prepare options for dropdowns
-  const unitOptions = units.map(unit => ({
-    value: unit.id,
-    label: unit.name
-  }));
+    const filtered = topics?.filter(t => {
+      const topicUnitId = String(t.unit_id);
+      const selectedUnitId = String(normalizedChapterId);
+      const isMatchingUnit = topicUnitId === selectedUnitId;
+      const isAlreadySelected = normalizedTopicIds.includes(String(t.id));
 
-  const topicOptions = filteredTopics.map(topic => ({
-    value: topic.id,
-    label: topic.name
-  }));
+      // Include if: matches current unit OR is already selected (to prevent losing selection)
+      return isMatchingUnit || isAlreadySelected;
+    }) || [];
 
-  const subtopicOptions = filteredSubtopics.map(subtopic => ({
-    value: subtopic.id,
-    label: subtopic.name
-  }));
+    return filtered;
+  }, [normalizedChapterId, topics, normalizedTopicIds]);
+
+  // ENHANCED Debug log for topics filtering with detailed diagnostics
+  React.useEffect(() => {
+    if (normalizedChapterId) {
+      // Find selected topics details
+      const selectedTopicsDetails = normalizedTopicIds.map(topicId => {
+        const topic = topics?.find(t => String(t.id) === topicId);
+        return topic ? {
+          id: topic.id,
+          name: topic.name,
+          unit_id: topic.unit_id,
+          unit_id_type: typeof topic.unit_id,
+          matches_selected_unit: String(topic.unit_id) === String(normalizedChapterId),
+          is_in_available_list: availableTopics.some(at => String(at.id) === topicId)
+        } : null;
+      }).filter(Boolean);
+
+      console.log('🔍 COMPREHENSIVE Topics Filtering Debug:', {
+        // Current state
+        selectedUnitId: normalizedChapterId,
+        selectedUnitName: selectedUnit?.name,
+        selectedTopicIds: normalizedTopicIds,
+
+        // Counts
+        totalTopicsInDB: topics?.length || 0,
+        availableTopicsCount: availableTopics.length,
+        selectedTopicsCount: normalizedTopicIds.length,
+
+        // Selected topics analysis
+        selectedTopicsDetails: selectedTopicsDetails,
+
+        // Available topics
+        availableTopicsNames: availableTopics.map(t => ({
+          id: t.id,
+          name: t.name,
+          unit_id: t.unit_id
+        })),
+
+        // Type analysis
+        unitIdType: typeof normalizedChapterId,
+        sampleTopicUnitIdType: topics?.[0] ? typeof topics[0].unit_id : 'N/A',
+
+        // Mismatch detection
+        hasMismatch: selectedTopicsDetails.some(t => !t?.matches_selected_unit),
+        mismatchedTopics: selectedTopicsDetails.filter(t => !t?.matches_selected_unit)
+      });
+
+      // Alert if we have a mismatch
+      if (selectedTopicsDetails.length > 0 && selectedTopicsDetails.some(t => !t?.matches_selected_unit)) {
+        console.warn('⚠️ TOPIC-UNIT MISMATCH DETECTED!');
+        console.warn('Selected topics do not belong to the selected unit.');
+        console.warn('This may indicate:');
+        console.warn('1. Data integrity issue in database');
+        console.warn('2. Topics were moved between units');
+        console.warn('3. Auto-mapping error');
+        console.warn('Mismatched topics:', selectedTopicsDetails.filter(t => !t?.matches_selected_unit));
+      }
+    }
+  }, [normalizedChapterId, availableTopics, topics, selectedUnit, normalizedTopicIds]);
+
+  // Filter subtopics based on selected topics - edu_subtopics table uses topic_id as foreign key
+  const availableSubtopics = normalizedTopicIds.length > 0
+    ? subtopics?.filter(s => {
+        return normalizedTopicIds.includes(String(s.topic_id));
+      }) || []
+    : subtopics || [];
+
+  const isMapped = !!normalizedChapterId && normalizedTopicIds.length > 0;
+
+  // Check if any selected topics don't belong to the selected unit (orphaned topics)
+  const orphanedTopics = React.useMemo(() => {
+    if (!normalizedChapterId || normalizedTopicIds.length === 0) return [];
+
+    return normalizedTopicIds
+      .map(topicId => {
+        const topic = topics?.find(t => String(t.id) === topicId);
+        if (!topic) return null;
+
+        const belongsToSelectedUnit = String(topic.unit_id) === String(normalizedChapterId);
+        if (belongsToSelectedUnit) return null;
+
+        // Find the actual unit this topic belongs to
+        const actualUnit = units?.find(u => String(u.id) === String(topic.unit_id));
+
+        return {
+          topicId: topic.id,
+          topicName: topic.name,
+          actualUnitId: topic.unit_id,
+          actualUnitName: actualUnit?.name || 'Unknown Unit'
+        };
+      })
+      .filter(Boolean);
+  }, [normalizedChapterId, normalizedTopicIds, topics, units]);
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Database className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-            Academic Mapping
-          </h4>
-        </div>
-
+        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <FolderTree className="h-4 w-4" />
+          Academic Mapping
+        </h4>
         {isMapped ? (
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
-            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-xs font-medium text-green-700 dark:text-green-300">Mapped</span>
-          </div>
+          <span className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs rounded-full">
+            <Target className="h-3 w-3" />
+            Mapped
+          </span>
         ) : (
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 rounded-full">
-            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <span className="text-xs font-medium text-red-700 dark:text-red-300">Not Mapped</span>
-          </div>
+          <span className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs rounded-full">
+            <AlertCircle className="h-3 w-3" />
+            Not Mapped
+          </span>
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Unit/Chapter Selection */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Unit/Chapter <span className="text-red-500">*</span>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Unit / Chapter *
           </label>
           <Select
-            value={selectedUnit}
-            onChange={(value) => onMappingUpdate('chapter_id', value)}
-            options={unitOptions}
-            placeholder="Select unit/chapter..."
-            disabled={disabled}
+            value={normalizedChapterId}
+            onChange={(value) => onUpdate('chapter_id', value)}
+            disabled={isDisabled}
             className="w-full"
-          />
-        </div>
-
-        {/* Topics Multi-Select */}
-        <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Topics <span className="text-red-500">*</span>
-          </label>
-          <SearchableMultiSelect
-            label=""
-            options={topicOptions}
-            selectedValues={selectedTopics}
-            onChange={(values) => onMappingUpdate('topic_ids', values)}
-            placeholder={selectedUnit ? "Select topics..." : "Select unit first"}
-            disabled={disabled || !selectedUnit}
+            placeholder="Select Unit..."
+            searchable={true}
             usePortal={false}
+            options={[
+              { value: '', label: 'Select Unit...', disabled: true },
+              ...units.map((unit) => ({
+                value: unit.id,
+                label: `${unit.number ? `${unit.number}. ` : ''}${unit.name}`
+              }))
+            ]}
           />
-          {!selectedUnit && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Select a unit/chapter first to see available topics
-            </p>
+          {!mapping?.chapter_id && !isDisabled && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">Required</p>
           )}
         </div>
 
-        {/* Subtopics Multi-Select */}
+        {/* Topics Selection */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Subtopics <span className="text-gray-400">(Optional)</span>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Topics *
           </label>
           <SearchableMultiSelect
             label=""
-            options={subtopicOptions}
-            selectedValues={selectedSubtopics}
-            onChange={(values) => onMappingUpdate('subtopic_ids', values)}
-            placeholder={selectedTopics.length > 0 ? "Select subtopics..." : "Select topics first"}
-            disabled={disabled || selectedTopics.length === 0}
+            options={availableTopics.map(t => {
+              const isOrphaned = orphanedTopics.some(ot => ot?.topicId === String(t.id));
+              return {
+                value: String(t.id),
+                label: `${t.sort !== undefined ? `${t.sort}. ` : ''}${t.name}${isOrphaned ? ' ⚠️' : ''}`
+              };
+            })}
+            selectedValues={normalizedTopicIds}
+            onChange={(value) => onUpdate('topic_ids', value)}
+            placeholder={!normalizedChapterId ? "Select unit first..." : `Select topics... (${availableTopics.length} available)`}
+            disabled={isDisabled || !normalizedChapterId}
             usePortal={false}
           />
-          {selectedTopics.length === 0 && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Select topics first to see available subtopics
-            </p>
+          {normalizedTopicIds.length === 0 && !isDisabled && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">At least one required</p>
+          )}
+          {orphanedTopics.length > 0 && (
+            <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs">
+              <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">⚠️ Topic Mismatch Detected</p>
+              <p className="text-amber-700 dark:text-amber-300">
+                The following topic(s) belong to a different unit:
+              </p>
+              <ul className="mt-1 space-y-0.5 text-amber-700 dark:text-amber-300">
+                {orphanedTopics.map(ot => (
+                  <li key={ot?.topicId} className="ml-2">
+                    • <span className="font-medium">{ot?.topicName}</span> (belongs to: {ot?.actualUnitName})
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-amber-700 dark:text-amber-300 italic">
+                Consider updating the unit selection or removing these topics.
+              </p>
+            </div>
           )}
         </div>
 
-        {/* Mapping Summary */}
-        {isMapped && (
-          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Mapping Summary
-            </h5>
-            <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-              <div>
-                <span className="font-medium">Unit:</span>{' '}
-                {units.find(u => u.id === selectedUnit)?.name || 'Not selected'}
-              </div>
-              <div>
-                <span className="font-medium">Topics ({selectedTopics.length}):</span>{' '}
-                {selectedTopics.length > 0 ? (
-                  <span>
-                    {selectedTopics.map(topicId => {
-                      const topic = topics.find(t => t.id === topicId);
-                      return topic?.name;
-                    }).filter(Boolean).join(', ')}
-                  </span>
-                ) : (
-                  'None'
+        {/* Subtopics Selection */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            Subtopics (Optional)
+          </label>
+          <SearchableMultiSelect
+            label=""
+            options={availableSubtopics.map(s => ({
+              value: String(s.id),
+              label: s.name
+            }))}
+            selectedValues={normalizedSubtopicIds}
+            onChange={(value) => onUpdate('subtopic_ids', value)}
+            placeholder="Select subtopics..."
+            disabled={isDisabled || normalizedTopicIds.length === 0}
+            usePortal={false}
+          />
+        </div>
+      </div>
+
+      {/* Mapping Summary */}
+      {isMapped && (
+        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="flex items-start gap-2 text-xs text-blue-800 dark:text-blue-200">
+            <BookOpen className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium mb-1">Mapped to:</p>
+              <ul className="space-y-0.5">
+                {selectedUnit && (
+                  <li>• Unit: {selectedUnit.name}</li>
                 )}
-              </div>
-              {selectedSubtopics.length > 0 && (
-                <div>
-                  <span className="font-medium">Subtopics ({selectedSubtopics.length}):</span>{' '}
-                  {selectedSubtopics.map(subtopicId => {
-                    const subtopic = subtopics.find(s => s.id === subtopicId);
-                    return subtopic?.name;
-                  }).filter(Boolean).join(', ')}
-                </div>
-              )}
+                {normalizedTopicIds.length > 0 && (
+                  <li>
+                    • Topics: {topics
+                      .filter(t => normalizedTopicIds.includes(String(t.id)))
+                      .map(t => t.name)
+                      .join(', ')}
+                  </li>
+                )}
+                {normalizedSubtopicIds.length > 0 && (
+                  <li>
+                    • Subtopics: {subtopics
+                      .filter(s => normalizedSubtopicIds.includes(String(s.id)))
+                      .map(s => s.name)
+                      .join(', ')}
+                  </li>
+                )}
+              </ul>
             </div>
           </div>
-        )}
-
-        {/* Validation Message */}
-        {!isMapped && (
-          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              <strong>Required:</strong> Please map this question to at least one unit and one topic before importing.
-            </p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

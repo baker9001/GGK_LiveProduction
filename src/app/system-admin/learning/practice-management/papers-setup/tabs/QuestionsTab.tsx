@@ -79,19 +79,6 @@ import {
   type PreImportValidationResult
 } from '../../../../../../lib/extraction/preImportValidation';
 
-// Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
-import {
-  ExtractionValidationDialog,
-  SimulationWarningDialog,
-  UnmappedQuestionsDialog,
-  ExtractionWarningsDialog
-} from './components/ValidationWarningDialogs';
-import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
-import { supabase } from '../../../../../../lib/supabase';
-import { cn } from '../../../../../../lib/utils';
-
 // Try to import validateQuestionsForImport if it exists
 let validateQuestionsForImport: any;
 try {
@@ -100,6 +87,13 @@ try {
 } catch (e) {
   console.warn('validateQuestionsForImport not available, using fallback validation');
 }
+
+// Import sub-components
+import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
+import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
+import { supabase } from '../../../../../../lib/supabase';
+import { cn } from '../../../../../../lib/utils';
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
@@ -402,13 +396,6 @@ export function QuestionsTab({
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
-
-  // Validation warning dialog states
-  const [showExtractionValidationDialog, setShowExtractionValidationDialog] = useState(false);
-  const [showSimulationWarningDialog, setShowSimulationWarningDialog] = useState(false);
-  const [showUnmappedQuestionsDialog, setShowUnmappedQuestionsDialog] = useState(false);
-  const [showExtractionWarningsDialog, setShowExtractionWarningsDialog] = useState(false);
-  const [validationDialogData, setValidationDialogData] = useState<any>(null);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1843,216 +1830,103 @@ export function QuestionsTab({
     const errors: Record<string, string[]> = {};
 
     try {
-      // Ensure questions is an array
-      if (!Array.isArray(questions) || questions.length === 0) {
-        console.warn('No questions to validate');
-        return errors;
-      }
-
       questions.forEach(question => {
-        if (!question || !question.id) {
-          console.warn('Skipping invalid question:', question);
-          return;
-        }
-
         const questionErrors: string[] = [];
 
-        try {
-          // Debug log for tracking
-          console.log(`Validating question ${question.id}`, {
-            figure_required: (question as any).figure_required,
-            figure: question.figure,
-            requiresFigure: safeRequiresFigure(question)
-          });
+        // Debug log for tracking
+        console.log(`Validating question ${question.id}`, {
+          figure_required: (question as any).figure_required,
+          figure: question.figure,
+          requiresFigure: safeRequiresFigure(question)
+        });
 
-          // Check if question requires figure - RESPECT THE TOGGLE!
-          // Only validate attachments if figure_required is not explicitly set to false
-          const shouldValidateFigure = (question as any).figure_required !== false &&
-                                       (question.figure || safeRequiresFigure(question));
+        // Check if question requires figure - RESPECT THE TOGGLE!
+        // Only validate attachments if figure_required is not explicitly set to false
+        const shouldValidateFigure = (question as any).figure_required !== false &&
+                                     (question.figure || safeRequiresFigure(question));
 
-          if (shouldValidateFigure) {
-            const questionAttachments = attachments?.[question.id];
-            if (!questionAttachments || questionAttachments.length === 0) {
-              questionErrors.push('Figure is required but no attachment added');
-            }
+        if (shouldValidateFigure) {
+          const questionAttachments = attachments[question.id];
+          if (!questionAttachments || questionAttachments.length === 0) {
+            questionErrors.push('Figure is required but no attachment added');
           }
+        }
 
-          // Check parts for figure requirements
-          if (question.parts && Array.isArray(question.parts)) {
-            question.parts.forEach((part, partIndex) => {
-              if (!part) return; // Skip null/undefined parts
+        // Check parts for figure requirements
+        if (question.parts && Array.isArray(question.parts)) {
+          question.parts.forEach((part, partIndex) => {
+            if (!part) return; // Skip null/undefined parts
 
-              try {
-                // Generate the key that matches how it was stored
-                const partKey = generateAttachmentKey(question.id, partIndex);
+            // Generate the key that matches how it was stored
+            const partKey = generateAttachmentKey(question.id, partIndex);
 
-                // RESPECT THE TOGGLE for parts too!
-                const shouldValidatePartFigure = (part as any).figure_required !== false &&
-                                                (part.figure || safeRequiresFigure(part));
+            // RESPECT THE TOGGLE for parts too!
+            const shouldValidatePartFigure = (part as any).figure_required !== false &&
+                                            (part.figure || safeRequiresFigure(part));
 
-                if (shouldValidatePartFigure) {
-                  const partAttachments = attachments?.[partKey];
-                  if (!partAttachments || partAttachments.length === 0) {
-                    questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)}: Figure is required but no attachment added`);
-                  }
-                }
+            if (shouldValidatePartFigure) {
+              const partAttachments = attachments[partKey];
+              if (!partAttachments || partAttachments.length === 0) {
+                questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)}: Figure is required but no attachment added`);
+              }
+            }
 
-                // Check subparts - FIXED: Handle Roman numeral indexing properly
-                if (part.subparts && Array.isArray(part.subparts)) {
-                  part.subparts.forEach((subpart, subpartIndex) => {
-                    if (!subpart) return; // Skip null/undefined subparts
+            // Check subparts - FIXED: Handle Roman numeral indexing properly
+            if (part.subparts && Array.isArray(part.subparts)) {
+              part.subparts.forEach((subpart, subpartIndex) => {
+                if (!subpart) return; // Skip null/undefined subparts
 
-                    try {
-                      // RESPECT THE TOGGLE for subparts too!
-                      const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
-                                                          (subpart.figure || safeRequiresFigure(subpart));
+                // RESPECT THE TOGGLE for subparts too!
+                const shouldValidateSubpartFigure = (subpart as any).figure_required !== false &&
+                                                    (subpart.figure || safeRequiresFigure(subpart));
 
-                      if (shouldValidateSubpartFigure) {
-                        // Try multiple possible key formats for compatibility
-                        const subpartKey = generateAttachmentKey(question.id, partIndex, subpartIndex);
+                if (shouldValidateSubpartFigure) {
+                  // Try multiple possible key formats for compatibility
+                  const subpartKey = generateAttachmentKey(question.id, partIndex, subpartIndex);
 
-                        // Check if attachment exists with primary key
-                        const hasAttachment = attachments?.[subpartKey] && attachments[subpartKey].length > 0;
+                  // Check if attachment exists with primary key
+                  const hasAttachment = attachments[subpartKey] && attachments[subpartKey].length > 0;
 
-                        if (!hasAttachment) {
-                          // Try alternative key formats
-                          let found = false;
+                  if (!hasAttachment) {
+                    // Try alternative key formats
+                    let found = false;
 
-                          // Check all keys that might contain this subpart's attachment
-                          if (attachments && typeof attachments === 'object') {
-                            Object.keys(attachments).forEach(key => {
-                              if (key.startsWith(question.id) && key.includes(`p${partIndex}`) && key.includes(`s${subpartIndex}`)) {
-                                if (attachments[key] && attachments[key].length > 0) {
-                                  found = true;
-                                }
-                              }
-                            });
-                          }
-
-                          if (!found) {
-                            const subpartLabel = subpart.subpart || `(${Roman[subpartIndex] || subpartIndex})`;
-                            questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)} Subpart ${subpartLabel}: Figure is required but no attachment added`);
-                          }
+                    // Check all keys that might contain this subpart's attachment
+                    Object.keys(attachments).forEach(key => {
+                      if (key.startsWith(question.id) && key.includes(`p${partIndex}`) && key.includes(`s${subpartIndex}`)) {
+                        if (attachments[key] && attachments[key].length > 0) {
+                          found = true;
                         }
                       }
-                    } catch (subpartError) {
-                      console.error(`Error validating subpart ${subpartIndex} of part ${partIndex}:`, subpartError);
+                    });
+
+                    if (!found) {
+                      const subpartLabel = subpart.subpart || `(${Roman[subpartIndex] || subpartIndex})`;
+                      questionErrors.push(`Part ${part.part || String.fromCharCode(97 + partIndex)} Subpart ${subpartLabel}: Figure is required but no attachment added`);
                     }
-                  });
+                  }
                 }
-              } catch (partError) {
-                console.error(`Error validating part ${partIndex}:`, partError);
-              }
-            });
-          }
-
-          // Check for mapping
-          const mapping = questionMappings?.[question.id];
-          if (!mapping?.chapter_id || !mapping?.topic_ids || mapping.topic_ids.length === 0) {
-            questionErrors.push('Question must be mapped to a unit and at least one topic');
-          }
-
-          if (questionErrors.length > 0) {
-            errors[question.id] = questionErrors;
-          }
-        } catch (questionError) {
-          console.error(`Error validating question ${question.id}:`, questionError);
-          errors[question.id] = ['Validation error occurred'];
+              });
+            }
+          });
+        }
+        
+        // Check for mapping
+        const mapping = questionMappings[question.id];
+        if (!mapping?.chapter_id || !mapping?.topic_ids || mapping.topic_ids.length === 0) {
+          questionErrors.push('Question must be mapped to a unit and at least one topic');
+        }
+        
+        if (questionErrors.length > 0) {
+          errors[question.id] = questionErrors;
         }
       });
     } catch (error) {
-      console.error('Critical error during validation:', error);
-      toast.error('Validation encountered an error. Please check the console for details.');
+      console.error('Error during validation:', error);
+      // Return errors collected so far even if there was an exception
     }
-
+    
     return errors;
-  };
-
-  // Helper functions to continue import flow after user acknowledges warnings
-  const continueImportAfterSimulationWarning = async () => {
-    console.log('User chose to proceed without simulation');
-    // Continue with unmapped questions check
-    await proceedWithRemainingValidation();
-  };
-
-  const continueImportAfterUnmappedWarning = async () => {
-    console.log('User chose to proceed with unmapped questions');
-    // Continue to show confirmation dialog
-    await proceedToFinalConfirmation();
-  };
-
-  const proceedWithRemainingValidation = async () => {
-    try {
-      // Check for unmapped questions (excluding already imported ones)
-      const unmappedQuestions = questions.filter(q => {
-        // Skip if already imported
-        if (existingQuestionNumbers.has(parseInt(q.question_number))) {
-          return false;
-        }
-        const mapping = questionMappings[q.id];
-        return !mapping?.chapter_id || !mapping?.topic_ids || mapping.topic_ids.length === 0;
-      });
-
-      if (unmappedQuestions.length > 0) {
-        console.log('Unmapped questions found:', unmappedQuestions.map(q => q.question_number));
-        const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
-
-        // Show inline dialog
-        setValidationDialogData({
-          type: 'unmapped',
-          unmappedCount: unmappedQuestions.length,
-          unmappedNumbers: unmappedNumbers
-        });
-        setShowUnmappedQuestionsDialog(true);
-        return;
-      }
-
-      // If no unmapped questions, proceed to confirmation
-      await proceedToFinalConfirmation();
-    } catch (error) {
-      console.error('Error during remaining validation:', error);
-      toast.error('Validation error occurred. Please try again.');
-    }
-  };
-
-  const proceedToFinalConfirmation = async () => {
-    try {
-      // Check for missing figures (warning only, don't block)
-      const questionsNeedingFigures = questions.filter(q => {
-        try {
-          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
-            return true;
-          }
-          if (q.parts && Array.isArray(q.parts)) {
-            return q.parts.some((part: any, index: number) => {
-              if (!part) return false;
-              const partKey = generateAttachmentKey(q.id, index);
-              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) &&
-                     !attachments[partKey]?.length;
-            });
-          }
-        } catch (err) {
-          console.error('Error checking figure requirements:', err);
-          return false;
-        }
-        return false;
-      });
-
-      if (questionsNeedingFigures.length > 0) {
-        const needsFiguresNumbers = questionsNeedingFigures.map(q => q.question_number).join(', ');
-        console.log('Questions needing figures:', needsFiguresNumbers);
-        toast.warning(`Questions ${needsFiguresNumbers} may need figure attachments.`, { duration: 3000 });
-      }
-
-      console.log('=== ALL VALIDATIONS PASSED ===');
-      console.log('Showing confirmation dialog...');
-
-      // Show confirmation dialog
-      setShowConfirmDialog(true);
-    } catch (error) {
-      console.error('Error proceeding to final confirmation:', error);
-      toast.error('Error occurred. Please try again.');
-    }
   };
 
   // FIXED IMPORT FUNCTIONS with comprehensive error handling and fallbacks
@@ -2103,30 +1977,29 @@ export function QuestionsTab({
 
           toast.error(`Extraction validation failed:\n${errorDetails.substring(0, 200)}...`, { duration: 8000 });
 
-          // Show inline dialog instead of browser confirm
-          setValidationDialogData({
-            type: 'extraction',
-            summary: preImportValidation.summary,
-            report: report,
-            errors: preImportValidation.errors,
-            warnings: preImportValidation.warnings
-          });
-          setShowExtractionValidationDialog(true);
+          const showFullReport = window.confirm(
+            `Extraction validation found ${preImportValidation.summary.totalErrors} errors.\n\n` +
+            `- Missing Answers: ${preImportValidation.summary.missingAnswers}\n` +
+            `- Invalid Alternatives: ${preImportValidation.summary.invalidAlternatives}\n` +
+            `- Invalid Operators: ${preImportValidation.summary.invalidOperators}\n\n` +
+            `Click OK to see full report in console, Cancel to fix errors.`
+          );
+
+          if (showFullReport) {
+            console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
+            console.log(report);
+            console.log('\n=== DETAILED ERRORS ===');
+            console.log(formatValidationErrors(preImportValidation.errors));
+            console.log('\n=== DETAILED WARNINGS ===');
+            console.log(formatValidationErrors(preImportValidation.warnings));
+          }
 
           return;
         } else if (preImportValidation.warnings.length > 0) {
           console.log('Pre-import validation has warnings:', preImportValidation.summary.totalWarnings);
+          toast.warning(`${preImportValidation.summary.totalWarnings} warnings found. Check console for details.`, { duration: 5000 });
           console.log('=== EXTRACTION VALIDATION WARNINGS ===');
           console.log(formatValidationErrors(preImportValidation.warnings));
-
-          // Show warnings dialog instead of toast
-          setValidationDialogData({
-            type: 'warnings',
-            warningCount: preImportValidation.summary.totalWarnings
-          });
-          setShowExtractionWarningsDialog(true);
-
-          // Don't return here - let user continue after acknowledging warnings
         } else {
           console.log('Pre-import validation passed successfully');
           toast.success('Extraction validation passed', { duration: 2000 });
@@ -2211,15 +2084,76 @@ export function QuestionsTab({
       
       console.log('No validation errors found');
       
-      // Check if simulation is required
+      // Check if simulation is required (make this optional for debugging)
       if (simulationRequired && !simulationResult?.completed) {
         console.warn('Simulation required but not completed');
-        setShowSimulationWarningDialog(true);
-        return;
+        // For debugging, make this a warning instead of blocking
+        const proceedAnyway = window.confirm(
+          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
+        );
+        if (!proceedAnyway) {
+          toast.warning('Please complete the exam simulation before importing');
+          return;
+        }
       }
 
-      // Proceed with remaining validation checks
-      await proceedWithRemainingValidation();
+      // Check for unmapped questions (excluding already imported ones)
+      const unmappedQuestions = questions.filter(q => {
+        // Skip if already imported
+        if (existingQuestionNumbers.has(parseInt(q.question_number))) {
+          return false;
+        }
+        const mapping = questionMappings[q.id];
+        return !mapping?.chapter_id || !mapping?.topic_ids || mapping.topic_ids.length === 0;
+      });
+      
+      if (unmappedQuestions.length > 0) {
+        console.log('Unmapped questions found:', unmappedQuestions.map(q => q.question_number));
+        const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
+        
+        // For debugging, make this optional
+        const proceedWithUnmapped = window.confirm(
+          `${unmappedQuestions.length} questions are not mapped to units/topics: ${unmappedNumbers}\n\nDo you want to proceed anyway?`
+        );
+        
+        if (!proceedWithUnmapped) {
+          toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
+          return;
+        }
+      }
+      
+      // Check for missing figures (warning only, don't block)
+      const questionsNeedingFigures = questions.filter(q => {
+        try {
+          if ((q.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(q))) && !attachments[q.id]?.length) {
+            return true;
+          }
+          if (q.parts && Array.isArray(q.parts)) {
+            return q.parts.some((part: any, index: number) => {
+              if (!part) return false;
+              const partKey = generateAttachmentKey(q.id, index);
+              return (part.figure || (typeof safeRequiresFigure === 'function' && safeRequiresFigure(part))) && 
+                     !attachments[partKey]?.length;
+            });
+          }
+        } catch (err) {
+          console.error('Error checking figure requirements:', err);
+          return false;
+        }
+        return false;
+      });
+      
+      if (questionsNeedingFigures.length > 0) {
+        const needsFiguresNumbers = questionsNeedingFigures.map(q => q.question_number).join(', ');
+        console.log('Questions needing figures:', needsFiguresNumbers);
+        toast.warning(`Questions ${needsFiguresNumbers} may need figure attachments.`, { duration: 3000 });
+      }
+
+      console.log('=== ALL VALIDATIONS PASSED ===');
+      console.log('Showing confirmation dialog...');
+      
+      // Show confirmation dialog
+      setShowConfirmDialog(true);
       
     } catch (error: any) {
       console.error('=== CRITICAL ERROR IN IMPORT HANDLER ===');
@@ -3535,75 +3469,6 @@ export function QuestionsTab({
           confirmVariant="danger"
         />
       )}
-
-      {/* Extraction Validation Error Dialog */}
-      <ExtractionValidationDialog
-        isOpen={showExtractionValidationDialog}
-        onClose={() => {
-          setShowExtractionValidationDialog(false);
-          setValidationDialogData(null);
-        }}
-        onProceed={() => {
-          // This should never be called as we don't allow proceeding with errors
-          setShowExtractionValidationDialog(false);
-          setValidationDialogData(null);
-        }}
-        onViewReport={() => {
-          if (validationDialogData) {
-            console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
-            console.log(validationDialogData.report);
-            console.log('\n=== DETAILED ERRORS ===');
-            console.log(formatValidationErrors(validationDialogData.errors));
-            console.log('\n=== DETAILED WARNINGS ===');
-            console.log(formatValidationErrors(validationDialogData.warnings));
-            toast.success('Full validation report printed to console');
-          }
-        }}
-        summary={validationDialogData?.summary || { totalErrors: 0, missingAnswers: 0, invalidAlternatives: 0, invalidOperators: 0 }}
-      />
-
-      {/* Extraction Warnings Dialog */}
-      <ExtractionWarningsDialog
-        isOpen={showExtractionWarningsDialog}
-        onClose={() => {
-          setShowExtractionWarningsDialog(false);
-          setValidationDialogData(null);
-          // Continue with import flow
-        }}
-        warningCount={validationDialogData?.warningCount || 0}
-      />
-
-      {/* Simulation Warning Dialog */}
-      <SimulationWarningDialog
-        isOpen={showSimulationWarningDialog}
-        onClose={() => {
-          setShowSimulationWarningDialog(false);
-          toast.info('Please complete the simulation or continue without it');
-        }}
-        onProceed={() => {
-          setShowSimulationWarningDialog(false);
-          // Continue with validation checks after user confirms
-          continueImportAfterSimulationWarning();
-        }}
-      />
-
-      {/* Unmapped Questions Dialog */}
-      <UnmappedQuestionsDialog
-        isOpen={showUnmappedQuestionsDialog}
-        onClose={() => {
-          setShowUnmappedQuestionsDialog(false);
-          setValidationDialogData(null);
-          toast.info('Please map all questions before importing');
-        }}
-        onProceed={() => {
-          setShowUnmappedQuestionsDialog(false);
-          setValidationDialogData(null);
-          // Continue with import flow
-          continueImportAfterUnmappedWarning();
-        }}
-        unmappedCount={validationDialogData?.unmappedCount || 0}
-        unmappedNumbers={validationDialogData?.unmappedNumbers || ''}
-      />
 
       {/* Validation Modal */}
       {showValidation && Object.keys(validationErrors).length > 0 && (

@@ -1,22 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  ChevronDown,
-  ChevronRight,
-  Edit2,
-  Save,
-  X,
-  AlertCircle,
-  CheckCircle,
-  AlertTriangle,
-  Info,
-  Hash,
-  BookOpen,
-  Flag,
-  FileText,
-  Calculator,
-  FlaskConical,
-  PenTool,
-  Link
+  ChevronDown, ChevronRight, Edit2, Save, X, AlertCircle,
+  CheckCircle, Flag, Image as ImageIcon, Paperclip, Hash,
+  Calculator, BookOpen, FileText, Target, Link, HelpCircle,
+  Lightbulb, AlertTriangle
 } from 'lucide-react';
 import { Button } from '../../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../../components/shared/StatusBadge';
@@ -28,28 +15,31 @@ import { cn } from '../../../../../../../lib/utils';
 
 interface QuestionCardProps {
   question: any;
-  questionIndex: number;
+  index: number;
   isExpanded: boolean;
   isEditing: boolean;
   mapping: any;
-  validation: any;
-  attachments: any[];
+  attachments: any;
+  validationErrors: string[];
+  existingQuestionNumbers: Set<number>;
+  dataStructureInfo: any;
   units: any[];
   topics: any[];
   subtopics: any[];
+  paperMetadata: any;
   pdfDataUrl: string | null;
-  existingQuestionNumbers: Set<number>;
-  onToggleExpanded: () => void;
+  onToggleExpand: () => void;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
-  onUpdateField: (field: string, value: any) => void;
-  onMappingUpdate: (field: string, value: string | string[]) => void;
-  onAttachmentUpload: (partPath: string[]) => void;
-  onAttachmentDelete: (attachmentId: string) => void;
+  onMappingUpdate: (field: string, value: any) => void;
+  onAddAttachment: (partIndex?: number, subpartIndex?: number) => void;
+  onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
+  onUpdateQuestion: (updates: any) => void;
+  onToggleFigureRequired?: (required: boolean) => void;
 }
 
-const answerFormatConfig: Record<string, { icon: any; color: string; label: string }> = {
+const answerFormatConfig: Record<string, any> = {
   single_word: { icon: Hash, color: 'blue', label: 'Single Word' },
   single_line: { icon: FileText, color: 'blue', label: 'Short Answer' },
   two_items: { icon: Link, color: 'purple', label: 'Two Items' },
@@ -58,272 +48,255 @@ const answerFormatConfig: Record<string, { icon: any; color: string; label: stri
   multi_line_labeled: { icon: BookOpen, color: 'indigo', label: 'Labeled Parts' },
   calculation: { icon: Calculator, color: 'green', label: 'Calculation' },
   equation: { icon: Calculator, color: 'green', label: 'Equation' },
-  chemical_structure: { icon: FlaskConical, color: 'orange', label: 'Chemical Structure' },
-  structural_diagram: { icon: FlaskConical, color: 'orange', label: 'Structural Diagram' },
-  diagram: { icon: PenTool, color: 'pink', label: 'Diagram' }
 };
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({
   question,
-  questionIndex,
+  index,
   isExpanded,
   isEditing,
   mapping,
-  validation,
   attachments,
+  validationErrors,
+  existingQuestionNumbers,
+  dataStructureInfo,
   units,
   topics,
   subtopics,
+  paperMetadata,
   pdfDataUrl,
-  existingQuestionNumbers,
-  onToggleExpanded,
+  onToggleExpand,
   onEdit,
   onSave,
   onCancel,
-  onUpdateField,
   onMappingUpdate,
-  onAttachmentUpload,
-  onAttachmentDelete
+  onAddAttachment,
+  onDeleteAttachment,
+  onUpdateQuestion,
+  onToggleFigureRequired,
 }) => {
   const isAlreadyImported = existingQuestionNumbers.has(parseInt(question.question_number));
-  const hasErrors = validation?.errors && validation.errors.length > 0;
-  const hasWarnings = validation?.warnings && validation.warnings.length > 0;
-  const isMapped = mapping?.chapter_id && mapping.topic_ids?.length > 0;
+  const hasErrors = validationErrors && validationErrors.length > 0;
   const hasParts = question.parts && question.parts.length > 0;
-  const hasSimulationFlags = question.simulation_flags && question.simulation_flags.length > 0;
+  const hasAttachments = attachments && attachments.length > 0;
+  const hasDynamicAnswer = question.answer_requirement;
+  const formatInfo = question.answer_format ? answerFormatConfig[question.answer_format] : null;
 
-  let statusColor = 'gray';
-  let StatusIcon = Info;
+  const getValidationStatus = () => {
+    if (isAlreadyImported) return 'info';
+    if (hasErrors) return 'error';
+    if (!mapping?.chapter_id || !mapping?.topic_ids?.length) return 'warning';
+    if (question.figure && !hasAttachments) return 'warning';
+    return 'success';
+  };
 
-  if (isAlreadyImported) {
-    statusColor = 'blue';
-    StatusIcon = Info;
-  } else if (hasErrors) {
-    statusColor = 'red';
-    StatusIcon = AlertCircle;
-  } else if (hasWarnings) {
-    statusColor = 'yellow';
-    StatusIcon = AlertTriangle;
-  } else if (isMapped) {
-    statusColor = 'green';
-    StatusIcon = CheckCircle;
-  }
-
-  const answerFormat = question.answer_format ? answerFormatConfig[question.answer_format] : null;
-  const hasDynamicAnswers = question.correct_answers && question.correct_answers.length > 1;
+  const status = getValidationStatus();
 
   return (
     <div
+      id={`question-${question.id}`}
+      data-question-id={question.id}
       className={cn(
-        'border-2 rounded-lg transition-all',
-        statusColor === 'red' && 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-900/10',
-        statusColor === 'yellow' && 'border-yellow-300 dark:border-yellow-700 bg-yellow-50/30 dark:bg-yellow-900/10',
-        statusColor === 'green' && 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10',
-        statusColor === 'blue' && 'border-blue-300 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/10',
-        statusColor === 'gray' && 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 transition-all",
+        status === 'error' && "border-red-300 dark:border-red-700",
+        status === 'warning' && "border-yellow-300 dark:border-yellow-700",
+        status === 'success' && "border-green-300 dark:border-green-700",
+        status === 'info' && "border-blue-300 dark:border-blue-700",
+        isExpanded && "ring-2 ring-blue-500 ring-offset-2"
       )}
     >
       {/* Question Header */}
-      <div
-        className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        onClick={onToggleExpanded}
-      >
-        <div className="flex items-center gap-4 flex-1">
-          <button className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-            {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-          </button>
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="mt-1 text-gray-400 hover:text-[#8CC63F]"
+              onClick={onToggleExpand}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
+              )}
+            </Button>
 
-          <div className="flex-1">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h4 className="font-semibold text-gray-900 dark:text-white">
-                Question {question.question_number}
-              </h4>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Question {question.question_number}
+                </h3>
 
-              {/* Status Badges */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                  {question.marks} mark{question.marks !== 1 ? 's' : ''}
-                </span>
-
-                {question.question_type === 'mcq' && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                    MCQ
-                  </span>
+                {isAlreadyImported && (
+                  <StatusBadge status="info" text="Already Imported" />
                 )}
 
-                {hasParts && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                    {question.parts.length} part{question.parts.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-
-                {answerFormat && (
-                  <span className={cn(
-                    "px-2 py-1 text-xs font-medium rounded flex items-center gap-1",
-                    `bg-${answerFormat.color}-100 dark:bg-${answerFormat.color}-900/30`,
-                    `text-${answerFormat.color}-700 dark:text-${answerFormat.color}-300`
-                  )}>
-                    <answerFormat.icon className="h-3 w-3" />
-                    {answerFormat.label}
-                  </span>
-                )}
-
-                {hasDynamicAnswers && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 flex items-center gap-1">
-                    <Link className="h-3 w-3" />
-                    {question.correct_answers.length} alternatives
-                  </span>
-                )}
-
-                {hasSimulationFlags && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                {question.simulation_flags?.includes('flagged') && (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 text-xs rounded-full">
                     <Flag className="h-3 w-3" />
                     Flagged
                   </span>
                 )}
 
-                {isAlreadyImported && (
-                  <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                    Already Imported
+                <span className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-full">
+                  <Target className="h-3 w-3" />
+                  {question.marks} marks
+                </span>
+
+                {question.question_type === 'mcq' && (
+                  <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-full font-medium">
+                    MCQ
                   </span>
                 )}
-              </div>
-            </div>
 
-            {!isExpanded && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
-                {question.question_text || 'No question text'}
-              </p>
+                {hasParts && (
+                  <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                    {question.parts.length} parts
+                  </span>
+                )}
+
+                {formatInfo && (
+                  <span className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs rounded-full",
+                    `bg-${formatInfo.color}-100 dark:bg-${formatInfo.color}-900/20`,
+                    `text-${formatInfo.color}-700 dark:text-${formatInfo.color}-300`
+                  )}>
+                    <formatInfo.icon className="h-3 w-3" />
+                    {formatInfo.label}
+                  </span>
+                )}
+
+                {hasDynamicAnswer && (
+                  <span className="flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs rounded-full">
+                    <Link className="h-3 w-3" />
+                    Dynamic
+                  </span>
+                )}
+
+                {/* Academic Mapping Tags - Show when card is collapsed */}
+                {!isExpanded && mapping && (
+                  <>
+                    {/* Unit/Chapter Tag */}
+                    {mapping.chapter_id && (() => {
+                      const unit = units.find(u => u.id === mapping.chapter_id);
+                      return unit ? (
+                        <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-xs rounded-full font-medium">
+                          {unit.name}
+                        </span>
+                      ) : null;
+                    })()}
+
+                    {/* Topics Tags */}
+                    {mapping.topic_ids && mapping.topic_ids.length > 0 && (() => {
+                      const mappedTopics = topics.filter(t => mapping.topic_ids.includes(t.id));
+                      return mappedTopics.slice(0, 2).map(topic => (
+                        <span
+                          key={topic.id}
+                          className="px-2 py-1 bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-xs rounded-full font-medium"
+                        >
+                          {topic.name}
+                        </span>
+                      ));
+                    })()}
+
+                    {/* Show "+N more" if there are more than 2 topics */}
+                    {mapping.topic_ids && mapping.topic_ids.length > 2 && (
+                      <span className="px-2 py-1 bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 text-xs rounded-full">
+                        +{mapping.topic_ids.length - 2} more
+                      </span>
+                    )}
+
+                    {/* Subtopics Tags */}
+                    {mapping.subtopic_ids && mapping.subtopic_ids.length > 0 && (() => {
+                      const mappedSubtopics = subtopics.filter(st => mapping.subtopic_ids.includes(st.id));
+                      return mappedSubtopics.slice(0, 2).map(subtopic => (
+                        <span
+                          key={subtopic.id}
+                          className="px-2 py-1 bg-teal-100 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 text-xs rounded-full font-medium"
+                        >
+                          {subtopic.name}
+                        </span>
+                      ));
+                    })()}
+
+                    {/* Show "+N more" if there are more than 2 subtopics */}
+                    {mapping.subtopic_ids && mapping.subtopic_ids.length > 2 && (
+                      <span className="px-2 py-1 bg-teal-50 dark:bg-teal-900/10 text-teal-600 dark:text-teal-400 text-xs rounded-full">
+                        +{mapping.subtopic_ids.length - 2} more
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {!isExpanded && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {question.question_text || 'No question text'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {status === 'error' && (
+              <AlertCircle className="h-5 w-5 text-red-500" />
+            )}
+            {status === 'warning' && (
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+            )}
+            {status === 'success' && (
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            )}
+
+            {!isEditing ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onEdit}
+                disabled={isAlreadyImported}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+            ) : (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={onSave}>
+                  <Save className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onCancel}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <StatusIcon className={cn(
-            "h-5 w-5",
-            statusColor === 'red' && "text-red-600 dark:text-red-400",
-            statusColor === 'yellow' && "text-yellow-600 dark:text-yellow-400",
-            statusColor === 'green' && "text-green-600 dark:text-green-400",
-            statusColor === 'blue' && "text-blue-600 dark:text-blue-400",
-            statusColor === 'gray' && "text-gray-400 dark:text-gray-500"
-          )} />
-        </div>
+        {hasErrors && (
+          <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
+              {validationErrors.map((error, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {question.simulation_notes && (
+          <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              <Flag className="h-4 w-4 inline mr-1" />
+              {question.simulation_notes}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-6 pb-6 space-y-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-          {/* Simulation Flags */}
-          {hasSimulationFlags && question.simulation_notes && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Flagged in Simulation
-                  </p>
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                    {question.simulation_notes}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Already Imported Notice */}
-          {isAlreadyImported && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  This question has already been imported. Editing is disabled.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Validation Errors */}
-          {hasErrors && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
-                    Validation Errors
-                  </p>
-                  <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-0.5">
-                    {validation.errors.map((error: string, idx: number) => (
-                      <li key={idx}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Validation Warnings */}
-          {hasWarnings && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                    Warnings
-                  </p>
-                  <ul className="text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside space-y-0.5">
-                    {validation.warnings.map((warning: string, idx: number) => (
-                      <li key={idx}>{warning}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Edit/Save Buttons */}
-          {!isAlreadyImported && (
-            <div className="flex justify-end gap-2">
-              {!isEditing ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                  leftIcon={<Edit2 className="h-4 w-4" />}
-                >
-                  Edit
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCancel();
-                    }}
-                    leftIcon={<X className="h-4 w-4" />}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSave();
-                    }}
-                    leftIcon={<Save className="h-4 w-4" />}
-                  >
-                    Save
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-
+        <div className="p-4 space-y-6">
           {/* Question Text */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -332,63 +305,95 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             {isEditing ? (
               <textarea
                 value={question.question_text || ''}
-                onChange={(e) => onUpdateField('question_text', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[100px] dark:bg-gray-900 dark:text-white"
-                placeholder="Enter question text..."
+                onChange={(e) => onUpdateQuestion({ question_text: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
             ) : (
-              <div className="text-gray-900 dark:text-white whitespace-pre-wrap">
-                {question.question_text || <span className="text-gray-400 italic">No question text</span>}
-              </div>
+              <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
+                {question.question_text || 'No question text provided'}
+              </p>
             )}
           </div>
 
           {/* Attachments */}
-          <AttachmentDisplay
-            attachments={attachments}
-            questionId={question.id}
-            partPath={[]}
-            requiresFigure={question.figure || false}
-            pdfDataUrl={pdfDataUrl}
-            onAttachmentUpload={() => onAttachmentUpload([])}
-            onAttachmentDelete={onAttachmentDelete}
-            disabled={isAlreadyImported}
-          />
+          {(question.figure || hasAttachments || pdfDataUrl) && (
+            <AttachmentDisplay
+              attachments={attachments}
+              questionLabel={`Question ${question.question_number}`}
+              attachmentKey={question.id}
+              requiresFigure={question.figure}
+              figureRequired={question.figure_required !== false}
+              pdfAvailable={!!pdfDataUrl}
+              onAdd={() => onAddAttachment()}
+              onDelete={onDeleteAttachment}
+              isEditing={isEditing}
+              showDeleteButton={true}
+              onToggleFigureRequired={onToggleFigureRequired ? () => {
+                const newRequired = !(question.figure_required !== false);
+                onToggleFigureRequired(newRequired);
+              } : undefined}
+            />
+          )}
 
-          {/* MCQ Options */}
-          {question.question_type === 'mcq' && question.options && (
+          {/* MCQ Options - Display BEFORE answers */}
+          {question.question_type === 'mcq' && question.options && question.options.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Options
               </label>
               <div className="space-y-2">
-                {question.options.map((option: any) => {
-                  const isCorrect = option.is_correct ||
-                    question.correct_answer === option.label ||
-                    question.correct_answers?.some((ca: any) =>
-                      ca.answer === option.label || ca.answer === option.text
-                    );
+                {question.options.map((option: any, idx: number) => {
+                  // Check if this option is correct - handle multiple data formats
+                  const correctAnswers = question.correct_answers || [];
+
+                  let isCorrect = option.is_correct || false;
+
+                  // Check if any correct answer matches this option
+                  if (!isCorrect && correctAnswers.length > 0) {
+                    isCorrect = correctAnswers.some((ans: any) => {
+                      // Get the answer value from different possible formats
+                      let answerValue = '';
+                      if (typeof ans === 'string') {
+                        answerValue = ans.trim();
+                      } else if (ans && typeof ans === 'object') {
+                        answerValue = (ans.answer_text || ans.text || ans.answer || ans.value || '').toString().trim();
+                      }
+
+                      // Match against option label or text (case-insensitive)
+                      const optionLabel = (option.label || '').toString().trim();
+                      const optionText = (option.text || '').toString().trim();
+
+                      return answerValue &&(
+                        answerValue === optionLabel ||
+                        answerValue === optionText ||
+                        answerValue.toLowerCase() === optionLabel.toLowerCase() ||
+                        answerValue.toLowerCase() === optionText.toLowerCase()
+                      );
+                    });
+                  }
 
                   return (
                     <div
-                      key={option.label}
+                      key={idx}
                       className={cn(
-                        "flex items-center p-3 rounded-lg border",
+                        "p-3 rounded-lg border",
                         isCorrect
                           ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                          : "bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700"
+                          : "bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
                       )}
                     >
-                      <span className={cn(
-                        "font-semibold px-2 py-1 rounded mr-3",
-                        isCorrect
-                          ? "bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300"
-                          : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                      )}>
-                        {option.label}
-                      </span>
-                      <span className="flex-1">{option.text}</span>
-                      {isCorrect && <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 ml-2" />}
+                      <div className="flex items-start gap-3">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                          {option.label}.
+                        </span>
+                        <span className="flex-1 text-gray-900 dark:text-white">
+                          {option.text}
+                        </span>
+                        {isCorrect && (
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -396,96 +401,134 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             </div>
           )}
 
-          {/* Correct Answer(s) */}
+          {/* Answer Display - Show for ALL question types */}
           {!hasParts && (
-            <DynamicAnswerField
-              question={question}
-              isEditing={isEditing}
-              onUpdate={onUpdateField}
-              showCorrectAnswer={true}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Correct Answer(s)
+              </label>
+              {question.correct_answers && question.correct_answers.length > 0 ? (
+                <DynamicAnswerField
+                  question={{
+                    id: question.id,
+                    type: question.question_type,
+                    subject: paperMetadata.subject,
+                    answer_format: question.answer_format,
+                    answer_requirement: question.answer_requirement,
+                    marks: question.marks,
+                    correct_answers: question.correct_answers
+                  }}
+                  mode={isEditing ? "admin" : "review"}
+                  showCorrectAnswer={true}
+                  onChange={(newAnswers) => {
+                    if (isEditing) {
+                      onUpdateQuestion({ correct_answers: newAnswers });
+                    }
+                  }}
+                />
+              ) : (
+                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    No correct answer provided
+                  </p>
+                </div>
+              )}
+            </div>
           )}
+
 
           {/* Hint */}
           {(question.hint || isEditing) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <HelpCircle className="h-4 w-4" />
                 Hint
               </label>
               {isEditing ? (
                 <textarea
                   value={question.hint || ''}
-                  onChange={(e) => onUpdateField('hint', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[60px] dark:bg-gray-900 dark:text-white"
-                  placeholder="Enter hint..."
+                  onChange={(e) => onUpdateQuestion({ hint: e.target.value })}
+                  rows={2}
+                  placeholder="Optional hint for students..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
-              ) : (
-                <div className="text-gray-700 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                  {question.hint || <span className="text-gray-400 italic">No hint</span>}
+              ) : question.hint ? (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    {question.hint}
+                  </p>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
           {/* Explanation */}
           {(question.explanation || isEditing) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4" />
                 Explanation
               </label>
               {isEditing ? (
                 <textarea
                   value={question.explanation || ''}
-                  onChange={(e) => onUpdateField('explanation', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[80px] dark:bg-gray-900 dark:text-white"
-                  placeholder="Enter explanation..."
+                  onChange={(e) => onUpdateQuestion({ explanation: e.target.value })}
+                  rows={3}
+                  placeholder="Optional explanation of the answer..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
-              ) : (
-                <div className="text-gray-700 dark:text-gray-300 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                  {question.explanation || <span className="text-gray-400 italic">No explanation</span>}
+              ) : question.explanation ? (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    {question.explanation}
+                  </p>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
 
-          {/* Parts */}
+          {/* Parts Display */}
           {hasParts && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Parts ({question.parts.length})
-              </label>
-              <div className="space-y-4">
-                {question.parts.map((part: any, partIndex: number) => (
-                  <QuestionPartDisplay
-                    key={part.id || partIndex}
-                    part={part}
-                    partIndex={partIndex}
-                    questionId={question.id}
-                    isEditing={isEditing}
-                    attachments={attachments}
-                    pdfDataUrl={pdfDataUrl}
-                    onUpdateField={(field, value) => {
-                      const updatedParts = [...question.parts];
-                      updatedParts[partIndex] = { ...updatedParts[partIndex], [field]: value };
-                      onUpdateField('parts', updatedParts);
-                    }}
-                    onAttachmentUpload={onAttachmentUpload}
-                    onAttachmentDelete={onAttachmentDelete}
-                    disabled={isAlreadyImported}
-                  />
-                ))}
-              </div>
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Question Parts ({question.parts.length})
+              </h4>
+              {question.parts.map((part: any, partIndex: number) => (
+                <QuestionPartDisplay
+                  key={partIndex}
+                  part={part}
+                  partIndex={partIndex}
+                  questionId={question.id}
+                  attachments={attachments}
+                  paperMetadata={paperMetadata}
+                  pdfDataUrl={pdfDataUrl}
+                  isEditing={isEditing}
+                  onAddAttachment={onAddAttachment}
+                  onDeleteAttachment={onDeleteAttachment}
+                  onUpdatePart={(updates) => {
+                    const newParts = [...question.parts];
+                    newParts[partIndex] = { ...newParts[partIndex], ...updates };
+                    onUpdateQuestion({ parts: newParts });
+                  }}
+                  onToggleFigureRequired={(required) => {
+                    const newParts = [...question.parts];
+                    newParts[partIndex] = { ...newParts[partIndex], figure_required: required };
+                    onUpdateQuestion({ parts: newParts });
+                  }}
+                />
+              ))}
             </div>
           )}
 
-          {/* Academic Mapping */}
+          {/* Mapping Controls */}
           <QuestionMappingControls
             mapping={mapping}
+            dataStructureInfo={dataStructureInfo}
             units={units}
             topics={topics}
             subtopics={subtopics}
-            onMappingUpdate={onMappingUpdate}
-            disabled={isAlreadyImported}
+            onUpdate={onMappingUpdate}
+            isDisabled={isAlreadyImported || isEditing}
           />
         </div>
       )}

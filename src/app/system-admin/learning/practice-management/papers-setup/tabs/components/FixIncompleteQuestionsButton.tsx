@@ -7,10 +7,10 @@ interface FixIncompleteQuestionsButtonProps {
   onFix: (updatedQuestions: any[]) => Promise<void>;
 }
 
-export function FixIncompleteQuestionsButton({
+export const FixIncompleteQuestionsButton: React.FC<FixIncompleteQuestionsButtonProps> = ({
   incompleteQuestions,
   onFix
-}: FixIncompleteQuestionsButtonProps) {
+}) => {
   const incompleteCount = incompleteQuestions.filter(
     q => !q.question_text || q.marks === 0
   ).length;
@@ -19,13 +19,23 @@ export function FixIncompleteQuestionsButton({
     return null;
   }
 
+  const handleFix = async () => {
+    const updatedQuestions = incompleteQuestions.map(q => ({
+      ...q,
+      question_text: q.question_text || 'Question text missing',
+      marks: q.marks || 1
+    }));
+    await onFix(updatedQuestions);
+  };
+
   return (
     <Button
       variant="outline"
-      onClick={() => onFix(incompleteQuestions)}
+      onClick={handleFix}
       leftIcon={<Wrench className="h-4 w-4" />}
+      className="border-yellow-500 text-yellow-600 hover:bg-yellow-50"
     >
-      Fix {incompleteCount} Incomplete Question{incompleteCount !== 1 ? 's' : ''}
+      Fix {incompleteCount} Incomplete
     </Button>
   );
-}
+};

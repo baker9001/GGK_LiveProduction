@@ -1,14 +1,7 @@
 import React from 'react';
 import {
-  Hash,
-  FileText,
-  Calculator,
-  FlaskConical,
-  PenTool,
-  Link,
-  BookOpen,
-  CheckCircle,
-  AlertCircle
+  Image as ImageIcon, HelpCircle, Lightbulb, CheckCircle,
+  Hash, Calculator, FileText, Link, BookOpen
 } from 'lucide-react';
 import DynamicAnswerField from '../../../../../../../components/shared/DynamicAnswerField';
 import { AttachmentDisplay } from './AttachmentDisplay';
@@ -18,16 +11,17 @@ interface QuestionPartDisplayProps {
   part: any;
   partIndex: number;
   questionId: string;
-  isEditing: boolean;
-  attachments: any[];
+  attachments: any;
+  paperMetadata: any;
   pdfDataUrl: string | null;
-  onUpdateField: (field: string, value: any) => void;
-  onAttachmentUpload: (partPath: string[]) => void;
-  onAttachmentDelete: (attachmentId: string) => void;
-  disabled?: boolean;
+  isEditing: boolean;
+  onAddAttachment: (partIndex: number, subpartIndex?: number) => void;
+  onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
+  onUpdatePart: (updates: any) => void;
+  onToggleFigureRequired?: (required: boolean) => void;
 }
 
-const answerFormatConfig: Record<string, { icon: any; color: string; label: string }> = {
+const answerFormatConfig: Record<string, any> = {
   single_word: { icon: Hash, color: 'blue', label: 'Single Word' },
   single_line: { icon: FileText, color: 'blue', label: 'Short Answer' },
   two_items: { icon: Link, color: 'purple', label: 'Two Items' },
@@ -36,414 +30,286 @@ const answerFormatConfig: Record<string, { icon: any; color: string; label: stri
   multi_line_labeled: { icon: BookOpen, color: 'indigo', label: 'Labeled Parts' },
   calculation: { icon: Calculator, color: 'green', label: 'Calculation' },
   equation: { icon: Calculator, color: 'green', label: 'Equation' },
-  chemical_structure: { icon: FlaskConical, color: 'orange', label: 'Chemical Structure' },
-  structural_diagram: { icon: FlaskConical, color: 'orange', label: 'Structural Diagram' },
-  diagram: { icon: PenTool, color: 'pink', label: 'Diagram' }
 };
-
-const answerRequirementLabels: Record<string, string> = {
-  any_one_from: 'Any one of the following',
-  any_two_from: 'Any two of the following',
-  any_three_from: 'Any three of the following',
-  both_required: 'Both answers required',
-  all_required: 'All answers required',
-  alternative_methods: 'Alternative methods accepted',
-  acceptable_variations: 'Acceptable variations'
-};
-
-const partLabels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't'];
-const romanNumerals = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
 export const QuestionPartDisplay: React.FC<QuestionPartDisplayProps> = ({
   part,
   partIndex,
   questionId,
-  isEditing,
   attachments,
+  paperMetadata,
   pdfDataUrl,
-  onUpdateField,
-  onAttachmentUpload,
-  onAttachmentDelete,
-  disabled = false
+  isEditing,
+  onAddAttachment,
+  onDeleteAttachment,
+  onUpdatePart,
+  onToggleFigureRequired,
 }) => {
-  const partLabel = part.part || partLabels[partIndex] || `part ${partIndex + 1}`;
+  const partKey = `${questionId}_p${partIndex}`;
+  const partAttachments = attachments?.[partKey] || [];
   const hasSubparts = part.subparts && part.subparts.length > 0;
-  const answerFormat = part.answer_format ? answerFormatConfig[part.answer_format] : null;
-  const answerRequirement = part.answer_requirement ? answerRequirementLabels[part.answer_requirement] : null;
+  const formatInfo = part.answer_format ? answerFormatConfig[part.answer_format] : null;
 
   return (
-    <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800/50">
-      {/* Part Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h5 className="font-semibold text-gray-900 dark:text-white">
-            ({partLabel})
-          </h5>
+    <div className="border-l-4 border-blue-300 dark:border-blue-700 pl-4">
+      <div className="space-y-4">
+        {/* Part Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                Part ({part.part})
+              </h5>
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-full">
+                {part.marks} marks
+              </span>
+              {formatInfo && (
+                <span className={cn(
+                  "flex items-center gap-1 px-2 py-1 text-xs rounded-full",
+                  `bg-${formatInfo.color}-100 dark:bg-${formatInfo.color}-900/20`,
+                  `text-${formatInfo.color}-700 dark:text-${formatInfo.color}-300`
+                )}>
+                  <formatInfo.icon className="h-3 w-3" />
+                  {formatInfo.label}
+                </span>
+              )}
+              {part.answer_requirement && (
+                <span className="flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs rounded-full">
+                  <Link className="h-3 w-3" />
+                  {part.answer_requirement.replace(/_/g, ' ')}
+                </span>
+              )}
+              {hasSubparts && (
+                <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs rounded-full">
+                  {part.subparts.length} subparts
+                </span>
+              )}
+            </div>
 
-          <span className="px-2 py-1 text-xs font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-            {part.marks} mark{part.marks !== 1 ? 's' : ''}
-          </span>
-
-          {answerFormat && (
-            <span className={cn(
-              "px-2 py-1 text-xs font-medium rounded flex items-center gap-1",
-              `bg-${answerFormat.color}-100 dark:bg-${answerFormat.color}-900/30`,
-              `text-${answerFormat.color}-700 dark:text-${answerFormat.color}-300`
-            )}>
-              <answerFormat.icon className="h-3 w-3" />
-              {answerFormat.label}
-            </span>
-          )}
-
-          {answerRequirement && (
-            <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-              {answerRequirement}
-            </span>
-          )}
-
-          {hasSubparts && (
-            <span className="px-2 py-1 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
-              {part.subparts.length} subpart{part.subparts.length !== 1 ? 's' : ''}
-            </span>
-          )}
+            {/* Part Question Text */}
+            {isEditing ? (
+              <textarea
+                value={part.question_text || ''}
+                onChange={(e) => onUpdatePart({ question_text: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+              />
+            ) : (
+              <p className="text-sm text-gray-900 dark:text-white">
+                {part.question_text || 'No question text'}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Part Text */}
-      <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-          Part Text
-        </label>
-        {isEditing ? (
-          <textarea
-            value={part.question_text || ''}
-            onChange={(e) => onUpdateField('question_text', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[60px] text-sm dark:bg-gray-900 dark:text-white"
-            placeholder="Enter part text..."
-            disabled={disabled}
+        {/* Part Attachments */}
+        {(part.figure || partAttachments.length > 0 || pdfDataUrl) && (
+          <AttachmentDisplay
+            attachments={partAttachments}
+            questionLabel={`Part (${part.part})`}
+            attachmentKey={partKey}
+            requiresFigure={part.figure}
+            figureRequired={part.figure_required !== false}
+            pdfAvailable={!!pdfDataUrl}
+            onAdd={() => onAddAttachment(partIndex)}
+            onDelete={onDeleteAttachment}
+            isEditing={isEditing}
+            showDeleteButton={true}
+            onToggleFigureRequired={onToggleFigureRequired ? () => {
+              const newRequired = !(part.figure_required !== false);
+              onToggleFigureRequired(newRequired);
+            } : undefined}
           />
-        ) : (
-          <div className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-            {part.question_text || <span className="text-gray-400 italic">No part text</span>}
+        )}
+
+        {/* Part Answer - Only if no subparts */}
+        {!hasSubparts && part.correct_answers && part.correct_answers.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Correct Answer(s)
+            </label>
+            <DynamicAnswerField
+              question={{
+                id: `${questionId}_p${partIndex}`,
+                type: 'descriptive',
+                subject: paperMetadata.subject,
+                answer_format: part.answer_format,
+                answer_requirement: part.answer_requirement,
+                marks: part.marks,
+                correct_answers: part.correct_answers
+              }}
+              mode={isEditing ? "admin" : "review"}
+              showCorrectAnswer={true}
+              onChange={(newAnswers) => {
+                if (isEditing) {
+                  onUpdatePart({ correct_answers: newAnswers });
+                }
+              }}
+            />
           </div>
         )}
-      </div>
 
-      {/* Part Attachments */}
-      <AttachmentDisplay
-        attachments={attachments}
-        questionId={questionId}
-        partPath={[part.id || `part_${partIndex}`]}
-        requiresFigure={part.figure || false}
-        pdfDataUrl={pdfDataUrl}
-        onAttachmentUpload={() => onAttachmentUpload([part.id || `part_${partIndex}`])}
-        onAttachmentDelete={onAttachmentDelete}
-        disabled={disabled}
-      />
-
-      {/* Part MCQ Options */}
-      {part.question_type === 'mcq' && part.options && (
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-            Options
-          </label>
-          <div className="space-y-2">
-            {part.options.map((option: any) => {
-              const isCorrect = option.is_correct ||
-                part.correct_answer === option.label ||
-                part.correct_answers?.some((ca: any) =>
-                  ca.answer === option.label || ca.answer === option.text
-                );
-
-              return (
+        {/* Part MCQ Options */}
+        {part.options && part.options.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Options
+            </label>
+            <div className="space-y-2">
+              {part.options.map((option: any, idx: number) => (
                 <div
-                  key={option.label}
+                  key={idx}
                   className={cn(
-                    "flex items-center p-2 rounded-lg border text-sm",
-                    isCorrect
+                    "p-2 rounded-lg border text-sm",
+                    option.is_correct
                       ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                      : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+                      : "bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
                   )}
                 >
-                  <span className={cn(
-                    "font-semibold px-2 py-0.5 rounded mr-2 text-xs",
-                    isCorrect
-                      ? "bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  )}>
-                    {option.label}
-                  </span>
-                  <span className="flex-1">{option.text}</span>
-                  {isCorrect && <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 ml-2" />}
+                  <div className="flex items-start gap-2">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {option.label}.
+                    </span>
+                    <span className="flex-1 text-gray-900 dark:text-white">
+                      {option.text}
+                    </span>
+                    {option.is_correct && (
+                      <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    )}
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Part Correct Answer (only if no subparts) */}
-      {!hasSubparts && (
-        <div className="mb-3">
-          <DynamicAnswerField
-            question={part}
-            isEditing={isEditing}
-            onUpdate={onUpdateField}
-            showCorrectAnswer={true}
-          />
-        </div>
-      )}
+        {/* Part Hint */}
+        {(part.hint || isEditing) && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
+              <HelpCircle className="h-3 w-3" />
+              Hint
+            </label>
+            {isEditing ? (
+              <textarea
+                value={part.hint || ''}
+                onChange={(e) => onUpdatePart({ hint: e.target.value })}
+                rows={2}
+                placeholder="Optional hint..."
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            ) : part.hint ? (
+              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                <p className="text-xs text-blue-800 dark:text-blue-200">{part.hint}</p>
+              </div>
+            ) : null}
+          </div>
+        )}
 
-      {/* Part Hint */}
-      {(part.hint || isEditing) && (
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            Hint
-          </label>
-          {isEditing ? (
-            <textarea
-              value={part.hint || ''}
-              onChange={(e) => onUpdateField('hint', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[40px] text-sm dark:bg-gray-900 dark:text-white"
-              placeholder="Enter hint..."
-              disabled={disabled}
-            />
-          ) : (
-            <div className="text-sm text-gray-700 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-              {part.hint || <span className="text-gray-400 italic">No hint</span>}
-            </div>
-          )}
-        </div>
-      )}
+        {/* Part Explanation */}
+        {(part.explanation || isEditing) && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1">
+              <Lightbulb className="h-3 w-3" />
+              Explanation
+            </label>
+            {isEditing ? (
+              <textarea
+                value={part.explanation || ''}
+                onChange={(e) => onUpdatePart({ explanation: e.target.value })}
+                rows={2}
+                placeholder="Optional explanation..."
+                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            ) : part.explanation ? (
+              <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                <p className="text-xs text-green-800 dark:text-green-200">{part.explanation}</p>
+              </div>
+            ) : null}
+          </div>
+        )}
 
-      {/* Part Explanation */}
-      {(part.explanation || isEditing) && (
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            Explanation
-          </label>
-          {isEditing ? (
-            <textarea
-              value={part.explanation || ''}
-              onChange={(e) => onUpdateField('explanation', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md min-h-[50px] text-sm dark:bg-gray-900 dark:text-white"
-              placeholder="Enter explanation..."
-              disabled={disabled}
-            />
-          ) : (
-            <div className="text-sm text-gray-700 dark:text-gray-300 bg-green-50 dark:bg-green-900/20 p-2 rounded">
-              {part.explanation || <span className="text-gray-400 italic">No explanation</span>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Subparts */}
-      {hasSubparts && (
-        <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
-            Subparts ({part.subparts.length})
-          </label>
-          {part.subparts.map((subpart: any, subpartIndex: number) => {
-            const subpartLabel = romanNumerals[subpartIndex] || `${subpartIndex + 1}`;
-            const subpartAnswerFormat = subpart.answer_format ? answerFormatConfig[subpart.answer_format] : null;
-            const subpartAnswerRequirement = subpart.answer_requirement ? answerRequirementLabels[subpart.answer_requirement] : null;
-
-            return (
-              <div
-                key={subpart.id || subpartIndex}
-                className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-900/50"
-              >
-                {/* Subpart Header */}
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <h6 className="font-medium text-sm text-gray-900 dark:text-white">
-                    ({subpartLabel})
-                  </h6>
-
-                  <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                    {subpart.marks} mark{subpart.marks !== 1 ? 's' : ''}
-                  </span>
-
-                  {subpartAnswerFormat && (
-                    <span className={cn(
-                      "px-1.5 py-0.5 text-xs font-medium rounded flex items-center gap-1",
-                      `bg-${subpartAnswerFormat.color}-100 dark:bg-${subpartAnswerFormat.color}-900/30`,
-                      `text-${subpartAnswerFormat.color}-700 dark:text-${subpartAnswerFormat.color}-300`
-                    )}>
-                      <subpartAnswerFormat.icon className="h-3 w-3" />
-                      {subpartAnswerFormat.label}
-                    </span>
-                  )}
-
-                  {subpartAnswerRequirement && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                      {subpartAnswerRequirement}
-                    </span>
-                  )}
-
-                  {subpart.figure && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
-                      Figure Required
-                    </span>
-                  )}
-                </div>
-
-                {/* Subpart Text */}
-                <div className="mb-2">
-                  {isEditing ? (
-                    <textarea
-                      value={subpart.question_text || ''}
-                      onChange={(e) => {
-                        const updatedSubparts = [...part.subparts];
-                        updatedSubparts[subpartIndex] = {
-                          ...updatedSubparts[subpartIndex],
-                          question_text: e.target.value
-                        };
-                        onUpdateField('subparts', updatedSubparts);
-                      }}
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs min-h-[40px] dark:bg-gray-900 dark:text-white"
-                      placeholder="Enter subpart text..."
-                      disabled={disabled}
-                    />
-                  ) : (
-                    <div className="text-xs text-gray-900 dark:text-white whitespace-pre-wrap">
-                      {subpart.question_text || <span className="text-gray-400 italic">No subpart text</span>}
+        {/* Subparts */}
+        {hasSubparts && (
+          <div className="space-y-3 pl-4 border-l-2 border-purple-200 dark:border-purple-800">
+            <h6 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Subparts ({part.subparts.length})
+            </h6>
+            {part.subparts.map((subpart: any, subpartIndex: number) => (
+              <div key={subpartIndex} className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h6 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {subpart.subpart}
+                      </h6>
+                      <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded">
+                        {subpart.marks}m
+                      </span>
+                      {subpart.answer_requirement && (
+                        <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs rounded">
+                          {subpart.answer_requirement.replace(/_/g, ' ')}
+                        </span>
+                      )}
                     </div>
-                  )}
+                    <p className="text-xs text-gray-900 dark:text-white">
+                      {subpart.question_text || 'No question text'}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Subpart Attachments */}
-                <AttachmentDisplay
-                  attachments={attachments}
-                  questionId={questionId}
-                  partPath={[part.id || `part_${partIndex}`, subpart.id || `subpart_${subpartIndex}`]}
-                  requiresFigure={subpart.figure || false}
-                  pdfDataUrl={pdfDataUrl}
-                  onAttachmentUpload={() => onAttachmentUpload([
-                    part.id || `part_${partIndex}`,
-                    subpart.id || `subpart_${subpartIndex}`
-                  ])}
-                  onAttachmentDelete={onAttachmentDelete}
-                  disabled={disabled}
-                />
-
-                {/* Subpart MCQ Options */}
-                {subpart.question_type === 'mcq' && subpart.options && (
-                  <div className="mb-2">
-                    <div className="space-y-1">
-                      {subpart.options.map((option: any) => {
-                        const isCorrect = option.is_correct ||
-                          subpart.correct_answer === option.label ||
-                          subpart.correct_answers?.some((ca: any) =>
-                            ca.answer === option.label || ca.answer === option.text
-                          );
-
-                        return (
-                          <div
-                            key={option.label}
-                            className={cn(
-                              "flex items-center p-1.5 rounded border text-xs",
-                              isCorrect
-                                ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
-                                : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
-                            )}
-                          >
-                            <span className={cn(
-                              "font-semibold px-1.5 py-0.5 rounded mr-1.5 text-xs",
-                              isCorrect
-                                ? "bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300"
-                                : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                            )}>
-                              {option.label}
-                            </span>
-                            <span className="flex-1">{option.text}</span>
-                            {isCorrect && <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400 ml-1" />}
-                          </div>
-                        );
-                      })}
-                    </div>
+                {subpart.figure && (
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded text-xs text-yellow-700 dark:text-yellow-300">
+                    <ImageIcon className="h-3 w-3 inline mr-1" />
+                    Figure required for this subpart
                   </div>
                 )}
 
-                {/* Subpart Correct Answer */}
-                <div className="mb-2">
-                  <DynamicAnswerField
-                    question={subpart}
-                    isEditing={isEditing}
-                    onUpdate={(field, value) => {
-                      const updatedSubparts = [...part.subparts];
-                      updatedSubparts[subpartIndex] = {
-                        ...updatedSubparts[subpartIndex],
-                        [field]: value
-                      };
-                      onUpdateField('subparts', updatedSubparts);
-                    }}
-                    showCorrectAnswer={true}
-                  />
-                </div>
-
-                {/* Subpart Hint */}
-                {(subpart.hint || isEditing) && (
-                  <div className="mb-2">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Hint
-                    </label>
-                    {isEditing ? (
-                      <textarea
-                        value={subpart.hint || ''}
-                        onChange={(e) => {
-                          const updatedSubparts = [...part.subparts];
-                          updatedSubparts[subpartIndex] = {
-                            ...updatedSubparts[subpartIndex],
-                            hint: e.target.value
-                          };
-                          onUpdateField('subparts', updatedSubparts);
-                        }}
-                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs min-h-[30px] dark:bg-gray-900 dark:text-white"
-                        placeholder="Enter hint..."
-                        disabled={disabled}
-                      />
-                    ) : (
-                      <div className="text-xs text-gray-700 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded">
-                        {subpart.hint || <span className="text-gray-400 italic">No hint</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Subpart Explanation */}
-                {(subpart.explanation || isEditing) && (
+                {/* Subpart Answer */}
+                {subpart.correct_answers && subpart.correct_answers.length > 0 && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                      Explanation
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Answer
                     </label>
-                    {isEditing ? (
-                      <textarea
-                        value={subpart.explanation || ''}
-                        onChange={(e) => {
-                          const updatedSubparts = [...part.subparts];
-                          updatedSubparts[subpartIndex] = {
-                            ...updatedSubparts[subpartIndex],
-                            explanation: e.target.value
-                          };
-                          onUpdateField('subparts', updatedSubparts);
-                        }}
-                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs min-h-[40px] dark:bg-gray-900 dark:text-white"
-                        placeholder="Enter explanation..."
-                        disabled={disabled}
-                      />
-                    ) : (
-                      <div className="text-xs text-gray-700 dark:text-gray-300 bg-green-50 dark:bg-green-900/20 p-1.5 rounded">
-                        {subpart.explanation || <span className="text-gray-400 italic">No explanation</span>}
-                      </div>
-                    )}
+                    <DynamicAnswerField
+                      question={{
+                        id: `${questionId}_p${partIndex}_s${subpartIndex}`,
+                        type: 'descriptive',
+                        subject: paperMetadata.subject,
+                        answer_format: subpart.answer_format,
+                        answer_requirement: subpart.answer_requirement,
+                        marks: subpart.marks,
+                        correct_answers: subpart.correct_answers
+                      }}
+                      mode="review"
+                      showCorrectAnswer={true}
+                    />
+                  </div>
+                )}
+
+                {/* Subpart Hint & Explanation */}
+                {subpart.hint && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                      <HelpCircle className="h-3 w-3 inline mr-1" />
+                      {subpart.hint}
+                    </p>
+                  </div>
+                )}
+                {subpart.explanation && (
+                  <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                    <p className="text-xs text-green-800 dark:text-green-200">
+                      <Lightbulb className="h-3 w-3 inline mr-1" />
+                      {subpart.explanation}
+                    </p>
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
