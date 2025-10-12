@@ -89,8 +89,9 @@ try {
 }
 
 // Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+// TODO: These components need to be created
+// import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
+// import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
@@ -3134,6 +3135,7 @@ export function QuestionsTab({
             )}
           </Button>
 
+          {/* TODO: FixIncompleteQuestionsButton component needs to be created
           <FixIncompleteQuestionsButton
             incompleteQuestions={questions || []}
             onFix={async (updatedQuestions) => {
@@ -3141,6 +3143,7 @@ export function QuestionsTab({
               toast.success('Questions updated with complete data');
             }}
           />
+          */}
 
           <Button
             variant="outline"
@@ -3247,7 +3250,8 @@ export function QuestionsTab({
       )}
 
       {/* Questions Review Section */}
-      <QuestionsReviewSection
+      {/* TODO: QuestionsReviewSection component needs to be created */}
+      {/* <QuestionsReviewSection
         questions={questions || []}
         mappings={questionMappings}
         dataStructureInfo={dataStructureInfo}
@@ -3408,7 +3412,7 @@ export function QuestionsTab({
             });
           }
         }}
-      />
+      /> */}
 
       {/* Import Progress */}
       {isImporting && (
