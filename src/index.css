@@ -36,9 +36,11 @@
 
 .brand-select option:checked,
 .brand-select option:focus,
-.brand-select option:hover {
-  background-color: var(--brand-accent);
-  color: var(--brand-accent-contrast);
+.brand-select option:hover,
+.brand-select option:active {
+  background-color: var(--brand-accent) !important;
+  color: var(--brand-accent-contrast) !important;
+  background-image: none !important;
 }
 
 .dark .brand-select {
