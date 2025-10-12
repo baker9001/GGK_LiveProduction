@@ -434,6 +434,7 @@ export function QuestionsTab({
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionsRef = useRef<Record<string, HTMLDivElement>>({});
+  const reviewSyncPromiseRef = useRef<Promise<void> | null>(null);
 
   const paperTitleForMetadata = useMemo(
     () => savedPaperDetails?.paper_name || paperMetadata.title || '',
@@ -640,22 +641,201 @@ export function QuestionsTab({
   useEffect(() => {
     let isCancelled = false;
 
-    const syncReviewWorkflow = async () => {
-      if (!importSession?.id || questions.length === 0) {
-        if (!isCancelled) {
-          setReviewStatuses({});
-          setReviewSessionId(null);
+    const runSync = async () => {
+      if (reviewSyncPromiseRef.current) {
+        try {
+          await reviewSyncPromiseRef.current;
+        } catch (previousError) {
+          console.warn('Previous review sync failed:', previousError);
         }
-        return;
+
+        if (isCancelled) {
+          return;
+        }
       }
 
-      setReviewLoading(true);
-
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
+      const syncPromise = (async () => {
+        if (!importSession?.id || questions.length === 0) {
           if (!isCancelled) {
+            setReviewStatuses({});
+            setReviewSessionId(null);
+            setReviewLoading(false);
+          }
+          return;
+        }
+
+        if (!isCancelled) {
+          setReviewLoading(true);
+        }
+
+        try {
+          const {
+            data: { user },
+            error: authError
+          } = await supabase.auth.getUser();
+
+          if (authError) {
+            throw authError;
+          }
+
+          if (!user) {
+            if (!isCancelled) {
+              setReviewStatuses(prev => {
+                const fallback: Record<string, ReviewStatus> = {};
+                questions.forEach(q => {
+                  fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
+                });
+                return fallback;
+              });
+              setReviewLoading(false);
+            }
+            return;
+          }
+
+          if (!isCancelled) {
+            setCurrentReviewerId(user.id);
+          }
+
+          let sessionId = reviewSessionId;
+
+          if (!sessionId) {
+            const { data: existingSession, error: sessionError } = await supabase
+              .from('question_import_review_sessions')
+              .select('*')
+              .eq('paper_import_session_id', importSession.id)
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (sessionError) throw sessionError;
+            if (existingSession) {
+              sessionId = existingSession.id;
+            }
+          }
+
+          if (!sessionId) {
+            const { data: newSession, error: createError } = await supabase
+              .from('question_import_review_sessions')
+              .insert({
+                paper_import_session_id: importSession.id,
+                user_id: user.id,
+                paper_id: existingPaperId,
+                total_questions: questions.length,
+                simulation_required: true,
+                metadata: {
+                  paper_title: paperTitleForMetadata,
+                  paper_code: paperCodeForMetadata,
+                  created_from_ui: 'QuestionsTab'
+                }
+              })
+              .select()
+              .single();
+
+            if (createError) throw createError;
+            sessionId = newSession.id;
+          }
+
+          if (!sessionId) return;
+
+          if (!isCancelled) {
+            setReviewSessionId(sessionId);
+          }
+
+          const { data: existingStatuses, error: statusesError } = await supabase
+            .from('question_import_review_status')
+            .select('*')
+            .eq('review_session_id', sessionId);
+
+          if (statusesError) throw statusesError;
+
+          const statusMap: Record<string, ReviewStatus> = {};
+          const missingQuestionIds: string[] = [];
+
+          questions.forEach(q => {
+            const match = existingStatuses?.find(status => status.question_identifier === q.id);
+            if (match) {
+              statusMap[q.id] = {
+                questionId: q.id,
+                isReviewed: match.is_reviewed,
+                reviewedAt: match.reviewed_at || undefined,
+                hasIssues: match.has_issues,
+                issueCount: match.issue_count,
+                needsAttention: match.needs_attention
+              };
+            } else {
+              statusMap[q.id] = { questionId: q.id, isReviewed: false };
+              missingQuestionIds.push(q.id);
+            }
+          });
+
+          if (missingQuestionIds.length > 0) {
+            const rows = missingQuestionIds
+              .map(questionId => {
+                const question = questions.find(q => q.id === questionId);
+                if (!question) return null;
+
+                const sanitizedQuestion = JSON.parse(JSON.stringify(question));
+
+                const questionIndex = questions.findIndex(q => q.id === questionId);
+                const fallbackNumber = questionIndex >= 0 ? String(questionIndex + 1) : questionId;
+
+                return {
+                  review_session_id: sessionId,
+                  question_identifier: questionId,
+                  question_number: question.question_number ? String(question.question_number) : fallbackNumber,
+                  question_data: sanitizedQuestion,
+                  is_reviewed: false,
+                  validation_status: 'pending'
+                };
+              })
+              .filter((row): row is {
+                review_session_id: string;
+                question_identifier: string;
+                question_number: string;
+                question_data: any;
+                is_reviewed: boolean;
+                validation_status: string;
+              } => row !== null);
+
+            if (rows.length > 0) {
+              const { error: upsertError } = await supabase
+                .from('question_import_review_status')
+                .upsert(rows, {
+                  onConflict: 'review_session_id,question_identifier',
+                  ignoreDuplicates: true
+                });
+
+              if (upsertError) throw upsertError;
+            }
+          }
+
+          if (!isCancelled) {
+            setReviewStatuses(statusMap);
+          }
+
+          const reviewedCount = Object.values(statusMap).filter(status => status.isReviewed).length;
+
+          const sessionUpdate: Record<string, any> = {
+            total_questions: questions.length,
+            reviewed_questions: reviewedCount,
+            updated_at: new Date().toISOString(),
+            status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
+          };
+
+          sessionUpdate.completed_at =
+            sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
+
+          const { error: updateError } = await supabase
+            .from('question_import_review_sessions')
+            .update(sessionUpdate)
+            .eq('id', sessionId);
+
+          if (updateError) throw updateError;
+        } catch (error) {
+          console.error('Failed to synchronize review workflow:', error);
+          if (!isCancelled) {
+            toast.error('Unable to sync question review progress.');
             setReviewStatuses(prev => {
               const fallback: Record<string, ReviewStatus> = {};
               questions.forEach(q => {
@@ -664,155 +844,30 @@ export function QuestionsTab({
               return fallback;
             });
           }
-          return;
-        }
-
-        if (!isCancelled) {
-          setCurrentReviewerId(user.id);
-        }
-
-        let sessionId = reviewSessionId;
-
-        if (!sessionId) {
-          const { data: existingSession, error: sessionError } = await supabase
-            .from('question_import_review_sessions')
-            .select('*')
-            .eq('paper_import_session_id', importSession.id)
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (sessionError) throw sessionError;
-          if (existingSession) {
-            sessionId = existingSession.id;
+        } finally {
+          if (!isCancelled) {
+            setReviewLoading(false);
           }
         }
+      })();
 
-        if (!sessionId) {
-          const { data: newSession, error: createError } = await supabase
-            .from('question_import_review_sessions')
-            .insert({
-              paper_import_session_id: importSession.id,
-              user_id: user.id,
-              paper_id: existingPaperId,
-              total_questions: questions.length,
-              simulation_required: true,
-              metadata: {
-                paper_title: paperTitleForMetadata,
-                paper_code: paperCodeForMetadata,
-                created_from_ui: 'QuestionsTab'
-              }
-            })
-            .select()
-            .single();
+      reviewSyncPromiseRef.current = syncPromise;
 
-          if (createError) throw createError;
-          sessionId = newSession.id;
-        }
-
-        if (!sessionId) return;
-
-        if (!isCancelled) {
-          setReviewSessionId(sessionId);
-        }
-
-        const { data: existingStatuses, error: statusesError } = await supabase
-          .from('question_import_review_status')
-          .select('*')
-          .eq('review_session_id', sessionId);
-
-        if (statusesError) throw statusesError;
-
-        const statusMap: Record<string, ReviewStatus> = {};
-        const missingQuestionIds: string[] = [];
-
-        questions.forEach(q => {
-          const match = existingStatuses?.find(status => status.question_identifier === q.id);
-          if (match) {
-            statusMap[q.id] = {
-              questionId: q.id,
-              isReviewed: match.is_reviewed,
-              reviewedAt: match.reviewed_at || undefined,
-              hasIssues: match.has_issues,
-              issueCount: match.issue_count,
-              needsAttention: match.needs_attention
-            };
-          } else {
-            statusMap[q.id] = { questionId: q.id, isReviewed: false };
-            missingQuestionIds.push(q.id);
-          }
-        });
-
-        if (missingQuestionIds.length > 0) {
-          const rows = questions
-            .filter(q => missingQuestionIds.includes(q.id))
-            .map(q => ({
-              review_session_id: sessionId,
-              question_identifier: q.id,
-              question_number: q.question_number,
-              question_data: q,
-              is_reviewed: false,
-              validation_status: 'pending'
-            }));
-
-          const { error: insertError } = await supabase
-            .from('question_import_review_status')
-            .insert(rows);
-
-          if (insertError) throw insertError;
-        }
-
-        if (!isCancelled) {
-          setReviewStatuses(statusMap);
-        }
-
-        const reviewedCount = Object.values(statusMap).filter(status => status.isReviewed).length;
-
-        const sessionUpdate: Record<string, any> = {
-          total_questions: questions.length,
-          reviewed_questions: reviewedCount,
-          updated_at: new Date().toISOString(),
-          status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
-        };
-
-        sessionUpdate.completed_at =
-          sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
-
-        await supabase
-          .from('question_import_review_sessions')
-          .update(sessionUpdate)
-          .eq('id', sessionId);
-      } catch (error) {
-        console.error('Failed to synchronize review workflow:', error);
-        if (!isCancelled) {
-          toast.error('Unable to sync question review progress.');
-          setReviewStatuses(prev => {
-            const fallback: Record<string, ReviewStatus> = {};
-            questions.forEach(q => {
-              fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
-            });
-            return fallback;
-          });
-        }
+      try {
+        await syncPromise;
       } finally {
-        if (!isCancelled) {
-          setReviewLoading(false);
+        if (reviewSyncPromiseRef.current === syncPromise) {
+          reviewSyncPromiseRef.current = null;
         }
       }
     };
 
-    if (questions.length > 0) {
-      syncReviewWorkflow();
-    } else {
-      setReviewStatuses({});
-      setReviewSessionId(null);
-    }
+    runSync();
 
     return () => {
       isCancelled = true;
     };
-  }, [importSession?.id, questions, existingPaperId, paperTitleForMetadata, paperCodeForMetadata, reviewSessionId]);
+  }, [importSession?.id, questions, existingPaperId, paperTitleForMetadata, paperCodeForMetadata]);
 
   // Auto-fill mappings from parsed data
   useEffect(() => {
