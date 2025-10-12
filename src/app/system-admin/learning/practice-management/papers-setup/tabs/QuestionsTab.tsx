@@ -416,6 +416,7 @@ export function QuestionsTab({
   const requestInlineConfirmation = useCallback(
     (options: InlineConfirmationOptions) =>
       new Promise<boolean>(resolve => {
+        console.log('📋 Requesting inline confirmation:', options.title);
         setPendingConfirmation({
           ...options,
           resolve,
@@ -2144,26 +2145,39 @@ export function QuestionsTab({
       }
       
       console.log('No validation errors found');
-      
-      // Check if simulation is required (make this optional for debugging)
+
+      // Check if simulation is required (optional - show warning but allow proceed)
       if (simulationRequired && !simulationResult?.completed) {
-        console.warn('Simulation required but not completed');
-        // For debugging, make this a warning instead of blocking
-        const proceedAnyway = await requestInlineConfirmation({
-          title: 'Simulation Recommended',
-          message: (
-            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-              <p>Exam simulation is recommended but has not been completed.</p>
-              <p>Do you want to proceed with the import anyway?</p>
-            </div>
-          ),
-          confirmText: 'Proceed Anyway',
-          cancelText: 'Go Back',
-          confirmVariant: 'primary',
-        });
-        if (!proceedAnyway) {
-          toast.warning('Please complete the exam simulation before importing');
-          return;
+        console.log('⚠️ Simulation recommended but not completed');
+        console.log('Showing confirmation dialog...');
+
+        try {
+          const proceedAnyway = await requestInlineConfirmation({
+            title: 'Simulation Recommended',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>Exam simulation is recommended but has not been completed.</p>
+                <p className="font-medium">This helps identify potential issues before importing questions.</p>
+                <p>Do you want to proceed with the import anyway?</p>
+              </div>
+            ),
+            confirmText: 'Proceed Anyway',
+            cancelText: 'Run Simulation First',
+            confirmVariant: 'primary',
+          });
+
+          console.log('User choice:', proceedAnyway ? 'Proceed' : 'Cancel');
+
+          if (!proceedAnyway) {
+            toast.info('Please run the exam simulation, then try importing again');
+            return;
+          }
+
+          toast.info('Proceeding without simulation - some issues may not be detected');
+        } catch (error) {
+          console.error('Error showing confirmation dialog:', error);
+          // Fallback: allow proceeding with warning
+          toast.warning('Simulation not completed - proceeding anyway', { duration: 3000 });
         }
       }
 
@@ -2181,27 +2195,41 @@ export function QuestionsTab({
         console.log('Unmapped questions found:', unmappedQuestions.map(q => q.question_number));
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
-        // For debugging, make this optional
-        const proceedWithUnmapped = await requestInlineConfirmation({
-          title: 'Unmapped Questions Detected',
-          message: (
-            <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-              <p>
-                {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} are not mapped to units/topics:
-                {' '}
-                {unmappedNumbers}
-              </p>
-              <p>Do you want to proceed anyway?</p>
-            </div>
-          ),
-          confirmText: 'Proceed',
-          cancelText: 'Review Mapping',
-          confirmVariant: 'primary',
-        });
+        // Show unmapped questions warning
+        console.log('⚠️ Showing unmapped questions dialog...');
 
-        if (!proceedWithUnmapped) {
-          toast.error(`Please map all questions to units and topics. Unmapped: ${unmappedNumbers}`, { duration: 5000 });
-          return;
+        try {
+          const proceedWithUnmapped = await requestInlineConfirmation({
+            title: 'Unmapped Questions Detected',
+            message: (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p className="font-medium">
+                  {unmappedQuestions.length} question{unmappedQuestions.length === 1 ? '' : 's'} {unmappedQuestions.length === 1 ? 'is' : 'are'} not mapped to units/topics:
+                </p>
+                <p className="text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-1 max-h-20 overflow-y-auto">
+                  {unmappedNumbers}
+                </p>
+                <p>Questions without mapping may be harder to organize and filter later.</p>
+                <p>Do you want to proceed anyway?</p>
+              </div>
+            ),
+            confirmText: 'Proceed Anyway',
+            cancelText: 'Review Mapping',
+            confirmVariant: 'primary',
+          });
+
+          console.log('User choice:', proceedWithUnmapped ? 'Proceed' : 'Cancel');
+
+          if (!proceedWithUnmapped) {
+            toast.info(`Please map questions to units/topics: ${unmappedNumbers.substring(0, 50)}...`, { duration: 5000 });
+            return;
+          }
+
+          toast.info('Proceeding with unmapped questions - you can map them later');
+        } catch (error) {
+          console.error('Error showing unmapped dialog:', error);
+          // Fallback: warn but allow proceeding
+          toast.warning(`${unmappedQuestions.length} questions not mapped - proceeding anyway`, { duration: 3000 });
         }
       }
       
@@ -3493,10 +3521,12 @@ export function QuestionsTab({
         <ConfirmationDialog
           open={true}
           onClose={() => {
+            console.log('📋 Confirmation dialog closed (cancel)');
             pendingConfirmation.resolve(false);
             setPendingConfirmation(null);
           }}
           onConfirm={() => {
+            console.log('📋 Confirmation dialog confirmed');
             pendingConfirmation.resolve(true);
             setPendingConfirmation(null);
           }}
