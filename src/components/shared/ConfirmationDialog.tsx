@@ -7,10 +7,10 @@ import { cn } from '../../lib/utils';
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link' | 'warning' | 'primary';
   onConfirm: () => void;
   onCancel: () => void;
   className?: string;
@@ -58,6 +58,8 @@ export function ConfirmationDialog({
 
   if (!isOpen) return null;
 
+  const resolvedConfirmVariant = confirmVariant === 'primary' ? 'default' : confirmVariant;
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div 
@@ -81,7 +83,7 @@ export function ConfirmationDialog({
         <div className="px-6 py-4">
           <div className="flex items-start">
             <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" />
-            <p className="text-gray-700 dark:text-gray-300">{message}</p>
+            <div className="text-gray-700 dark:text-gray-300 space-y-2">{message}</div>
           </div>
         </div>
         
@@ -94,7 +96,7 @@ export function ConfirmationDialog({
             {cancelText}
           </Button>
           <Button
-            variant={confirmVariant}
+            variant={resolvedConfirmVariant}
             onClick={onConfirm}
           >
             {confirmText}

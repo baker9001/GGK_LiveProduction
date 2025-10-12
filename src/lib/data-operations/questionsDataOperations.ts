@@ -1587,13 +1587,29 @@ export const importQuestions = async (params: {
   importSessionId?: string;
   yearOverride?: number;
   existingQuestionNumbers: Set<number>;
+  onProgress?: (current: number, total: number) => void;
 }): Promise<ImportResult> => {
-  const { questions, mappings, attachments, paperId, dataStructureInfo, importSessionId, yearOverride, existingQuestionNumbers } = params;
-  
+  const {
+    questions,
+    mappings,
+    attachments,
+    paperId,
+    dataStructureInfo,
+    importSessionId,
+    yearOverride,
+    existingQuestionNumbers,
+    onProgress
+  } = params;
+
   const importedQuestions = [];
   const errors = [];
   const skippedQuestions = [];
   const updatedQuestions = [];
+  const totalQuestions = questions.length;
+
+  if (totalQuestions === 0) {
+    onProgress?.(0, 0);
+  }
 
   try {
     // Upload all attachments first
@@ -1605,7 +1621,7 @@ export const importQuestions = async (params: {
     for (let i = 0; i < questions.length; i++) {
       const question = questions[i];
       const mapping = mappings?.[question.id] || {};
-      
+
       try {
         const questionNumber = !isNaN(parseInt(question.question_number)) ? parseInt(question.question_number) : (i + 1);
         
@@ -1815,6 +1831,8 @@ export const importQuestions = async (params: {
           error: error.message,
           details: error.details || error
         });
+      } finally {
+        onProgress?.(Math.min(i + 1, totalQuestions), totalQuestions);
       }
     }
 
