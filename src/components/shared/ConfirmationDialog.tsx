@@ -1,32 +1,45 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, X } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../../lib/utils';
 
 interface ConfirmationDialogProps {
-  isOpen: boolean;
+  // Support both naming conventions for backward compatibility
+  isOpen?: boolean;
+  open?: boolean;
   title: string;
-  message: string;
+  message: string | ReactNode;
   confirmText?: string;
   cancelText?: string;
-  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link' | 'primary' | 'danger';
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
+  onClose?: () => void;
   className?: string;
+  icon?: ReactNode;
+  iconClassName?: string;
 }
 
 export function ConfirmationDialog({
-  isOpen,
+  isOpen: isOpenProp,
+  open: openProp,
   title,
   message,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   confirmVariant = 'destructive',
   onConfirm,
-  onCancel,
-  className
+  onCancel: onCancelProp,
+  onClose: onCloseProp,
+  className,
+  icon,
+  iconClassName
 }: ConfirmationDialogProps) {
+  // Support both prop naming conventions
+  const isOpen = isOpenProp !== undefined ? isOpenProp : (openProp ?? false);
+  const onCancel = onCancelProp || onCloseProp || (() => {});
+
   // Prevent body scroll when dialog is open
   useEffect(() => {
     if (isOpen) {
@@ -58,9 +71,21 @@ export function ConfirmationDialog({
 
   if (!isOpen) return null;
 
+  // Map variant names for backward compatibility
+  const mappedVariant = confirmVariant === 'primary' ? 'default' :
+                        confirmVariant === 'danger' ? 'destructive' :
+                        confirmVariant;
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <div
         className={cn(
           "bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-black/30 max-w-md w-full overflow-hidden",
           className
@@ -76,15 +101,22 @@ export function ConfirmationDialog({
             <X className="h-5 w-5" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="px-6 py-4">
           <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0" />
-            <p className="text-gray-700 dark:text-gray-300">{message}</p>
+            {icon || (
+              <AlertCircle className={cn(
+                "h-5 w-5 mt-0.5 mr-3 flex-shrink-0",
+                iconClassName || "text-red-500 dark:text-red-400"
+              )} />
+            )}
+            <div className="text-gray-700 dark:text-gray-300">
+              {typeof message === 'string' ? <p>{message}</p> : message}
+            </div>
           </div>
         </div>
-        
+
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/80 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
           <Button
@@ -94,8 +126,10 @@ export function ConfirmationDialog({
             {cancelText}
           </Button>
           <Button
-            variant={confirmVariant}
-            onClick={onConfirm}
+            variant={mappedVariant as any}
+            onClick={() => {
+              onConfirm();
+            }}
           >
             {confirmText}
           </Button>
