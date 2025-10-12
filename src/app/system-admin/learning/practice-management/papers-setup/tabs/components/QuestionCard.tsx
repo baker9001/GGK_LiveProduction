@@ -36,6 +36,7 @@ interface QuestionCardProps {
   onAddAttachment: (partIndex?: number, subpartIndex?: number) => void;
   onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
   onUpdateQuestion: (updates: any) => void;
+  onToggleFigureRequired?: (required: boolean) => void;
 }
 
 const answerFormatConfig: Record<string, any> = {
@@ -72,6 +73,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onAddAttachment,
   onDeleteAttachment,
   onUpdateQuestion,
+  onToggleFigureRequired,
 }) => {
   const isAlreadyImported = existingQuestionNumbers.has(parseInt(question.question_number));
   const hasErrors = validationErrors && validationErrors.length > 0;
@@ -321,11 +323,16 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               questionLabel={`Question ${question.question_number}`}
               attachmentKey={question.id}
               requiresFigure={question.figure}
+              figureRequired={question.figure_required !== false}
               pdfAvailable={!!pdfDataUrl}
               onAdd={() => onAddAttachment()}
               onDelete={onDeleteAttachment}
               isEditing={isEditing}
               showDeleteButton={true}
+              onToggleFigureRequired={onToggleFigureRequired ? () => {
+                const newRequired = !(question.figure_required !== false);
+                onToggleFigureRequired(newRequired);
+              } : undefined}
             />
           )}
 
@@ -501,6 +508,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                   onUpdatePart={(updates) => {
                     const newParts = [...question.parts];
                     newParts[partIndex] = { ...newParts[partIndex], ...updates };
+                    onUpdateQuestion({ parts: newParts });
+                  }}
+                  onToggleFigureRequired={(required) => {
+                    const newParts = [...question.parts];
+                    newParts[partIndex] = { ...newParts[partIndex], figure_required: required };
                     onUpdateQuestion({ parts: newParts });
                   }}
                 />

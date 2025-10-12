@@ -18,6 +18,7 @@ interface QuestionPartDisplayProps {
   onAddAttachment: (partIndex: number, subpartIndex?: number) => void;
   onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
   onUpdatePart: (updates: any) => void;
+  onToggleFigureRequired?: (required: boolean) => void;
 }
 
 const answerFormatConfig: Record<string, any> = {
@@ -42,6 +43,7 @@ export const QuestionPartDisplay: React.FC<QuestionPartDisplayProps> = ({
   onAddAttachment,
   onDeleteAttachment,
   onUpdatePart,
+  onToggleFigureRequired,
 }) => {
   const partKey = `${questionId}_p${partIndex}`;
   const partAttachments = attachments?.[partKey] || [];
@@ -107,11 +109,16 @@ export const QuestionPartDisplay: React.FC<QuestionPartDisplayProps> = ({
             questionLabel={`Part (${part.part})`}
             attachmentKey={partKey}
             requiresFigure={part.figure}
+            figureRequired={part.figure_required !== false}
             pdfAvailable={!!pdfDataUrl}
             onAdd={() => onAddAttachment(partIndex)}
             onDelete={onDeleteAttachment}
             isEditing={isEditing}
             showDeleteButton={true}
+            onToggleFigureRequired={onToggleFigureRequired ? () => {
+              const newRequired = !(part.figure_required !== false);
+              onToggleFigureRequired(newRequired);
+            } : undefined}
           />
         )}
 
