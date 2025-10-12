@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../../components/shared/StatusBadge';
+import { QuestionReviewStatus, type ReviewStatus } from '../../../../../../../components/shared/QuestionReviewStatus';
 import DynamicAnswerField from '../../../../../../../components/shared/DynamicAnswerField';
 import { QuestionPartDisplay } from './QuestionPartDisplay';
 import { QuestionMappingControls } from './QuestionMappingControls';
@@ -37,6 +38,9 @@ interface QuestionCardProps {
   onDeleteAttachment: (attachmentKey: string, attachmentId: string) => void;
   onUpdateQuestion: (updates: any) => void;
   onToggleFigureRequired?: (required: boolean) => void;
+  reviewStatus?: ReviewStatus;
+  onToggleReview?: (questionId: string) => void;
+  reviewDisabled?: boolean;
 }
 
 const answerFormatConfig: Record<string, any> = {
@@ -74,6 +78,9 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onDeleteAttachment,
   onUpdateQuestion,
   onToggleFigureRequired,
+  reviewStatus,
+  onToggleReview,
+  reviewDisabled = false,
 }) => {
   const isAlreadyImported = existingQuestionNumbers.has(parseInt(question.question_number));
   const hasErrors = validationErrors && validationErrors.length > 0;
@@ -81,6 +88,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   const hasAttachments = attachments && attachments.length > 0;
   const hasDynamicAnswer = question.answer_requirement;
   const formatInfo = question.answer_format ? answerFormatConfig[question.answer_format] : null;
+  const reviewInfo: ReviewStatus = reviewStatus || {
+    questionId: question.id,
+    isReviewed: false,
+  };
 
   const getValidationStatus = () => {
     if (isAlreadyImported) return 'info';
@@ -239,6 +250,14 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onToggleReview && (
+              <QuestionReviewStatus
+                status={reviewInfo}
+                onToggleReview={onToggleReview}
+                size="sm"
+                disabled={reviewDisabled}
+              />
+            )}
             {status === 'error' && (
               <AlertCircle className="h-5 w-5 text-red-500" />
             )}

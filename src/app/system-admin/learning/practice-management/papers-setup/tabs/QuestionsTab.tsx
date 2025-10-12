@@ -12,7 +12,7 @@
  * - Ensured attachment state synchronization
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   AlertCircle, CheckCircle, XCircle, AlertTriangle, Edit2, Save, X, 
   ChevronDown, ChevronRight, FileText, Image, Upload, Scissors, 
@@ -20,7 +20,7 @@ import {
   Loader2, Info, RefreshCw, ImageOff, Plus, Copy, FlaskConical,
   Calculator, PenTool, Table, Code, Mic, LineChart, FileUp,
   HelpCircle, BookOpen, Lightbulb, Target, Award, PlayCircle,
-  Flag, CheckSquare, FileCheck, TestTube, ShieldCheck
+  Flag, CheckSquare, FileCheck, ShieldCheck
 } from 'lucide-react';
 
 // Import shared components
@@ -29,6 +29,7 @@ import { toast } from '../../../../../../components/shared/Toast';
 import { PDFSnippingTool } from '../../../../../../components/shared/PDFSnippingTool';
 import { ConfirmationDialog } from '../../../../../../components/shared/ConfirmationDialog';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
+import { type ReviewStatus } from '../../../../../../components/shared/QuestionReviewStatus';
 import { DataTableSkeleton } from '../../../../../../components/shared/DataTableSkeleton';
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
@@ -411,7 +412,12 @@ export function QuestionsTab({
   const [showSimulation, setShowSimulation] = useState(false);
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
-  const [simulationRequired, setSimulationRequired] = useState(false);
+
+  // Review workflow states
+  const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
+  const [reviewSessionId, setReviewSessionId] = useState<string | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [currentReviewerId, setCurrentReviewerId] = useState<string | null>(null);
 
   const requestInlineConfirmation = useCallback(
     (options: InlineConfirmationOptions) =>
@@ -428,6 +434,16 @@ export function QuestionsTab({
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionsRef = useRef<Record<string, HTMLDivElement>>({});
+
+  const paperTitleForMetadata = useMemo(
+    () => savedPaperDetails?.paper_name || paperMetadata.title || '',
+    [savedPaperDetails?.paper_name, paperMetadata.title]
+  );
+
+  const paperCodeForMetadata = useMemo(
+    () => savedPaperDetails?.paper_code || paperMetadata.paper_code || '',
+    [savedPaperDetails?.paper_code, paperMetadata.paper_code]
+  );
 
   // Helper arrays
   const Roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
@@ -620,6 +636,183 @@ export function QuestionsTab({
       loadExistingQuestions();
     }
   }, [questions, existingPaperId]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const syncReviewWorkflow = async () => {
+      if (!importSession?.id || questions.length === 0) {
+        if (!isCancelled) {
+          setReviewStatuses({});
+          setReviewSessionId(null);
+        }
+        return;
+      }
+
+      setReviewLoading(true);
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+          if (!isCancelled) {
+            setReviewStatuses(prev => {
+              const fallback: Record<string, ReviewStatus> = {};
+              questions.forEach(q => {
+                fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
+              });
+              return fallback;
+            });
+          }
+          return;
+        }
+
+        if (!isCancelled) {
+          setCurrentReviewerId(user.id);
+        }
+
+        let sessionId = reviewSessionId;
+
+        if (!sessionId) {
+          const { data: existingSession, error: sessionError } = await supabase
+            .from('question_import_review_sessions')
+            .select('*')
+            .eq('paper_import_session_id', importSession.id)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (sessionError) throw sessionError;
+          if (existingSession) {
+            sessionId = existingSession.id;
+          }
+        }
+
+        if (!sessionId) {
+          const { data: newSession, error: createError } = await supabase
+            .from('question_import_review_sessions')
+            .insert({
+              paper_import_session_id: importSession.id,
+              user_id: user.id,
+              paper_id: existingPaperId,
+              total_questions: questions.length,
+              simulation_required: true,
+              metadata: {
+                paper_title: paperTitleForMetadata,
+                paper_code: paperCodeForMetadata,
+                created_from_ui: 'QuestionsTab'
+              }
+            })
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          sessionId = newSession.id;
+        }
+
+        if (!sessionId) return;
+
+        if (!isCancelled) {
+          setReviewSessionId(sessionId);
+        }
+
+        const { data: existingStatuses, error: statusesError } = await supabase
+          .from('question_import_review_status')
+          .select('*')
+          .eq('review_session_id', sessionId);
+
+        if (statusesError) throw statusesError;
+
+        const statusMap: Record<string, ReviewStatus> = {};
+        const missingQuestionIds: string[] = [];
+
+        questions.forEach(q => {
+          const match = existingStatuses?.find(status => status.question_identifier === q.id);
+          if (match) {
+            statusMap[q.id] = {
+              questionId: q.id,
+              isReviewed: match.is_reviewed,
+              reviewedAt: match.reviewed_at || undefined,
+              hasIssues: match.has_issues,
+              issueCount: match.issue_count,
+              needsAttention: match.needs_attention
+            };
+          } else {
+            statusMap[q.id] = { questionId: q.id, isReviewed: false };
+            missingQuestionIds.push(q.id);
+          }
+        });
+
+        if (missingQuestionIds.length > 0) {
+          const rows = questions
+            .filter(q => missingQuestionIds.includes(q.id))
+            .map(q => ({
+              review_session_id: sessionId,
+              question_identifier: q.id,
+              question_number: q.question_number,
+              question_data: q,
+              is_reviewed: false,
+              validation_status: 'pending'
+            }));
+
+          const { error: insertError } = await supabase
+            .from('question_import_review_status')
+            .insert(rows);
+
+          if (insertError) throw insertError;
+        }
+
+        if (!isCancelled) {
+          setReviewStatuses(statusMap);
+        }
+
+        const reviewedCount = Object.values(statusMap).filter(status => status.isReviewed).length;
+
+        const sessionUpdate: Record<string, any> = {
+          total_questions: questions.length,
+          reviewed_questions: reviewedCount,
+          updated_at: new Date().toISOString(),
+          status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
+        };
+
+        sessionUpdate.completed_at =
+          sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
+
+        await supabase
+          .from('question_import_review_sessions')
+          .update(sessionUpdate)
+          .eq('id', sessionId);
+      } catch (error) {
+        console.error('Failed to synchronize review workflow:', error);
+        if (!isCancelled) {
+          toast.error('Unable to sync question review progress.');
+          setReviewStatuses(prev => {
+            const fallback: Record<string, ReviewStatus> = {};
+            questions.forEach(q => {
+              fallback[q.id] = prev[q.id] || { questionId: q.id, isReviewed: false };
+            });
+            return fallback;
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          setReviewLoading(false);
+        }
+      }
+    };
+
+    if (questions.length > 0) {
+      syncReviewWorkflow();
+    } else {
+      setReviewStatuses({});
+      setReviewSessionId(null);
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [importSession?.id, questions, existingPaperId, paperTitleForMetadata, paperCodeForMetadata, reviewSessionId]);
 
   // Auto-fill mappings from parsed data
   useEffect(() => {
@@ -833,47 +1026,6 @@ export function QuestionsTab({
       }
     }
   }, [units.length, topics.length, subtopics.length, questions.length, Object.keys(questionMappings).length, autoMappingInProgress]);
-
-  // Check if simulation is required based on question complexity
-  useEffect(() => {
-    if (questions.length > 0) {
-      const hasComplexQuestions = questions.some(q => 
-        q.parts && q.parts.length > 0 || 
-        q.answer_format && ['calculation', 'equation', 'chemical_structure', 'diagram', 'table', 'graph'].includes(q.answer_format) ||
-        q.answer_requirement !== undefined
-      );
-      
-      const hasDynamicAnswers = questions.some(q => 
-        q.answer_requirement || 
-        (q.parts && q.parts.some((p: any) => p.answer_requirement))
-      );
-      
-      // Check for complex dynamic field combinations
-      const hasComplexDynamicFields = questions.some(q => {
-        // Multiple alternatives with linking
-        const hasLinkedAlternatives = q.correct_answers?.some(ans => 
-          ans.linked_alternatives && ans.linked_alternatives.length > 0
-        );
-        
-        // ECF (Error Carried Forward) answers
-        const hasECF = q.correct_answers?.some(ans => ans.error_carried_forward) ||
-          q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.error_carried_forward));
-        
-        // Context-dependent answers
-        const hasContextAnswers = q.correct_answers?.some(ans => ans.context) ||
-          q.parts?.some((p: any) => p.correct_answers?.some((ans: any) => ans.context));
-        
-        return hasLinkedAlternatives || hasECF || hasContextAnswers;
-      });
-      
-      setSimulationRequired(
-        hasComplexQuestions || 
-        hasDynamicAnswers || 
-        hasComplexDynamicFields ||
-        questions.length > 20
-      );
-    }
-  }, [questions]);
 
   // Load simulation results from import session
   useEffect(() => {
@@ -1671,7 +1823,7 @@ export function QuestionsTab({
 
   const handleSimulationExit = async (result?: any) => {
     setShowSimulation(false);
-    
+
     // Process simulation results if provided
     if (result) {
       const simulationResult: SimulationResult = {
@@ -1877,9 +2029,79 @@ export function QuestionsTab({
         }
       }
     }
-    
+
     setSimulationPaper(null);
   };
+
+  const handleToggleReviewStatus = useCallback(async (questionId: string) => {
+    const previousStatuses = reviewStatuses;
+    const currentStatus = previousStatuses[questionId] || { questionId, isReviewed: false };
+    const newState = !currentStatus.isReviewed;
+
+    const updatedStatuses: Record<string, ReviewStatus> = {
+      ...previousStatuses,
+      [questionId]: {
+        ...currentStatus,
+        questionId,
+        isReviewed: newState,
+        reviewedAt: newState ? new Date().toISOString() : undefined,
+      },
+    };
+
+    setReviewStatuses(updatedStatuses);
+
+    const reviewedCount = Object.values(updatedStatuses).filter(status => status.isReviewed).length;
+
+    try {
+      const userId =
+        currentReviewerId ||
+        (await supabase.auth.getUser()).data.user?.id ||
+        null;
+
+      if (reviewSessionId) {
+        const { error: updateError } = await supabase
+          .from('question_import_review_status')
+          .update({
+            is_reviewed: newState,
+            reviewed_at: newState ? new Date().toISOString() : null,
+            reviewed_by: newState ? userId : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('review_session_id', reviewSessionId)
+          .eq('question_identifier', questionId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        const sessionUpdate: Record<string, any> = {
+          reviewed_questions: reviewedCount,
+          total_questions: questions.length,
+          updated_at: new Date().toISOString(),
+          status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress',
+        };
+
+        sessionUpdate.completed_at =
+          sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
+
+        const { error: sessionError } = await supabase
+          .from('question_import_review_sessions')
+          .update(sessionUpdate)
+          .eq('id', reviewSessionId);
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+      }
+
+      toast.success(newState ? 'Question marked as reviewed' : 'Review status removed');
+    } catch (error) {
+      console.error('Error updating review status:', error);
+      toast.error('Failed to update review status. Please try again.');
+      setReviewStatuses({ ...previousStatuses });
+    }
+  }, [reviewStatuses, currentReviewerId, reviewSessionId, questions.length, importSession?.id]);
 
   // FIXED: Updated validation function with proper error handling and figure_required check
   const validateQuestionsWithAttachments = () => {
@@ -2014,8 +2236,23 @@ export function QuestionsTab({
         toast.error('No questions to import');
         return;
       }
-      
+
       console.log('Prerequisites check passed');
+
+      if (reviewLoading) {
+        toast.info('Review progress is still syncing. Please wait a moment.');
+        return;
+      }
+
+      if (!allQuestionsReviewed) {
+        toast.error(`Please review all questions before importing. (${reviewedCount}/${questions.length} reviewed)`);
+        return;
+      }
+
+      if (!simulationCompleted) {
+        toast.error('Run the test simulation and confirm the results before importing.');
+        return;
+      }
 
       if (extractionRules && (extractionRules.forwardSlashHandling || extractionRules.alternativeLinking)) {
         console.log('Running extraction rules validation...');
@@ -2145,41 +2382,6 @@ export function QuestionsTab({
       }
       
       console.log('No validation errors found');
-
-      // Check if simulation is required (optional - show warning but allow proceed)
-      if (simulationRequired && !simulationResult?.completed) {
-        console.log('⚠️ Simulation recommended but not completed');
-        console.log('Showing confirmation dialog...');
-
-        try {
-          const proceedAnyway = await requestInlineConfirmation({
-            title: 'Simulation Recommended',
-            message: (
-              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                <p>Exam simulation is recommended but has not been completed.</p>
-                <p className="font-medium">This helps identify potential issues before importing questions.</p>
-                <p>Do you want to proceed with the import anyway?</p>
-              </div>
-            ),
-            confirmText: 'Proceed Anyway',
-            cancelText: 'Run Simulation First',
-            confirmVariant: 'primary',
-          });
-
-          console.log('User choice:', proceedAnyway ? 'Proceed' : 'Cancel');
-
-          if (!proceedAnyway) {
-            toast.info('Please run the exam simulation, then try importing again');
-            return;
-          }
-
-          toast.info('Proceeding without simulation - some issues may not be detected');
-        } catch (error) {
-          console.error('Error showing confirmation dialog:', error);
-          // Fallback: allow proceeding with warning
-          toast.warning('Simulation not completed - proceeding anyway', { duration: 3000 });
-        }
-      }
 
       // Check for unmapped questions (excluding already imported ones)
       const unmappedQuestions = questions.filter(q => {
@@ -2631,11 +2833,11 @@ export function QuestionsTab({
   };
 
   // FIXED: Scroll to question function
-  const scrollToQuestion = (questionId: string) => {
+  const scrollToQuestion = useCallback((questionId: string) => {
     // Try multiple selectors to find the element
-    const element = document.getElementById(`question-${questionId}`) || 
+    const element = document.getElementById(`question-${questionId}`) ||
                    document.querySelector(`[data-question-id="${questionId}"]`);
-    
+
     if (element) {
       element.scrollIntoView({ 
         behavior: 'smooth', 
@@ -2650,7 +2852,29 @@ export function QuestionsTab({
     } else {
       console.warn(`Could not find element for question ${questionId}`);
     }
-  };
+  }, []);
+
+  const firstPendingReview = useMemo(() => {
+    const pendingQuestion = questions.find(question => !reviewStatuses[question.id]?.isReviewed);
+
+    if (!pendingQuestion) {
+      return null;
+    }
+
+    return {
+      id: pendingQuestion.id,
+      label: pendingQuestion.question_number || pendingQuestion.id,
+    };
+  }, [questions, reviewStatuses]);
+
+  const handleJumpToPendingReview = useCallback(() => {
+    if (!firstPendingReview) {
+      return;
+    }
+
+    scrollToQuestion(firstPendingReview.id);
+    toast.info(`Jumped to question ${firstPendingReview.label} for review.`);
+  }, [firstPendingReview, scrollToQuestion]);
 
   const updateQuestionMapping = (questionId: string, mapping: QuestionMapping) => {
     setQuestionMappings(prev => ({
@@ -3108,6 +3332,20 @@ export function QuestionsTab({
     );
   };
 
+  const reviewedCount = useMemo(() => (
+    questions.reduce((count, question) => (
+      reviewStatuses[question.id]?.isReviewed ? count + 1 : count
+    ), 0)
+  ), [questions, reviewStatuses]);
+
+  const allQuestionsReviewed = questions.length > 0 && reviewedCount === questions.length;
+  const outstandingReviewCount = useMemo(() => (
+    questions.length > 0 ? Math.max(0, questions.length - reviewedCount) : 0
+  ), [questions.length, reviewedCount]);
+  const simulationCompleted = Boolean(simulationResult?.completed || importSession?.metadata?.simulation_completed);
+  const reviewChecklistComplete = allQuestionsReviewed && simulationCompleted;
+  const canImport = !isImporting && !reviewLoading && questions.length > 0 && reviewChecklistComplete;
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
@@ -3205,37 +3443,6 @@ export function QuestionsTab({
               toast.success('Questions updated with complete data');
             }}
           />
-
-          <Button
-            variant="outline"
-            onClick={handleStartSimulation}
-            disabled={questions.length === 0}
-            leftIcon={<PlayCircle className="h-4 w-4" />}
-            className={cn(
-              simulationRequired && !simulationResult?.completed && 
-              "border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-            )}
-            aria-label={simulationResult?.completed ? 'Re-run exam simulation' : 'Start exam preview and test'}
-            title={simulationRequired ? 'Simulation required before import' : 'Preview paper as student would see it'}
-          >
-            {simulationResult?.completed ? 'Re-run Simulation' : 'Preview & Test'}
-          </Button>
-
-          {simulationRequired && !simulationResult?.completed && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-orange-100 dark:bg-orange-900/20 rounded-full">
-              <TestTube className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              <span className="text-sm text-orange-700 dark:text-orange-300">
-                Simulation required for {(() => {
-                  const reasons = [];
-                  if (questions.some(q => q.parts && q.parts.length > 0)) reasons.push('multi-part');
-                  if (questions.some(q => q.answer_requirement || (q.parts && q.parts.some((p: any) => p.answer_requirement)))) reasons.push('dynamic answer');
-                  if (questions.some(q => q.answer_format && ['calculation', 'equation', 'chemical_structure', 'diagram', 'table', 'graph'].includes(q.answer_format))) reasons.push('complex format');
-                  if (questions.length > 20) reasons.push('large paper');
-                  return reasons.join(', ');
-                })()}
-              </span>
-            </div>
-          )}
 
           {Object.keys(validationErrors).length > 0 && (
             <Button
@@ -3472,6 +3679,10 @@ export function QuestionsTab({
             });
           }
         }}
+        reviewStatuses={reviewStatuses}
+        onToggleReview={handleToggleReviewStatus}
+        reviewDisabled={isImporting || reviewLoading}
+        reviewLoading={reviewLoading}
       />
 
       {/* Import Progress */}
@@ -3679,45 +3890,238 @@ export function QuestionsTab({
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-        <Button
-          variant="outline"
-          onClick={onPrevious}
-          disabled={isImporting}
-        >
-          Previous
-        </Button>
-        <Button
-          onClick={() => {
-            console.log('=== NAVIGATION IMPORT BUTTON CLICKED ===');
-            console.log('Button enabled:', !isImporting && questions.length > 0);
-            console.log('Questions count:', questions.length);
-            console.log('Is importing:', isImporting);
-            console.log('Simulation required:', simulationRequired);
-            console.log('Simulation completed:', simulationResult?.completed);
-            
-            // Call the import handler directly
-            handleImportQuestions().catch(error => {
-              console.error('Error caught in button handler:', error);
-              toast.error(`Button click failed: ${error?.message || 'Unknown error'}`);
-            });
-          }}
-          disabled={isImporting || questions.length === 0}
-          className="min-w-[120px]"
-          variant="primary"
-        >
-          {isImporting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Importing...
-            </>
-          ) : (
-            <>
-              Import Questions
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </>
-          )}
-        </Button>
+      <div className="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4">
+        <div className="bg-white dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Review checklist</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Complete each step to unlock the import workflow.</p>
+            </div>
+            <StatusBadge
+              status={reviewChecklistComplete ? 'success' : 'warning'}
+              text={reviewChecklistComplete ? 'Ready to import' : 'Steps remaining'}
+            />
+          </div>
+
+          <ol className="space-y-3">
+            <li className="flex items-start gap-3">
+              <div className="mt-1">
+                {allQuestionsReviewed ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Manual question review</p>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{reviewedCount}/{questions.length || 0} complete</span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Open each question card and use the Reviewed toggle after confirming the mappings, answers, and attachments.
+                </p>
+                {allQuestionsReviewed ? (
+                  <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-3 w-3" />
+                    All questions have been reviewed.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {firstPendingReview && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={handleJumpToPendingReview}
+                      >
+                        Review question {firstPendingReview.label}
+                      </Button>
+                    )}
+                    <span className="text-xs text-amber-600 dark:text-amber-300">
+                      {outstandingReviewCount} question{outstandingReviewCount === 1 ? '' : 's'} still need review.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </li>
+
+            <li className="flex items-start gap-3">
+              <div className="mt-1">
+                {simulationCompleted ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Run the full test simulation</p>
+                  {simulationResult?.completedAt && (
+                    <span className="text-xs text-gray-600 dark:text-gray-300">
+                      Completed {new Date(simulationResult.completedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Launch the learner preview to confirm navigation, timing, and answer validation. Use the Test &amp; Review button below.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {simulationCompleted ? (
+                    <>
+                      <span className={cn(
+                        simulationResult?.issues?.length
+                          ? 'text-amber-600 dark:text-amber-300'
+                          : 'text-green-600 dark:text-green-400'
+                      )}>
+                        {simulationResult?.issues?.length
+                          ? `${simulationResult.issues.length} issue${simulationResult.issues.length === 1 ? '' : 's'} flagged`
+                          : 'No blocking issues detected'}
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={handleStartSimulation}
+                      >
+                        Re-run simulation
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={handleStartSimulation}
+                      >
+                        Start Test &amp; Review
+                      </Button>
+                      <span className="text-amber-600 dark:text-amber-300">
+                        Simulation must be completed before importing.
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </li>
+
+            <li className="flex items-start gap-3">
+              <div className="mt-1">
+                {reviewChecklistComplete ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Finalize import</p>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">
+                    Import unlocks automatically after completing the steps above.
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  When everything looks good, run the import to push the reviewed questions into the live databases.
+                </p>
+                {reviewChecklistComplete ? (
+                  <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-3 w-3" />
+                    Import requirements satisfied.
+                  </div>
+                ) : (
+                  <div className="text-xs text-amber-600 dark:text-amber-300">
+                    Finish the manual review and simulation steps to enable the Import Questions button.
+                  </div>
+                )}
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <div className="bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusBadge
+              status={allQuestionsReviewed ? 'success' : 'warning'}
+              text={`Reviewed ${reviewedCount}/${questions.length || 0}`}
+            />
+            <StatusBadge
+              status={simulationCompleted ? 'success' : 'warning'}
+              text={simulationCompleted ? 'Simulation complete' : 'Simulation pending'}
+            />
+            {reviewLoading && (
+              <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Syncing review data…
+              </div>
+            )}
+            {!allQuestionsReviewed && (
+              <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
+                <AlertCircle className="h-4 w-4" />
+                Mark the remaining {outstandingReviewCount} question{outstandingReviewCount === 1 ? '' : 's'} as reviewed.
+              </div>
+            )}
+            {!simulationCompleted && (
+              <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-300">
+                <AlertCircle className="h-4 w-4" />
+                Complete the simulation to unlock import.
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            Every question must be marked as reviewed and the Test &amp; Review simulation must be completed before importing to the live question bank.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            variant="outline"
+            onClick={onPrevious}
+            disabled={isImporting}
+          >
+            Previous
+          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={handleStartSimulation}
+              disabled={questions.length === 0 || isImporting}
+              leftIcon={simulationCompleted ? <RefreshCw className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+              className={cn(
+                !simulationCompleted && 'border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+              )}
+              aria-label={simulationCompleted ? 'Re-run test simulation' : 'Start test simulation'}
+              title="Run the student test simulation to validate the paper"
+            >
+              {simulationCompleted ? 'Re-run Test' : 'Test & Review'}
+            </Button>
+            <Button
+              onClick={() => {
+                console.log('=== NAVIGATION IMPORT BUTTON CLICKED ===');
+                console.log('Button enabled:', canImport);
+                console.log('Questions count:', questions.length);
+                console.log('Is importing:', isImporting);
+                console.log('Simulation completed:', simulationCompleted);
+
+                handleImportQuestions().catch(error => {
+                  console.error('Error caught in button handler:', error);
+                  toast.error(`Button click failed: ${error?.message || 'Unknown error'}`);
+                });
+              }}
+              disabled={!canImport}
+              className="min-w-[140px]"
+              variant="primary"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  Import Questions
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
