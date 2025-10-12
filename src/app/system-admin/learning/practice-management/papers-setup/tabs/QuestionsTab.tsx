@@ -116,6 +116,52 @@ const answerFormatConfig = {
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
 
+const sanitizeQuestionForStorage = (question: unknown): any => {
+  const transform = (value: any): any => {
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(transform);
+    }
+
+    if (value && typeof value === 'object') {
+      const result: Record<string, any> = {};
+      Object.entries(value as Record<string, any>).forEach(([key, nestedValue]) => {
+        const transformed = transform(nestedValue);
+        if (transformed !== undefined) {
+          result[key] = transformed;
+        }
+      });
+      return result;
+    }
+
+    return value;
+  };
+
+  try {
+    if (typeof structuredClone === 'function') {
+      return transform(structuredClone(question));
+    }
+  } catch (error) {
+    console.warn('structuredClone failed when sanitizing question data:', error);
+  }
+
+  try {
+    return JSON.parse(
+      JSON.stringify(question, (_, value) => (typeof value === 'bigint' ? value.toString() : value))
+    );
+  } catch (error) {
+    console.warn('JSON serialization failed when sanitizing question data:', error);
+    return transform(question);
+  }
+};
+
 type InlineConfirmationOptions = {
   title: string;
   message: React.ReactNode;
@@ -775,7 +821,7 @@ export function QuestionsTab({
                 const question = questions.find(q => q.id === questionId);
                 if (!question) return null;
 
-                const sanitizedQuestion = JSON.parse(JSON.stringify(question));
+                const sanitizedQuestion = sanitizeQuestionForStorage(question);
 
                 const questionIndex = questions.findIndex(q => q.id === questionId);
                 const fallbackNumber = questionIndex >= 0 ? String(questionIndex + 1) : questionId;
