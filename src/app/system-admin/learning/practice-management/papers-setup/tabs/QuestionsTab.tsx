@@ -396,6 +396,7 @@ export function QuestionsTab({
   const [simulationPaper, setSimulationPaper] = useState<any>(null);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [simulationRequired, setSimulationRequired] = useState(false);
+  const [showSimulationWarning, setShowSimulationWarning] = useState(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2083,18 +2084,16 @@ export function QuestionsTab({
       }
       
       console.log('No validation errors found');
-      
-      // Check if simulation is required (make this optional for debugging)
+
+      // Check if simulation is required
       if (simulationRequired && !simulationResult?.completed) {
         console.warn('Simulation required but not completed');
-        // For debugging, make this a warning instead of blocking
-        const proceedAnyway = window.confirm(
-          'Exam simulation is recommended but not completed. Do you want to proceed anyway?'
-        );
-        if (!proceedAnyway) {
-          toast.warning('Please complete the exam simulation before importing');
-          return;
-        }
+        // Show inline warning instead of blocking dialog
+        setShowSimulationWarning(true);
+        toast.warning('Exam simulation is recommended. Review the warning below or proceed to import.');
+        // Scroll to top to show the warning
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
       // Check for unmapped questions (excluding already imported ones)
@@ -3023,6 +3022,55 @@ export function QuestionsTab({
     <div className="space-y-6">
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
+
+      {/* Simulation Warning Banner */}
+      {showSimulationWarning && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-400 dark:border-amber-600 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
+                Exam Simulation Recommended
+              </h4>
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                It's recommended to complete the exam simulation before importing to ensure all questions are properly validated and formatted. This helps catch any issues early.
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowSimulationWarning(false);
+                    setShowSimulation(true);
+                  }}
+                  className="border-amber-600 text-amber-900 hover:bg-amber-100 dark:border-amber-400 dark:text-amber-100 dark:hover:bg-amber-900/40"
+                >
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Start Simulation
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowSimulationWarning(false);
+                    setSimulationRequired(false);
+                    handleImportQuestions();
+                  }}
+                  className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Proceed Without Simulation
+                </Button>
+                <button
+                  onClick={() => setShowSimulationWarning(false)}
+                  className="text-sm text-amber-700 dark:text-amber-300 hover:underline ml-auto"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDF Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
