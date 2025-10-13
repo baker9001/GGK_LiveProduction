@@ -273,7 +273,7 @@ export function PaperCard({
     <>
       <div
         className={cn(
-          'rounded-2xl border overflow-hidden bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
+          'relative rounded-2xl border bg-white/95 dark:bg-gray-900/80 shadow-sm transition-all duration-300 backdrop-blur-sm',
           expanded
             ? 'border-[#8CC63F]/60 ring-2 ring-[#8CC63F]/40'
             : 'border-gray-200 dark:border-gray-700 hover:shadow-lg'
@@ -289,7 +289,7 @@ export function PaperCard({
               <FileText className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
                 <StatusBadge
                   status={paper.status}
@@ -297,36 +297,41 @@ export function PaperCard({
                   showIcon
                   className="px-3 py-1 text-xs font-semibold"
                 />
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/60 bg-emerald-100/70 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-100/70 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CircleCheck className="h-3.5 w-3.5" />
                   {confirmedCount}/{paper.questions.length} confirmed
                 </span>
                 {qaReviewCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+                    <AlertCircle className="h-3.5 w-3.5" />
                     {qaReviewCount} pending
                   </span>
                 )}
                 {validationSummary.invalidQuestions > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/60 bg-rose-100/70 px-3 py-1 text-xs font-semibold text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-300/60 bg-rose-100/70 px-3 py-1 text-xs font-semibold text-rose-700 dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-200">
+                    <AlertCircle className="h-3.5 w-3.5" />
                     {validationSummary.invalidQuestions} incomplete
                   </span>
                 )}
                 {hasQuestionsNeedingAttachments && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/60 bg-amber-100/70 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
+                    <FileText className="h-3.5 w-3.5" />
                     {questionsNeedingAttachments.length} need figures
                   </span>
                 )}
                 {questionsNeedingSubtopics > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-purple-300/60 bg-purple-100/70 px-3 py-1 text-xs font-semibold text-purple-800 dark:border-purple-500/50 dark:bg-purple-500/10 dark:text-purple-200">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-300/60 bg-purple-100/70 px-3 py-1 text-xs font-semibold text-purple-800 dark:border-purple-500/50 dark:bg-purple-500/10 dark:text-purple-200">
+                    <Square className="h-3.5 w-3.5" />
                     {questionsNeedingSubtopics} need subtopics
                   </span>
                 )}
                 {paper.status === 'active' && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
                     <CheckCircle className="h-3.5 w-3.5" /> Paper confirmed
                   </span>
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
                 <span>{paper.subject}</span>
                 <span>•</span>
                 <span>{paper.provider}</span>
@@ -350,8 +355,11 @@ export function PaperCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 sm:gap-3"
+            >
               {/* Full Page Review Button */}
               <Button
                 size="sm"
@@ -365,17 +373,17 @@ export function PaperCard({
 
               {/* Status Badge and Dropdown */}
               {showQAActions && (
-                <div className="relative ml-2" ref={statusDropdownRef}>
+                <div className="relative" ref={statusDropdownRef}>
                     <button
                       onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                      className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700"
+                      className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900"
                       title="Change paper status"
                     >
                       <MoreVertical className="h-4 w-4" />
                     </button>
-                    
+
                     {showStatusDropdown && (
-                      <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/30">
+                      <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/30 z-20">
                         {paper.status === 'draft' && (
                           <button
                             onClick={() => {
