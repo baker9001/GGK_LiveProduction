@@ -417,10 +417,10 @@ export function useQuestionMutations() {
       
       if (fetchError) throw fetchError;
       
-      // Update main question status
+      // Update main question status (allow from draft or qa_review)
       const { error: questionError } = await supabase
         .from('questions_master_admin')
-        .update({ 
+        .update({
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
@@ -428,14 +428,14 @@ export function useQuestionMutations() {
           updated_at: new Date().toISOString()
         })
         .eq('id', questionId)
-        .eq('status', 'qa_review'); // Only update if currently in qa_review
-      
+        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
+
       if (questionError) throw questionError;
-      
-      // Update all sub-questions status
+
+      // Update all sub-questions status (allow from draft or qa_review)
       const { error: subQuestionError } = await supabase
         .from('sub_questions')
-        .update({ 
+        .update({
           status: 'active',
           is_confirmed: true,
           confirmed_at: new Date().toISOString(),
@@ -443,7 +443,7 @@ export function useQuestionMutations() {
           updated_at: new Date().toISOString()
         })
         .eq('question_id', questionId)
-        .eq('status', 'qa_review'); // Only update if currently in qa_review
+        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
       
       if (subQuestionError) throw subQuestionError;
 
@@ -475,17 +475,22 @@ export function useQuestionMutations() {
           const allConfirmed = allQuestions.every(q => q.status === 'active');
           
           if (allConfirmed) {
-            // Auto-confirm the paper
+            // Auto-confirm the paper (allow from draft or qa_review)
             const { error: paperError } = await supabase
               .from('papers_setup')
-              .update({ 
+              .update({
                 status: 'active',
+                qa_status: 'completed',
                 qa_completed_at: new Date().toISOString(),
                 qa_completed_by: user?.id || null,
-                updated_at: new Date().toISOString()
+                published_at: new Date().toISOString(),
+                published_by: user?.id || null,
+                updated_at: new Date().toISOString(),
+                last_status_change_at: new Date().toISOString(),
+                last_status_change_by: user?.id || null
               })
               .eq('id', question.paper_id)
-              .eq('status', 'qa_review');
+              .in('status', ['draft', 'qa_review']);
             
             if (!paperError) {
               // Return info that paper was also confirmed
@@ -513,40 +518,85 @@ export function useQuestionMutations() {
     }
   });
   
-  // Confirm paper (change status from qa_review to active)
+  // Confirm paper (change status from draft/qa_review to active - publishing)
   const confirmPaper = useMutation({
     mutationFn: async ({ paperId }: ConfirmPaperParams) => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // First, check if all questions in the paper are confirmed (active)
+
+      // First, get the paper to check current status
+      const { data: paper, error: paperFetchError } = await supabase
+        .from('papers_setup')
+        .select('id, status, qa_status')
+        .eq('id', paperId)
+        .single();
+
+      if (paperFetchError) throw paperFetchError;
+
+      // Only allow publishing from draft or qa_review status
+      if (!['draft', 'qa_review'].includes(paper.status)) {
+        throw new Error('Paper must be in draft or qa_review status to be published');
+      }
+
+      // Check if all questions are ready (have all required fields)
       const { data: questions, error: fetchError } = await supabase
         .from('questions_master_admin')
-        .select('id, status')
+        .select('id, status, question_description, marks, difficulty, topic_id')
         .eq('paper_id', paperId);
-      
+
       if (fetchError) throw fetchError;
-      
-      const hasUnconfirmedQuestions = questions?.some(q => q.status !== 'active');
-      
-      if (hasUnconfirmedQuestions) {
-        throw new Error('All questions must be confirmed before publishing the paper');
+
+      // Validate questions have required data
+      const invalidQuestions = questions?.filter(q =>
+        !q.question_description || !q.marks || !q.difficulty || !q.topic_id
+      );
+
+      if (invalidQuestions && invalidQuestions.length > 0) {
+        throw new Error(`${invalidQuestions.length} question(s) are missing required fields (description, marks, difficulty, or topic)`);
       }
-      
-      // Update paper status
+
+      const now = new Date().toISOString();
+
+      // Update paper status to active (published)
       const { error: paperError } = await supabase
         .from('papers_setup')
-        .update({ 
+        .update({
           status: 'active',
-          qa_completed_at: new Date().toISOString(),
+          qa_status: 'completed',
+          qa_completed_at: now,
           qa_completed_by: user?.id || null,
-          updated_at: new Date().toISOString()
+          published_at: now,
+          published_by: user?.id || null,
+          updated_at: now,
+          last_status_change_at: now,
+          last_status_change_by: user?.id || null
         })
         .eq('id', paperId)
-        .eq('status', 'qa_review'); // Only update if currently in qa_review
-      
+        .in('status', ['draft', 'qa_review']); // Allow from both draft and qa_review
+
       if (paperError) throw paperError;
-      
+
+      // Log the status change in history
+      const { error: historyError } = await supabase
+        .from('paper_status_history')
+        .insert({
+          paper_id: paperId,
+          previous_status: paper.status,
+          new_status: 'active',
+          changed_by: user?.id || null,
+          changed_at: now,
+          reason: 'Paper published after QA review',
+          metadata: {
+            qa_status: paper.qa_status,
+            total_questions: questions?.length || 0
+          }
+        });
+
+      if (historyError) {
+        console.error('Error logging status change:', historyError);
+        // Don't throw - history is not critical
+      }
+
       return { success: true };
     },
     onSuccess: () => {

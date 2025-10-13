@@ -422,7 +422,7 @@ export default function QuestionsSetupPage() {
           type: question.type,
           difficulty: question.difficulty,
           category: question.category,
-          status: question.status === 'active' ? 'active' : 'qa_review',
+          status: question.status, // Use actual question status from database
           topic_id: question.topic_id,
           topic_name: topicInfo?.name,
           unit_name: unitName,
@@ -445,7 +445,7 @@ export default function QuestionsSetupPage() {
               marks: sq.marks,
               difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
               type: sq.type,
-              status: sq.status === 'active' ? 'active' : 'qa_review',
+              status: sq.status, // Use actual sub-question status from database
               topic_id: sq.topic_id,
               topic_name: topicMap.get(sq.topic_id || '')?.name,
               unit_name: sq.topic_id ? unitMap.get(topicMap.get(sq.topic_id)?.unit_id || '') : undefined,
@@ -852,16 +852,28 @@ export default function QuestionsSetupPage() {
 
         <TabsContent value="qa" className="space-y-6">
           <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mr-2" />
-              <div>
-                <h3 className="text-sm font-medium text-orange-800 dark:text-orange-300">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mr-3 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
                   Papers Under QA Review
                 </h3>
-                <p className="text-sm text-orange-700 dark:text-orange-400">
-                  These papers are either newly imported (Draft) or currently under quality assurance review.
-                  Complete the review process and publish them to move the paper and its questions to the Published tab.
+                <p className="text-sm text-orange-700 dark:text-orange-400 mb-3">
+                  Papers in this tab are in <strong>Draft</strong> status after being imported from Paper Setup.
+                  They must be reviewed and explicitly published before becoming accessible to teachers and students.
                 </p>
+                <div className="text-sm text-orange-700 dark:text-orange-400 space-y-1">
+                  <p className="font-medium">Workflow:</p>
+                  <ol className="list-decimal list-inside space-y-1 ml-2">
+                    <li>Review questions for accuracy and completeness</li>
+                    <li>Verify all questions have correct answers, difficulty, and topics</li>
+                    <li>Ensure questions mentioning figures have attachments</li>
+                    <li>Click "Publish Paper" to make the paper active</li>
+                  </ol>
+                  <p className="mt-2 text-xs italic">
+                    Only <strong>Active</strong> (published) papers are accessible to other modules (Teachers, Students, Entity).
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -870,14 +882,18 @@ export default function QuestionsSetupPage() {
 
         <TabsContent value="published" className="space-y-6">
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+            <div className="flex items-start">
+              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-3 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-green-800 dark:text-green-300">
-                  Published Papers
+                <h3 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-1">
+                  Published Papers (Active)
                 </h3>
                 <p className="text-sm text-green-700 dark:text-green-400">
-                  These papers are published and available across the platform. All questions have passed QA and are ready for teachers and learners.
+                  These papers have been reviewed, validated, and published with <strong>Active</strong> status.
+                  They are now accessible across the platform to teachers, students, and entity modules.
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-500 mt-2 italic">
+                  Papers can be archived or returned to draft if corrections are needed.
                 </p>
               </div>
             </div>

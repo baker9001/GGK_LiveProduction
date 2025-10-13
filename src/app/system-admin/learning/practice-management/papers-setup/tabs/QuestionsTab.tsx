@@ -2654,6 +2654,27 @@ export function QuestionsTab({
             console.error('Error updating import session:', error);
           }
         }
+
+        // Update paper status and flags after successful import
+        if (result.importedQuestions.length > 0 && importParams.paperId) {
+          try {
+            await supabase
+              .from('papers_setup')
+              .update({
+                status: 'draft', // Ensure paper is in draft status for QA review
+                qa_status: 'pending', // Mark as pending QA
+                questions_imported: true,
+                questions_imported_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', importParams.paperId);
+
+            console.log('Paper status updated to draft with qa_status=pending');
+          } catch (error) {
+            console.error('Error updating paper status:', error);
+            // Don't fail the import if this update fails
+          }
+        }
         
         // Show success message with details
         let message = `Successfully imported ${result.importedQuestions.length} question${result.importedQuestions.length !== 1 ? 's' : ''}!`;
