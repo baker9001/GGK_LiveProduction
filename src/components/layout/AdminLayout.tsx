@@ -39,7 +39,14 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
-import { clearAuthenticatedUser, getCurrentUser, isInTestMode, getRealAdminUser } from '../../lib/auth';
+import {
+  clearAuthenticatedUser,
+  clearSessionExpiredNotice,
+  getCurrentUser,
+  getRealAdminUser,
+  isInTestMode,
+  markUserLogout
+} from '../../lib/auth';
 import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
 import { supabase } from '../../lib/supabase';
@@ -331,6 +338,8 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   }, [isProfileDropdownOpen]);
 
   const handleLogout = () => {
+    markUserLogout();
+    clearSessionExpiredNotice();
     clearAuthenticatedUser();
     navigate('/signin');
   };

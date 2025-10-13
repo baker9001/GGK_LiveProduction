@@ -28,6 +28,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { markSessionExpired } from './auth';
 
 // Get environment variables with trimming to remove any whitespace
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -205,6 +206,9 @@ export const handleSupabaseError = (error: any, context?: string) => {
       errorMessage.includes('authentication')) {
     console.error(`🔐 Authentication Error${context ? ` in ${context}` : ''}:`, errorMessage);
     console.error('DIAGNOSIS: No valid authentication session found.');
+
+    // Ensure the UI can show an inline notice prompting the user to sign in again
+    markSessionExpired();
 
     throw new Error('Authentication required. Please sign in to continue.');
   }

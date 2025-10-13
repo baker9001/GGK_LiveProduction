@@ -16,11 +16,12 @@ import {
 import { Button } from '../../components/shared/Button';
 import { FormField, Input } from '../../components/shared/FormField';
 import { toast } from '../../components/shared/Toast';
-import { 
-  setAuthenticatedUser, 
-  clearAuthenticatedUser, 
-  type User, 
-  type UserRole 
+import {
+  setAuthenticatedUser,
+  clearAuthenticatedUser,
+  consumeSessionExpiredNotice,
+  type User,
+  type UserRole
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 
@@ -39,6 +40,7 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [loginErrorType, setLoginErrorType] = useState<string | null>(null);
   const [verificationNeeded, setVerificationNeeded] = useState(false);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   
   // Redirect path
   const from = location.state?.from?.pathname || '/app/dashboard';
@@ -63,12 +65,18 @@ export default function SignInPage() {
     authKeys.forEach(key => localStorage.removeItem(key));
     sessionStorage.clear();
     clearAuthenticatedUser();
-    
+
     // Load remembered email
     const savedEmail = localStorage.getItem('ggk_remembered_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
+    }
+
+    // Check if the previous session expired and surface the inline notice if present
+    const expirationNotice = consumeSessionExpiredNotice();
+    if (expirationNotice) {
+      setSessionExpiredMessage(expirationNotice);
     }
   }, []);
   
@@ -419,6 +427,19 @@ export default function SignInPage() {
         
         {/* Sign-in Form */}
         <div className="mt-8 bg-gray-900/50 backdrop-blur-md py-8 px-4 shadow-2xl sm:rounded-xl sm:px-10 border border-gray-700/50">
+          {/* Session expiration inline notice */}
+          {sessionExpiredMessage && (
+            <div className="mb-4 bg-blue-500/10 backdrop-blur text-blue-200 p-4 rounded-lg border border-blue-500/20">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Session expired</p>
+                  <p className="text-sm mt-1">{sessionExpiredMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Error Messages */}
           {error && (
             <div className="mb-4">
