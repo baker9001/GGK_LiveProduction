@@ -12,7 +12,7 @@ import { toast } from '../../../components/shared/Toast';
 const licenseSchema = z.object({
   company_id: z.string().uuid('Please select a company'),
   data_structure_id: z.string().uuid('Please select a data structure'),
-  total_quantity: z.number().min(1, 'Quantity must be greater than 0').optional(),
+  total_allocated: z.number().min(1, 'Quantity must be greater than 0').optional(),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
   notes: z.string().optional()
@@ -246,20 +246,20 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
   const licenseMutation = useMutation(
     async (formData: FormData) => {
       const totalQuantityValue = formData.get('total_quantity') as string;
-      
+
       const data = {
         company_id: selectedCompany,
         data_structure_id: dataStructureId,
-        total_quantity: totalQuantityValue ? parseInt(totalQuantityValue) : (editingLicense?.total_quantity || undefined),
+        total_allocated: totalQuantityValue ? parseInt(totalQuantityValue) : (editingLicense?.total_allocated || editingLicense?.total_quantity || undefined),
         start_date: formData.get('start_date') as string,
         end_date: formData.get('end_date') as string,
         notes: (formData.get('notes') || '') as string,
         status: 'active'
       };
 
-      // For editing, if total_quantity is not provided, use the existing value
-      if (editingLicense && !data.total_quantity) {
-        data.total_quantity = editingLicense.total_quantity;
+      // For editing, if total_allocated is not provided, use the existing value
+      if (editingLicense && !data.total_allocated) {
+        data.total_allocated = editingLicense.total_allocated || editingLicense.total_quantity;
       }
 
       const validatedData = licenseSchema.parse(data);
@@ -278,8 +278,8 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
         }
         return { ...editingLicense, ...validatedData };
       } else {
-        // For new licenses, total_quantity is required
-        if (!validatedData.total_quantity) {
+        // For new licenses, total_allocated is required
+        if (!validatedData.total_allocated) {
           throw new Error('Total quantity is required for new licenses');
         }
 
@@ -342,7 +342,7 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
               form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.'
             });
             toast.error('An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.');
-          } else if (error.message.includes('total_quantity')) {
+          } else if (error.message.includes('total_quantity') || error.message.includes('total_allocated')) {
             setFormErrors({ total_quantity: error.message });
             toast.error(error.message);
           } else if (error.message.includes('permission') || error.message.includes('policy')) {
