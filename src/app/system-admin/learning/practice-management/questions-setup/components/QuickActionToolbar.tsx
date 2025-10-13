@@ -1,9 +1,9 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/QuickActionToolbar.tsx
 import React, { useState, useEffect } from 'react';
-import { 
-  Zap, 
-  ChevronUp, 
-  CheckCircle, 
+import {
+  Zap,
+  ChevronUp,
+  CheckCircle,
   RefreshCw,
   Download,
   Upload,
@@ -59,31 +59,31 @@ export function QuickActionToolbar({
       icon: RefreshCw,
       label: 'Refresh',
       onClick: onRefresh,
-      color: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+      className: 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
     },
     {
       icon: BarChart3,
       label: 'Analytics',
       onClick: onShowAnalytics,
-      color: 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300'
+      className: 'text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300'
     },
     {
       icon: Upload,
       label: 'Import',
       onClick: onBulkImport,
-      color: 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+      className: 'text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
     },
     {
       icon: Download,
       label: 'Export',
       onClick: onBulkExport,
-      color: 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
+      className: 'text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
     },
     {
       icon: Wand2,
       label: 'Auto Fix',
       onClick: onAutoFix,
-      color: 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300',
+      className: 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300',
       show: !!onAutoFix
     }
   ];
@@ -114,51 +114,51 @@ export function QuickActionToolbar({
       )}>
         <div className="flex items-center">
           {/* Toggle Button */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            rounded="full"
+            className="p-4 hover:bg-gray-100 dark:hover:bg-gray-700"
+            tooltip={isExpanded ? 'Collapse' : 'Quick Actions'}
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-4 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-            title={isExpanded ? "Collapse" : "Quick Actions"}
-          >
-            {isExpanded ? (
+            leftIcon={isExpanded ? (
               <X className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             ) : (
               <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             )}
-          </button>
-          
+          />
+
           {/* Actions */}
           {isExpanded && (
             <div className="flex items-center space-x-1 pr-2">
               {actions.filter(a => a.show !== false).map((action, index) => (
-                <button
+                <Button
                   key={index}
+                  variant="ghost"
+                  size="icon"
+                  rounded="full"
+                  className={cn('p-3', action.className)}
                   onClick={action.onClick}
-                  className={cn(
-                    "p-3 rounded-full transition-colors relative group",
-                    action.color
-                  )}
-                  title={action.label}
-                >
-                  <action.icon className="h-5 w-5" />
-                  <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {action.label}
-                  </span>
-                </button>
+                  tooltip={action.label}
+                  leftIcon={<action.icon className="h-5 w-5" />}
+                />
               ))}
             </div>
           )}
         </div>
       </div>
-      
+
       {/* Scroll to Top Button */}
       {showScrollTop && (
-        <button
+        <Button
+          variant="secondary"
+          size="icon"
+          rounded="full"
+          className="mt-3 p-3 bg-gray-900 text-white shadow-lg hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 transition-all duration-300 transform hover:scale-110"
+          tooltip="Scroll to top"
           onClick={onScrollToTop}
-          className="mt-3 p-3 bg-gray-900 dark:bg-gray-700 text-white rounded-full shadow-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-all duration-300 transform hover:scale-110"
-          title="Scroll to top"
-        >
-          <ChevronUp className="h-5 w-5" />
-        </button>
+          leftIcon={<ChevronUp className="h-5 w-5" />}
+        />
       )}
     </div>
   );
