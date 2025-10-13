@@ -621,7 +621,7 @@ export default function QuestionsSetupPage() {
   });
 
   // Filter papers by status for tabs
-  const activePapers = groupedPapers.filter(paper => paper.status === 'active');
+  const publishedPapers = groupedPapers.filter(paper => paper.status === 'active');
   const underQAPapers = groupedPapers.filter(paper => 
     paper.status === 'draft' || paper.status === 'qa_review'
   );
@@ -836,9 +836,9 @@ export default function QuestionsSetupPage() {
             <AlertTriangle className="h-4 w-4 mr-2" />
             Under QA ({underQAPapers.length})
           </TabsTrigger>
-          <TabsTrigger value="active" className="flex items-center text-green-600 dark:text-green-400">
+          <TabsTrigger value="published" className="flex items-center text-green-600 dark:text-green-400">
             <CheckCircle className="h-4 w-4 mr-2" />
-            Active Papers ({activePapers.length})
+            Published Papers ({publishedPapers.length})
           </TabsTrigger>
           <TabsTrigger value="archived" className="flex items-center text-gray-600 dark:text-gray-400">
             <Archive className="h-4 w-4 mr-2" />
@@ -859,8 +859,8 @@ export default function QuestionsSetupPage() {
                   Papers Under QA Review
                 </h3>
                 <p className="text-sm text-orange-700 dark:text-orange-400">
-                  These papers are either newly imported (Draft) or currently under quality assurance review. 
-                  Complete the review process to activate them.
+                  These papers are either newly imported (Draft) or currently under quality assurance review.
+                  Complete the review process and publish them to move the paper and its questions to the Published tab.
                 </p>
               </div>
             </div>
@@ -868,21 +868,21 @@ export default function QuestionsSetupPage() {
           {renderPapersList(underQAPapers, "No papers under QA review")}
         </TabsContent>
 
-        <TabsContent value="active" className="space-y-6">
+        <TabsContent value="published" className="space-y-6">
           <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <div className="flex items-center">
               <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
               <div>
                 <h3 className="text-sm font-medium text-green-800 dark:text-green-300">
-                  Active Papers
+                  Published Papers
                 </h3>
                 <p className="text-sm text-green-700 dark:text-green-400">
-                  These papers are confirmed and ready for use in the system. All questions have been validated and approved.
+                  These papers are published and available across the platform. All questions have passed QA and are ready for teachers and learners.
                 </p>
               </div>
             </div>
           </div>
-          {renderPapersList(activePapers, "No active papers found")}
+          {renderPapersList(publishedPapers, "No published papers found")}
         </TabsContent>
 
         <TabsContent value="archived" className="space-y-6">
