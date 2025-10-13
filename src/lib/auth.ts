@@ -25,6 +25,7 @@ const AUTH_STORAGE_KEY = 'ggk_authenticated_user';
 const TEST_USER_KEY = 'test_mode_user';
 const AUTH_TOKEN_KEY = 'ggk_auth_token';
 const REMEMBER_SESSION_KEY = 'ggk_remember_session';
+const SESSION_EXPIRED_NOTICE_KEY = 'ggk_session_expired_notice';
 
 // Session durations
 const DEFAULT_SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -192,6 +193,38 @@ export function clearAuthenticatedUserSync(): void {
 // Mark that user explicitly logged out (not session expiration)
 export function markUserLogout(): void {
   localStorage.setItem('ggk_user_logout', 'true');
+}
+
+// Mark that the session expired so the UI can show a friendly inline notice
+export function markSessionExpired(message: string = 'Your session has expired. Please sign in again to continue.'): void {
+  try {
+    localStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, message);
+  } catch (error) {
+    console.warn('[Auth] Unable to persist session expiration notice:', error);
+  }
+}
+
+// Consume (read and clear) the stored session expiration notice
+export function consumeSessionExpiredNotice(): string | null {
+  try {
+    const message = localStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+    if (message) {
+      localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+      return message;
+    }
+  } catch (error) {
+    console.warn('[Auth] Unable to read session expiration notice:', error);
+  }
+  return null;
+}
+
+// Explicitly clear any stored session expiration notice (used on manual logout)
+export function clearSessionExpiredNotice(): void {
+  try {
+    localStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+  } catch (error) {
+    console.warn('[Auth] Unable to clear session expiration notice:', error);
+  }
 }
 
 // Check if authenticated
@@ -429,6 +462,9 @@ export function startSessionMonitoring(): void {
         // Set flags to prevent loops
         isMonitoringActive = false;
         isRedirecting = true;
+
+        // Store a friendly notice so the sign-in page can surface the message inline
+        markSessionExpired();
 
         // Stop the interval
         if (sessionCheckInterval) {
