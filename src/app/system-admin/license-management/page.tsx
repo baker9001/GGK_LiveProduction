@@ -287,6 +287,18 @@ export default function LicenseManagementPage() {
           throw new Error('License not found');
         }
 
+        // Get current user for action tracking
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError) {
+          console.error('Error getting current user:', userError);
+          throw new Error('Failed to identify current user. Please try logging in again.');
+        }
+
+        if (!user?.id) {
+          throw new Error('User authentication required. Please log in and try again.');
+        }
+
         // Create license action record
         const actionRecord = {
           license_id: payload.license_id,
@@ -296,10 +308,14 @@ export default function LicenseManagementPage() {
                           null,
           new_end_date: payload.new_end_date,
           notes: payload.notes,
-          performed_by: (await supabase.auth.getUser()).data.user?.id
+          performed_by: user.id
         };
 
-        console.log('Inserting license action:', actionRecord);
+        console.log('Inserting license action:', {
+          ...actionRecord,
+          performed_by: user.id,
+          user_email: user.email
+        });
 
         const { error: actionError } = await supabase
           .from('license_actions')
