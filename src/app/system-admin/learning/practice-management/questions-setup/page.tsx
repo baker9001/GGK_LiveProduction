@@ -1,7 +1,7 @@
 // src/app/system-admin/learning/practice-management/questions-setup/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, FileText, BarChart3, X, CheckCircle, Clock, Archive, AlertTriangle } from 'lucide-react';
 import { Button } from '../../../../../components/shared/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../../components/shared/Tabs';
@@ -47,6 +47,7 @@ export interface SubQuestion {
   topic_id?: string;
   topic_name?: string;
   unit_name?: string;
+  unit_id?: string;
   subtopics?: Subtopic[];
   options?: QuestionOption[];
   attachments: Attachment[];
@@ -72,6 +73,7 @@ export interface Question {
   attachments: Attachment[];
   hint?: string;
   explanation?: string;
+  unit_id?: string;
 }
 
 export interface GroupedPaper {
@@ -84,6 +86,11 @@ export interface GroupedPaper {
   status: string;
   duration?: string;
   total_marks?: number;
+  subject_id?: string;
+  provider_id?: string;
+  program_id?: string;
+  region_id?: string;
+  data_structure_id?: string;
   questions: Question[];
 }
 
@@ -365,6 +372,11 @@ export default function QuestionsSetupPage() {
             status: paper.status,
             duration: paper.duration,
             total_marks: 0,
+            subject_id: dataStructure?.edu_subjects?.id,
+            provider_id: dataStructure?.providers?.id,
+            program_id: dataStructure?.programs?.id,
+            region_id: dataStructure?.regions?.id,
+            data_structure_id: dataStructure?.id || paperDetail?.data_structure_id,
             questions: []
           };
         }
@@ -390,6 +402,7 @@ export default function QuestionsSetupPage() {
           topic_id: question.topic_id,
           topic_name: topicInfo?.name,
           unit_name: unitName,
+          unit_id: topicInfo?.unit_id,
           subtopic_id: question.subtopic_id,
           subtopics: question.question_subtopics?.map((qs: any) => ({
             id: qs.edu_subtopics.id,
@@ -412,6 +425,7 @@ export default function QuestionsSetupPage() {
               topic_id: sq.topic_id,
               topic_name: topicMap.get(sq.topic_id || '')?.name,
               unit_name: sq.topic_id ? unitMap.get(topicMap.get(sq.topic_id)?.unit_id || '') : undefined,
+              unit_id: topicMap.get(sq.topic_id || '')?.unit_id,
               subtopics: sq.question_subtopics?.map((qs: any) => ({
                 id: qs.edu_subtopics.id,
                 name: qs.edu_subtopics.name
@@ -453,16 +467,69 @@ export default function QuestionsSetupPage() {
         .select('id, name, topic_id')
         .eq('status', 'active')
         .order('name');
-      
+
       if (error) throw error;
       return data || [];
     }
   });
 
+  const subjectsForFilters = useMemo(
+    () => {
+      const nameById = new Map(subjects.map(subject => [subject.id, subject.name]));
+      const aggregate = new Map<
+        string,
+        { id: string; name: string; providerIds: Set<string> }
+      >();
+
+      groupedPapers.forEach(paper => {
+        if (!paper.subject_id) return;
+        const existing = aggregate.get(paper.subject_id);
+        const providerIds = existing?.providerIds || new Set<string>();
+        if (paper.provider_id) {
+          providerIds.add(paper.provider_id);
+        }
+
+        aggregate.set(paper.subject_id, {
+          id: paper.subject_id,
+          name: nameById.get(paper.subject_id) || paper.subject || 'Unknown',
+          providerIds
+        });
+      });
+
+      subjects.forEach(subject => {
+        if (!aggregate.has(subject.id)) {
+          aggregate.set(subject.id, {
+            id: subject.id,
+            name: subject.name,
+            providerIds: new Set<string>()
+          });
+        }
+      });
+
+      return Array.from(aggregate.values()).map(subject => ({
+        id: subject.id,
+        name: subject.name,
+        provider_ids: Array.from(subject.providerIds)
+      }));
+    },
+    [subjects, groupedPapers]
+  );
+
+  const hasActiveFilters = useMemo(
+    () =>
+      Boolean(searchTerm.trim()) ||
+      filters.provider_ids.length > 0 ||
+      filters.subject_ids.length > 0 ||
+      filters.unit_ids.length > 0 ||
+      filters.difficulty.length > 0 ||
+      filters.validation_status.length > 0,
+    [searchTerm, filters]
+  );
+
   // Enhanced filtering logic
   const filteredPapers = groupedPapers.filter(paper => {
     // Search term filter
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       paper.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       paper.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       paper.questions.some(q => 
@@ -470,18 +537,37 @@ export default function QuestionsSetupPage() {
       );
     
     // Provider filter
-    const matchesProvider = filters.provider_ids.length === 0 || 
-      filters.provider_ids.some(id => providers.find(p => p.id === id)?.name === paper.provider);
-    
+    const matchesProvider =
+      filters.provider_ids.length === 0 ||
+      (paper.provider_id
+        ? filters.provider_ids.includes(paper.provider_id)
+        : filters.provider_ids.some(id => {
+            const provider = providers.find(p => p.id === id);
+            return (
+              provider?.name?.toLowerCase() === paper.provider?.toLowerCase()
+            );
+          }));
+
     // Subject filter
-    const matchesSubject = filters.subject_ids.length === 0 || 
-      filters.subject_ids.some(id => subjects.find(s => s.id === id)?.name === paper.subject);
-    
+    const matchesSubject =
+      filters.subject_ids.length === 0 ||
+      (paper.subject_id
+        ? filters.subject_ids.includes(paper.subject_id)
+        : filters.subject_ids.some(id => {
+            const subject = subjectsForFilters.find(s => s.id === id);
+            return subject?.name?.toLowerCase() === paper.subject?.toLowerCase();
+          }));
+
     // Unit filter
-    const matchesUnit = filters.unit_ids.length === 0 || 
-      paper.questions.some(q => 
-        q.unit_name && filters.unit_ids.some(id => units.find(u => u.id === id)?.name === q.unit_name)
-      );
+    const matchesUnit =
+      filters.unit_ids.length === 0 ||
+      paper.questions.some(q => {
+        const matchesQuestionUnit = q.unit_id && filters.unit_ids.includes(q.unit_id);
+        const matchesPartUnit = q.parts?.some(
+          part => part.unit_id && filters.unit_ids.includes(part.unit_id)
+        );
+        return matchesQuestionUnit || matchesPartUnit;
+      });
     
     // Validation status filter
     let matchesValidation = true;
@@ -649,7 +735,7 @@ export default function QuestionsSetupPage() {
             {emptyMessage}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
-            {searchTerm || filters.status !== 'all' 
+            {hasActiveFilters
               ? 'Try adjusting your search criteria or filters'
               : 'No papers available in this category'}
           </p>
@@ -696,7 +782,7 @@ export default function QuestionsSetupPage() {
       {/* Search and Filters */}
       <FilterSection
         providers={providers}
-        subjects={subjects}
+        subjects={subjectsForFilters}
         units={units}
         searchTerm={searchTerm}
         filters={filters}
