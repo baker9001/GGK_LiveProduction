@@ -34,12 +34,10 @@ interface License {
   provider_name: string;
   subject_id: string;
   subject_name: string;
-  total_quantity: number;
-  used_quantity: number;
-  available_quantity: number;
+  quantity: number;
   start_date: string;
   end_date: string;
-  status: 'active' | 'inactive' | 'expired';
+  status: 'active' | 'inactive';
   created_at: string;
 }
 
@@ -154,7 +152,6 @@ export default function LicenseManagementPage() {
         .select(`
           id,
           total_quantity,
-          used_quantity,
           start_date,
           end_date,
           status,
@@ -203,32 +200,24 @@ export default function LicenseManagementPage() {
       if (error) throw error;
 
       // Format the licenses
-      const formattedLicenses: License[] = (data || []).map(license => {
-        const totalQuantity = Number(license.total_quantity) || 0;
-        const usedQuantity = Number(license.used_quantity) || 0;
-        const availableQuantity = Math.max(totalQuantity - usedQuantity, 0);
-
-        return {
-          id: license.id,
-          company_id: license.company_id,
-          company_name: license.companies?.name || 'Unknown',
-          region_id: license.data_structures?.region_id || '',
-          region_name: license.data_structures?.regions?.name || 'Unknown',
-          program_id: license.data_structures?.program_id || '',
-          program_name: license.data_structures?.programs?.name || 'Unknown',
-          provider_id: license.data_structures?.provider_id || '',
-          provider_name: license.data_structures?.providers?.name || 'Unknown',
-          subject_id: license.data_structures?.subject_id || '',
-          subject_name: license.data_structures?.edu_subjects?.name || 'Unknown',
-          total_quantity: totalQuantity,
-          used_quantity: usedQuantity,
-          available_quantity: availableQuantity,
-          start_date: license.start_date,
-          end_date: license.end_date,
-          status: license.status,
-          created_at: license.created_at
-        };
-      });
+      const formattedLicenses: License[] = (data || []).map(license => ({
+        id: license.id,
+        company_id: license.company_id,
+        company_name: license.companies?.name || 'Unknown',
+        region_id: license.data_structures?.region_id || '',
+        region_name: license.data_structures?.regions?.name || 'Unknown',
+        program_id: license.data_structures?.program_id || '',
+        program_name: license.data_structures?.programs?.name || 'Unknown',
+        provider_id: license.data_structures?.provider_id || '',
+        provider_name: license.data_structures?.providers?.name || 'Unknown',
+        subject_id: license.data_structures?.subject_id || '',
+        subject_name: license.data_structures?.edu_subjects?.name || 'Unknown',
+        quantity: license.total_quantity,
+        start_date: license.start_date,
+        end_date: license.end_date,
+        status: license.status,
+        created_at: license.created_at
+      }));
 
       return formattedLicenses;
     },
@@ -257,7 +246,7 @@ export default function LicenseManagementPage() {
       
       const companyData = companyMap.get(license.company_id)!;
       companyData.licenseCount += 1;
-      companyData.totalQuantity += license.total_quantity;
+      companyData.totalQuantity += license.quantity;
       companyData.licenses.push(license);
     });
 
@@ -310,20 +299,13 @@ export default function LicenseManagementPage() {
           throw new Error('User authentication required. Please log in and try again.');
         }
 
-        const renewQuantityChange = payload.action_type === 'RENEW'
-          ? (payload.new_total_quantity ?? 0) - license.total_quantity
-          : null;
-
         // Create license action record
         const actionRecord = {
           license_id: payload.license_id,
           action_type: payload.action_type,
-          change_quantity:
-            payload.action_type === 'EXPAND'
-              ? payload.additional_quantity
-              : payload.action_type === 'RENEW' && renewQuantityChange && renewQuantityChange > 0
-                ? renewQuantityChange
-                : null,
+          change_quantity: payload.action_type === 'EXPAND' ? payload.additional_quantity :
+                          payload.action_type === 'RENEW' ? payload.new_total_quantity - license.total_quantity :
+                          null,
           new_end_date: payload.new_end_date,
           notes: payload.notes,
           performed_by: user.id
@@ -521,16 +503,7 @@ export default function LicenseManagementPage() {
     {
       id: 'quantity',
       header: 'Quantity',
-      cell: (row: License) => (
-        <div className="space-y-1">
-          <div className="font-medium text-gray-900 dark:text-gray-100">
-            {row.total_quantity}
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            Used: {row.used_quantity} · Available: {row.available_quantity}
-          </div>
-        </div>
-      ),
+      accessorKey: 'quantity',
     },
     {
       id: 'dates',
