@@ -45,6 +45,7 @@ interface StatusBadgeProps {
   className?: string;
   showIcon?: boolean;
   showPulse?: boolean;
+  label?: string;
 }
 
 export const StatusBadge = memo(({ 
@@ -52,7 +53,8 @@ export const StatusBadge = memo(({
   size = 'sm', 
   className,
   showIcon = false,
-  showPulse = false
+  showPulse = false,
+  label
 }: StatusBadgeProps) => {
   
   // Normalize status for comparison
@@ -168,7 +170,7 @@ export const StatusBadge = memo(({
       {showIcon && config.icon}
       
       {/* PRESERVED: Status text with original casing or capitalization */}
-      {status || capitalize(normalizedStatus) || 'Unknown'}
+      {label ?? status ?? capitalize(normalizedStatus) ?? 'Unknown'}
     </span>
   );
 });
