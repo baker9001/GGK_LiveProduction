@@ -11,9 +11,15 @@ interface FilterState {
   validation_status: string[];
 }
 
+interface SubjectOption {
+  id: string;
+  name: string;
+  provider_ids?: string[];
+}
+
 interface FilterSectionProps {
   providers: Array<{ id: string; name: string }>;
-  subjects: Array<{ id: string; name: string; provider_id?: string }>;
+  subjects: SubjectOption[];
   units: Array<{ id: string; name: string; subject_id?: string }>;
   searchTerm: string;
   filters: FilterState;
@@ -50,10 +56,13 @@ export function FilterSection({
     onFilterChange(newFilters);
   };
 
-  // Note: In the current schema, subjects and providers are related through data_structures
-  // For now, we show all subjects but disable until provider is selected
-  // A full implementation would require fetching data_structures to filter properly
-  const filteredSubjects = subjects;
+  const filteredSubjects = useMemo(() => {
+    if (filters.provider_ids.length === 0) return subjects;
+    return subjects.filter(subject => {
+      if (!subject.provider_ids || subject.provider_ids.length === 0) return true;
+      return subject.provider_ids.some(providerId => filters.provider_ids.includes(providerId));
+    });
+  }, [subjects, filters.provider_ids]);
 
   // Filter units based on selected subjects
   const filteredUnits = useMemo(() => {
