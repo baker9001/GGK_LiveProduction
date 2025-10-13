@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, Filter, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, FileText, ArrowUpDown, ArrowUp, ArrowDown, Copy, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarDays, CheckCircle2, ClipboardList, Download, GraduationCap, Layers, LineChart, Plus, Search, Sparkles, Users, Loader2, CreditCard as Edit2, Clock, History, RefreshCw, Eye, ArrowUpDown, ArrowUp, ArrowDown, Copy, Save, Trash2, X } from 'lucide-react';
 import { useUser } from '../../../contexts/UserContext';
 import { useAccessControl } from '../../../hooks/useAccessControl';
 import {
@@ -15,7 +15,6 @@ import {
   useClassSections,
   useTeachers,
   useCreateMockExam,
-  useMockExamById,
   useStatusHistory,
   useDeleteMockExam
 } from '../../../hooks/useMockExams';
