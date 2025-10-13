@@ -302,55 +302,79 @@ export default function QuestionsSetupPage() {
         return [];
       }
 
+      if (!data || data.length === 0) {
+        return [];
+      }
+
       // Fetch paper details with data structure info
-      const paperIds = [...new Set(data?.map(q => q.paper_id).filter(Boolean))];
-      
-      const { data: paperDetails } = await supabase
-        .from('papers_setup')
-        .select(`
-          id,
-          paper_code,
-          data_structure_id,
-          data_structures(
-            id,
-            edu_subjects(id, name),
-            providers(id, name),
-            programs(id, name),
-            regions(id, name)
-          )
-        `)
-        .in('id', paperIds);
+      const paperIds = [...new Set(data.map(q => q.paper_id).filter(Boolean))];
 
-      const paperDetailsMap = new Map(
-        paperDetails?.map(p => [p.id, p]) || []
-      );
+      const [paperDetailsResponse, topicDetailsResponse] = await Promise.all([
+        paperIds.length
+          ? supabase
+              .from('papers_setup')
+              .select(`
+                id,
+                paper_code,
+                data_structure_id,
+                data_structures(
+                  id,
+                  edu_subjects(id, name),
+                  providers(id, name),
+                  programs(id, name),
+                  regions(id, name)
+                )
+              `)
+              .in('id', paperIds)
+          : Promise.resolve({ data: [], error: null }),
+        (() => {
+          const topicIds = [
+            ...new Set([
+              ...data.map(q => q.topic_id).filter(Boolean),
+              ...data
+                .flatMap(q => q.sub_questions?.map((sq: any) => sq.topic_id).filter(Boolean))
+            ])
+          ];
 
-      // Fetch topics and units for questions
-      const topicIds = [...new Set([
-        ...data?.map(q => q.topic_id).filter(Boolean) || [],
-        ...data?.flatMap(q => q.sub_questions?.map(sq => sq.topic_id).filter(Boolean)) || []
-      ])];
-      
-      const { data: topicDetails } = await supabase
-        .from('edu_topics')
-        .select('id, name, unit_id')
-        .in('id', topicIds);
+          return topicIds.length
+            ? supabase
+                .from('edu_topics')
+                .select('id, name, unit_id')
+                .in('id', topicIds)
+            : Promise.resolve({ data: [], error: null });
+        })()
+      ]);
 
+      if (paperDetailsResponse.error) {
+        console.error('Error fetching paper details:', paperDetailsResponse.error);
+      }
+
+      if (topicDetailsResponse.error) {
+        console.error('Error fetching topic details:', topicDetailsResponse.error);
+      }
+
+      const paperDetails = paperDetailsResponse.data ?? [];
+      const topicDetails = topicDetailsResponse.data ?? [];
+
+      const paperDetailsMap = new Map(paperDetails.map(p => [p.id, p]));
       const topicMap = new Map(
-        topicDetails?.map(t => [t.id, { name: t.name, unit_id: t.unit_id }]) || []
+        topicDetails.map(t => [t.id, { name: t.name, unit_id: t.unit_id }])
       );
 
-      // Fetch units for the topics
-      const unitIds = [...new Set(topicDetails?.map(t => t.unit_id).filter(Boolean) || [])];
-      
-      const { data: unitDetails } = await supabase
-        .from('edu_units')
-        .select('id, name')
-        .in('id', unitIds);
+      const unitIds = [...new Set(topicDetails.map(t => t.unit_id).filter(Boolean))];
 
-      const unitMap = new Map(
-        unitDetails?.map(u => [u.id, u.name]) || []
-      );
+      const { data: unitDetails, error: unitError } = unitIds.length
+        ? await supabase
+            .from('edu_units')
+            .select('id, name')
+            .in('id', unitIds)
+        : { data: [], error: null };
+
+      if (unitError) {
+        console.error('Error fetching units:', unitError);
+      }
+
+      const unitMap = new Map((unitDetails ?? []).map(u => [u.id, u.name]));
 
       // Group questions by paper
       const paperGroups: Record<string, GroupedPaper> = {};
