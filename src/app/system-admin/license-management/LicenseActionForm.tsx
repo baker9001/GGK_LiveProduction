@@ -36,7 +36,6 @@ interface License {
   id: string;
   total_quantity: number;
   used_quantity: number;
-  available_quantity: number;
   start_date: string;
   end_date: string;
 }
@@ -96,36 +95,7 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
 
       const schema = actionSchemas[actionType];
       const validatedData = schema.parse(data);
-
-      if (actionType === 'EXTEND') {
-        const currentEnd = dayjs(license.end_date);
-        const newEnd = dayjs(validatedData.new_end_date as string);
-        if (!newEnd.isAfter(currentEnd)) {
-          setFormErrors({
-            new_end_date: `New end date must be after the current end date (${currentEnd.format('MMM D, YYYY')}).`
-          });
-          return false;
-        }
-      }
-
-      if (actionType === 'RENEW') {
-        if (validatedData.new_total_quantity < license.used_quantity) {
-          setFormErrors({
-            new_total_quantity: `New total quantity must be at least ${license.used_quantity} to cover active assignments.`
-          });
-          return false;
-        }
-
-        const currentEnd = dayjs(license.end_date);
-        const newEnd = dayjs(validatedData.new_end_date as string);
-        if (!newEnd.isAfter(currentEnd)) {
-          setFormErrors({
-            new_end_date: `New end date must be after the current end date (${currentEnd.format('MMM D, YYYY')}).`
-          });
-          return false;
-        }
-      }
-
+      
       await onSubmit({
         license_id: license.id,
         action_type: actionType,
@@ -168,25 +138,25 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
                   <span className="text-blue-700 dark:text-blue-300 font-medium">Used:</span>
                   <span className="ml-2 text-blue-900 dark:text-blue-100">{license.used_quantity}</span>
                 </div>
-              <div>
-                <span className="text-blue-700 dark:text-blue-300 font-medium">Available:</span>
-                <span className="ml-2 text-blue-900 dark:text-blue-100">{license.available_quantity}</span>
-              </div>
-              <div>
-                <span className="text-blue-700 dark:text-blue-300 font-medium">Expires:</span>
-                <span className="ml-2 text-blue-900 dark:text-blue-100">{dayjs(license.end_date).format('MMM D, YYYY')}</span>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Available:</span>
+                  <span className="ml-2 text-blue-900 dark:text-blue-100">{license.total_quantity - license.used_quantity}</span>
+                </div>
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Expires:</span>
+                  <span className="ml-2 text-blue-900 dark:text-blue-100">{dayjs(license.end_date).format('MMM D, YYYY')}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <FormField
-            id="additional_quantity"
-            label="Additional Quantity"
-            required
-            error={formErrors.additional_quantity}
-            description={`Current availability: ${license.available_quantity}. New total will be ${license.total_quantity} + additional quantity.`}
-          >
-            <Input
+            <FormField
+              id="additional_quantity"
+              label="Additional Quantity"
+              required
+              error={formErrors.additional_quantity}
+              description={`This will increase the total quantity from ${license.total_quantity} to ${license.total_quantity} + additional quantity`}
+            >
+              <Input
                 id="additional_quantity"
                 name="additional_quantity"
                 type="number"
@@ -208,8 +178,8 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
               id="new_end_date"
               name="new_end_date"
               type="date"
-              min={dayjs(license.end_date).add(1, 'day').format('YYYY-MM-DD')}
-              defaultValue={dayjs(license.end_date).add(1, 'year').format('YYYY-MM-DD')}
+              min={dayjs().add(1, 'day').format('YYYY-MM-DD')}
+              defaultValue={dayjs().add(1, 'year').format('YYYY-MM-DD')}
             />
           </FormField>
         )}
@@ -243,7 +213,7 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
                 name="new_start_date"
                 type="date"
                 min={dayjs().format('YYYY-MM-DD')}
-                defaultValue={dayjs(license.end_date).add(1, 'day').format('YYYY-MM-DD')}
+                defaultValue={dayjs().format('YYYY-MM-DD')}
               />
             </FormField>
 
@@ -257,8 +227,8 @@ export const LicenseActionForm = forwardRef<LicenseActionFormRef, LicenseActionF
                 id="new_end_date"
                 name="new_end_date"
                 type="date"
-                min={dayjs(license.end_date).add(1, 'day').format('YYYY-MM-DD')}
-                defaultValue={dayjs(license.end_date).add(1, 'year').format('YYYY-MM-DD')}
+                min={dayjs().add(1, 'day').format('YYYY-MM-DD')}
+                defaultValue={dayjs().add(1, 'year').format('YYYY-MM-DD')}
               />
             </FormField>
           </>
