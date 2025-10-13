@@ -34,6 +34,7 @@ export interface QuestionOption {
 export interface Subtopic {
   id: string;
   name: string;
+  topic_id?: string;
 }
 
 export interface SubQuestion {
@@ -48,6 +49,7 @@ export interface SubQuestion {
   topic_name?: string;
   unit_name?: string;
   unit_id?: string;
+  subtopic_id?: string;
   subtopics?: Subtopic[];
   options?: QuestionOption[];
   attachments: Attachment[];
@@ -205,6 +207,11 @@ export default function QuestionsSetupPage() {
           status,
           topic_id,
           subtopic_id,
+          primary_subtopic:edu_subtopics!questions_master_admin_subtopic_id_fkey (
+            id,
+            name,
+            topic_id
+          ),
           explanation,
           hint,
           created_at,
@@ -237,6 +244,7 @@ export default function QuestionsSetupPage() {
             question_id,
             type,
             topic_id,
+            subtopic_id,
             question_description,
             marks,
             hint,
@@ -249,6 +257,11 @@ export default function QuestionsSetupPage() {
             level,
             explanation,
             status,
+            primary_subtopic:edu_subtopics!sub_questions_subtopic_id_fkey (
+              id,
+              name,
+              topic_id
+            ),
             question_subtopics(
               subtopic_id,
               edu_subtopics(
@@ -410,8 +423,34 @@ export default function QuestionsSetupPage() {
         paperGroups[paperId].total_marks += questionMarks;
 
         // Get topic and unit information
-        const topicInfo = topicMap.get(question.topic_id || '');
+        const primarySubtopicRecord = question.primary_subtopic;
+        const inferredTopicId = question.topic_id || primarySubtopicRecord?.topic_id || '';
+        const topicInfo = topicMap.get(inferredTopicId);
         const unitName = topicInfo?.unit_id ? unitMap.get(topicInfo.unit_id) : undefined;
+
+        const additionalSubtopics = (question.question_subtopics || []).map((qs: any) => ({
+          id: qs.edu_subtopics.id,
+          name: qs.edu_subtopics.name,
+          topic_id: qs.edu_subtopics.topic_id
+        }));
+
+        const mergedSubtopicsMap = new Map<string, Subtopic>();
+
+        if (primarySubtopicRecord?.id) {
+          mergedSubtopicsMap.set(primarySubtopicRecord.id, {
+            id: primarySubtopicRecord.id,
+            name: primarySubtopicRecord.name,
+            topic_id: primarySubtopicRecord.topic_id
+          });
+        }
+
+        additionalSubtopics.forEach(subtopic => {
+          if (subtopic.id && !mergedSubtopicsMap.has(subtopic.id)) {
+            mergedSubtopicsMap.set(subtopic.id, subtopic);
+          }
+        });
+
+        const mergedSubtopics = Array.from(mergedSubtopicsMap.values());
 
         // Format the question
         const formattedQuestion: Question = {
@@ -423,42 +462,70 @@ export default function QuestionsSetupPage() {
           difficulty: question.difficulty,
           category: question.category,
           status: question.status, // Use actual question status from database
-          topic_id: question.topic_id,
+          topic_id: inferredTopicId || undefined,
           topic_name: topicInfo?.name,
           unit_name: unitName,
           unit_id: topicInfo?.unit_id,
-          subtopic_id: question.subtopic_id,
-          subtopics: question.question_subtopics?.map((qs: any) => ({
-            id: qs.edu_subtopics.id,
-            name: qs.edu_subtopics.name
-          })) || [],
+          subtopic_id: question.subtopic_id || primarySubtopicRecord?.id || undefined,
+          subtopics: mergedSubtopics,
           options: question.question_options || [],
           attachments: question.questions_attachments || [],
           hint: question.hint || question.questions_hints?.[0]?.hint_text,
           explanation: question.explanation,
           parts: question.sub_questions?.
             sort((a: any, b: any) => (a.sort_order || a.order_index || a.order || 0) - (b.sort_order || b.order_index || b.order || 0))
-            .map((sq: any, index: number) => ({
-              id: sq.id,
-              part_label: `Part ${String.fromCharCode(97 + index)}`,
-              question_description: sq.question_description,
-              marks: sq.marks,
-              difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
-              type: sq.type,
-              status: sq.status, // Use actual sub-question status from database
-              topic_id: sq.topic_id,
-              topic_name: topicMap.get(sq.topic_id || '')?.name,
-              unit_name: sq.topic_id ? unitMap.get(topicMap.get(sq.topic_id)?.unit_id || '') : undefined,
-              unit_id: topicMap.get(sq.topic_id || '')?.unit_id,
-              subtopics: sq.question_subtopics?.map((qs: any) => ({
+            .map((sq: any, index: number) => {
+              const primarySubQuestionSubtopic = sq.primary_subtopic;
+              const subQuestionTopicId = sq.topic_id || primarySubQuestionSubtopic?.topic_id || '';
+              const subQuestionTopicInfo = topicMap.get(subQuestionTopicId);
+              const subQuestionUnitName = subQuestionTopicInfo?.unit_id
+                ? unitMap.get(subQuestionTopicInfo.unit_id)
+                : undefined;
+
+              const subQuestionAdditionalSubtopics = (sq.question_subtopics || []).map((qs: any) => ({
                 id: qs.edu_subtopics.id,
-                name: qs.edu_subtopics.name
-              })) || [],
-              options: sq.question_options || [],
-              attachments: sq.questions_attachments || [],
-              hint: sq.hint || sq.questions_hints?.[0]?.hint_text,
-              explanation: sq.explanation
-            })) || []
+                name: qs.edu_subtopics.name,
+                topic_id: qs.edu_subtopics.topic_id
+              }));
+
+              const subQuestionMergedSubtopicsMap = new Map<string, Subtopic>();
+
+              if (primarySubQuestionSubtopic?.id) {
+                subQuestionMergedSubtopicsMap.set(primarySubQuestionSubtopic.id, {
+                  id: primarySubQuestionSubtopic.id,
+                  name: primarySubQuestionSubtopic.name,
+                  topic_id: primarySubQuestionSubtopic.topic_id
+                });
+              }
+
+              subQuestionAdditionalSubtopics.forEach(subtopic => {
+                if (subtopic.id && !subQuestionMergedSubtopicsMap.has(subtopic.id)) {
+                  subQuestionMergedSubtopicsMap.set(subtopic.id, subtopic);
+                }
+              });
+
+              const subQuestionMergedSubtopics = Array.from(subQuestionMergedSubtopicsMap.values());
+
+              return {
+                id: sq.id,
+                part_label: `Part ${String.fromCharCode(97 + index)}`,
+                question_description: sq.question_description,
+                marks: sq.marks,
+                difficulty: 'medium', // Default since sub_questions doesn't have difficulty column
+                type: sq.type,
+                status: sq.status, // Use actual sub-question status from database
+                topic_id: subQuestionTopicId || undefined,
+                topic_name: subQuestionTopicInfo?.name,
+                unit_name: subQuestionUnitName,
+                unit_id: subQuestionTopicInfo?.unit_id,
+                subtopic_id: sq.subtopic_id || primarySubQuestionSubtopic?.id || undefined,
+                subtopics: subQuestionMergedSubtopics,
+                options: sq.question_options || [],
+                attachments: sq.questions_attachments || [],
+                hint: sq.hint || sq.questions_hints?.[0]?.hint_text,
+                explanation: sq.explanation
+              };
+            }) || []
         };
 
         paperGroups[paperId].questions.push(formattedQuestion);
