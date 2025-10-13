@@ -270,60 +270,94 @@ export default function LicenseManagementPage() {
   // License action mutation
   const actionMutation = useMutation(
     async (payload: any) => {
-      // Fetch the license details
-      const { data: license, error: fetchError } = await supabase
-        .from('licenses')
-        .select('*')
-        .eq('id', payload.license_id)
-        .single();
+      try {
+        // Fetch the license details
+        const { data: license, error: fetchError } = await supabase
+          .from('licenses')
+          .select('*')
+          .eq('id', payload.license_id)
+          .single();
 
-      if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('Error fetching license:', fetchError);
+          throw new Error(`Failed to fetch license: ${fetchError.message}`);
+        }
 
-      // Create license action record
-      const { error: actionError } = await supabase
-        .from('license_actions')
-        .insert([{
+        if (!license) {
+          throw new Error('License not found');
+        }
+
+        // Create license action record
+        const actionRecord = {
           license_id: payload.license_id,
           action_type: payload.action_type,
-          change_quantity: payload.action_type === 'EXPAND' ? payload.additional_quantity : 
-                          payload.action_type === 'RENEW' ? payload.new_total_quantity - license.total_quantity : 
+          change_quantity: payload.action_type === 'EXPAND' ? payload.additional_quantity :
+                          payload.action_type === 'RENEW' ? payload.new_total_quantity - license.total_quantity :
                           null,
           new_end_date: payload.new_end_date,
-          notes: payload.notes
-        }]);
+          notes: payload.notes,
+          performed_by: (await supabase.auth.getUser()).data.user?.id
+        };
 
-      if (actionError) throw actionError;
+        console.log('Inserting license action:', actionRecord);
 
-      // Update the license based on action type
-      let updateData = {};
-      switch (payload.action_type) {
-        case 'EXPAND':
-          updateData = {
-            total_quantity: license.total_quantity + payload.additional_quantity
-          };
-          break;
-        case 'EXTEND':
-          updateData = {
-            end_date: payload.new_end_date
-          };
-          break;
-        case 'RENEW':
-          updateData = {
-            total_quantity: payload.new_total_quantity,
-            start_date: payload.new_start_date,
-            end_date: payload.new_end_date
-          };
-          break;
+        const { error: actionError } = await supabase
+          .from('license_actions')
+          .insert([actionRecord]);
+
+        if (actionError) {
+          console.error('License action INSERT error:', {
+            code: actionError.code,
+            message: actionError.message,
+            details: actionError.details,
+            hint: actionError.hint
+          });
+          throw new Error(`Failed to record license action: ${actionError.message}`);
+        }
+
+        // Update the license based on action type
+        let updateData = {};
+        switch (payload.action_type) {
+          case 'EXPAND':
+            updateData = {
+              total_quantity: license.total_quantity + payload.additional_quantity
+            };
+            break;
+          case 'EXTEND':
+            updateData = {
+              end_date: payload.new_end_date
+            };
+            break;
+          case 'RENEW':
+            updateData = {
+              total_quantity: payload.new_total_quantity,
+              start_date: payload.new_start_date,
+              end_date: payload.new_end_date
+            };
+            break;
+        }
+
+        console.log('Updating license with:', updateData);
+
+        const { error: updateError } = await supabase
+          .from('licenses')
+          .update(updateData)
+          .eq('id', payload.license_id);
+
+        if (updateError) {
+          console.error('License UPDATE error:', {
+            code: updateError.code,
+            message: updateError.message,
+            details: updateError.details
+          });
+          throw new Error(`Failed to update license: ${updateError.message}`);
+        }
+
+        return { ...license, ...updateData };
+      } catch (error) {
+        console.error('License action mutation error:', error);
+        throw error;
       }
-
-      const { error: updateError } = await supabase
-        .from('licenses')
-        .update(updateData)
-        .eq('id', payload.license_id);
-
-      if (updateError) throw updateError;
-
-      return { ...license, ...updateData };
     },
     {
       onSuccess: () => {
@@ -334,9 +368,24 @@ export default function LicenseManagementPage() {
         setEditingLicense(null);
         toast.success(`License ${selectedAction?.toLowerCase()}ed successfully`);
       },
-      onError: (error) => {
+      onError: (error: any) => {
         console.error('Error processing license action:', error);
-        toast.error('Failed to process license action. Please try again.');
+
+        let errorMessage = 'Failed to process license action. Please try again.';
+
+        if (error?.message) {
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
+            errorMessage = 'Database table missing. Please contact system administrator.';
+          } else if (error.message.includes('permission denied') || error.message.includes('policy')) {
+            errorMessage = 'You do not have permission to perform this action.';
+          } else if (error.message.includes('Failed to record license action')) {
+            errorMessage = 'Failed to record the action history. The license may have been updated.';
+          } else {
+            errorMessage = error.message;
+          }
+        }
+
+        toast.error(errorMessage);
       }
     }
   );
