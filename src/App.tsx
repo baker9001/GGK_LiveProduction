@@ -69,13 +69,12 @@ import CookiesPage from './app/landing/cookies/page';
 import AuthCallbackPage from './app/auth/callback/page';
 
 // PRESERVED: Module access control wrapper
-function ModuleRoute({ 
-  path, 
-  element, 
-  allowedRoles 
-}: { 
-  path: string; 
-  element: React.ReactNode; 
+function ModuleRoute({
+  element,
+  allowedRoles
+}: {
+  path: string;
+  element: React.ReactNode;
   allowedRoles: string[] 
 }) {
   const currentUser = getCurrentUser();
