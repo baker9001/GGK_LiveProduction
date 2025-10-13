@@ -70,12 +70,47 @@ export function QuestionCard({
   const needsAttachmentWarning = questionNeedsAttachment(question);
   
   // Filter subtopics based on selected topic
-  const availableSubtopics = question.topic_id 
+  const availableSubtopics = question.topic_id
     ? subtopics.filter(s => s.topic_id === question.topic_id)
     : [];
-  
+
   // Get current subtopic IDs from the question data
   const currentSubtopicIds = question.subtopics?.map(s => s.id) || [];
+
+  const qaChecklist = [
+    {
+      label: 'Description added',
+      complete: Boolean(question.question_description?.trim())
+    },
+    {
+      label: 'Marks set',
+      complete: question.marks > 0
+    },
+    {
+      label: 'Difficulty selected',
+      complete: Boolean(question.difficulty)
+    },
+    {
+      label: 'Topic & subtopics tagged',
+      complete: Boolean(question.topic_id) && currentSubtopicIds.length > 0
+    },
+    {
+      label: 'Hint provided',
+      complete: Boolean(question.hint?.trim())
+    },
+    {
+      label: 'Explanation provided',
+      complete: Boolean(question.explanation?.trim())
+    },
+    {
+      label: 'Attachments ready',
+      complete: !needsAttachmentWarning
+    }
+  ];
+
+  const completedChecklistItems = qaChecklist.filter(item => item.complete).length;
+  const qaProgress = Math.round((completedChecklistItems / qaChecklist.length) * 100);
+  const confirmBlocked = hasValidationErrors || needsAttachmentWarning;
   
   const getAnswerFormatLabel = (format: string) => {
     const formats: Record<string, string> = {
@@ -275,6 +310,23 @@ export function QuestionCard({
       toast.error('Failed to update subtopics');
     }
   };
+
+  const handleConfirmCurrentQuestion = () => {
+    if (!onConfirm) return;
+
+    if (hasValidationErrors) {
+      setShowValidationErrors(true);
+      toast.error('Please resolve validation issues before marking this question complete');
+      return;
+    }
+
+    if (needsAttachmentWarning) {
+      toast.error('Upload the required figure or diagram before marking this question complete');
+      return;
+    }
+
+    onConfirm(question.id);
+  };
   
   return (
     <div
@@ -324,33 +376,13 @@ export function QuestionCard({
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center gap-2">
-            {showQAActions && question.status !== 'active' && onConfirm && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (hasValidationErrors) {
-                    setShowValidationErrors(true);
-                    toast.error('Please fix all validation errors before confirming');
-                  } else if (needsAttachmentWarning) {
-                    toast.error('Please upload the required figure/diagram before confirming');
-                  } else {
-                    onConfirm(question.id);
-                  }
-                }}
-                leftIcon={<CheckCircle className="h-4 w-4" />}
-                disabled={needsAttachmentWarning}
-              >
-                Confirm question
-              </Button>
-            )}
-
-            {showQAActions && question.status === 'active' && (
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-emerald-100/80 px-4 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200">
-                <CheckCircle className="h-4 w-4" /> Confirmed
-              </span>
-            )}
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2">
+              {showQAActions && question.status === 'active' && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-emerald-100/80 px-4 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CheckCircle className="h-4 w-4" /> QA complete
+                </span>
+              )}
 
             {!readOnly && (
               <Button
@@ -379,7 +411,53 @@ export function QuestionCard({
           
         </div>
       </div>
-      
+
+      {showQAActions && (
+        <div className="px-6 pb-6 pt-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-white via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">QA progress</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {completedChecklistItems}/{qaChecklist.length} checks complete
+              </div>
+            </div>
+            <div>
+              <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
+                  style={{ width: `${qaProgress}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {qaChecklist.map(item => (
+                  <div
+                    key={item.label}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                      item.complete
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200'
+                        : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/60 dark:bg-amber-900/20 dark:text-amber-200'
+                    )}
+                  >
+                    {item.complete ? (
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    ) : (
+                      <AlertCircle className="h-3.5 w-3.5" />
+                    )}
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {confirmBlocked && (
+              <p className="text-xs text-amber-600 dark:text-amber-300">
+                Resolve the highlighted checklist items above before marking this question complete.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Enhanced Question Metadata */}
       <div className="bg-gray-50 dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-6 gap-8">
@@ -692,9 +770,46 @@ export function QuestionCard({
             </div>
           </div>
         </div>
-        
+
       </div>
-      
+
+      {showQAActions && (
+        <div className="border-t border-gray-200 bg-gray-50 px-6 py-5 dark:border-gray-700 dark:bg-gray-900/40">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Publish readiness</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                {question.status === 'active'
+                  ? 'This question is QA complete and ready to be included when the paper is published.'
+                  : 'Finish the checklist requirements above, then mark this question as QA complete to include it in publishing.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {question.status !== 'active' && onConfirm && (
+                <Button
+                  size="sm"
+                  onClick={handleConfirmCurrentQuestion}
+                  disabled={confirmBlocked}
+                  title={
+                    confirmBlocked
+                      ? 'Complete the checklist items before marking QA complete'
+                      : 'Mark this question as QA complete'
+                  }
+                  leftIcon={<CheckCircle className="h-4 w-4" />}
+                >
+                  Mark QA Complete
+                </Button>
+              )}
+              {question.status === 'active' && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/60 bg-emerald-100/80 px-4 py-1.5 text-sm font-semibold text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CheckCircle className="h-4 w-4" /> Ready for publish
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sub-questions */}
       {expandedParts && question.parts.length > 0 && (
         <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-800/30">

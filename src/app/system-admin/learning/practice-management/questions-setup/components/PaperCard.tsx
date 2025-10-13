@@ -21,7 +21,7 @@ import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { QuestionCard } from './QuestionCard';
 import { cn } from '../../../../../../lib/utils';
 import { GroupedPaper, Question, SubQuestion } from '../page';
-import { getQuestionStatusLabel, questionNeedsAttachment } from '../utils/questionHelpers';
+import { getPaperStatusLabel, getQuestionStatusLabel, questionNeedsAttachment } from '../utils/questionHelpers';
 import { useQuestionValidation } from '../hooks/useQuestionValidation';
 import { useQuestionMutations } from '../hooks/useQuestionMutations';
 import { useQuestionBatchOperations } from '../hooks/useQuestionBatchOperations';
@@ -91,11 +91,34 @@ export function PaperCard({
   // Get validation summary
   const validationSummary = getValidationSummary(paper.questions);
   const canConfirm = canConfirmPaper(paper.questions);
-  
+
   // Check if any questions need attachments
   const questionsNeedingAttachments = paper.questions.filter(questionNeedsAttachment);
-  
+
   const hasQuestionsNeedingAttachments = questionsNeedingAttachments.length > 0;
+
+  const totalQuestions = paper.questions.length;
+  const completionPercentage = totalQuestions > 0
+    ? Math.round((confirmedCount / totalQuestions) * 100)
+    : 0;
+
+  const paperChecklist = [
+    {
+      label: 'All questions confirmed',
+      complete: confirmedCount === totalQuestions && totalQuestions > 0
+    },
+    {
+      label: 'No validation issues',
+      complete: validationSummary.invalidQuestions === 0
+    },
+    {
+      label: 'Attachments in place',
+      complete: !hasQuestionsNeedingAttachments
+    }
+  ];
+
+  const readyToPublish =
+    paper.status === 'qa_review' && paperChecklist.every(item => item.complete) && canConfirm;
   
   // Selection handlers
   const handleSelectAll = () => {
@@ -289,14 +312,14 @@ export function PaperCard({
               <FileText className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
-                <StatusBadge
-                  status={paper.status}
-                  label={getQuestionStatusLabel(paper.status)}
-                  showIcon
-                  className="px-3 py-1 text-xs font-semibold"
-                />
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{paper.code}</h3>
+                  <StatusBadge
+                    status={paper.status}
+                    label={getPaperStatusLabel(paper.status)}
+                    showIcon
+                    className="px-3 py-1 text-xs font-semibold"
+                  />
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-100/70 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200">
                   <CircleCheck className="h-3.5 w-3.5" />
                   {confirmedCount}/{paper.questions.length} confirmed
@@ -327,7 +350,7 @@ export function PaperCard({
                 )}
                 {paper.status === 'active' && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/60 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                    <CheckCircle className="h-3.5 w-3.5" /> Paper confirmed
+                    <CheckCircle className="h-3.5 w-3.5" /> Published
                   </span>
                 )}
               </div>
@@ -345,15 +368,60 @@ export function PaperCard({
                     <span>{paper.duration}</span>
                   </>
                 )}
-                {paper.total_marks && (
-                  <>
-                    <span>•</span>
-                    <span>{paper.total_marks} marks</span>
-                  </>
-                )}
+              {paper.total_marks && (
+                <>
+                  <span>•</span>
+                  <span>{paper.total_marks} marks</span>
+                </>
+              )}
+            </div>
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>
+                    {confirmedCount} of {totalQuestions} question{totalQuestions === 1 ? '' : 's'} confirmed
+                  </span>
+                  <span>{qaReviewCount} awaiting QA</span>
+                </div>
+                <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-500 dark:bg-emerald-400"
+                    style={{ width: `${completionPercentage}%` }}
+                  />
+                </div>
               </div>
+              {showQAActions && (
+                <div className="flex flex-wrap gap-2">
+                  {paperChecklist.map(item => (
+                    <span
+                      key={item.label}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                        item.complete
+                          ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200'
+                          : 'border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200'
+                      )}
+                    >
+                      {item.complete ? (
+                        <CircleCheck className="h-3.5 w-3.5" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5" />
+                      )}
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {showQAActions && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {readyToPublish
+                    ? 'All QA checks are complete. Publish to move this paper to the Published tab and unlock it for other modules.'
+                    : 'Complete the remaining QA checklist items to publish this paper for teachers and learners.'}
+                </p>
+              )}
             </div>
           </div>
+        </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <div
@@ -466,9 +534,9 @@ export function PaperCard({
                     leftIcon={<CircleCheck className="h-3 w-3" />}
                     className="bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 text-white"
                     disabled={confirmPaper.isPending || !canConfirm}
-                    title={!canConfirm ? "Some questions have validation errors" : "Confirm this paper"}
+                    title={!canConfirm ? "Resolve validation issues before publishing" : "Publish this paper"}
                   >
-                    {confirmPaper.isPending ? 'Confirming...' : 'Confirm Paper'}
+                    {confirmPaper.isPending ? 'Publishing...' : 'Publish Paper'}
                   </Button>
                 )}
               </>
@@ -509,6 +577,14 @@ export function PaperCard({
             {/* Statistics and Actions Bar */}
             <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-md dark:shadow-gray-900/20">
               <div className="p-4 space-y-3">
+                {showQAActions && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+                    <div className="font-semibold">QA publishing checklist</div>
+                    <p className="mt-1 leading-relaxed">
+                      Confirm each question below. When all items are resolved, publish the paper to move it into the Published tab and make it available to teachers and learners.
+                    </p>
+                  </div>
+                )}
                 {/* Note about figure attachments - informational only, no PDF upload */}
                 {showQAActions && hasQuestionsNeedingAttachments && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">

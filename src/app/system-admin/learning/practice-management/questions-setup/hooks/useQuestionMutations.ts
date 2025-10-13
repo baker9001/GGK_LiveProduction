@@ -502,7 +502,7 @@ export function useQuestionMutations() {
       queryClient.invalidateQueries({ queryKey: ['papers'] });
       
       if (data.paperConfirmed) {
-        toast.success('Question confirmed and paper automatically confirmed!');
+        toast.success('Question confirmed and paper automatically published!');
       } else {
         toast.success('Question confirmed successfully');
       }
@@ -530,7 +530,7 @@ export function useQuestionMutations() {
       const hasUnconfirmedQuestions = questions?.some(q => q.status !== 'active');
       
       if (hasUnconfirmedQuestions) {
-        throw new Error('All questions must be confirmed before confirming the paper');
+        throw new Error('All questions must be confirmed before publishing the paper');
       }
       
       // Update paper status
@@ -552,14 +552,14 @@ export function useQuestionMutations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['papers'] });
-      toast.success('Paper confirmed successfully');
+      toast.success('Paper published successfully');
     },
     onError: (error) => {
       console.error('Error confirming paper:', error);
       if (error instanceof Error && error.message.includes('All questions must be confirmed')) {
         toast.error(error.message);
       } else {
-        toast.error('Failed to confirm paper');
+        toast.error('Failed to publish paper');
       }
     }
   });

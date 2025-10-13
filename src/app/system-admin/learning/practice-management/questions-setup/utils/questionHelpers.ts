@@ -53,3 +53,18 @@ export const getQuestionStatusLabel = (status: string) => {
   }
 };
 
+export const getPaperStatusLabel = (status: string) => {
+  switch (status) {
+    case 'active':
+      return 'Published';
+    case 'qa_review':
+      return 'Under QA';
+    case 'draft':
+      return 'Draft';
+    case 'inactive':
+      return 'Archived';
+    default:
+      return status ? status.replace('_', ' ') : 'Unknown';
+  }
+};
+
