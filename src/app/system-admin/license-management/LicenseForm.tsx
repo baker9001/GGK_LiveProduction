@@ -290,6 +290,13 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
           .maybeSingle();
 
         if (error) {
+          console.error('License INSERT Error Details:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            payload: validatedData
+          });
           if (error.code === '23505') {
             throw new Error('An active license for this company and data structure already exists.');
           }
@@ -308,6 +315,8 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
       },
       onError: (error) => {
         setIsSubmittingForm(false);
+        console.error('License Mutation Error:', error);
+
         if (error instanceof z.ZodError) {
           const errors: Record<string, string> = {};
           error.errors.forEach((err) => {
@@ -317,28 +326,34 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
           });
           setFormErrors(errors);
         } else if (error instanceof Error) {
+          // Log the full error for debugging
+          console.error('Full Error Object:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            error: error
+          });
+
           // Check for Supabase unique constraint error
-          if (error.message.includes('23505') || 
-              error.message.includes('already exists') || 
+          if (error.message.includes('23505') ||
+              error.message.includes('already exists') ||
               error.message.includes('unique constraint')) {
-            setFormErrors({ 
-              form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.' 
+            setFormErrors({
+              form: 'An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.'
             });
             toast.error('An active license for this company and data structure already exists. Please use Expand, Extend, or Renew.');
           } else if (error.message.includes('total_quantity')) {
             setFormErrors({ total_quantity: error.message });
+            toast.error(error.message);
+          } else if (error.message.includes('permission') || error.message.includes('policy')) {
+            setFormErrors({ form: `Permission Error: ${error.message}` });
+            toast.error(`Permission Error: ${error.message}`);
           } else {
             setFormErrors({ form: error.message });
             toast.error(error.message);
           }
-        } else if (error instanceof Error) {
-          if (error.message.includes('total_quantity')) {
-            setFormErrors({ total_quantity: error.message });
-          } else {
-            setFormErrors({ form: error.message });
-          }
         } else {
-          console.error('Error saving license:', error);
+          console.error('Unknown error type saving license:', error);
           setFormErrors({ form: 'Failed to save license. Please try again.' });
           toast.error('Failed to save license. Please try again.');
         }
