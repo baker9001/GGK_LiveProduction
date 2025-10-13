@@ -247,41 +247,57 @@ export function LicenseForm({ isOpen, onClose, initialCompanyId, onSuccess, edit
     async (formData: FormData) => {
       const totalQuantityValue = formData.get('total_quantity') as string;
 
-      const data = {
-        company_id: selectedCompany,
-        data_structure_id: dataStructureId,
-        total_allocated: totalQuantityValue ? parseInt(totalQuantityValue) : (editingLicense?.total_allocated || editingLicense?.total_quantity || undefined),
-        start_date: formData.get('start_date') as string,
-        end_date: formData.get('end_date') as string,
-        notes: (formData.get('notes') || '') as string,
-        status: 'active'
-      };
-
-      // For editing, if total_allocated is not provided, use the existing value
-      if (editingLicense && !data.total_allocated) {
-        data.total_allocated = editingLicense.total_allocated || editingLicense.total_quantity;
-      }
-
-      const validatedData = licenseSchema.parse(data);
-
       if (editingLicense) {
+        // For UPDATE: only send editable fields to avoid unique constraint violation
+        // The fields company_id, data_structure_id, and status are part of a unique constraint
+        // and cannot be changed during edit, so we exclude them from the update payload
+        const updateData = {
+          start_date: formData.get('start_date') as string,
+          end_date: formData.get('end_date') as string,
+          notes: (formData.get('notes') || '') as string
+        };
+
+        // Validate dates
+        const start = dayjs(updateData.start_date);
+        const end = dayjs(updateData.end_date);
+        if (!end.isAfter(start) && !end.isSame(start)) {
+          throw new Error('End date must be after or equal to start date');
+        }
+
         const { error } = await supabase
           .from('licenses')
-          .update(validatedData)
+          .update(updateData)
           .eq('id', editingLicense.id);
 
         if (error) {
-          if (error.code === '23505') {
-            throw new Error('An active license for this company and data structure already exists.');
-          }
+          console.error('License UPDATE Error Details:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            payload: updateData
+          });
           throw error;
         }
-        return { ...editingLicense, ...validatedData };
+        return { ...editingLicense, ...updateData };
       } else {
+        // For INSERT: build complete data object with all required fields
+        const data = {
+          company_id: selectedCompany,
+          data_structure_id: dataStructureId,
+          total_allocated: totalQuantityValue ? parseInt(totalQuantityValue) : undefined,
+          start_date: formData.get('start_date') as string,
+          end_date: formData.get('end_date') as string,
+          notes: (formData.get('notes') || '') as string,
+          status: 'active'
+        };
+
         // For new licenses, total_allocated is required
-        if (!validatedData.total_allocated) {
+        if (!data.total_allocated) {
           throw new Error('Total quantity is required for new licenses');
         }
+
+        const validatedData = licenseSchema.parse(data);
 
         const { data: newLicense, error } = await supabase
           .from('licenses')
