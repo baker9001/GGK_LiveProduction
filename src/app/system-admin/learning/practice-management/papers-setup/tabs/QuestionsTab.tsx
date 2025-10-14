@@ -95,6 +95,8 @@ import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
+import { ExtractionRules, QuestionSupportSummary } from '../types';
+import QuestionSupportMatrix from './components/QuestionSupportMatrix';
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
@@ -115,6 +117,17 @@ const answerFormatConfig = {
   audio: { icon: Mic, color: 'red', label: 'Audio Recording', hint: 'Record audio response' },
   file_upload: { icon: FileUp, color: 'yellow', label: 'File Upload', hint: 'Upload document or file' }
 };
+
+const manualAnswerFormats = new Set([
+  'diagram',
+  'chemical_structure',
+  'structural_diagram',
+  'table',
+  'graph',
+  'multi_line',
+  'multi_line_labeled',
+  'file_upload'
+]);
 
 const sanitizeQuestionForStorage = (question: unknown): any => {
   const transform = (value: any): any => {
@@ -236,43 +249,6 @@ const extractNameCandidates = (value: any): string[] => {
   return [String(value)];
 };
 
-interface ExtractionRules {
-  forwardSlashHandling: boolean;
-  lineByLineProcessing: boolean;
-  alternativeLinking: boolean;
-  contextRequired: boolean;
-  figureDetection: boolean;
-  educationalContent: {
-    hintsRequired: boolean;
-    explanationsRequired: boolean;
-  };
-  subjectSpecific: {
-    physics: boolean;
-    chemistry: boolean;
-    biology: boolean;
-    mathematics: boolean;
-  };
-  abbreviations: {
-    ora: boolean;
-    owtte: boolean;
-    ecf: boolean;
-    cao: boolean;
-  };
-  answerStructure: {
-    validateMarks: boolean;
-    requireContext: boolean;
-    validateLinking: boolean;
-    acceptAlternatives: boolean;
-  };
-  markScheme: {
-    requiresManualMarking: boolean;
-    markingCriteria: boolean;
-    componentMarking: boolean;
-    levelDescriptors: boolean;
-  };
-  examBoard: 'Cambridge' | 'Edexcel' | 'Both';
-}
-
 interface QuestionsTabProps {
   importSession: any;
   parsedData: any;
@@ -306,6 +282,14 @@ interface ProcessedQuestion {
   parts?: ProcessedPart[];
   correct_answers?: ProcessedAnswer[];
   options?: ProcessedOption[];
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
   // Store original data for mapping
   original_topics?: string[];
   original_subtopics?: string[];
@@ -332,6 +316,14 @@ interface ProcessedPart {
   options?: ProcessedOption[];
   requires_manual_marking?: boolean;
   marking_criteria?: any;
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
 }
 
 interface ProcessedSubpart {
@@ -347,6 +339,14 @@ interface ProcessedSubpart {
   explanation?: string;
   figure?: boolean; // Add figure field to track requirement
   figure_required?: boolean;
+  mcq_type?: string;
+  match_pairs?: any[];
+  left_column?: any[];
+  right_column?: any[];
+  correct_sequence?: any[];
+  partial_credit?: any;
+  partial_marking?: any;
+  conditional_marking?: any;
 }
 
 interface ProcessedAnswer {
@@ -494,6 +494,11 @@ export function QuestionsTab({
 
   // Helper arrays
   const Roman = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+
+  const questionSupportSummary = useMemo<QuestionSupportSummary>(
+    () => computeQuestionSupportSummary(questions),
+    [questions]
+  );
 
   // Add global error handler for debugging - MUST BE AFTER STATE DECLARATIONS
   useEffect(() => {
@@ -1160,7 +1165,7 @@ export function QuestionsTab({
       setPaperMetadata(metadata);
 
       // Process questions with enhanced extraction rules
-      const processedQuestions = processQuestions(data.questions || []);
+      const processedQuestions = processQuestions(data.questions || [], metadata);
       setQuestions(processedQuestions);
 
       // Initialize question mappings
@@ -1187,47 +1192,57 @@ export function QuestionsTab({
     }
   };
 
-  const processQuestions = (rawQuestions: any[]): ProcessedQuestion[] => {
+  const processQuestions = (rawQuestions: any[], paperContext: { subject?: string }): ProcessedQuestion[] => {
+    const normalizedSubject = paperContext.subject?.toLowerCase() || '';
+
     return rawQuestions.map((q, index) => {
       const questionId = `q_${index + 1}`;
       
       // Enhanced question type detection
-      let questionType = q.type || 'descriptive';
-      if (q.options && q.options.length > 0) {
-        questionType = 'mcq';
-      } else if (q.answer_format === 'true_false' || 
-                 (q.question_text && q.question_text.toLowerCase().includes('true or false'))) {
-        questionType = 'tf';
+      let questionType = q.type;
+      if (!questionType) {
+        if (Array.isArray(q.parts) && q.parts.length > 0) {
+          questionType = 'complex';
+        } else if (q.options && q.options.length > 0) {
+          questionType = 'mcq';
+        } else if (
+          q.answer_format === 'true_false' ||
+          (q.question_text && q.question_text.toLowerCase().includes('true or false')) ||
+          (q.options && q.options.length === 2 && q.options.every((opt: any) => /true|false/i.test(opt.text || opt.option_text)))
+        ) {
+          questionType = 'tf';
+        } else {
+          questionType = 'descriptive';
+        }
       }
       
       // Enhanced answer format detection for main question
       let mainAnswerFormat = q.answer_format;
       if (!mainAnswerFormat && q.question_text) {
         mainAnswerFormat = detectAnswerFormat(q.question_text);
-        
+
         // Additional subject-specific detection
-        const subject = paperMetadata.subject?.toLowerCase() || '';
         const text = q.question_text.toLowerCase();
-        
-        if (subject.includes('chemistry')) {
+
+        if (normalizedSubject.includes('chemistry')) {
           if (text.includes('structure') || text.includes('draw the structure')) {
             mainAnswerFormat = 'chemical_structure';
           } else if (text.includes('equation') || text.includes('balanced equation')) {
             mainAnswerFormat = 'equation';
           }
-        } else if (subject.includes('physics')) {
+        } else if (normalizedSubject.includes('physics')) {
           if (text.includes('calculate') || text.includes('find the value')) {
             mainAnswerFormat = 'calculation';
           } else if (text.includes('graph') || text.includes('plot')) {
             mainAnswerFormat = 'graph';
           }
-        } else if (subject.includes('biology')) {
+        } else if (normalizedSubject.includes('biology')) {
           if (text.includes('diagram') || text.includes('label')) {
             mainAnswerFormat = 'diagram';
           } else if (text.includes('table') || text.includes('tabulate')) {
             mainAnswerFormat = 'table';
           }
-        } else if (subject.includes('mathematics')) {
+        } else if (normalizedSubject.includes('mathematics') || normalizedSubject.includes('math')) {
           if (text.includes('prove') || text.includes('show that')) {
             mainAnswerFormat = 'calculation';
           } else if (text.includes('construct') || text.includes('draw')) {
@@ -1274,6 +1289,14 @@ export function QuestionsTab({
         answer_format: mainAnswerFormat,
         answer_requirement: answerRequirement,
         total_alternatives: q.total_alternatives,
+        mcq_type: q.mcq_type,
+        match_pairs: q.match_pairs || q.correct_matches,
+        left_column: q.left_column,
+        right_column: q.right_column,
+        correct_sequence: q.correct_sequence,
+        partial_credit: q.partial_credit,
+        partial_marking: q.partial_marking,
+        conditional_marking: q.conditional_marking || q.marking_conditions,
         // Store original topics/subtopics for mapping
         original_topics: ensureArray(q.topics || q.topic),
         original_subtopics: ensureArray(q.subtopics || q.subtopic),
@@ -1294,8 +1317,8 @@ export function QuestionsTab({
 
       // Process parts if available
       if (q.parts && Array.isArray(q.parts)) {
-        processedQuestion.parts = q.parts.map((part: any, partIndex: number) => 
-          processPart(part, partIndex, questionId)
+        processedQuestion.parts = q.parts.map((part: any, partIndex: number) =>
+          processPart(part, partIndex, questionId, paperContext)
         );
       }
 
@@ -1330,20 +1353,25 @@ export function QuestionsTab({
     return 'Easy';
   };
 
-  const processPart = (part: any, partIndex: number, parentId: string): ProcessedPart => {
+  const processPart = (
+    part: any,
+    partIndex: number,
+    parentId: string,
+    paperContext: { subject?: string }
+  ): ProcessedPart => {
     // FIXED: Ensure parts have IDs for consistent key generation
     const partId = part.id || `p${partIndex}`;
-    
+
     // Enhanced answer format detection
     const questionText = ensureString(part.question_text || part.text || part.question || '');
     let answerFormat = part.answer_format;
-    
+
     if (!answerFormat && questionText) {
       // First try auto-detection
       answerFormat = detectAnswerFormat(questionText);
-      
+
       // Subject-specific enhancements
-      const subject = paperMetadata.subject?.toLowerCase() || '';
+      const subject = paperContext.subject?.toLowerCase() || '';
       if (subject.includes('chemistry') && questionText.toLowerCase().includes('structure')) {
         answerFormat = 'chemical_structure';
       } else if (subject.includes('physics') && questionText.toLowerCase().includes('calculate')) {
@@ -1387,13 +1415,21 @@ export function QuestionsTab({
       options: [],
       requires_manual_marking: part.requires_manual_marking ||
         ['diagram', 'chemical_structure', 'table', 'graph'].includes(answerFormat || ''),
-      marking_criteria: part.marking_criteria
+      marking_criteria: part.marking_criteria,
+      mcq_type: part.mcq_type,
+      match_pairs: part.match_pairs || part.correct_matches,
+      left_column: part.left_column,
+      right_column: part.right_column,
+      correct_sequence: part.correct_sequence,
+      partial_credit: part.partial_credit,
+      partial_marking: part.partial_marking,
+      conditional_marking: part.conditional_marking || part.marking_conditions
     };
 
     // Process subparts if available
     if (part.subparts && Array.isArray(part.subparts)) {
-      processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) => 
-        processSubpart(subpart, subpartIndex, parentId)
+      processedPart.subparts = part.subparts.map((subpart: any, subpartIndex: number) =>
+        processSubpart(subpart, subpartIndex, parentId, paperContext)
       );
     }
 
@@ -1410,7 +1446,12 @@ export function QuestionsTab({
     return processedPart;
   };
 
-  const processSubpart = (subpart: any, subpartIndex: number, parentId: string): ProcessedSubpart => {
+  const processSubpart = (
+    subpart: any,
+    subpartIndex: number,
+    parentId: string,
+    paperContext: { subject?: string }
+  ): ProcessedSubpart => {
     // FIXED: Ensure subparts have IDs that match their Roman numeral designation
     const romanNumeral = Roman[subpartIndex] || `${subpartIndex}`;
     const subpartId = subpart.id || `s${subpartIndex}`;
@@ -1427,7 +1468,7 @@ export function QuestionsTab({
     const subpartFigureFlag = resolveFigureFlag(subpart);
     const subpartFigureRequired = resolveFigureRequirement(subpart);
 
-    return {
+    const processedSubpart: ProcessedSubpart = {
       id: subpartId, // FIXED: Include id in processed subpart
       subpart: subpartLabel,
       question_text: questionText || '',
@@ -1439,8 +1480,292 @@ export function QuestionsTab({
       hint: subpart.hint,
       explanation: subpart.explanation,
       figure: subpartFigureFlag,
-      figure_required: subpartFigureRequired
+      figure_required: subpartFigureRequired,
+      mcq_type: subpart.mcq_type,
+      match_pairs: subpart.match_pairs || subpart.correct_matches,
+      left_column: subpart.left_column,
+      right_column: subpart.right_column,
+      correct_sequence: subpart.correct_sequence,
+      partial_credit: subpart.partial_credit,
+      partial_marking: subpart.partial_marking,
+      conditional_marking: subpart.conditional_marking || subpart.marking_conditions
     };
+
+    return processedSubpart;
+  };
+
+  const computeQuestionSupportSummary = (items: ProcessedQuestion[]): QuestionSupportSummary => {
+    const summary: QuestionSupportSummary = {
+      totalQuestions: items.length,
+      questionTypeCounts: {},
+      answerFormatCounts: {},
+      answerRequirementCounts: {},
+      optionTypeCounts: {},
+      contextTypes: {},
+      structureFlags: {
+        hasParts: false,
+        hasSubparts: false,
+        hasFigures: false,
+        hasAttachments: false,
+        hasContext: false,
+        hasHints: false,
+        hasExplanations: false,
+        hasOptions: false,
+        hasMatching: false,
+        hasSequencing: false
+      },
+      logicFlags: {
+        alternativeLinking: false,
+        allRequired: false,
+        anyOf: false,
+        alternativeMethods: false,
+        contextUsage: false,
+        multiMark: false,
+        componentMarking: false,
+        manualMarking: false,
+        partialCredit: false,
+        errorCarriedForward: false,
+        reverseArgument: false,
+        acceptsEquivalentPhrasing: false
+      }
+    };
+
+    const incrementCount = (map: Record<string, number>, key?: string | null) => {
+      if (!key) return;
+      const normalized = String(key);
+      map[normalized] = (map[normalized] || 0) + 1;
+    };
+
+    const registerContextType = (type?: string | null) => {
+      if (!type) return;
+      const normalized = String(type);
+      summary.contextTypes[normalized] = (summary.contextTypes[normalized] || 0) + 1;
+    };
+
+    const registerRequirement = (requirement?: string) => {
+      if (!requirement) return;
+      incrementCount(summary.answerRequirementCounts, requirement);
+      const normalized = requirement.toLowerCase();
+      if (normalized.includes('any')) {
+        summary.logicFlags.anyOf = true;
+        summary.logicFlags.alternativeLinking = true;
+      }
+      if (normalized.includes('all') || normalized.includes('both')) {
+        summary.logicFlags.allRequired = true;
+      }
+      if (normalized.includes('alternative')) {
+        summary.logicFlags.alternativeMethods = true;
+      }
+      if (normalized.includes('owtte')) {
+        summary.logicFlags.acceptsEquivalentPhrasing = true;
+      }
+      if (normalized.includes('ecf')) {
+        summary.logicFlags.errorCarriedForward = true;
+      }
+      if (normalized.includes('ora')) {
+        summary.logicFlags.reverseArgument = true;
+      }
+    };
+
+    const registerAnswer = (answer?: ProcessedAnswer) => {
+      if (!answer) return;
+
+      if (answer.context) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        if (Array.isArray(answer.context)) {
+          answer.context.forEach((ctx: any) => {
+            if (ctx?.type) {
+              registerContextType(ctx.type);
+            }
+          });
+        } else if (typeof answer.context === 'object' && answer.context.type) {
+          registerContextType(answer.context.type);
+        }
+      }
+
+      if (answer.unit) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType('unit');
+      }
+
+      if (answer.measurement_details) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType('measurement');
+      }
+
+      if (typeof answer.marks === 'number' && answer.marks > 1) {
+        summary.logicFlags.multiMark = true;
+      }
+
+      if (answer.partial_credit || answer.partial_marks) {
+        summary.logicFlags.partialCredit = true;
+      }
+
+      if (answer.error_carried_forward) {
+        summary.logicFlags.errorCarriedForward = true;
+      }
+
+      if (answer.accepts_reverse_argument) {
+        summary.logicFlags.reverseArgument = true;
+      }
+
+      if (answer.accepts_equivalent_phrasing) {
+        summary.logicFlags.acceptsEquivalentPhrasing = true;
+      }
+
+      if (typeof answer.total_alternatives === 'number' && answer.total_alternatives > 1) {
+        summary.logicFlags.alternativeLinking = true;
+      }
+
+      if (Array.isArray(answer.linked_alternatives) && answer.linked_alternatives.length > 0) {
+        summary.logicFlags.alternativeLinking = true;
+      }
+
+      if (answer.alternative_type) {
+        const normalized = answer.alternative_type.toLowerCase();
+        if (normalized.includes('all') || normalized.includes('both')) {
+          summary.logicFlags.allRequired = true;
+        }
+        if (normalized.includes('any') || normalized.includes('one')) {
+          summary.logicFlags.anyOf = true;
+          summary.logicFlags.alternativeLinking = true;
+        }
+        if (normalized.includes('alt')) {
+          summary.logicFlags.alternativeMethods = true;
+        }
+      }
+
+      if (answer.answer_requirement) {
+        registerRequirement(answer.answer_requirement);
+      }
+    };
+
+    const registerAnswerCarrier = (item?: {
+      answer_format?: string;
+      answer_requirement?: string;
+      correct_answers?: ProcessedAnswer[];
+      marks?: number;
+      figure?: boolean;
+      figure_required?: boolean;
+      attachments?: any[];
+      hint?: string;
+      explanation?: string;
+      requires_manual_marking?: boolean;
+      mcq_type?: string;
+      match_pairs?: any[];
+      left_column?: any[];
+      right_column?: any[];
+      correct_sequence?: any[];
+      partial_credit?: any;
+      partial_marking?: any;
+      conditional_marking?: any;
+      context_type?: string;
+      context_fields?: Array<{ type?: string }>;
+      options?: ProcessedOption[];
+    }) => {
+      if (!item) return;
+
+      if (item.answer_format) {
+        incrementCount(summary.answerFormatCounts, item.answer_format);
+        if (manualAnswerFormats.has(item.answer_format)) {
+          summary.logicFlags.manualMarking = true;
+        }
+      }
+
+      registerRequirement(item.answer_requirement);
+
+      if (item.context_type) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        registerContextType(item.context_type);
+      }
+
+      if (Array.isArray(item.context_fields) && item.context_fields.length > 0) {
+        summary.structureFlags.hasContext = true;
+        summary.logicFlags.contextUsage = true;
+        item.context_fields.forEach(field => registerContextType(field?.type));
+      }
+
+      if (Array.isArray((item as any).options) && (item as any).options.length > 0) {
+        summary.structureFlags.hasOptions = true;
+        const optionType = item.mcq_type || item.answer_requirement || 'multiple_choice';
+        incrementCount(summary.optionTypeCounts, optionType);
+      }
+
+      if (item.match_pairs || (item.left_column && item.right_column)) {
+        summary.structureFlags.hasMatching = true;
+        incrementCount(summary.optionTypeCounts, 'matching');
+      }
+
+      if (item.correct_sequence && Array.isArray(item.correct_sequence) && item.correct_sequence.length > 0) {
+        summary.structureFlags.hasSequencing = true;
+        incrementCount(summary.optionTypeCounts, 'sequencing');
+      }
+
+      if (item.partial_credit || item.partial_marking) {
+        summary.logicFlags.partialCredit = true;
+      }
+
+      if (Array.isArray(item.correct_answers) && item.correct_answers.length > 0) {
+        if (item.correct_answers.length > 1) {
+          summary.logicFlags.alternativeLinking = true;
+        }
+        item.correct_answers.forEach(registerAnswer);
+      }
+
+      if (typeof item.marks === 'number' && item.marks > 1) {
+        summary.logicFlags.multiMark = true;
+      }
+
+      if (item.hint) {
+        summary.structureFlags.hasHints = true;
+      }
+
+      if (item.explanation) {
+        summary.structureFlags.hasExplanations = true;
+      }
+
+      if (item.figure || item.figure_required) {
+        summary.structureFlags.hasFigures = true;
+      }
+
+      if (Array.isArray(item.attachments) && item.attachments.length > 0) {
+        summary.structureFlags.hasAttachments = true;
+      }
+
+      if (item.requires_manual_marking) {
+        summary.logicFlags.manualMarking = true;
+      }
+    };
+
+    items.forEach(question => {
+      incrementCount(summary.questionTypeCounts, question.question_type || 'descriptive');
+
+      if (question.parts && question.parts.length > 0) {
+        summary.structureFlags.hasParts = true;
+      }
+
+      registerAnswerCarrier(question);
+
+      if (question.parts) {
+        question.parts.forEach(part => {
+          registerAnswerCarrier(part);
+          if (part.subparts && part.subparts.length > 0) {
+            summary.structureFlags.hasSubparts = true;
+            part.subparts.forEach(subpart => {
+              registerAnswerCarrier(subpart);
+            });
+          }
+        });
+      }
+    });
+
+    summary.logicFlags.componentMarking = summary.structureFlags.hasParts || summary.structureFlags.hasSubparts;
+
+    return summary;
   };
 
   const processAnswers = (answers: any[], answerRequirement?: string): ProcessedAnswer[] => {
@@ -3474,6 +3799,10 @@ export function QuestionsTab({
     <div className="space-y-6">
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
+
+      {questions.length > 0 && (
+        <QuestionSupportMatrix summary={questionSupportSummary} />
+      )}
 
       {/* PDF Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
