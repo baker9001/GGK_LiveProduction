@@ -11,7 +11,7 @@ import {
   X,
   Bell,
   User,
-  Globe,
+  Accessibility,
   Sun,
   Moon,
   LogOut,
@@ -38,6 +38,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
 import {
   clearAuthenticatedUser,
@@ -95,12 +96,26 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
-  const [language, setLanguage] = useState<'EN' | 'AR'>('EN');
+  const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleDyslexiaChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ enabled: boolean }>;
+      setIsDyslexiaEnabled(customEvent.detail.enabled);
+    };
+
+    window.addEventListener('dyslexia-support-change', handleDyslexiaChange);
+    return () => window.removeEventListener('dyslexia-support-change', handleDyslexiaChange);
+  }, []);
+
+  useEffect(() => {
+    setDyslexiaPreference(isDyslexiaEnabled);
+  }, [isDyslexiaEnabled]);
 
   const { data: sidebarProfile } = useQuery<SidebarProfileData>(
     ['userSidebarProfile', user?.id],
@@ -574,12 +589,20 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
                   </span>
                 </button>
 
-                {/* Language Toggle */}
-                <button 
-                  className="p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 rounded-lg"
-                  onClick={() => setLanguage(language === 'EN' ? 'AR' : 'EN')}
+                {/* Dyslexia Support Toggle */}
+                <button
+                  className={cn(
+                    'p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700',
+                    'text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+                    isDyslexiaEnabled && 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-600'
+                  )}
+                  onClick={() => setIsDyslexiaEnabled((prev) => !prev)}
+                  aria-pressed={isDyslexiaEnabled}
+                  type="button"
+                  title={isDyslexiaEnabled ? 'Disable dyslexia-friendly font' : 'Enable dyslexia-friendly font'}
                 >
-                  <Globe className="h-5 w-5" />
+                  <span className="sr-only">Toggle dyslexia-friendly font</span>
+                  <Accessibility className="h-5 w-5" />
                 </button>
 
                 {/* Theme Toggle */}

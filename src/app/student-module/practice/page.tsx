@@ -22,6 +22,7 @@ import {
 import { getLeaderboardSnapshot } from '@/services/leaderboardService';
 import { QuestionMasterAdmin } from '@/types/questions';
 import { cn } from '@/lib/utils';
+import { getDyslexiaPreference, setDyslexiaPreference } from '@/lib/accessibility';
 import { BookOpen, Clock, Target, Trophy, Zap, Flame, ChevronRight, ChevronLeft, Brain, Award, Filter, Sparkles, BarChart3, ShieldCheck, HelpCircle, Accessibility, Highlighter } from 'lucide-react';
 import dayjs from 'dayjs';
 
@@ -62,7 +63,6 @@ interface PracticeProgressCard {
 }
 
 const HIGH_CONTRAST_CLASS = 'hc-mode';
-const DYSLEXIA_FONT_CLASS = 'font-dyslexic';
 
 async function loadPracticeSets(): Promise<PracticeSetWithMeta[]> {
   const { data, error } = await supabase
@@ -146,7 +146,7 @@ const PracticePage: React.FC = () => {
   const [report, setReport] = useState<PracticeReportOverview | null>(null);
   const [assistOpen, setAssistOpen] = useState(true);
   const [highContrast, setHighContrast] = useState(false);
-  const [dyslexiaFriendly, setDyslexiaFriendly] = useState(false);
+  const [dyslexiaFriendly, setDyslexiaFriendly] = useState(() => getDyslexiaPreference());
 
   const practiceSetsQuery = useQuery(['practice-sets'], loadPracticeSets);
   const practiceProgressQuery = useQuery(['practice-progress', studentId], () => loadPracticeProgress(studentId), { enabled: !!studentId });
@@ -300,12 +300,21 @@ const PracticePage: React.FC = () => {
     } else {
       document.body.classList.remove(HIGH_CONTRAST_CLASS);
     }
-    if (dyslexiaFriendly) {
-      document.body.classList.add(DYSLEXIA_FONT_CLASS);
-    } else {
-      document.body.classList.remove(DYSLEXIA_FONT_CLASS);
-    }
-  }, [highContrast, dyslexiaFriendly]);
+  }, [highContrast]);
+
+  useEffect(() => {
+    setDyslexiaPreference(dyslexiaFriendly);
+  }, [dyslexiaFriendly]);
+
+  useEffect(() => {
+    const handleDyslexiaChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ enabled: boolean }>;
+      setDyslexiaFriendly(customEvent.detail.enabled);
+    };
+
+    window.addEventListener('dyslexia-support-change', handleDyslexiaChange);
+    return () => window.removeEventListener('dyslexia-support-change', handleDyslexiaChange);
+  }, []);
 
   const renderHub = () => (
     <div className="space-y-8">
