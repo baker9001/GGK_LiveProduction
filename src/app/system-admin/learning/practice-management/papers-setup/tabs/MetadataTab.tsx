@@ -21,6 +21,7 @@ import { Button } from '../../../../../../components/shared/Button';
 import { toast } from '../../../../../../components/shared/Toast';
 import { Select } from '../../../../../../components/shared/Select';
 import { CollapsibleSection } from '../../../../../../components/shared/CollapsibleSection';
+import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
 
@@ -138,6 +139,44 @@ export function MetadataTab({
   const [manualOverride, setManualOverride] = useState(false);
   const [sessionEntityIds, setSessionEntityIds] = useState<EntityIds | null>(null);
   const [entityIdsStatus, setEntityIdsStatus] = useState<'loading' | 'found' | 'missing' | 'error'>('loading');
+
+  const jsonFieldChecklist = useMemo(() => {
+    const root = parsedData || {};
+    const metadataNode = root.paper_metadata || {};
+    const getFieldValue = (key: string) => {
+      const candidate = root[key];
+      if (candidate !== undefined && candidate !== null && candidate !== '') {
+        return candidate;
+      }
+      const nested = metadataNode[key];
+      if (nested !== undefined && nested !== null && nested !== '') {
+        return nested;
+      }
+      return undefined;
+    };
+
+    const fields = [
+      { id: 'paper_code', label: 'Paper code', required: true },
+      { id: 'exam_year', label: 'Exam year', required: true },
+      { id: 'exam_session', label: 'Exam session', required: true },
+      { id: 'paper_duration', label: 'Duration', required: true },
+      { id: 'total_marks', label: 'Total marks', required: true },
+      { id: 'subject', label: 'Subject', required: true },
+      { id: 'exam_board', label: 'Exam board', required: true },
+      { id: 'qualification', label: 'Qualification', required: false }
+    ];
+
+    return fields.map(field => {
+      const value = getFieldValue(field.id);
+      const present = value !== undefined && value !== null && value !== '';
+      return { ...field, value, present };
+    });
+  }, [parsedData]);
+
+  const hasMissingJsonFields = useMemo(
+    () => jsonFieldChecklist.some(field => field.required && !field.present),
+    [jsonFieldChecklist]
+  );
 
   useEffect(() => {
     if (parsedData) {
@@ -721,6 +760,45 @@ export function MetadataTab({
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Review and configure the extracted paper metadata
         </p>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">JSON Compliance Checklist</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Quick audit of required metadata fields detected in the uploaded JSON. Align these before creating or updating the
+              paper record.
+            </p>
+          </div>
+          <StatusBadge
+            status={hasMissingJsonFields ? 'pending' : 'completed'}
+            label={hasMissingJsonFields ? 'Fields missing' : 'All fields captured'}
+            showIcon
+          />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {jsonFieldChecklist.map(field => {
+            const Icon = field.present ? CheckCircle : AlertCircle;
+            return (
+              <div
+                key={field.id}
+                className={`rounded-lg border px-3 py-3 ${field.present ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${field.present ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{field.label}</span>
+                  {field.required && (
+                    <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400 ml-auto">Required</span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-300 break-words">
+                  {field.present ? String(field.value) : 'Missing in JSON payload'}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Entity IDs Status */}
