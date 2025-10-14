@@ -1,12 +1,12 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/PaperCard.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { 
+import {
   ChevronDown,
-  ChevronUp, 
-  FileText, 
-  Play, 
-  CheckCircle as CircleCheck, 
-  CheckCircle, 
+  ChevronUp,
+  FileText,
+  Play,
+  CheckCircle as CircleCheck,
+  CheckCircle,
   AlertCircle,
   PlayCircle,
   CheckSquare,
@@ -14,7 +14,8 @@ import {
   Download,
   Wand2,
   RefreshCw,
-  Square
+  Square,
+  Archive
 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
@@ -62,9 +63,13 @@ export function PaperCard({
   const [showFullPageReview, setShowFullPageReview] = useState(false);
   
   const { getValidationSummary, canConfirmPaper, validateForConfirmation } = useQuestionValidation();
-  const { confirmQuestion, confirmPaper, updateSubtopics } = useQuestionMutations();
+  const {
+    confirmQuestion,
+    confirmPaper,
+    updateSubtopics,
+    updatePaperStatus
+  } = useQuestionMutations();
   const { batchConfirmQuestions, autoAssignDifficulty } = useQuestionBatchOperations();
-  const { updatePaperStatus } = useQuestionMutations();
   
   // Close status dropdown when clicking outside
   useEffect(() => {
@@ -291,6 +296,38 @@ export function PaperCard({
   const handleCloseFullPageReview = () => {
     setShowFullPageReview(false);
   };
+
+  const isUpdatingPaperStatus = updatePaperStatus.isPending;
+  const canArchivePaper = ['draft', 'qa_review', 'active'].includes(paper.status);
+  const canRestorePaper = paper.status === 'inactive';
+
+  const handleArchivePaper = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    if (isUpdatingPaperStatus) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Archiving will remove this paper and its questions from all teacher and student experiences. Are you sure you want to archive it?'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'inactive' });
+  };
+
+  const handleRestorePaper = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    if (isUpdatingPaperStatus) {
+      return;
+    }
+
+    updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'draft' });
+  };
   
   return (
     <>
@@ -504,7 +541,36 @@ export function PaperCard({
                 </div>
               )}
             </div>
-            
+
+            {showQAActions && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+                {canArchivePaper && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleArchivePaper}
+                    leftIcon={<Archive className="h-3 w-3" />}
+                    className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                    disabled={isUpdatingPaperStatus}
+                  >
+                    Archive
+                  </Button>
+                )}
+                {canRestorePaper && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRestorePaper}
+                    leftIcon={<RefreshCw className="h-3 w-3" />}
+                    className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+                    disabled={isUpdatingPaperStatus}
+                  >
+                    Restore to Draft
+                  </Button>
+                )}
+              </div>
+            )}
+
             {showQAActions && (
               <>
                 {onStartTestMode && (

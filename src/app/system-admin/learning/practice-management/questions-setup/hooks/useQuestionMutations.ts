@@ -2,6 +2,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../../../../lib/supabase';
 import { toast } from '../../../../../../components/shared/Toast';
+import type { PaperStatus } from '../../../../../../types/questions';
 
 interface UpdateFieldParams {
   id: string;
@@ -56,6 +57,16 @@ interface UpdatePaperStatusParams {
 
 export function useQuestionMutations() {
   const queryClient = useQueryClient();
+
+  const STATUS_LABELS: Record<PaperStatus | string, string> = {
+    draft: 'Draft',
+    qa_review: 'Under QA',
+    active: 'Published',
+    inactive: 'Archived',
+    archived: 'Archived',
+    completed: 'Completed',
+    failed: 'Failed'
+  };
   
   // Update a single field
   const updateField = useMutation({
@@ -617,22 +628,105 @@ export function useQuestionMutations() {
   // Update paper status
   const updatePaperStatus = useMutation({
     mutationFn: async ({ paperId, newStatus }: UpdatePaperStatusParams) => {
-      const { error } = await supabase
+      const [{ data: auth }, paperResponse, questionsResponse] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase
+          .from('papers_setup')
+          .select('id, status, qa_status')
+          .eq('id', paperId)
+          .single(),
+        supabase
+          .from('questions_master_admin')
+          .select('id')
+          .eq('paper_id', paperId)
+      ]);
+
+      if (paperResponse.error) throw paperResponse.error;
+      if (questionsResponse.error) throw questionsResponse.error;
+
+      const user = auth.user;
+      const now = new Date().toISOString();
+
+      const paperUpdates: Record<string, any> = {
+        status: newStatus,
+        updated_at: now,
+        last_status_change_at: now,
+        last_status_change_by: user?.id || null
+      };
+
+      if (newStatus === 'draft') {
+        paperUpdates.qa_status = 'pending';
+      }
+
+      const { error: updateError } = await supabase
         .from('papers_setup')
-        .update({
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-          last_status_change_at: new Date().toISOString()
-        })
+        .update(paperUpdates)
         .eq('id', paperId);
 
-      if (error) throw error;
-      return { success: true };
+      if (updateError) throw updateError;
+
+      if (newStatus === 'inactive' || newStatus === 'draft') {
+        const questionStatus = newStatus === 'inactive' ? 'inactive' : 'draft';
+
+        const { error: questionUpdateError } = await supabase
+          .from('questions_master_admin')
+          .update({
+            status: questionStatus,
+            is_confirmed: false,
+            updated_at: now
+          })
+          .eq('paper_id', paperId);
+
+        if (questionUpdateError) throw questionUpdateError;
+
+        const questionIds = (questionsResponse.data || []).map(record => record.id);
+
+        if (questionIds.length > 0) {
+          const { error: subQuestionUpdateError } = await supabase
+            .from('sub_questions')
+            .update({
+              status: questionStatus,
+              is_confirmed: false,
+              updated_at: now
+            })
+            .in('question_id', questionIds);
+
+          if (subQuestionUpdateError) throw subQuestionUpdateError;
+        }
+      }
+
+      if (paperResponse.data && paperResponse.data.status !== newStatus) {
+        const { error: historyError } = await supabase
+          .from('paper_status_history')
+          .insert({
+            paper_id: paperId,
+            previous_status: paperResponse.data.status,
+            new_status: newStatus,
+            changed_by: user?.id || null,
+            changed_at: now,
+            reason:
+              newStatus === 'inactive'
+                ? 'Paper archived from Questions Setup'
+                : newStatus === 'draft'
+                  ? 'Paper restored from archive'
+                  : 'Paper status updated via Questions Setup',
+            metadata: {
+              qa_status: paperResponse.data.qa_status
+            }
+          });
+
+        if (historyError) {
+          console.error('Error logging status change:', historyError);
+        }
+      }
+
+      return { success: true, newStatus };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['papers'] });
-      toast.success(`Paper status updated to "${variables.newStatus}" successfully`);
+      const label = STATUS_LABELS[variables.newStatus] || variables.newStatus;
+      toast.success(`Paper status updated to "${label}" successfully`);
     },
     onError: (error) => {
       console.error('Error updating paper status:', error);
