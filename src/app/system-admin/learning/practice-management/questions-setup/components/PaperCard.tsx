@@ -61,6 +61,8 @@ export function PaperCard({
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [showFullPageReview, setShowFullPageReview] = useState(false);
+  const [isArchiveConfirmationActive, setIsArchiveConfirmationActive] = useState(false);
+  const archiveConfirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { getValidationSummary, canConfirmPaper, validateForConfirmation } = useQuestionValidation();
   const {
@@ -80,6 +82,14 @@ export function PaperCard({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (archiveConfirmationTimeoutRef.current) {
+        clearTimeout(archiveConfirmationTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Count questions by status
@@ -301,6 +311,14 @@ export function PaperCard({
   const canArchivePaper = ['draft', 'qa_review', 'active'].includes(paper.status);
   const canRestorePaper = paper.status === 'inactive';
 
+  const resetArchiveConfirmation = () => {
+    if (archiveConfirmationTimeoutRef.current) {
+      clearTimeout(archiveConfirmationTimeoutRef.current);
+      archiveConfirmationTimeoutRef.current = null;
+    }
+    setIsArchiveConfirmationActive(false);
+  };
+
   const handleArchivePaper = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
 
@@ -308,13 +326,30 @@ export function PaperCard({
       return;
     }
 
-    const confirmed = window.confirm(
-      'Archiving will remove this paper and its questions from all teacher and student experiences. Are you sure you want to archive it?'
-    );
-
-    if (!confirmed) {
+    if (!canArchivePaper) {
       return;
     }
+
+    if (!isArchiveConfirmationActive) {
+      setIsArchiveConfirmationActive(true);
+
+      if (archiveConfirmationTimeoutRef.current) {
+        clearTimeout(archiveConfirmationTimeoutRef.current);
+      }
+
+      toast.warning(
+        'Archiving will remove this paper and its questions from all teacher and student experiences. Click "Archive" again within 5 seconds to confirm.'
+      );
+
+      archiveConfirmationTimeoutRef.current = setTimeout(() => {
+        setIsArchiveConfirmationActive(false);
+        archiveConfirmationTimeoutRef.current = null;
+      }, 5000);
+
+      return;
+    }
+
+    resetArchiveConfirmation();
 
     updatePaperStatus.mutate({ paperId: paper.id, newStatus: 'inactive' });
   };
