@@ -17,6 +17,11 @@ export interface Material {
   created_at: string;
   created_by?: string | null;
   thumbnail_url?: string | null;
+  created_by_role?: 'system_admin' | 'teacher';
+  visibility_scope?: 'global' | 'school' | 'branch';
+  school_id?: string | null;
+  grade_id?: string | null;
+  teacher_id?: string | null;
   data_structure?: {
     id: string;
     regions: { name: string } | null;
@@ -333,11 +338,26 @@ export async function createTeacherMaterial(materialData: {
   status: 'active' | 'inactive';
   created_by: string;
   thumbnail_url?: string | null;
+  created_by_role?: 'system_admin' | 'teacher';
+  visibility_scope?: 'global' | 'school' | 'branch';
+  school_id?: string | null;
+  grade_id?: string | null;
+  teacher_id?: string | null;
 }): Promise<Material> {
   try {
+    // Ensure required fields have default values
+    const insertData = {
+      ...materialData,
+      created_by_role: materialData.created_by_role || 'system_admin',
+      visibility_scope: materialData.visibility_scope || 'global',
+      school_id: materialData.school_id || null,
+      grade_id: materialData.grade_id || null,
+      teacher_id: materialData.teacher_id || null,
+    };
+
     const { data, error } = await supabase
       .from('materials')
-      .insert([materialData])
+      .insert([insertData])
       .select()
       .single();
 
