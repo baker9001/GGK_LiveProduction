@@ -16,7 +16,7 @@ import {
   Tag,
   MapPin
 } from 'lucide-react';
-import { StatusBadge } from '../../../../../components/shared/StatusBadge';
+import { StatusBadge } from '../../../../../../components/shared/StatusBadge';
 import { ExtractionRules, JsonGuidelineSummary } from '../types';
 
 interface JsonGuidelineChecklistProps {
