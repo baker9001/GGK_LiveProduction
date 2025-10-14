@@ -41,6 +41,7 @@ type Material = {
   status: 'active' | 'inactive';
   created_at: string;
   thumbnail_url?: string | null;
+  thumbnail_public_url?: string | null;
   data_structure_name: string;
   region_name: string;
   program_name: string;
@@ -272,19 +273,21 @@ export default function MaterialManagementPage() {
           .from('materials_files')
           .getPublicUrl(material.file_path);
 
-        // Generate thumbnail URL if exists
-        let thumbnailUrl = null;
-        if (material.thumbnail_url) {
+        // Preserve the storage path while generating a public URL for display purposes
+        const thumbnailStoragePath = material.thumbnail_url;
+        let thumbnailPublicUrl = null;
+        if (thumbnailStoragePath) {
           const { data: thumbData } = supabase.storage
             .from('thumbnails')
-            .getPublicUrl(material.thumbnail_url);
-          thumbnailUrl = thumbData.publicUrl;
+            .getPublicUrl(thumbnailStoragePath);
+          thumbnailPublicUrl = thumbData.publicUrl;
         }
 
         return {
           ...material,
           file_url: urlData.publicUrl,
-          thumbnail_url: thumbnailUrl,
+          thumbnail_public_url: thumbnailPublicUrl,
+          thumbnail_url: thumbnailStoragePath,
           data_structure_name: `${material.data_structures?.regions?.name || 'Unknown'} - ${material.data_structures?.programs?.name || 'Unknown'} - ${material.data_structures?.providers?.name || 'Unknown'} - ${material.data_structures?.edu_subjects?.name || 'Unknown'}`,
           region_name: material.data_structures?.regions?.name || 'Unknown',
           program_name: material.data_structures?.programs?.name || 'Unknown',
@@ -569,6 +572,15 @@ export default function MaterialManagementPage() {
         await supabase.storage
           .from('materials_files')
           .remove(filePaths);
+      }
+
+      const thumbnailPaths = materialsToDelete
+        .map(m => m.thumbnail_url)
+        .filter((path): path is string => !!path);
+      if (thumbnailPaths.length > 0) {
+        await supabase.storage
+          .from('thumbnails')
+          .remove(thumbnailPaths);
       }
 
       const { error } = await supabase
@@ -1182,11 +1194,11 @@ export default function MaterialManagementPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Upload a preview image (JPG, PNG, WEBP - Max 5MB). Recommended for videos and visual content.
               </p>
-              {editingMaterial?.thumbnail_url && !thumbnailPreview && !uploadedThumbnail && (
+              {editingMaterial?.thumbnail_public_url && !thumbnailPreview && !uploadedThumbnail && (
                 <div className="mt-2">
                   <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Current thumbnail:</p>
                   <img
-                    src={editingMaterial.thumbnail_url}
+                    src={editingMaterial.thumbnail_public_url}
                     alt="Current thumbnail"
                     className="w-32 h-20 object-cover rounded-lg border-2 border-gray-200 dark:border-gray-700"
                   />
