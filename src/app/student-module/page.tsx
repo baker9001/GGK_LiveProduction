@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { getCurrentUser } from '../../lib/auth';
@@ -12,6 +12,7 @@ import LicensesPage from './licenses/page';
 import LearningPathPage from './pathways/page';
 import StudentProfileSettingsPage from './profile/page';
 import StudentLearningMaterialsPage from './pathways/materials/page';
+import PracticePage from './practice/page';
 
 interface StudentModulePageProps {
   moduleKey?: string;
@@ -182,9 +183,12 @@ function DashboardPage() {
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Access all your enrolled courses, materials, and learning resources.
           </p>
-          <div className="text-sm text-gray-500 dark:text-gray-500 font-medium">
-            Coming Soon
-          </div>
+          <Link
+            to="/app/student-module/practice"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+          >
+            Open Practice Arena
+          </Link>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -318,6 +322,7 @@ export default function StudentModulePage({ moduleKey }: StudentModulePageProps)
         <Route path="pathways" element={<LearningPathPage />} />
         <Route path="pathways/materials/:subjectId" element={<StudentLearningMaterialsPage />} />
         <Route path="profile" element={<StudentProfileSettingsPage />} />
+        <Route path="practice" element={<PracticePage />} />
       </Routes>
     </AdminLayout>
   );
