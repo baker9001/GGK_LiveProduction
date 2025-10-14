@@ -54,24 +54,32 @@ async function fetchPracticeItems(practiceSetId: string): Promise<PracticeSetIte
     .from('practice_set_items')
     .select('*, question:questions_master_admin(*, paper:papers_setup(paper_code), subject:edu_subjects(name))')
     .eq('practice_set_id', practiceSetId)
+    .eq('question.status', 'active')
     .order('order_index', { ascending: true });
 
   if (error) {
     throw new Error(`Unable to load practice items: ${error.message}`);
   }
 
-  const items: PracticeSetItem[] = (data ?? []).map((row) => {
-    const typedRow = row as PracticeSetItem & { question?: QuestionMasterAdmin };
-    return {
-      id: typedRow.id,
-      practice_set_id: typedRow.practice_set_id,
-      question_id: typedRow.question_id,
-      weight: typedRow.weight,
-      time_limit_sec: typedRow.time_limit_sec,
-      order_index: typedRow.order_index,
-      question: typedRow.question
-    };
-  });
+  const items: PracticeSetItem[] = (data ?? [])
+    .map((row) => {
+      const typedRow = row as PracticeSetItem & { question?: QuestionMasterAdmin };
+
+      if (typedRow.question && typedRow.question.status !== 'active') {
+        return null;
+      }
+
+      return {
+        id: typedRow.id,
+        practice_set_id: typedRow.practice_set_id,
+        question_id: typedRow.question_id,
+        weight: typedRow.weight,
+        time_limit_sec: typedRow.time_limit_sec,
+        order_index: typedRow.order_index,
+        question: typedRow.question
+      } as PracticeSetItem;
+    })
+    .filter((item): item is PracticeSetItem => item !== null);
 
   return items;
 }
@@ -116,6 +124,7 @@ export async function fetchQuestionWithMarkScheme(questionId: string): Promise<Q
     .from('questions_master_admin')
     .select(`*, paper:papers_setup(paper_code), subject:edu_subjects(name), correct_answers:question_correct_answers(*), answer_components:answer_components(*), options:question_options(*)`)
     .eq('id', questionId)
+    .eq('status', 'active')
     .maybeSingle();
 
   if (error || !data) {
@@ -202,6 +211,7 @@ export async function submitAnswer(request: PracticeAnswerRequest): Promise<Prac
     .from('practice_set_items')
     .select('*, session:practice_sessions(student_id, started_at), question:questions_master_admin(id, marks, paper_id, subject_id, difficulty, paper:papers_setup(paper_code), subject:edu_subjects(name))')
     .eq('id', itemId)
+    .eq('question.status', 'active')
     .maybeSingle();
 
   if (itemError || !item) {
