@@ -15,11 +15,7 @@ export interface Material {
   size: number;
   status: 'active' | 'inactive';
   created_at: string;
-  school_id: string | null;
-  created_by_role: 'system_admin' | 'teacher';
-  visibility_scope: 'global' | 'school' | 'branch';
-  grade_id: string | null;
-  teacher_id: string | null;
+  created_by?: string | null;
   thumbnail_url?: string | null;
   data_structure?: {
     id: string;
@@ -31,7 +27,6 @@ export interface Material {
   edu_units?: { id: string; name: string } | null;
   edu_topics?: { id: string; name: string } | null;
   edu_subtopics?: { id: string; name: string } | null;
-  grade_levels?: { id: string; name: string } | null;
 }
 
 export interface StudentMaterial extends Material {
@@ -123,10 +118,9 @@ export async function getMaterialsForStudent(
         ...material,
         file_url: fileUrl,
         thumbnail_url: thumbnailUrl,
-        source_type: 'global', // Default to global since we removed visibility_scope column
+        source_type: 'global',
         subject_name: material.data_structures?.edu_subjects?.name || 'Unknown',
-        subject_id: material.data_structures?.edu_subjects?.id || '',
-        grade_levels: null // Removed grade_levels since it doesn't exist in materials table
+        subject_id: material.data_structures?.edu_subjects?.id || ''
       };
     });
 
@@ -138,7 +132,7 @@ export async function getMaterialsForStudent(
 }
 
 /**
- * Fetches materials uploaded by a teacher
+ * Fetches materials accessible to system admins (all materials)
  */
 export async function getMaterialsForTeacher(
   teacherId: string,
@@ -148,11 +142,10 @@ export async function getMaterialsForTeacher(
     data_structure_ids?: string[];
     types?: string[];
     status?: string[];
-    grade_ids?: string[];
   }
 ): Promise<Material[]> {
   try {
-    console.log('[MaterialsService] Fetching materials for teacher:', teacherId);
+    console.log('[MaterialsService] Fetching materials for admin/teacher:', teacherId);
 
     let query = supabase
       .from('materials')
@@ -183,7 +176,6 @@ export async function getMaterialsForTeacher(
         edu_topics (id, name),
         edu_subtopics (id, name)
       `)
-      .eq('created_by', teacherId)
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -239,8 +231,7 @@ export async function getMaterialsForTeacher(
       return {
         ...material,
         file_url: fileUrl,
-        thumbnail_url: thumbnailUrl,
-        grade_levels: null // Removed since table doesn't have grade_id
+        thumbnail_url: thumbnailUrl
       };
     });
 
@@ -326,7 +317,7 @@ export async function uploadTeacherMaterialFile(
 }
 
 /**
- * Creates a new teacher material record
+ * Creates a new material record (for teachers or admins)
  */
 export async function createTeacherMaterial(materialData: {
   title: string;
@@ -340,18 +331,13 @@ export async function createTeacherMaterial(materialData: {
   mime_type: string;
   size: number;
   status: 'active' | 'inactive';
-  school_id: string;
-  grade_id?: string | null;
-  teacher_id: string;
+  created_by: string;
+  thumbnail_url?: string | null;
 }): Promise<Material> {
   try {
     const { data, error } = await supabase
       .from('materials')
-      .insert([{
-        ...materialData,
-        created_by_role: 'teacher',
-        visibility_scope: 'school'
-      }])
+      .insert([materialData])
       .select()
       .single();
 
@@ -359,7 +345,7 @@ export async function createTeacherMaterial(materialData: {
 
     // Generate public URL
     const { data: urlData } = supabase.storage
-      .from('materials_files_teachers')
+      .from('materials_files')
       .getPublicUrl(data.file_path);
 
     return {
@@ -367,13 +353,13 @@ export async function createTeacherMaterial(materialData: {
       file_url: urlData.publicUrl
     };
   } catch (error) {
-    console.error('Error creating teacher material:', error);
+    console.error('Error creating material:', error);
     throw error;
   }
 }
 
 /**
- * Updates a teacher material record
+ * Updates a material record
  */
 export async function updateTeacherMaterial(
   materialId: string,
@@ -383,8 +369,8 @@ export async function updateTeacherMaterial(
     unit_id: string | null;
     topic_id: string | null;
     subtopic_id: string | null;
-    grade_id: string | null;
     status: 'active' | 'inactive';
+    thumbnail_url: string | null;
   }>
 ): Promise<void> {
   try {
@@ -395,13 +381,13 @@ export async function updateTeacherMaterial(
 
     if (error) throw error;
   } catch (error) {
-    console.error('Error updating teacher material:', error);
+    console.error('Error updating material:', error);
     throw error;
   }
 }
 
 /**
- * Deletes a teacher material and its file
+ * Deletes a material and its file
  */
 export async function deleteTeacherMaterial(
   materialId: string,
@@ -410,7 +396,7 @@ export async function deleteTeacherMaterial(
   try {
     // Delete file from storage
     const { error: storageError } = await supabase.storage
-      .from('materials_files_teachers')
+      .from('materials_files')
       .remove([filePath]);
 
     if (storageError) throw storageError;
@@ -423,7 +409,7 @@ export async function deleteTeacherMaterial(
 
     if (dbError) throw dbError;
   } catch (error) {
-    console.error('Error deleting teacher material:', error);
+    console.error('Error deleting material:', error);
     throw error;
   }
 }
@@ -478,12 +464,10 @@ export async function getMaterialAccessAnalytics(
         materials!inner (
           id,
           title,
-          teacher_id,
-          school_id
+          created_by
         )
       `)
-      .eq('materials.teacher_id', teacherId)
-      .eq('materials.school_id', schoolId);
+      .eq('materials.created_by', teacherId);
 
     if (error) throw error;
 
