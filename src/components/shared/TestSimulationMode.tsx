@@ -188,11 +188,23 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
     earnedMarks: number;
     feedback: string;
   } => {
-    if (!userAnswer || !question.correct_answers || question.correct_answers.length === 0) {
+    // Ensure correct_answers is an array
+    const correctAnswers = Array.isArray(question.correct_answers) ? question.correct_answers : [];
+
+    if (!userAnswer) {
       return {
         isCorrect: false,
         earnedMarks: 0,
         feedback: 'No answer provided'
+      };
+    }
+
+    if (correctAnswers.length === 0) {
+      console.warn(`Question ${question.question_number} has no correct answers defined`);
+      return {
+        isCorrect: false,
+        earnedMarks: 0,
+        feedback: 'No correct answer available for validation'
       };
     }
 
@@ -228,7 +240,7 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
     }
 
     // For descriptive/calculation questions
-    for (const correctAns of question.correct_answers) {
+    for (const correctAns of correctAnswers) {
       const correctAnswerNormalized = normalizeAnswer(correctAns.answer);
 
       // Exact match
@@ -254,7 +266,7 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
     }
 
     // Check for partial credit
-    const matchedWords = question.correct_answers.reduce((count, correctAns) => {
+    const matchedWords = correctAnswers.reduce((count, correctAns) => {
       const correctWords = normalizeAnswer(correctAns.answer).split(' ');
       const userWords = userAnswerNormalized.split(' ');
       const matches = correctWords.filter(word =>

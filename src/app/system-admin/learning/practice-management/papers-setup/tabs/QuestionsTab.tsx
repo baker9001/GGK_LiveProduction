@@ -4249,14 +4249,14 @@ function QuestionsTabInner({
           subtopic: q.subtopic,
           answer_format: q.answer_format,
           answer_requirement: q.answer_requirement,
-          correct_answers: q.correct_answers,
-          options: q.options,
+          correct_answers: Array.isArray(q.correct_answers) ? q.correct_answers : (q.correct_answers ? [q.correct_answers] : []),
+          options: Array.isArray(q.options) ? q.options : [],
           attachments: attachments[q.id] || [],
           hint: q.hint,
           explanation: q.explanation,
           requires_manual_marking: q.requires_manual_marking,
           marking_criteria: q.marking_criteria,
-          parts: q.parts
+          parts: Array.isArray(q.parts) ? q.parts : []
         }))}
         paperTitle={paperMetadata?.paper_title || paperMetadata?.paper_code || 'Untitled Paper'}
         paperDuration={paperMetadata?.paper_duration}
