@@ -55,6 +55,7 @@ export function QuestionCard({
   showQAActions = false,
   readOnly = false
 }: QuestionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true); // Expand/collapse entire card
   const [expandedParts, setExpandedParts] = useState(true); // Default to expanded for better UX
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   
@@ -359,12 +360,26 @@ export function QuestionCard({
           : 'border-gray-200 dark:border-gray-700 hover:shadow-lg dark:shadow-gray-900/20'
       )}
     >
-      {/* Question Header */}
-      <div className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800">
+      {/* Question Header - Clickable to expand/collapse */}
+      <div
+        className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex flex-1 flex-wrap items-center gap-4">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl border border-[#8CC63F]/30 bg-[#8CC63F]/10 text-[#356B1B] dark:text-[#A6E36A] dark:bg-[#8CC63F]/20">
-            <span className="font-semibold text-lg">{question.question_number}</span>
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="flex items-center justify-center w-12 h-12 rounded-xl border border-[#8CC63F]/30 bg-[#8CC63F]/10 text-[#356B1B] dark:text-[#A6E36A] dark:bg-[#8CC63F]/20 hover:bg-[#8CC63F]/20 transition-colors"
+            aria-label={isExpanded ? 'Collapse question' : 'Expand question'}
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-5 w-5" />
+            ) : (
+              <ChevronDown className="h-5 w-5" />
+            )}
+          </button>
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
               Question {question.question_number}
@@ -647,7 +662,7 @@ export function QuestionCard({
       </div>
       
       {/* Validation Errors */}
-      {showValidationErrors && hasValidationErrors && (
+      {isExpanded && showValidationErrors && hasValidationErrors && (
         <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 p-4">
           <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
             Please fix the following issues before confirming:
@@ -659,9 +674,10 @@ export function QuestionCard({
           </ul>
         </div>
       )}
-      
-      {/* Question Content */}
-      <div className="p-6">
+
+      {/* Question Content - Only show when expanded */}
+      {isExpanded && (
+      <div className="p-6 animate-in fade-in duration-200">
         <div className="mb-8">
           <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
             <FileText className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
@@ -827,8 +843,9 @@ export function QuestionCard({
         </div>
 
       </div>
+      )}
 
-      {showQAActions && (
+      {isExpanded && showQAActions && (
         <div className="border-t border-gray-200 bg-gray-50 px-6 py-5 dark:border-gray-700 dark:bg-gray-900/40">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>

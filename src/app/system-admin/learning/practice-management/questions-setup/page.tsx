@@ -870,6 +870,38 @@ export default function QuestionsSetupPage() {
         </div>
       </div>
 
+      {/* Progress Overview Card */}
+      {filteredPapers.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {groupedPapers.flatMap(p => p.questions).length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Total Questions</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                {groupedPapers.flatMap(p => p.questions).filter(q => q.status === 'active').length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                {groupedPapers.flatMap(p => p.questions).filter(q => q.status === 'draft' || q.status === 'qa_review').length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Under Review</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-gray-600 dark:text-gray-400">
+                {filteredPapers.length}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Papers</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search and Filters */}
       <FilterSection
         providers={providers}
