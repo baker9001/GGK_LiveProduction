@@ -80,6 +80,8 @@ export interface QuestionDisplayData {
   requires_manual_marking?: boolean;
   marking_criteria?: string;
   parts?: QuestionPart[];
+  figure_required?: boolean;
+  figure?: boolean;
 }
 
 type ExpandedSectionsConfig = {

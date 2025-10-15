@@ -3348,9 +3348,41 @@ function QuestionsTabInner({
       toast.error('Please upload a PDF file first to add attachments');
       return;
     }
-    
+
     setAttachmentTarget({ questionId, partIndex, subpartIndex });
     setShowSnippingTool(true);
+  };
+
+  const handleQuestionUpdateFromReview = (questionId: string, updates: Partial<QuestionDisplayData>) => {
+    setQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) {
+        return q;
+      }
+
+      return {
+        ...q,
+        question_text: updates.question_text ?? q.question_text,
+        marks: updates.marks ?? q.marks,
+        difficulty: updates.difficulty ?? q.difficulty,
+        topic: updates.topic ?? q.topic,
+        subtopic: updates.subtopic ?? q.subtopic,
+        answer_format: updates.answer_format ?? q.answer_format,
+        answer_requirement: updates.answer_requirement ?? q.answer_requirement,
+        hint: updates.hint ?? q.hint,
+        explanation: updates.explanation ?? q.explanation,
+        correct_answers: updates.correct_answers ?? q.correct_answers,
+        options: updates.options ?? q.options,
+        requires_manual_marking: updates.requires_manual_marking ?? q.requires_manual_marking,
+        marking_criteria: updates.marking_criteria ?? q.marking_criteria,
+        parts: updates.parts ?? q.parts,
+        figure_required: updates.figure_required ?? q.figure_required,
+        figure: updates.figure ?? q.figure,
+      };
+    }));
+  };
+
+  const handleRequestSnippingTool = (questionId: string) => {
+    handleAddAttachment(questionId);
   };
 
   const handleAttachmentUpload = (questionId: string, partPath: string[]) => {
@@ -4256,13 +4288,17 @@ function QuestionsTabInner({
           explanation: q.explanation,
           requires_manual_marking: q.requires_manual_marking,
           marking_criteria: q.marking_criteria,
-          parts: Array.isArray(q.parts) ? q.parts : []
+          parts: Array.isArray(q.parts) ? q.parts : [],
+          figure_required: typeof q.figure_required === 'boolean' ? q.figure_required : (q.figure ?? false),
+          figure: q.figure
         }))}
         paperTitle={paperMetadata?.paper_title || paperMetadata?.paper_code || 'Untitled Paper'}
         paperDuration={paperMetadata?.paper_duration}
         totalMarks={paperMetadata?.total_marks || questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
         importSessionId={importSession?.id}
         requireSimulation={true}
+        onQuestionUpdate={handleQuestionUpdateFromReview}
+        onRequestSnippingTool={handleRequestSnippingTool}
         onAllQuestionsReviewed={() => {
           console.log('All questions reviewed');
         }}
