@@ -97,6 +97,7 @@ import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
 import { ExtractionRules, QuestionSupportSummary } from '../types';
 import QuestionSupportMatrix from './components/QuestionSupportMatrix';
+import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
@@ -401,17 +402,20 @@ const generateAttachmentKey = (questionId: string, partIndex?: number, subpartIn
   return key;
 };
 
-export function QuestionsTab({ 
-  importSession, 
-  parsedData, 
+function QuestionsTabInner({
+  importSession,
+  parsedData,
   existingPaperId,
   savedPaperDetails,
-  onPrevious, 
+  onPrevious,
   onContinue,
   extractionRules,
   updateStagedAttachments,
   stagedAttachments = {}
 }: QuestionsTabProps) {
+  // Critical data validation - prevent rendering with invalid state
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   // State management
   const [questions, setQuestions] = useState<ProcessedQuestion[]>([]);
   const [paperMetadata, setPaperMetadata] = useState<any>({
@@ -633,54 +637,158 @@ export function QuestionsTab({
     return undefined;
   };
 
-  // Fetch data structure information
+  // Fetch data structure information with retry logic
   useEffect(() => {
-    if (savedPaperDetails?.data_structure_id) {
-      loadDataStructureInfo();
-    }
-  }, [savedPaperDetails]);
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const loadWithRetry = async () => {
+      if (!savedPaperDetails?.data_structure_id) {
+        console.warn('Cannot load data structure: data_structure_id is missing');
+        return;
+      }
+
+      while (retryCount < maxRetries && isMounted) {
+        try {
+          await loadDataStructureInfo();
+          break;
+        } catch (error) {
+          retryCount++;
+          console.error(`Failed to load data structure (attempt ${retryCount}/${maxRetries}):`, error);
+
+          if (retryCount < maxRetries && isMounted) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+          } else if (isMounted) {
+            toast.error('Failed to load academic structure. Some features may not work correctly.');
+            setAcademicStructureLoaded(false);
+          }
+        }
+      }
+    };
+
+    loadWithRetry();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [savedPaperDetails?.data_structure_id]);
 
   const loadDataStructureInfo = async () => {
     try {
       setAcademicStructureLoaded(false);
+
+      if (!savedPaperDetails?.data_structure_id) {
+        throw new Error('Missing data_structure_id in savedPaperDetails');
+      }
+
       const result = await fetchDataStructureInfo(savedPaperDetails.data_structure_id);
+
+      // Validate the returned data structure
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid data structure response');
+      }
+
+      if (!result.dataStructure) {
+        throw new Error('Missing dataStructure in response');
+      }
+
       setDataStructureInfo(result.dataStructure);
-      setUnits(result.units);
-      
+
+      // Safely set units with validation
+      const units = Array.isArray(result.units) ? result.units : [];
+      setUnits(units);
+
       // Ensure topics are properly loaded with their relationships
-      const allTopics = result.topics || [];
-      const allSubtopics = result.subtopics || [];
-      
+      const allTopics = Array.isArray(result.topics) ? result.topics : [];
+      const allSubtopics = Array.isArray(result.subtopics) ? result.subtopics : [];
+
       // Set all topics and subtopics
       setTopics(allTopics);
       setSubtopics(allSubtopics);
-      
+
       console.log('Loaded data structure:', {
-        units: result.units.length,
+        units: units.length,
         topics: allTopics.length,
         subtopics: allSubtopics.length,
         topicSample: allTopics[0],
         subtopicSample: allSubtopics[0]
       });
-      
+
+      if (units.length === 0) {
+        console.warn('No units loaded - this may cause mapping issues');
+      }
+
+      if (allTopics.length === 0) {
+        console.warn('No topics loaded - this may cause mapping issues');
+      }
+
       setAcademicStructureLoaded(true);
     } catch (error) {
       console.error('Error loading data structure info:', error);
-      toast.error('Failed to load academic structure information');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load academic structure information';
+      toast.error(errorMessage);
       setAcademicStructureLoaded(false);
+      throw error; // Re-throw for retry logic
     }
   };
 
-  // Initialize questions from parsed data
+  // Initialize questions from parsed data with comprehensive error handling
   useEffect(() => {
-    if (parsedData) {
-      initializeFromParsedData(parsedData);
-    } else if (importSession?.id) {
-      loadImportedQuestions();
-    } else {
-      setLoading(false);
-    }
-  }, [importSession, parsedData]);
+    let isMounted = true;
+
+    const initialize = async () => {
+      try {
+        setInitializationError(null);
+        setLoading(true);
+
+        // Validate critical props before proceeding
+        if (!importSession && !parsedData) {
+          throw new Error('Missing required data: importSession or parsedData');
+        }
+
+        if (!existingPaperId) {
+          console.warn('existingPaperId is not set, tab may not be fully initialized');
+        }
+
+        if (!savedPaperDetails?.data_structure_id) {
+          throw new Error('Missing data_structure_id in savedPaperDetails');
+        }
+
+        if (parsedData) {
+          if (!parsedData.questions || !Array.isArray(parsedData.questions)) {
+            throw new Error('Invalid parsedData: questions array is missing or malformed');
+          }
+          if (isMounted) {
+            await initializeFromParsedData(parsedData);
+          }
+        } else if (importSession?.id) {
+          if (isMounted) {
+            await loadImportedQuestions();
+          }
+        }
+
+        if (isMounted) {
+          setIsInitialized(true);
+        }
+      } catch (error) {
+        console.error('Failed to initialize QuestionsTab:', error);
+        if (isMounted) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
+          setInitializationError(errorMessage);
+          toast.error(`Initialization failed: ${errorMessage}`);
+          setLoading(false);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [importSession, parsedData, existingPaperId, savedPaperDetails]);
 
   // Check existing questions after questions are loaded
   useEffect(() => {
@@ -886,7 +994,18 @@ export function QuestionsTab({
         } catch (error) {
           console.error('Failed to synchronize review workflow:', error);
           if (!isCancelled) {
-            toast.error('Unable to sync question review progress.');
+            // Provide more specific error messages
+            let errorMessage = 'Unable to sync question review progress.';
+            if (error instanceof Error) {
+              if (error.message.includes('network') || error.message.includes('fetch')) {
+                errorMessage = 'Network error: Unable to connect to database. Working offline.';
+              } else if (error.message.includes('auth')) {
+                errorMessage = 'Authentication error: Please refresh the page and try again.';
+              }
+            }
+            toast.error(errorMessage);
+
+            // Set fallback review statuses to allow continued work
             setReviewStatuses(prev => {
               const fallback: Record<string, ReviewStatus> = {};
               questions.forEach(q => {
@@ -1140,32 +1259,56 @@ export function QuestionsTab({
     }
   }, [importSession]);
 
-  const initializeFromParsedData = (data: any) => {
+  const initializeFromParsedData = async (data: any): Promise<void> => {
     try {
       setLoading(true);
-      
-      // Extract paper metadata with all available fields
+
+      // Validate input data structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data: expected object');
+      }
+
+      if (!Array.isArray(data.questions)) {
+        throw new Error('Invalid data: questions must be an array');
+      }
+
+      if (data.questions.length === 0) {
+        throw new Error('No questions found in parsed data');
+      }
+
+      // Extract paper metadata with all available fields and validation
       const metadata = {
-        title: data.title || data.paper_name || data.paper_code || '',
-        exam_board: data.exam_board || data.board || '',
-        qualification: data.qualification || data.level || '',
-        subject: data.subject || '',
-        paper_code: data.paper_code || data.code || '',
-        paper_name: data.paper_name || data.name || '',
-        exam_year: data.exam_year || data.year || '',
-        exam_session: data.exam_session || data.session || '',
-        paper_duration: data.paper_duration || data.duration || '',
-        total_marks: parseInt(data.total_marks || '0') || 0,
+        title: String(data.title || data.paper_name || data.paper_code || 'Untitled Paper'),
+        exam_board: String(data.exam_board || data.board || 'Unknown'),
+        qualification: String(data.qualification || data.level || ''),
+        subject: String(data.subject || ''),
+        paper_code: String(data.paper_code || data.code || ''),
+        paper_name: String(data.paper_name || data.name || ''),
+        exam_year: String(data.exam_year || data.year || ''),
+        exam_session: String(data.exam_session || data.session || ''),
+        paper_duration: String(data.paper_duration || data.duration || ''),
+        total_marks: parseInt(String(data.total_marks || '0')) || 0,
         // Additional fields that might be in the parsed data
-        region: data.region || '',
-        program: data.program || '',
-        provider: data.provider || '',
-        subject_code: data.subject_code || ''
+        region: String(data.region || ''),
+        program: String(data.program || ''),
+        provider: String(data.provider || ''),
+        subject_code: String(data.subject_code || '')
       };
       setPaperMetadata(metadata);
 
-      // Process questions with enhanced extraction rules
-      const processedQuestions = processQuestions(data.questions || [], metadata);
+      // Process questions with enhanced extraction rules and error recovery
+      let processedQuestions: ProcessedQuestion[] = [];
+      try {
+        processedQuestions = processQuestions(data.questions, metadata);
+
+        if (processedQuestions.length === 0) {
+          throw new Error('No valid questions were processed');
+        }
+      } catch (processingError) {
+        console.error('Error processing questions:', processingError);
+        throw new Error(`Failed to process questions: ${processingError instanceof Error ? processingError.message : 'Unknown error'}`);
+      }
+
       setQuestions(processedQuestions);
 
       // Initialize question mappings
@@ -1180,22 +1323,38 @@ export function QuestionsTab({
       setQuestionMappings(mappings);
 
       // Initialize attachments from staged attachments
-      if (stagedAttachments) {
+      if (stagedAttachments && typeof stagedAttachments === 'object') {
         setAttachments(stagedAttachments);
       }
 
       setLoading(false);
     } catch (error) {
       console.error('Error initializing questions:', error);
-      toast.error('Failed to process questions data');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process questions data';
+      toast.error(errorMessage);
       setLoading(false);
+      throw error; // Re-throw to be caught by initialization handler
     }
   };
 
   const processQuestions = (rawQuestions: any[], paperContext: { subject?: string }): ProcessedQuestion[] => {
-    const normalizedSubject = paperContext.subject?.toLowerCase() || '';
+    // Validate input
+    if (!Array.isArray(rawQuestions)) {
+      throw new Error('rawQuestions must be an array');
+    }
 
-    return rawQuestions.map((q, index) => {
+    const normalizedSubject = paperContext.subject?.toLowerCase() || '';
+    const processedQuestions: ProcessedQuestion[] = [];
+
+    for (let index = 0; index < rawQuestions.length; index++) {
+      try {
+        const q = rawQuestions[index];
+
+        // Skip invalid questions
+        if (!q || typeof q !== 'object') {
+          console.warn(`Skipping invalid question at index ${index}:`, q);
+          continue;
+        }
       const questionId = `q_${index + 1}`;
       
       // Enhanced question type detection
@@ -1339,8 +1498,19 @@ export function QuestionsTab({
         }
       }
 
-      return processedQuestion;
-    });
+        processedQuestions.push(processedQuestion);
+      } catch (error) {
+        console.error(`Error processing question ${index + 1}:`, error);
+        // Continue processing other questions instead of failing entirely
+        toast.error(`Warning: Question ${index + 1} could not be processed completely`);
+      }
+    }
+
+    if (processedQuestions.length === 0) {
+      throw new Error('No valid questions could be processed');
+    }
+
+    return processedQuestions;
   };
 
   // Helper to determine question difficulty based on marks and complexity
@@ -3772,13 +3942,63 @@ export function QuestionsTab({
   const simulationCompleted = Boolean(simulationResult?.completed);
   const canImport = !isImporting && !reviewLoading && questions.length > 0 && allQuestionsReviewed && simulationCompleted;
 
-  if (loading) {
+  // Show initialization error state
+  if (initializationError) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="min-h-[400px] flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-red-200 dark:border-red-800 p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Failed to Load Questions
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                {initializationError}
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => {
+                    setInitializationError(null);
+                    setLoading(true);
+                    window.location.reload();
+                  }}
+                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={onPrevious}
+                >
+                  Go Back
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
+
+  // Show loading state with more information
+  if (loading || !isInitialized) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-[400px] gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <div className="text-center">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {!academicStructureLoaded ? 'Loading academic structure...' : 'Initializing questions...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show warning if academic structure failed to load but allow continuation
+  const showAcademicStructureWarning = !academicStructureLoaded && isInitialized;
 
   // Show simulation if active
   if (showSimulation && simulationPaper) {
@@ -3797,6 +4017,23 @@ export function QuestionsTab({
 
   return (
     <div className="space-y-6">
+      {/* Academic Structure Warning */}
+      {showAcademicStructureWarning && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-yellow-900 dark:text-yellow-100 mb-1">
+                Academic Structure Not Loaded
+              </h4>
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                Auto-mapping and topic selection may not work correctly. You can still review and import questions manually.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
 
@@ -4410,5 +4647,20 @@ export function QuestionsTab({
         </div>
       </div>
     </div>
+  );
+}
+
+// Export wrapped component with Error Boundary
+export function QuestionsTab(props: QuestionsTabProps) {
+  return (
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error("QuestionsTab Error Boundary caught:", error, errorInfo);
+        toast.error("An unexpected error occurred in the Questions tab");
+      }}
+      resetKeys={[props.importSession?.id, props.existingPaperId]}
+    >
+      <QuestionsTabInner {...props} />
+    </ErrorBoundary>
   );
 }

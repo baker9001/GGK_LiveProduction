@@ -1632,51 +1632,63 @@ export default function PapersSetupPage() {
   };
 
   const handleMetadataSave = async (paperId: string, paperDetails: any) => {
-    // Update session metadata first
-    if (importSession?.id) {
-      const { data: existingSession } = await supabase
-        .from('past_paper_import_sessions')
-        .select('metadata')
-        .eq('id', importSession.id)
-        .single();
+    try {
+      // Update session metadata first
+      if (importSession?.id) {
+        const { data: existingSession } = await supabase
+          .from('past_paper_import_sessions')
+          .select('metadata')
+          .eq('id', importSession.id)
+          .maybeSingle();
 
-      const updatedMetadata = {
-        ...(existingSession?.metadata || {}),
-        metadata_complete: true,
-        paper_id: paperId,
-        paper_details: paperDetails
-      };
+        const updatedMetadata = {
+          ...(existingSession?.metadata || {}),
+          metadata_complete: true,
+          paper_id: paperId,
+          paper_details: paperDetails
+        };
 
-      await supabase
-        .from('past_paper_import_sessions')
-        .update({
+        await supabase
+          .from('past_paper_import_sessions')
+          .update({
+            metadata: updatedMetadata,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', importSession.id);
+
+        // Update local importSession state with new metadata
+        setImportSession((prev: any) => ({
+          ...prev,
           metadata: updatedMetadata,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', importSession.id);
+          updated_at: new Date().toISOString()
+        }));
+      }
 
-      // Update local importSession state with new metadata
-      setImportSession((prev: any) => ({
-        ...prev,
-        metadata: updatedMetadata,
-        updated_at: new Date().toISOString()
-      }));
-    }
+      // Use React's batched state updates with flushSync for immediate updates
+      // This ensures all state is set before navigation
+      await new Promise<void>((resolve) => {
+        setExistingPaperId(paperId);
+        setSavedPaperDetails(paperDetails);
+        setTabStatuses(prev => ({
+          ...prev,
+          metadata: 'completed',
+          questions: 'active',
+        }));
 
-    // Set state and wait for React to process the update
-    setExistingPaperId(paperId);
-    setSavedPaperDetails(paperDetails);
-    setTabStatuses(prev => ({
-      ...prev,
-      metadata: 'completed',
-      questions: 'active',
-    }));
+        // Use requestAnimationFrame to ensure DOM updates are complete
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
 
-    // Use setTimeout to ensure state updates are processed before navigation
-    // This prevents the race condition where QuestionsTab renders before existingPaperId is set
-    setTimeout(() => {
+      // Now navigate to questions tab after state is guaranteed to be set
       handleTabChange('questions', { message: 'Preparing questions review...' });
-    }, 50);
+    } catch (error) {
+      console.error('Error in handleMetadataSave:', error);
+      toast.error('Failed to save metadata. Please try again.');
+    }
   };
 
   const getTabStatus = (tabId: string): TabStatus => {
