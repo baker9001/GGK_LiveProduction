@@ -61,11 +61,27 @@ async function fetchPracticeItems(practiceSetId: string): Promise<PracticeSetIte
     throw new Error(`Unable to load practice items: ${error.message}`);
   }
 
+  const questionIds = (data ?? []).map((row) => row.question_id).filter(Boolean);
+
+  const { data: answersData } = await supabase
+    .from('question_correct_answers')
+    .select('question_id')
+    .in('question_id', questionIds);
+
+  const questionsWithAnswers = new Set(
+    (answersData ?? []).map((row) => row.question_id)
+  );
+
   const items: PracticeSetItem[] = (data ?? [])
     .map((row) => {
       const typedRow = row as PracticeSetItem & { question?: QuestionMasterAdmin };
 
       if (typedRow.question && typedRow.question.status !== 'active') {
+        return null;
+      }
+
+      if (!questionsWithAnswers.has(typedRow.question_id)) {
+        console.warn(`Question ${typedRow.question_id} has no correct answers and will be skipped from practice set`);
         return null;
       }
 
@@ -80,6 +96,10 @@ async function fetchPracticeItems(practiceSetId: string): Promise<PracticeSetIte
       } as PracticeSetItem;
     })
     .filter((item): item is PracticeSetItem => item !== null);
+
+  if (items.length === 0) {
+    throw new Error('No valid questions found in this practice set. All questions may be missing correct answers.');
+  }
 
   return items;
 }
@@ -131,7 +151,18 @@ export async function fetchQuestionWithMarkScheme(questionId: string): Promise<Q
     throw new Error('Unable to fetch question metadata for auto-marking');
   }
 
-  return data as QuestionWithMarkScheme;
+  const questionWithDefaults: QuestionWithMarkScheme = {
+    ...data,
+    correct_answers: data.correct_answers ?? [],
+    answer_components: data.answer_components ?? [],
+    options: data.options ?? []
+  } as QuestionWithMarkScheme;
+
+  if (questionWithDefaults.correct_answers.length === 0 && questionWithDefaults.answer_components.length === 0) {
+    throw new Error(`Question ${questionId} has no correct answers defined. This question cannot be used for practice.`);
+  }
+
+  return questionWithDefaults;
 }
 
 async function upsertPracticeAnswer(
@@ -224,9 +255,9 @@ export async function submitAnswer(request: PracticeAnswerRequest): Promise<Prac
 
   const autoMarkResult = autoMarkQuestion({
     question,
-    correctAnswers: question.correct_answers ?? [],
-    answerComponents: question.answer_components ?? [],
-    options: question.options ?? [],
+    correctAnswers: question.correct_answers,
+    answerComponents: question.answer_components,
+    options: question.options,
     rawAnswer,
     board,
     subjectArea
