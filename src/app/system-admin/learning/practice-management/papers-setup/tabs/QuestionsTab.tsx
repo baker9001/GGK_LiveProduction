@@ -1630,148 +1630,190 @@ function QuestionsTabInner({
           console.warn(`Skipping invalid question at index ${index}:`, q);
           continue;
         }
-      const questionId = `q_${index + 1}`;
-      
-      // Enhanced question type detection
-      let questionType = q.type;
-      if (!questionType) {
+
+        const questionId = `q_${index + 1}`;
+
+        const rawQuestionText = ensureString(
+          q.question_text ?? q.question_description ?? q.question
+        ) || '';
+        const rawTopic = ensureString(q.topic) || ensureString(q.topics?.[0]) || '';
+        const rawSubtopic = ensureString(q.subtopic) || ensureString(q.subtopics?.[0]) || '';
+        const rawUnit = ensureString(q.unit) || ensureString(q.chapter) || '';
+        const optionsArray = Array.isArray(q.options)
+          ? q.options
+          : (q.options && typeof q.options === 'object'
+            ? Object.values(q.options)
+            : []);
+
+        // Enhanced question type detection
+        let questionType = q.type;
+        if (!questionType) {
+          if (Array.isArray(q.parts) && q.parts.length > 0) {
+            questionType = 'complex';
+          } else if (optionsArray.length > 0) {
+            questionType = 'mcq';
+          } else if (
+            q.answer_format === 'true_false' ||
+            (rawQuestionText && rawQuestionText.toLowerCase().includes('true or false')) ||
+            (optionsArray.length === 2 && optionsArray.every((opt: any) => /true|false/i.test(opt?.text || opt?.option_text)))
+          ) {
+            questionType = 'tf';
+          } else {
+            questionType = 'descriptive';
+          }
+        }
+
+        // Enhanced answer format detection for main question
+        let mainAnswerFormat = q.answer_format;
+        if (!mainAnswerFormat && rawQuestionText) {
+          mainAnswerFormat = detectAnswerFormat(rawQuestionText);
+
+          // Additional subject-specific detection
+          const text = rawQuestionText.toLowerCase();
+
+          if (normalizedSubject.includes('chemistry')) {
+            if (text.includes('structure') || text.includes('draw the structure')) {
+              mainAnswerFormat = 'chemical_structure';
+            } else if (text.includes('equation') || text.includes('balanced equation')) {
+              mainAnswerFormat = 'equation';
+            }
+          } else if (normalizedSubject.includes('physics')) {
+            if (text.includes('calculate') || text.includes('find the value')) {
+              mainAnswerFormat = 'calculation';
+            } else if (text.includes('graph') || text.includes('plot')) {
+              mainAnswerFormat = 'graph';
+            }
+          } else if (normalizedSubject.includes('biology')) {
+            if (text.includes('diagram') || text.includes('label')) {
+              mainAnswerFormat = 'diagram';
+            } else if (text.includes('table') || text.includes('tabulate')) {
+              mainAnswerFormat = 'table';
+            }
+          } else if (normalizedSubject.includes('mathematics') || normalizedSubject.includes('math')) {
+            if (text.includes('prove') || text.includes('show that')) {
+              mainAnswerFormat = 'calculation';
+            } else if (text.includes('construct') || text.includes('draw')) {
+              mainAnswerFormat = 'diagram';
+            }
+          }
+
+          // IGCSE specific patterns
+          if (text.includes('name') && text.includes('and') && (text.includes('two') || text.includes('2'))) {
+            mainAnswerFormat = 'two_items';
+          } else if (text.includes('state') && text.includes('reason')) {
+            mainAnswerFormat = 'two_items_connected';
+          } else if (text.match(/\([a-d]\)/i) || text.includes('(i)') || text.includes('(ii)')) {
+            mainAnswerFormat = 'multi_line_labeled';
+          }
+        }
+
+        // Parse answer requirement
+        let answerRequirement = q.answer_requirement ? ensureString(q.answer_requirement) ?? undefined : undefined;
+        if (!answerRequirement && q.correct_answers && Array.isArray(q.correct_answers) && q.correct_answers.length > 0) {
+          let serializedAnswers: string | null = null;
+          if (typeof q.correct_answers === 'string') {
+            serializedAnswers = q.correct_answers;
+          } else {
+            try {
+              serializedAnswers = JSON.stringify(q.correct_answers);
+            } catch (serializationError) {
+              console.warn(`Failed to stringify correct_answers for question ${index + 1}:`, serializationError);
+              try {
+                serializedAnswers = q.correct_answers
+                  .map((ans: any) => ensureString(ans?.answer) || '')
+                  .filter(Boolean)
+                  .join(' / ');
+              } catch (fallbackError) {
+                console.warn(`Fallback serialization failed for question ${index + 1}:`, fallbackError);
+              }
+            }
+          }
+
+          if (serializedAnswers) {
+            try {
+              const marksValue = parseInt(String(q.marks ?? q.total_marks ?? '0')) || 0;
+              answerRequirement = parseAnswerRequirement(serializedAnswers, marksValue);
+            } catch (parseError) {
+              console.warn(`Failed to parse answer requirement for question ${index + 1}:`, parseError);
+            }
+          }
+        }
+
+        const figureFlag = resolveFigureFlag(q);
+        const figureRequired = resolveFigureRequirement(q);
+
+        // Process main question with all available data
+        const processedQuestion: ProcessedQuestion = {
+          id: questionId,
+          question_number: ensureString(q.question_number) || String(index + 1),
+          question_text: rawQuestionText,
+          question_type: questionType,
+          marks: parseInt(String(q.total_marks ?? q.marks ?? '0')) || 0,
+          topic: rawTopic,
+          subtopic: rawSubtopic,
+          difficulty: q.difficulty || determineQuestionDifficulty(q),
+          status: 'pending',
+          figure: figureFlag,
+          figure_required: figureRequired,
+          attachments: ensureArray(q.attachments),
+          hint: ensureString(q.hint) || '',
+          explanation: ensureString(q.explanation) || '',
+          parts: [],
+          correct_answers: [],
+          options: [],
+          answer_format: mainAnswerFormat,
+          answer_requirement: answerRequirement,
+          total_alternatives: q.total_alternatives,
+          mcq_type: q.mcq_type,
+          match_pairs: q.match_pairs || q.correct_matches,
+          left_column: q.left_column,
+          right_column: q.right_column,
+          correct_sequence: q.correct_sequence,
+          partial_credit: q.partial_credit,
+          partial_marking: q.partial_marking,
+          conditional_marking: q.conditional_marking || q.marking_conditions,
+          // Store original topics/subtopics for mapping
+          original_topics: ensureArray(q.topics || q.topic),
+          original_subtopics: ensureArray(q.subtopics || q.subtopic),
+          original_unit: rawUnit,
+          // Initialize simulation tracking
+          simulation_flags: [],
+          simulation_notes: ''
+        };
+
+        console.log(`Processing question ${index + 1}:`, {
+          topic: processedQuestion.topic,
+          original_topics: processedQuestion.original_topics,
+          subtopic: processedQuestion.subtopic,
+          original_subtopics: processedQuestion.original_subtopics,
+          unit: processedQuestion.original_unit,
+          answer_requirement: processedQuestion.answer_requirement
+        });
+
+        // Process parts if available
         if (Array.isArray(q.parts) && q.parts.length > 0) {
-          questionType = 'complex';
-        } else if (q.options && q.options.length > 0) {
-          questionType = 'mcq';
-        } else if (
-          q.answer_format === 'true_false' ||
-          (q.question_text && q.question_text.toLowerCase().includes('true or false')) ||
-          (q.options && q.options.length === 2 && q.options.every((opt: any) => /true|false/i.test(opt.text || opt.option_text)))
-        ) {
-          questionType = 'tf';
-        } else {
-          questionType = 'descriptive';
+          processedQuestion.parts = q.parts.map((part: any, partIndex: number) =>
+            processPart(part, partIndex, questionId, paperContext)
+          );
         }
-      }
-      
-      // Enhanced answer format detection for main question
-      let mainAnswerFormat = q.answer_format;
-      if (!mainAnswerFormat && q.question_text) {
-        mainAnswerFormat = detectAnswerFormat(q.question_text);
 
-        // Additional subject-specific detection
-        const text = q.question_text.toLowerCase();
+        // Process direct answers if no parts
+        if (!Array.isArray(q.parts) || q.parts.length === 0) {
+          if (q.correct_answers) {
+            processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
+          } else if (q.correct_answer) {
+            processedQuestion.correct_answers = [{
+              answer: ensureString(q.correct_answer) || '',
+              marks: processedQuestion.marks,
+              alternative_id: 1,
+              answer_requirement: answerRequirement
+            }];
+          }
 
-        if (normalizedSubject.includes('chemistry')) {
-          if (text.includes('structure') || text.includes('draw the structure')) {
-            mainAnswerFormat = 'chemical_structure';
-          } else if (text.includes('equation') || text.includes('balanced equation')) {
-            mainAnswerFormat = 'equation';
-          }
-        } else if (normalizedSubject.includes('physics')) {
-          if (text.includes('calculate') || text.includes('find the value')) {
-            mainAnswerFormat = 'calculation';
-          } else if (text.includes('graph') || text.includes('plot')) {
-            mainAnswerFormat = 'graph';
-          }
-        } else if (normalizedSubject.includes('biology')) {
-          if (text.includes('diagram') || text.includes('label')) {
-            mainAnswerFormat = 'diagram';
-          } else if (text.includes('table') || text.includes('tabulate')) {
-            mainAnswerFormat = 'table';
-          }
-        } else if (normalizedSubject.includes('mathematics') || normalizedSubject.includes('math')) {
-          if (text.includes('prove') || text.includes('show that')) {
-            mainAnswerFormat = 'calculation';
-          } else if (text.includes('construct') || text.includes('draw')) {
-            mainAnswerFormat = 'diagram';
+          if (optionsArray.length > 0) {
+            processedQuestion.options = processOptions(optionsArray);
           }
         }
-        
-        // IGCSE specific patterns
-        if (text.includes('name') && text.includes('and') && (text.includes('two') || text.includes('2'))) {
-          mainAnswerFormat = 'two_items';
-        } else if (text.includes('state') && text.includes('reason')) {
-          mainAnswerFormat = 'two_items_connected';
-        } else if (text.match(/\([a-d]\)/i) || text.includes('(i)') || text.includes('(ii)')) {
-          mainAnswerFormat = 'multi_line_labeled';
-        }
-      }
-      
-      // Parse answer requirement
-      const answerRequirement = q.answer_requirement || 
-        (q.correct_answers && q.correct_answers.length > 0 ? parseAnswerRequirement(JSON.stringify(q.correct_answers), q.marks) : undefined);
-      
-      const figureFlag = resolveFigureFlag(q);
-      const figureRequired = resolveFigureRequirement(q);
-
-      // Process main question with all available data
-      const processedQuestion: ProcessedQuestion = {
-        id: questionId,
-        question_number: q.question_number || String(index + 1),
-        question_text: q.question_text || q.question_description || '',
-        question_type: questionType,
-        marks: parseInt(q.total_marks || q.marks || '0'),
-        topic: q.topic || q.topics?.[0] || '',
-        subtopic: q.subtopic || q.subtopics?.[0] || '',
-        difficulty: q.difficulty || determineQuestionDifficulty(q),
-        status: 'pending',
-        figure: figureFlag,
-        figure_required: figureRequired,
-        attachments: ensureArray(q.attachments),
-        hint: q.hint || '',
-        explanation: q.explanation || '',
-        parts: [],
-        correct_answers: [],
-        options: [],
-        answer_format: mainAnswerFormat,
-        answer_requirement: answerRequirement,
-        total_alternatives: q.total_alternatives,
-        mcq_type: q.mcq_type,
-        match_pairs: q.match_pairs || q.correct_matches,
-        left_column: q.left_column,
-        right_column: q.right_column,
-        correct_sequence: q.correct_sequence,
-        partial_credit: q.partial_credit,
-        partial_marking: q.partial_marking,
-        conditional_marking: q.conditional_marking || q.marking_conditions,
-        // Store original topics/subtopics for mapping
-        original_topics: ensureArray(q.topics || q.topic),
-        original_subtopics: ensureArray(q.subtopics || q.subtopic),
-        original_unit: q.unit || q.chapter || '',
-        // Initialize simulation tracking
-        simulation_flags: [],
-        simulation_notes: ''
-      };
-
-      console.log(`Processing question ${index + 1}:`, {
-        topic: processedQuestion.topic,
-        original_topics: processedQuestion.original_topics,
-        subtopic: processedQuestion.subtopic,
-        original_subtopics: processedQuestion.original_subtopics,
-        unit: processedQuestion.original_unit,
-        answer_requirement: processedQuestion.answer_requirement
-      });
-
-      // Process parts if available
-      if (q.parts && Array.isArray(q.parts)) {
-        processedQuestion.parts = q.parts.map((part: any, partIndex: number) =>
-          processPart(part, partIndex, questionId, paperContext)
-        );
-      }
-
-      // Process direct answers if no parts
-      if (!q.parts || q.parts.length === 0) {
-        if (q.correct_answers) {
-          processedQuestion.correct_answers = processAnswers(q.correct_answers, answerRequirement);
-        } else if (q.correct_answer) {
-          processedQuestion.correct_answers = [{
-            answer: q.correct_answer,
-            marks: processedQuestion.marks,
-            alternative_id: 1,
-            answer_requirement: answerRequirement
-          }];
-        }
-        if (q.options) {
-          processedQuestion.options = processOptions(q.options);
-        }
-      }
 
         processedQuestions.push(processedQuestion);
       } catch (error) {
@@ -2307,7 +2349,7 @@ function QuestionsTabInner({
             type: (() => {
               // Enhanced type detection for parts
               if (p.options && p.options.length > 0) return 'mcq';
-              if (p.answer_format === 'true_false' || p.question_text.toLowerCase().includes('true or false')) return 'tf';
+              if (p.answer_format === 'true_false' || (p.question_text || '').toLowerCase().includes('true or false')) return 'tf';
               return 'descriptive';
             })() as 'mcq' | 'tf' | 'descriptive',
             status: 'pending',
