@@ -64,6 +64,7 @@ export function AttachmentManager({
   const [snippingViewState, setSnippingViewState] = useState<{ page: number; scale: number }>(
     () => ({ ...DEFAULT_SNIPPING_VIEW_STATE })
   );
+  const [pendingSnippingOpen, setPendingSnippingOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -148,9 +149,10 @@ export function AttachmentManager({
     if (files.length === 0) return;
     
     const file = files[0];
-    
+
     // Check if it's a PDF for snipping
     if (file.type === 'application/pdf') {
+      setPendingSnippingOpen(true);
       handlePdfFile(file);
     } else {
       // Regular file upload
@@ -216,6 +218,9 @@ export function AttachmentManager({
 
       // Auto-open snipping tool
       setShowSnippingTool(true);
+      if (pendingSnippingOpen) {
+        setPendingSnippingOpen(false);
+      }
       
       toast.success(
         <div className="flex items-center">
@@ -227,16 +232,20 @@ export function AttachmentManager({
     reader.onerror = () => {
       toast.error('Failed to load PDF file');
       setLoadingPdf(false);
+      setPendingSnippingOpen(false);
     };
     reader.readAsDataURL(file);
   };
   
   const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    
+    if (!file) {
+      setPendingSnippingOpen(false);
+      return;
+    }
+
     handlePdfFile(file);
-    
+
     // Clear the input for future selections
     if (pdfInputRef.current) {
       pdfInputRef.current.value = '';
@@ -333,14 +342,16 @@ export function AttachmentManager({
     if (!pdfDataUrl) {
       // No PDF loaded, open file selector
       toast.info('Select a PDF to start snipping');
+      setPendingSnippingOpen(true);
       pdfInputRef.current?.click();
     } else {
       // PDF already loaded, toggle snipping tool
       setShowSnippingTool(!showSnippingTool);
     }
   };
-  
+
   const handleChangePdf = () => {
+    setPendingSnippingOpen(true);
     pdfInputRef.current?.click();
   };
   
