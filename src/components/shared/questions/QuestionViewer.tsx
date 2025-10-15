@@ -29,6 +29,8 @@ import { cn } from '../../../lib/utils';
 import { Button } from '../Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Tabs';
 import DynamicAnswerField from '../DynamicAnswerField';
+import { MarkingSimulationPanel } from './MarkingSimulationPanel';
+import { toast } from '../Toast';
 
 // ============================================================================
 // Type Definitions
@@ -462,6 +464,20 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
     onRevealMarkScheme?.();
   }, [onRevealMarkScheme]);
 
+  // Calculate earned marks for simulation
+  const [earnedMarks, setEarnedMarks] = useState(0);
+  const [hasCheckedAnswer, setHasCheckedAnswer] = useState(false);
+
+  const handleCheckAnswer = useCallback(() => {
+    // Simple validation logic - in production this would use SubjectAdapter
+    const isCorrect = userAnswer !== null && userAnswer !== undefined && userAnswer !== '';
+    const marks = isCorrect ? (question.marks || 0) : 0;
+    setEarnedMarks(marks);
+    setHasCheckedAnswer(true);
+    setShowMarkScheme(true);
+    toast.info(`Answer checked: ${marks}/${question.marks || 0} marks`);
+  }, [userAnswer, question.marks]);
+
   // Render based on mode
   const renderContent = () => {
     if (mode === 'review') {
@@ -477,15 +493,31 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
           <TabsContent value="edit" className="space-y-6 mt-6">
             <QuestionBody question={question} />
 
-            {/* Answer Structure Editor would go here */}
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
-              <FileText className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Answer Structure Editor
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500">
-                Edit answer alternatives, marking schemes, and validation rules
-              </p>
+            {/* Answer Section with DynamicAnswerField */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Answer Configuration
+              </h4>
+              <DynamicAnswerField
+                question={{
+                  id: question.id || '',
+                  type: question.type as any || 'descriptive',
+                  subject: effectiveSubject,
+                  answer_format: question.parts?.[0]?.answer_format,
+                  options: question.options,
+                  correct_answers: question.correct_answers,
+                  marks: question.marks || 0
+                }}
+                value={question.correct_answers || []}
+                onChange={(value) => {
+                  if (onUpdate) {
+                    onUpdate({ ...question, correct_answers: value as any });
+                  }
+                }}
+                mode="admin"
+                showCorrectAnswer={true}
+              />
             </div>
           </TabsContent>
 
@@ -527,14 +559,29 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
           </TabsContent>
 
           <TabsContent value="validation" className="mt-6">
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
-              <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Validation & Compliance
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500">
-                Subject-specific validation results and compliance checks will appear here
-              </p>
+            <div className="space-y-4">
+              {onValidate && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+                      Validation Status
+                    </h4>
+                  </div>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Subject-specific validation and compliance checks are active.
+                  </p>
+                </div>
+              )}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Validation Results
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500">
+                  Validation reports will appear here as you make changes
+                </p>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
@@ -576,14 +623,38 @@ export const QuestionViewer: React.FC<QuestionViewerProps> = ({
         </div>
 
         {mode === 'simulation' && (
-          <div className="flex gap-2">
-            <Button
-              onClick={handleRevealMarkScheme}
-              variant={showMarkScheme ? 'default' : 'outline'}
-              disabled={showMarkScheme}
-            >
-              {showMarkScheme ? 'Mark Scheme Revealed' : 'Reveal Mark Scheme'}
-            </Button>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCheckAnswer}
+                variant="default"
+                disabled={hasCheckedAnswer}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {hasCheckedAnswer ? 'Answer Checked' : 'Check Answer'}
+              </Button>
+              {!hasCheckedAnswer && (
+                <Button
+                  onClick={handleRevealMarkScheme}
+                  variant="outline"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Reveal Mark Scheme
+                </Button>
+              )}
+            </div>
+
+            {/* Show Marking Simulation Panel after checking */}
+            {hasCheckedAnswer && question.correct_answers && question.correct_answers.length > 0 && (
+              <MarkingSimulationPanel
+                subject={effectiveSubject}
+                totalMarks={question.marks || 0}
+                earnedMarks={earnedMarks}
+                correctAnswers={question.correct_answers}
+                userAnswer={userAnswer}
+                showBreakdown={true}
+              />
+            )}
           </div>
         )}
       </div>
