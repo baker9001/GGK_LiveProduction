@@ -270,8 +270,12 @@ interface ProcessedQuestion {
   question_text: string;
   question_type: string;
   marks: number;
+  unit?: string;
+  unit_id?: string | null;
   topic: string;
+  topic_id?: string | null;
   subtopic: string;
+  subtopic_id?: string | null;
   difficulty: string;
   status: string;
   figure: boolean;
@@ -1758,8 +1762,12 @@ function QuestionsTabInner({
           question_text: rawQuestionText,
           question_type: questionType,
           marks: parseInt(String(q.total_marks ?? q.marks ?? '0')) || 0,
+          unit: rawUnit,
+          unit_id: q.unit_id ?? null,
           topic: rawTopic,
+          topic_id: q.topic_id ?? null,
           subtopic: rawSubtopic,
+          subtopic_id: q.subtopic_id ?? null,
           difficulty: q.difficulty || determineQuestionDifficulty(q),
           status: 'pending',
           figure: figureFlag,
@@ -3363,9 +3371,13 @@ function QuestionsTabInner({
         ...q,
         question_text: updates.question_text ?? q.question_text,
         marks: updates.marks ?? q.marks,
+        unit: updates.unit ?? q.unit,
+        unit_id: updates.unit_id ?? q.unit_id,
         difficulty: updates.difficulty ?? q.difficulty,
         topic: updates.topic ?? q.topic,
+        topic_id: updates.topic_id ?? q.topic_id,
         subtopic: updates.subtopic ?? q.subtopic,
+        subtopic_id: updates.subtopic_id ?? q.subtopic_id,
         answer_format: updates.answer_format ?? q.answer_format,
         answer_requirement: updates.answer_requirement ?? q.answer_requirement,
         hint: updates.hint ?? q.hint,
@@ -4276,9 +4288,13 @@ function QuestionsTabInner({
           question_text: q.question_text || '',
           question_type: q.question_type as 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay',
           marks: q.marks || 0,
+          unit: q.unit ?? q.original_unit ?? null,
+          unit_id: q.unit_id ?? null,
           difficulty: q.difficulty,
           topic: q.topic,
+          topic_id: q.topic_id ?? null,
           subtopic: q.subtopic,
+          subtopic_id: q.subtopic_id ?? null,
           answer_format: q.answer_format,
           answer_requirement: q.answer_requirement,
           correct_answers: Array.isArray(q.correct_answers) ? q.correct_answers : (q.correct_answers ? [q.correct_answers] : []),
