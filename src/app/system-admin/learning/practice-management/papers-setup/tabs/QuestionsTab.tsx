@@ -3428,7 +3428,7 @@ function QuestionsTabInner({
 
   const handleAddAttachment = (questionId: string, partIndex?: number, subpartIndex?: number) => {
     if (!pdfDataUrl) {
-      toast.error('Please upload a PDF file first to add attachments');
+      fileInputRef.current?.click();
       return;
     }
 
