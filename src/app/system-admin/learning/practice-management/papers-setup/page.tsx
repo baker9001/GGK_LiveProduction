@@ -1632,10 +1632,7 @@ export default function PapersSetupPage() {
   };
 
   const handleMetadataSave = async (paperId: string, paperDetails: any) => {
-    setExistingPaperId(paperId);
-    setSavedPaperDetails(paperDetails);
-    
-    // Update session metadata
+    // Update session metadata first
     if (importSession?.id) {
       const { data: existingSession } = await supabase
         .from('past_paper_import_sessions')
@@ -1643,28 +1640,43 @@ export default function PapersSetupPage() {
         .eq('id', importSession.id)
         .single();
 
+      const updatedMetadata = {
+        ...(existingSession?.metadata || {}),
+        metadata_complete: true,
+        paper_id: paperId,
+        paper_details: paperDetails
+      };
+
       await supabase
         .from('past_paper_import_sessions')
         .update({
-          metadata: {
-            ...(existingSession?.metadata || {}),
-            metadata_complete: true,
-            paper_id: paperId,
-            paper_details: paperDetails
-          },
+          metadata: updatedMetadata,
           updated_at: new Date().toISOString(),
         })
         .eq('id', importSession.id);
+
+      // Update local importSession state with new metadata
+      setImportSession((prev: any) => ({
+        ...prev,
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString()
+      }));
     }
-    
+
+    // Set state and wait for React to process the update
+    setExistingPaperId(paperId);
+    setSavedPaperDetails(paperDetails);
     setTabStatuses(prev => ({
       ...prev,
       metadata: 'completed',
       questions: 'active',
     }));
-    
-    // Auto-navigate to questions tab
-    handleTabChange('questions', { message: 'Preparing questions review...' });
+
+    // Use setTimeout to ensure state updates are processed before navigation
+    // This prevents the race condition where QuestionsTab renders before existingPaperId is set
+    setTimeout(() => {
+      handleTabChange('questions', { message: 'Preparing questions review...' });
+    }, 50);
   };
 
   const getTabStatus = (tabId: string): TabStatus => {
@@ -1943,6 +1955,16 @@ export default function PapersSetupPage() {
               updateStagedAttachments={updateStagedAttachments}
               stagedAttachments={stagedAttachments}
             />
+          ) : importSession && parsedData && !existingPaperId ? (
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
+              <Loader2 className="h-12 w-12 text-blue-600 mx-auto mb-3 animate-spin" />
+              <p className="text-gray-600 dark:text-gray-400">
+                Loading paper data...
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                Preparing questions review workspace
+              </p>
+            </div>
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border">
               <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
