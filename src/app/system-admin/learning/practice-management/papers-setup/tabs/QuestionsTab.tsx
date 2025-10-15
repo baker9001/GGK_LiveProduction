@@ -85,6 +85,8 @@ import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestion
 import { QuestionsReviewSection } from './components/QuestionsReviewSection';
 import QuestionSupportMatrix from './components/QuestionSupportMatrix';
 import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
+import { QuestionImportReviewWorkflow } from '../../../../../../components/shared/QuestionImportReviewWorkflow';
+import type { QuestionDisplayData } from '../../../../../../components/shared/EnhancedQuestionDisplay';
 import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
 import { ExtractionRules, QuestionSupportSummary } from '../types';
@@ -4228,171 +4230,38 @@ function QuestionsTabInner({
       )}
 
       {/* Questions Review Section */}
-      <QuestionsReviewSection
-        questions={questions || []}
-        mappings={questionMappings}
-        dataStructureInfo={dataStructureInfo}
-        units={units}
-        topics={topics}
-        subtopics={subtopics}
-        attachments={attachments}
-        validationErrors={validationErrors}
-        existingQuestionNumbers={existingQuestionNumbers}
-        isImporting={isImporting}
-        importProgress={importProgress}
-        paperMetadata={paperMetadata}
-        editingMetadata={editingMetadata}
-        pdfDataUrl={pdfDataUrl}
-        hasIncompleteQuestions={questions.some(q => !q.question_text || q.marks === 0)}
-        existingPaperId={existingPaperId}
-        expandedQuestions={expandedQuestions}
-        editingQuestion={editingQuestion}
-        onQuestionEdit={handleEditQuestion}
-        onQuestionSave={handleSaveQuestion}
-        onQuestionCancel={handleCancelEdit}
-        onMappingUpdate={(questionId: string, field: string, value: string | string[]) => {
-          const mapping = questionMappings[questionId] || { chapter_id: '', topic_ids: [], subtopic_ids: [] };
-          const normalizedValue = Array.isArray(value)
-            ? value.map(v => String(v))
-            : value !== undefined && value !== null
-              ? String(value)
-              : value;
-          const updatedMapping = {
-            ...mapping,
-            chapter_id: mapping?.chapter_id ? String(mapping.chapter_id) : '',
-            topic_ids: Array.isArray(mapping?.topic_ids) ? mapping.topic_ids.map(id => String(id)) : [],
-            subtopic_ids: Array.isArray(mapping?.subtopic_ids) ? mapping.subtopic_ids.map(id => String(id)) : []
-          };
-
-          if (field === 'chapter_id') {
-            updatedMapping.chapter_id = (normalizedValue as string) || '';
-            // Don't clear topics and subtopics when chapter changes if they're already populated
-            if (!mapping.topic_ids || mapping.topic_ids.length === 0) {
-              updatedMapping.topic_ids = [];
-              updatedMapping.subtopic_ids = [];
-            }
-          } else if (field === 'topic_ids') {
-            updatedMapping.topic_ids = (normalizedValue as string[]) || [];
-            // Only clear subtopics if no topics are selected
-            if (((normalizedValue as string[]) || []).length === 0) {
-              updatedMapping.subtopic_ids = [];
-            }
-          } else if (field === 'subtopic_ids') {
-            updatedMapping.subtopic_ids = (normalizedValue as string[]) || [];
-
-            // Auto-select parent topics when subtopics are selected
-            const selectedSubtopics = subtopics.filter(s => ((normalizedValue as string[]) || []).includes(String(s.id)));
-            const parentTopicIds = [...new Set(selectedSubtopics
-              .map(s => s.topic_id || s.edu_topic_id)
-              .filter(Boolean)
-            )].map(id => String(id));
-
-            console.log('Selected subtopics:', selectedSubtopics);
-            console.log('Parent topic IDs:', parentTopicIds);
-
-            // Add parent topic IDs that aren't already selected
-            const newTopicIds = [...new Set([...updatedMapping.topic_ids.map(id => String(id)), ...parentTopicIds])];
-            updatedMapping.topic_ids = newTopicIds;
-
-            console.log('Updated topic IDs:', newTopicIds);
-          }
-          
-          updateQuestionMapping(questionId, updatedMapping);
-          console.log('Updated mapping for question', questionId, ':', updatedMapping);
+      <QuestionImportReviewWorkflow
+        questions={(questions || []).map((q): QuestionDisplayData => ({
+          id: q.id,
+          question_number: q.question_number,
+          question_text: q.question_text || '',
+          question_type: q.question_type as 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay',
+          marks: q.marks || 0,
+          difficulty: q.difficulty,
+          topic: q.topic,
+          subtopic: q.subtopic,
+          answer_format: q.answer_format,
+          answer_requirement: q.answer_requirement,
+          correct_answers: q.correct_answers,
+          options: q.options,
+          attachments: attachments[q.id] || [],
+          hint: q.hint,
+          explanation: q.explanation,
+          requires_manual_marking: q.requires_manual_marking,
+          marking_criteria: q.marking_criteria,
+          parts: q.parts
+        }))}
+        paperTitle={paperMetadata?.paper_title || paperMetadata?.paper_code || 'Untitled Paper'}
+        paperDuration={paperMetadata?.paper_duration}
+        totalMarks={paperMetadata?.total_marks || questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+        importSessionId={importSession?.id}
+        requireSimulation={true}
+        onAllQuestionsReviewed={() => {
+          console.log('All questions reviewed');
         }}
-        onAttachmentUpload={handleAttachmentUpload}
-        onAttachmentDelete={(key: string, attachmentId: string) => {
-          console.log('🗑️ Delete attachment clicked:', { key, attachmentId });
-          setDeleteAttachmentConfirm({ key, attachmentId });
-          console.log('✅ Confirmation dialog should now appear');
+        onImportReady={(canImport) => {
+          console.log('Import ready status:', canImport);
         }}
-        onAutoMap={() => handleAutoMapQuestions(true)}
-        onImportConfirm={handleImportQuestions}
-        onPrevious={onPrevious}
-        onToggleExpanded={toggleQuestionExpanded}
-        onToggleFigureRequired={handleToggleFigureRequired}
-        onExpandAll={() => {
-          const allQuestionIds = questions.map(q => q.id);
-          setExpandedQuestions(new Set(allQuestionIds));
-        }}
-        onCollapseAll={() => {
-          setExpandedQuestions(new Set());
-        }}
-        onPdfUpload={(file: File) => {
-          setPdfFile(file);
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            setPdfDataUrl(event.target?.result as string);
-          };
-          reader.readAsDataURL(file);
-        }}
-        onRemovePdf={() => {
-          setPdfFile(null);
-          setPdfDataUrl(null);
-        }}
-        onEditMetadata={() => setEditingMetadata(true)}
-        onSaveMetadata={saveMetadata}
-        onUpdateMetadata={(field: string, value: any) => {
-          setPaperMetadata((prev: any) => ({ ...prev, [field]: value }));
-        }}
-        onFixIncomplete={handleFixIncompleteQuestions}
-        confirmationStatus={confirmationStatus}
-        onSnippingComplete={(dataUrl: string, fileName: string, questionId: string, partPath: string[]) => {
-          // Convert part path to indices
-          let partIndex: number | undefined;
-          let subpartIndex: number | undefined;
-          
-          if (partPath && partPath.length > 0) {
-            const question = questions.find(q => q.id === questionId);
-            if (question && question.parts) {
-              const partId = partPath[0];
-              partIndex = question.parts.findIndex(p => p.id === partId);
-              
-              if (partPath.length > 1 && partIndex >= 0) {
-                const part = question.parts[partIndex];
-                if (part.subparts) {
-                  const subpartId = partPath[1];
-                  subpartIndex = part.subparts.findIndex(sp => sp.id === subpartId);
-                }
-              }
-            }
-          }
-          
-          const attachmentKey = generateAttachmentKey(questionId, partIndex, subpartIndex);
-          
-          const newAttachment = {
-            id: `att_${Date.now()}`,
-            dataUrl: dataUrl,
-            file_url: dataUrl,
-            fileName: fileName,
-            file_name: fileName,
-            file_type: 'image/png',
-            created_at: new Date().toISOString()
-          };
-          
-          setAttachments(prev => ({
-            ...prev,
-            [attachmentKey]: [...(prev[attachmentKey] || []), newAttachment]
-          }));
-          
-          if (updateStagedAttachments) {
-            updateStagedAttachments(attachmentKey, [...(attachments[attachmentKey] || []), newAttachment]);
-          }
-          
-          toast.success('Attachment added');
-        }}
-        onUpdateAttachments={(newAttachments) => {
-          setAttachments(newAttachments);
-          if (updateStagedAttachments) {
-            Object.entries(newAttachments).forEach(([key, value]) => {
-              updateStagedAttachments(key, value);
-            });
-          }
-        }}
-        reviewStatuses={reviewStatuses}
-        onToggleReview={handleToggleReviewStatus}
-        reviewDisabled={isImporting || reviewLoading}
-        reviewLoading={reviewLoading}
       />
 
       {/* Import Progress */}

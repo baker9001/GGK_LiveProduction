@@ -386,34 +386,34 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
     const indent = level * 24; // 24px per level
 
     return (
-      <div key={part.id} className=\"space-y-2\" style={{ marginLeft: `${indent}px` }}>
+      <div key={part.id} className="space-y-2" style={{ marginLeft: `${indent}px` }}>
         {/* Part Header */}
         <button
           onClick={() => togglePart(part.id)}
-          className=\"w-full bg-gray-100 dark:bg-gray-700 rounded-lg p-3 flex items-start justify-between hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors\"
+          className="w-full bg-gray-100 dark:bg-gray-700 rounded-lg p-3 flex items-start justify-between hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
         >
-          <div className=\"flex items-start gap-3 flex-1\">
-            <div className=\"flex-shrink-0 h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold\">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
               {part.part_label}
             </div>
-            <div className=\"flex-1 text-left\">
-              <p className=\"text-sm text-gray-900 dark:text-white font-medium\">
+            <div className="flex-1 text-left">
+              <p className="text-sm text-gray-900 dark:text-white font-medium">
                 Part {part.part_label}
               </p>
               {!isExpanded && part.question_text && (
-                <p className=\"text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-1\">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
                   {part.question_text}
                 </p>
               )}
             </div>
-            <div className=\"flex items-center gap-2\">
-              <span className=\"text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300\">
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
                 {part.marks} mark{part.marks !== 1 ? 's' : ''}
               </span>
               {isExpanded ? (
-                <ChevronUp className=\"h-4 w-4 text-gray-600 dark:text-gray-400\" />
+                <ChevronUp className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               ) : (
-                <ChevronDown className=\"h-4 w-4 text-gray-600 dark:text-gray-400\" />
+                <ChevronDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               )}
             </div>
           </div>
@@ -421,11 +421,11 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
         {/* Part Content */}
         {isExpanded && (
-          <div className=\"bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 space-y-3\">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 space-y-3">
             {/* Question Text */}
             {part.question_text && (
-              <div className=\"bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700\">
-                <p className=\"text-sm text-gray-900 dark:text-white whitespace-pre-wrap\">
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
                   {part.question_text}
                 </p>
               </div>
@@ -433,15 +433,15 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
             {/* Answer Format Info */}
             {part.answer_format && (
-              <div className=\"flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400\">
-                <FileText className=\"h-3 w-3\" />
+              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                <FileText className="h-3 w-3" />
                 <span>Answer format: {part.answer_format}</span>
               </div>
             )}
 
             {/* MCQ Options for this part */}
             {part.options && part.options.length > 0 && (
-              <div className=\"space-y-2\">
+              <div className="space-y-2">
                 {part.options.map((option, optIndex) => (
                   <div
                     key={optIndex}
@@ -452,7 +452,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                         : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                     )}
                   >
-                    <div className=\"flex items-start gap-3\">
+                    <div className="flex items-start gap-3">
                       <div
                         className={cn(
                           'flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold',
@@ -463,11 +463,11 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                       >
                         {option.label}
                       </div>
-                      <div className=\"flex-1\">
-                        <p className=\"text-sm text-gray-900 dark:text-white\">{option.text}</p>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900 dark:text-white">{option.text}</p>
                       </div>
                       {showAnswers && option.is_correct && highlightCorrect && (
-                        <CheckCircle className=\"h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0\" />
+                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                       )}
                     </div>
                   </div>
@@ -480,16 +480,16 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
             {/* Attachments for this part */}
             {part.attachments && part.attachments.length > 0 && (
-              <div className=\"space-y-2\">
-                <h5 className=\"text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2\">
-                  <ImageIcon className=\"h-3 w-3\" />
+              <div className="space-y-2">
+                <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <ImageIcon className="h-3 w-3" />
                   Attachments ({part.attachments.length})
                 </h5>
-                <div className=\"grid grid-cols-2 gap-2\">
+                <div className="grid grid-cols-2 gap-2">
                   {part.attachments.map((attachment, attIdx) => (
                     <div
                       key={attIdx}
-                      className=\"bg-gray-100 dark:bg-gray-700 rounded p-2 text-xs text-gray-600 dark:text-gray-400\"
+                      className="bg-gray-100 dark:bg-gray-700 rounded p-2 text-xs text-gray-600 dark:text-gray-400"
                     >
                       {attachment.file_name || attachment.description || `Attachment ${attIdx + 1}`}
                     </div>
@@ -500,12 +500,12 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
             {/* Hint for this part */}
             {showHints && part.hint && (
-              <div className=\"bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3\">
-                <div className=\"flex items-start gap-2\">
-                  <Lightbulb className=\"h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5\" />
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className=\"text-xs font-semibold text-yellow-900 dark:text-yellow-100 mb-1\">Hint</p>
-                    <p className=\"text-xs text-yellow-800 dark:text-yellow-200\">{part.hint}</p>
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Hint</p>
+                    <p className="text-xs text-yellow-800 dark:text-yellow-200">{part.hint}</p>
                   </div>
                 </div>
               </div>
@@ -513,12 +513,12 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
             {/* Explanation for this part */}
             {showExplanations && part.explanation && (
-              <div className=\"bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3\">
-                <div className=\"flex items-start gap-2\">
-                  <BookOpen className=\"h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5\" />
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className=\"text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1\">Explanation</p>
-                    <p className=\"text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap\">{part.explanation}</p>
+                    <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">Explanation</p>
+                    <p className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{part.explanation}</p>
                   </div>
                 </div>
               </div>
@@ -526,7 +526,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
 
             {/* Nested Subparts */}
             {part.subparts && part.subparts.length > 0 && (
-              <div className=\"space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600\">
+              <div className="space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
                 {part.subparts.map((subpart, subIndex) => renderQuestionPart(subpart, subIndex, level + 1))}
               </div>
             )}
