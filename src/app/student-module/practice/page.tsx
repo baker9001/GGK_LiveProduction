@@ -154,8 +154,13 @@ const PracticePage: React.FC = () => {
 
   const createSessionMutation = useMutation<PracticeSessionCreationResponse, Error, PracticeSetWithMeta>({
     mutationFn: async (practiceSet) => {
-      const response = await createSession(practiceSet.id);
-      return response;
+      try {
+        const response = await createSession(practiceSet.id);
+        return response;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start practice session';
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: (data, variables) => {
       setSessionState({
@@ -167,6 +172,10 @@ const PracticePage: React.FC = () => {
         practiceSet: variables
       });
       setMode('session');
+    },
+    onError: (error) => {
+      alert(`Unable to start practice: ${error.message}\n\nThis practice set may contain questions without correct answers. Please contact support.`);
+      setMode('picker');
     }
   });
 
@@ -186,6 +195,10 @@ const PracticePage: React.FC = () => {
             }
           };
         });
+      },
+      onError: (error) => {
+        console.error('Failed to submit answer:', error);
+        alert(`Error submitting answer: ${error.message}`);
       }
     }
   );
@@ -220,7 +233,11 @@ const PracticePage: React.FC = () => {
   const questionDetailQuery = useQuery({
     queryKey: ['practice-question', activeItem?.question_id],
     queryFn: () => (activeItem ? fetchQuestionWithMarkScheme(activeItem.question_id) : Promise.resolve(null)),
-    enabled: !!activeItem?.question_id
+    enabled: !!activeItem?.question_id,
+    retry: false,
+    onError: (error) => {
+      console.error('Failed to load question:', error);
+    }
   });
 
   const questionDetails = questionDetailQuery.data ?? null;
@@ -581,6 +598,25 @@ const PracticePage: React.FC = () => {
                 </details>
               )}
               {renderAnswerInput()}
+            </div>
+          ) : questionDetailQuery.isError ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md">
+                <div className="text-red-600 dark:text-red-400 font-semibold mb-2">Unable to Load Question</div>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  This question cannot be loaded. It may be missing required data such as correct answers.
+                </p>
+                <button
+                  type="button"
+                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
+                  onClick={() => {
+                    setMode('hub');
+                    setSessionState(null);
+                  }}
+                >
+                  Return to Hub
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center text-gray-500">
