@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   ChevronLeft,
@@ -84,6 +84,65 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestion = questions[currentQuestionIndex];
+
+  const normalizedQuestion = useMemo(() => {
+    if (!currentQuestion) {
+      return null;
+    }
+
+    const normalizedType: 'mcq' | 'tf' | 'descriptive' =
+      currentQuestion.question_type === 'mcq'
+        ? 'mcq'
+        : currentQuestion.question_type === 'tf'
+          ? 'tf'
+          : 'descriptive';
+
+    const attachments = (currentQuestion.attachments || [])
+      .map(att => att.file_name || att.url || att.preview)
+      .filter((value): value is string => Boolean(value));
+
+    const options = currentQuestion.options?.map((option, index) => {
+      const optionText = option.text ?? (option as { option_text?: string }).option_text ?? '';
+      const optionLabel = option.label ?? String.fromCharCode(65 + index);
+
+      return {
+        label: optionLabel,
+        text: optionText,
+        is_correct: option.is_correct,
+      };
+    });
+
+    const correctAnswers = Array.isArray(currentQuestion.correct_answers)
+      ? currentQuestion.correct_answers
+      : [];
+
+    const rawCorrectAnswer = (currentQuestion as { correct_answer?: unknown }).correct_answer;
+
+    const singularCorrectAnswer =
+      typeof rawCorrectAnswer === 'string'
+        ? rawCorrectAnswer
+        : correctAnswers.find(answer => typeof answer.answer === 'string')?.answer;
+
+    return {
+      id: currentQuestion.id,
+      type: normalizedType,
+      subject: currentQuestion.topic,
+      answer_format: currentQuestion.answer_format || 'single_line',
+      answer_requirement: currentQuestion.answer_requirement,
+      marks: currentQuestion.marks,
+      correct_answers: correctAnswers,
+      correct_answer: singularCorrectAnswer,
+      total_alternatives:
+        currentQuestion.total_alternatives || correctAnswers.length || undefined,
+      figure: currentQuestion.figure_required || currentQuestion.figure,
+      attachments,
+      options,
+    };
+  }, [currentQuestion]);
+
+  if (!currentQuestion || !normalizedQuestion) {
+    return null;
+  }
 
   // Start timer for current question
   useEffect(() => {
@@ -577,12 +636,9 @@ export const TestSimulationMode: React.FC<TestSimulationModeProps> = ({
                       Your Answer
                     </h3>
                     <DynamicAnswerField
+                      question={normalizedQuestion}
                       value={userAnswers[currentQuestion.id]?.answer}
                       onChange={handleAnswerChange}
-                      questionType={currentQuestion.question_type}
-                      answerFormat={currentQuestion.answer_format || 'single_line'}
-                      options={currentQuestion.options}
-                      placeholder="Enter your answer here..."
                     />
                   </div>
 
