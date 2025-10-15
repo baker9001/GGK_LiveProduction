@@ -512,6 +512,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                     showAttachments={true}
                     compact={false}
                     highlightCorrect={true}
+                    defaultExpandedSections={{ hint: true, explanation: true }}
                   />
                 </div>
               )}
