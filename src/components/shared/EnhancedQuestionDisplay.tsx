@@ -82,6 +82,12 @@ export interface QuestionDisplayData {
   parts?: QuestionPart[];
 }
 
+type ExpandedSectionsConfig = {
+  hint?: boolean;
+  explanation?: boolean;
+  markingCriteria?: boolean;
+};
+
 interface EnhancedQuestionDisplayProps {
   question: QuestionDisplayData;
   showAnswers?: boolean;
@@ -90,6 +96,7 @@ interface EnhancedQuestionDisplayProps {
   showAttachments?: boolean;
   compact?: boolean;
   highlightCorrect?: boolean;
+  defaultExpandedSections?: ExpandedSectionsConfig;
 }
 
 export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = ({
@@ -99,12 +106,13 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
   showExplanations = true,
   showAttachments = true,
   compact = false,
-  highlightCorrect = true
+  highlightCorrect = true,
+  defaultExpandedSections
 }) => {
   const [expandedSections, setExpandedSections] = useState({
-    hint: false,
-    explanation: false,
-    markingCriteria: false
+    hint: defaultExpandedSections?.hint ?? false,
+    explanation: defaultExpandedSections?.explanation ?? false,
+    markingCriteria: defaultExpandedSections?.markingCriteria ?? false
   });
 
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
