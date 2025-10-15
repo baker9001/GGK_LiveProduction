@@ -1820,7 +1820,11 @@ function QuestionsTabInner({
           }
 
           if (optionsArray.length > 0) {
-            processedQuestion.options = processOptions(optionsArray);
+            processedQuestion.options = processOptions(
+              optionsArray,
+              q.correct_answers,
+              q.correct_answer
+            );
           }
         }
 
@@ -1936,7 +1940,11 @@ function QuestionsTabInner({
 
     // Process options for MCQ
     if (part.options) {
-      processedPart.options = processOptions(part.options);
+      processedPart.options = processOptions(
+        part.options,
+        part.correct_answers,
+        part.correct_answer
+      );
     }
 
     return processedPart;
@@ -1972,7 +1980,9 @@ function QuestionsTabInner({
       answer_format: answerFormat || 'single_line',
       answer_requirement: answerRequirement,
       correct_answers: subpart.correct_answers ? processAnswers(subpart.correct_answers, answerRequirement) : [],
-      options: subpart.options ? processOptions(subpart.options) : [],
+      options: subpart.options
+        ? processOptions(subpart.options, subpart.correct_answers, subpart.correct_answer)
+        : [],
       hint: subpart.hint,
       explanation: subpart.explanation,
       figure: subpartFigureFlag,
@@ -2069,14 +2079,79 @@ function QuestionsTabInner({
     });
   };
 
-  const processOptions = (options: any[]): ProcessedOption[] => {
+  const buildNormalizedOptionValue = (value: unknown): string[] => {
+    const strValue = ensureString(value)?.trim();
+    if (!strValue) return [];
+
+    const lower = strValue.toLowerCase();
+    const variants = new Set<string>();
+
+    variants.add(lower);
+    variants.add(lower.replace(/^option\s+/i, '').trim());
+
+    const withoutPunctuation = lower.replace(/[\.,;:()\[\]{}]/g, '').trim();
+    variants.add(withoutPunctuation);
+    variants.add(withoutPunctuation.replace(/\s+/g, ''));
+
+    return Array.from(variants).filter(Boolean);
+  };
+
+  const buildNormalizedCorrectAnswerSet = (
+    correctAnswers?: any[],
+    correctAnswer?: unknown
+  ): Set<string> => {
+    const normalized = new Set<string>();
+
+    correctAnswers?.forEach(answer => {
+      buildNormalizedOptionValue(answer?.answer).forEach(variant => normalized.add(variant));
+    });
+
+    buildNormalizedOptionValue(correctAnswer).forEach(variant => normalized.add(variant));
+
+    return normalized;
+  };
+
+  const matchesCorrectAnswer = (value: string, normalizedAnswers: Set<string>): boolean => {
+    if (!value || normalizedAnswers.size === 0) {
+      return false;
+    }
+
+    return buildNormalizedOptionValue(value).some(variant => normalizedAnswers.has(variant));
+  };
+
+  const processOptions = (
+    options: any[],
+    correctAnswers?: any[],
+    correctAnswer?: unknown
+  ): ProcessedOption[] => {
     if (!Array.isArray(options)) return [];
-    
-    return options.map((opt, index) => ({
-      label: opt.label || String.fromCharCode(65 + index), // A, B, C...
-      text: ensureString(opt.text || opt.option_text) || '',
-      is_correct: opt.is_correct || false
-    }));
+
+    const normalizedAnswers = buildNormalizedCorrectAnswerSet(correctAnswers, correctAnswer);
+
+    return options.map((opt, index) => {
+      const label = opt.label || String.fromCharCode(65 + index); // A, B, C...
+      const text = ensureString(opt.text || opt.option_text) || '';
+
+      let explicitIsCorrect: boolean | undefined;
+      if (typeof opt.is_correct === 'boolean') {
+        explicitIsCorrect = opt.is_correct;
+      } else if (typeof opt.is_correct === 'string') {
+        explicitIsCorrect = opt.is_correct.toLowerCase() === 'true';
+      } else if (typeof opt.is_correct === 'number') {
+        explicitIsCorrect = opt.is_correct === 1;
+      }
+
+      const derivedIsCorrect =
+        matchesCorrectAnswer(label, normalizedAnswers) ||
+        matchesCorrectAnswer(text, normalizedAnswers) ||
+        matchesCorrectAnswer(`option ${label}`, normalizedAnswers);
+
+      return {
+        label,
+        text,
+        is_correct: explicitIsCorrect ?? derivedIsCorrect
+      };
+    });
   };
 
   const detectQuestionType = (question: any): string => {
