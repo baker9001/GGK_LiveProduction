@@ -41,6 +41,7 @@ import StructureTab from './tabs/StructureTab';
 import { MetadataTab } from './tabs/MetadataTab';
 import { QuestionsTab } from './tabs/QuestionsTab';
 import { PreviousSessionsTable } from './components/PreviousSessionsTable';
+import { transformImportedPaper } from '../../../../../lib/extraction/jsonTransformer';
 
 // Define the tabs for the import workflow
 const IMPORT_TABS = [
@@ -1386,13 +1387,27 @@ export default function PapersSetupPage() {
       // Read and parse the file
       const text = await file.text();
       const jsonData = JSON.parse(text);
-      
+
       // Validate JSON structure
       if (!jsonData.exam_board || !jsonData.qualification || !jsonData.questions) {
         throw new Error('Invalid JSON structure. Missing required fields: exam_board, qualification, or questions.');
       }
-      
-      setParsedData(jsonData);
+
+      // Transform imported JSON to internal format
+      try {
+        const transformed = transformImportedPaper(jsonData);
+        // Store both original and transformed data
+        setParsedData({
+          ...jsonData,
+          transformedQuestions: transformed.questions,
+          transformedMetadata: transformed.metadata
+        });
+      } catch (transformError) {
+        console.error('JSON transformation error:', transformError);
+        // Fall back to original if transformation fails
+        setParsedData(jsonData);
+        toast.warning('Some questions may not display correctly');
+      }
       
       // Generate hash for duplicate detection
       const jsonHash = await generateJsonHash(jsonData);
