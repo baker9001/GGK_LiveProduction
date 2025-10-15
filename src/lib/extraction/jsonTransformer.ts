@@ -96,15 +96,11 @@ export function transformImportedQuestion(
     questionType = 'essay';
   }
 
-  // Process options for MCQ/TF questions
-  const options = imported.options?.map(opt => ({
-    label: opt.label,
-    text: opt.text,
-    is_correct: opt.is_correct || false
-  })) || [];
-
   // Process correct answers
   const correctAnswers = processCorrectAnswers(imported.correct_answers || []);
+
+  // Process options for MCQ/TF questions
+  const options = mapOptionsWithCorrectAnswers(imported.options, correctAnswers);
 
   // Process attachments
   const attachments = processAttachments(imported.attachments || []);
@@ -150,11 +146,7 @@ function transformQuestionPart(
   const partId = `${parentNumber}-${partLabel}`;
 
   const correctAnswers = processCorrectAnswers(part.correct_answers || []);
-  const options = part.options?.map(opt => ({
-    label: opt.label,
-    text: opt.text,
-    is_correct: opt.is_correct || false
-  })) || [];
+  const options = mapOptionsWithCorrectAnswers(part.options, correctAnswers);
 
   const attachments = processAttachments(part.attachments || []);
 
@@ -198,6 +190,80 @@ function processCorrectAnswers(answers: ImportedCorrectAnswer[]): Array<any> {
     error_carried_forward: answer.error_carried_forward || false,
     marking_criteria: answer.marking_criteria
   }));
+}
+
+function mapOptionsWithCorrectAnswers(
+  importedOptions: ImportedQuestion['options'],
+  correctAnswers: ReturnType<typeof processCorrectAnswers>
+): Array<{ label: string; text: string; is_correct: boolean }> {
+  if (!importedOptions || importedOptions.length === 0) {
+    return [];
+  }
+
+  const normalizedCorrectAnswers = buildNormalizedAnswerSet(correctAnswers);
+
+  return importedOptions.map(option => {
+    const isCorrectFromAnswers = [option.label, option.text]
+      .some(value => matchesCorrectAnswerValue(value, normalizedCorrectAnswers));
+
+    return {
+      label: option.label,
+      text: option.text,
+      is_correct: Boolean(option.is_correct ?? isCorrectFromAnswers)
+    };
+  });
+}
+
+function buildNormalizedAnswerSet(
+  correctAnswers: ReturnType<typeof processCorrectAnswers>
+): Set<string> {
+  const normalized = new Set<string>();
+
+  correctAnswers.forEach(answer => {
+    if (!answer || typeof answer.answer === 'undefined' || answer.answer === null) {
+      return;
+    }
+
+    generateNormalizationVariants(answer.answer).forEach(variant => {
+      if (variant) {
+        normalized.add(variant);
+      }
+    });
+  });
+
+  return normalized;
+}
+
+function matchesCorrectAnswerValue(
+  value: string | null | undefined,
+  normalizedCorrectAnswers: Set<string>
+): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return generateNormalizationVariants(value).some(variant => normalizedCorrectAnswers.has(variant));
+}
+
+function generateNormalizationVariants(value: string): string[] {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const lower = trimmed.toLowerCase();
+  const variants = new Set<string>();
+
+  variants.add(lower);
+  variants.add(lower.replace(/^option\s+/i, '').trim());
+
+  const withoutPunctuation = lower.replace(/[\.,;:()\[\]{}]/g, '').trim();
+  variants.add(withoutPunctuation);
+
+  const condensed = withoutPunctuation.replace(/\s+/g, '');
+  variants.add(condensed);
+
+  return Array.from(variants).filter(Boolean);
 }
 
 /**
