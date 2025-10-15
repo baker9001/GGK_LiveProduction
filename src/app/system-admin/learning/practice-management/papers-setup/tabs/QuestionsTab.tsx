@@ -1261,7 +1261,7 @@ function QuestionsTabInner({
 
           const sessionUpdate: Record<string, any> = {
             total_questions: questions.length,
-            reviewed_questions: reviewedCount,
+            questions_reviewed: reviewedCount,
             updated_at: new Date().toISOString(),
             status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
           };
@@ -2723,7 +2723,7 @@ function QuestionsTabInner({
         }
 
         const sessionUpdate: Record<string, any> = {
-          reviewed_questions: reviewedCount,
+          questions_reviewed: reviewedCount,
           total_questions: questions.length,
           updated_at: new Date().toISOString(),
           status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress',
