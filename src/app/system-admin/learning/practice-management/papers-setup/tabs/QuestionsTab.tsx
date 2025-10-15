@@ -1259,22 +1259,7 @@ function QuestionsTabInner({
 
           const reviewedCount = Object.values(statusMap).filter(status => status.isReviewed).length;
 
-          const sessionUpdate: Record<string, any> = {
-            total_questions: questions.length,
-            questions_reviewed: reviewedCount,
-            updated_at: new Date().toISOString(),
-            status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress'
-          };
-
-          sessionUpdate.completed_at =
-            sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
-
-          const { error: updateError } = await supabase
-            .from('question_import_review_sessions')
-            .update(sessionUpdate)
-            .eq('id', sessionId);
-
-          if (updateError) throw updateError;
+          await persistReviewSessionProgress(sessionId, reviewedCount, questions.length);
         } catch (error) {
           console.error('Failed to synchronize review workflow:', error);
           if (!isCancelled) {
@@ -1321,7 +1306,14 @@ function QuestionsTabInner({
     return () => {
       isCancelled = true;
     };
-  }, [importSession?.id, questions, existingPaperId, paperTitleForMetadata, paperCodeForMetadata]);
+  }, [
+    importSession?.id,
+    questions,
+    existingPaperId,
+    paperTitleForMetadata,
+    paperCodeForMetadata,
+    persistReviewSessionProgress
+  ]);
 
   // Auto-fill mappings from parsed data
   useEffect(() => {
@@ -2722,24 +2714,7 @@ function QuestionsTabInner({
           throw updateError;
         }
 
-        const sessionUpdate: Record<string, any> = {
-          questions_reviewed: reviewedCount,
-          total_questions: questions.length,
-          updated_at: new Date().toISOString(),
-          status: reviewedCount === questions.length && questions.length > 0 ? 'completed' : 'in_progress',
-        };
-
-        sessionUpdate.completed_at =
-          sessionUpdate.status === 'completed' ? new Date().toISOString() : null;
-
-        const { error: sessionError } = await supabase
-          .from('question_import_review_sessions')
-          .update(sessionUpdate)
-          .eq('id', reviewSessionId);
-
-        if (sessionError) {
-          throw sessionError;
-        }
+        await persistReviewSessionProgress(reviewSessionId, reviewedCount, questions.length);
 
       }
 
@@ -2749,7 +2724,14 @@ function QuestionsTabInner({
       toast.error('Failed to update review status. Please try again.');
       setReviewStatuses({ ...previousStatuses });
     }
-  }, [reviewStatuses, currentReviewerId, reviewSessionId, questions.length, importSession?.id]);
+  }, [
+    reviewStatuses,
+    currentReviewerId,
+    reviewSessionId,
+    questions.length,
+    importSession?.id,
+    persistReviewSessionProgress
+  ]);
 
   // FIXED: Updated validation function with proper error handling and figure_required check
   const validateQuestionsWithAttachments = () => {
@@ -3389,7 +3371,7 @@ function QuestionsTabInner({
     // FIXED: Convert part path to indices
     let partIndex: number | undefined;
     let subpartIndex: number | undefined;
-    
+
     if (partPath && partPath.length > 0) {
       // Find the part index
       const question = questions.find(q => q.id === questionId);
@@ -3407,9 +3389,75 @@ function QuestionsTabInner({
         }
       }
     }
-    
+
     handleAddAttachment(questionId, partIndex, subpartIndex);
   };
+
+  const persistReviewSessionProgress = useCallback(
+    async (sessionId: string, reviewedCount: number, totalQuestions: number) => {
+      const status = reviewedCount === totalQuestions && totalQuestions > 0 ? 'completed' : 'in_progress';
+      const timestamp = new Date().toISOString();
+      const completionTimestamp = status === 'completed' ? timestamp : null;
+
+      const baseUpdate = {
+        total_questions: totalQuestions,
+        updated_at: timestamp,
+        status
+      } satisfies Record<string, any>;
+
+      const buildPayload = (
+        config: { reviewedField: 'questions_reviewed' | 'reviewed_questions'; includeCompletedAt: boolean }
+      ) => {
+        const payload: Record<string, any> = {
+          ...baseUpdate,
+          [config.reviewedField]: reviewedCount
+        };
+
+        if (config.includeCompletedAt) {
+          payload.completed_at = completionTimestamp;
+        }
+
+        return payload;
+      };
+
+      const payloads: Record<string, any>[] = [
+        buildPayload({ reviewedField: 'questions_reviewed', includeCompletedAt: true }),
+        buildPayload({ reviewedField: 'questions_reviewed', includeCompletedAt: false }),
+        buildPayload({ reviewedField: 'reviewed_questions', includeCompletedAt: true }),
+        buildPayload({ reviewedField: 'reviewed_questions', includeCompletedAt: false })
+      ];
+
+      let lastError: any = null;
+
+      for (const payload of payloads) {
+        const { error } = await supabase
+          .from('question_import_review_sessions')
+          .update(payload)
+          .eq('id', sessionId);
+
+        if (!error) {
+          if (lastError) {
+            console.warn('Review session progress update succeeded after fallback payload', {
+              initialError: lastError,
+              appliedPayload: payload
+            });
+          }
+          return;
+        }
+
+        lastError = error;
+
+        if (error.code !== '42703') {
+          break;
+        }
+      }
+
+      if (lastError) {
+        throw lastError;
+      }
+    },
+    []
+  );
 
   const handleFixIncompleteQuestions = async () => {
     try {
