@@ -295,26 +295,26 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
           return (
             <div
               key={id}
-              className="group relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow"
+              className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/70 shadow-sm transition-all hover:shadow-md"
             >
               <div className="relative">
                 {isImage ? (
                   <button
                     type="button"
                     onClick={() => setPreviewAttachment(attachment)}
-                    className="w-full bg-gray-50 dark:bg-gray-950"
+                    className="flex w-full items-center justify-center bg-white dark:bg-gray-900/60 p-4"
                   >
                     <img
                       src={attachment.file_url}
                       alt={attachment.file_name || 'Attachment preview'}
-                      className="w-full h-48 object-contain mix-blend-normal"
+                      className="max-h-80 w-full object-contain"
                     />
                   </button>
                 ) : (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-950">
+                  <div className="bg-white p-4 dark:bg-gray-900/60">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800">
-                        <FileText className="h-6 w-6 text-gray-500" />
+                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800/80">
+                        <FileText className="h-6 w-6 text-gray-500 dark:text-gray-300" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
@@ -343,7 +343,7 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                     href={attachment.file_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
                     aria-label="Open attachment in new tab"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -351,7 +351,7 @@ const AttachmentGallery: React.FC<{ attachments: AttachmentAsset[] }> = ({ attac
                   <a
                     href={attachment.file_url}
                     download={attachment.file_name || undefined}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 hover:text-blue-600 dark:bg-gray-800/80 dark:text-gray-200"
                     aria-label="Download attachment"
                   >
                     <Download className="h-4 w-4" />
