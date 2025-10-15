@@ -110,6 +110,25 @@ All tables include:
 1. `supabase/migrations/add_question_import_review_tracking.sql` (new)
 2. `src/app/system-admin/learning/practice-management/papers-setup/tabs/QuestionsTab.tsx`
 3. `src/components/shared/EnhancedQuestionDisplay.tsx`
+4. `src/app/system-admin/learning/practice-management/papers-setup/tabs/components/FixIncompleteQuestionsButton.tsx` (new)
+5. `src/app/system-admin/learning/practice-management/papers-setup/tabs/components/QuestionSupportMatrix.tsx` (new)
+6. `src/app/system-admin/learning/practice-management/papers-setup/tabs/components/QuestionsReviewSection.tsx` (new - stub)
+
+### Supporting Components Created
+
+**FixIncompleteQuestionsButton**
+- Detects questions with missing required fields
+- Provides one-click fix for incomplete questions
+- Shows count of incomplete questions
+
+**QuestionSupportMatrix**
+- Displays visual summary of question types and statistics
+- Shows MCQ count, descriptive questions, multi-part questions
+- Highlights questions requiring manual marking
+
+**QuestionsReviewSection**
+- Stub component for backward compatibility
+- Deprecated in favor of QuestionImportReviewWorkflow
 
 ## Build Status
 
