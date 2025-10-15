@@ -27,6 +27,23 @@ import { cn } from '../../lib/utils';
 type EditableCorrectAnswer = NonNullable<QuestionDisplayData['correct_answers']>[number];
 type EditableOption = NonNullable<QuestionDisplayData['options']>[number];
 
+interface UnitRecord {
+  id: string;
+  name: string;
+}
+
+interface TopicRecord {
+  id: string;
+  name: string;
+  unit_id: string | null;
+}
+
+interface SubtopicRecord {
+  id: string;
+  name: string;
+  topic_id: string | null;
+}
+
 interface SimulationResults {
   totalQuestions: number;
   answeredQuestions: number;
@@ -82,9 +99,58 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [syncError, setSyncError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [units, setUnits] = useState<UnitRecord[]>([]);
+  const [topics, setTopics] = useState<TopicRecord[]>([]);
+  const [subtopics, setSubtopics] = useState<SubtopicRecord[]>([]);
+  const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
+  const taxonomyErrorNotifiedRef = useRef(false);
 
   const isInitializedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTaxonomy = async () => {
+      setIsLoadingTaxonomy(true);
+      try {
+        const [unitsRes, topicsRes, subtopicsRes] = await Promise.all([
+          supabase.from('edu_units').select('id, name').order('name', { ascending: true }),
+          supabase.from('edu_topics').select('id, name, unit_id').order('name', { ascending: true }),
+          supabase.from('edu_subtopics').select('id, name, topic_id').order('name', { ascending: true })
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (unitsRes.error || topicsRes.error || subtopicsRes.error) {
+          throw unitsRes.error || topicsRes.error || subtopicsRes.error;
+        }
+
+        setUnits(unitsRes.data ?? []);
+        setTopics(topicsRes.data ?? []);
+        setSubtopics(subtopicsRes.data ?? []);
+        taxonomyErrorNotifiedRef.current = false;
+      } catch (error) {
+        console.error('Failed to load academic taxonomy data', error);
+        if (!taxonomyErrorNotifiedRef.current) {
+          toast.error('Unable to load units and topics. Please refresh or try again later.');
+          taxonomyErrorNotifiedRef.current = true;
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTaxonomy(false);
+        }
+      }
+    };
+
+    fetchTaxonomy();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const commitQuestionUpdate = useCallback(
     (question: QuestionDisplayData, updates: Partial<QuestionDisplayData>) => {
@@ -95,6 +161,157 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       }
     },
     [onQuestionUpdate]
+  );
+
+  const normalizeName = useCallback((value?: string | null) => value?.trim().toLowerCase() ?? '', []);
+
+  const taxonomyMaps = useMemo(() => {
+    const unitsById = new Map<string, UnitRecord>();
+    const unitsByName = new Map<string, UnitRecord>();
+    const topicsById = new Map<string, TopicRecord>();
+    const topicsByName = new Map<string, TopicRecord>();
+    const subtopicsById = new Map<string, SubtopicRecord>();
+    const subtopicsByName = new Map<string, SubtopicRecord>();
+
+    units.forEach(unit => {
+      unitsById.set(unit.id, unit);
+      unitsByName.set(normalizeName(unit.name), unit);
+    });
+
+    topics.forEach(topic => {
+      topicsById.set(topic.id, topic);
+      topicsByName.set(normalizeName(topic.name), topic);
+    });
+
+    subtopics.forEach(subtopic => {
+      subtopicsById.set(subtopic.id, subtopic);
+      subtopicsByName.set(normalizeName(subtopic.name), subtopic);
+    });
+
+    return {
+      unitsById,
+      unitsByName,
+      topicsById,
+      topicsByName,
+      subtopicsById,
+      subtopicsByName
+    };
+  }, [normalizeName, units, topics, subtopics]);
+
+  const getEffectiveSelections = useCallback(
+    (question: QuestionDisplayData) => {
+      const normalizedSubtopic = normalizeName(question.subtopic);
+      const normalizedTopic = normalizeName(question.topic);
+      const normalizedUnit = normalizeName(question.unit);
+
+      const explicitSubtopic = question.subtopic_id ? taxonomyMaps.subtopicsById.get(question.subtopic_id) : null;
+      const matchedSubtopic = explicitSubtopic || (normalizedSubtopic ? taxonomyMaps.subtopicsByName.get(normalizedSubtopic) ?? null : null);
+
+      const explicitTopic = question.topic_id ? taxonomyMaps.topicsById.get(question.topic_id) : null;
+      const matchedTopicFromSubtopic = matchedSubtopic?.topic_id ? taxonomyMaps.topicsById.get(matchedSubtopic.topic_id) ?? null : null;
+      const matchedTopic =
+        explicitTopic || matchedTopicFromSubtopic || (normalizedTopic ? taxonomyMaps.topicsByName.get(normalizedTopic) ?? null : null);
+
+      const explicitUnit = question.unit_id ? taxonomyMaps.unitsById.get(question.unit_id) : null;
+      const matchedUnitFromTopic = matchedTopic?.unit_id ? taxonomyMaps.unitsById.get(matchedTopic.unit_id) ?? null : null;
+      const matchedUnit =
+        explicitUnit || matchedUnitFromTopic || (normalizedUnit ? taxonomyMaps.unitsByName.get(normalizedUnit) ?? null : null);
+
+      return {
+        unitId: matchedUnit?.id ?? '',
+        topicId: matchedTopic?.id ?? '',
+        subtopicId: matchedSubtopic?.id ?? ''
+      };
+    },
+    [normalizeName, taxonomyMaps]
+  );
+
+  const handleUnitSelect = useCallback(
+    (question: QuestionDisplayData, unitId: string) => {
+      if (!unitId) {
+        commitQuestionUpdate(question, {
+          unit_id: null,
+          unit: '',
+          topic_id: null,
+          topic: '',
+          subtopic_id: null,
+          subtopic: ''
+        });
+        return;
+      }
+
+      const selectedUnit = taxonomyMaps.unitsById.get(unitId) ?? null;
+      commitQuestionUpdate(question, {
+        unit_id: unitId,
+        unit: selectedUnit?.name ?? '',
+        topic_id: null,
+        topic: '',
+        subtopic_id: null,
+        subtopic: ''
+      });
+    },
+    [commitQuestionUpdate, taxonomyMaps.unitsById]
+  );
+
+  const handleTopicSelect = useCallback(
+    (question: QuestionDisplayData, topicId: string) => {
+      if (!topicId) {
+        commitQuestionUpdate(question, {
+          topic_id: null,
+          topic: '',
+          subtopic_id: null,
+          subtopic: ''
+        });
+        return;
+      }
+
+      const selectedTopic = taxonomyMaps.topicsById.get(topicId) ?? null;
+      const parentUnit = selectedTopic?.unit_id ? taxonomyMaps.unitsById.get(selectedTopic.unit_id) ?? null : null;
+
+      const currentSubtopic = question.subtopic_id ? taxonomyMaps.subtopicsById.get(question.subtopic_id) ?? null : null;
+      const shouldClearSubtopic = !currentSubtopic || currentSubtopic.topic_id !== topicId;
+
+      const nextUnitId = parentUnit?.id ?? (question.unit_id ? question.unit_id : null);
+      const nextUnitName =
+        parentUnit?.name ??
+        (nextUnitId ? taxonomyMaps.unitsById.get(nextUnitId)?.name ?? question.unit ?? '' : question.unit ?? '');
+
+      commitQuestionUpdate(question, {
+        topic_id: topicId,
+        topic: selectedTopic?.name ?? '',
+        unit_id: nextUnitId,
+        unit: nextUnitName,
+        subtopic_id: shouldClearSubtopic ? null : question.subtopic_id ?? null,
+        subtopic: shouldClearSubtopic ? '' : question.subtopic ?? ''
+      });
+    },
+    [commitQuestionUpdate, taxonomyMaps.topicsById, taxonomyMaps.unitsById, taxonomyMaps.subtopicsById]
+  );
+
+  const handleSubtopicSelect = useCallback(
+    (question: QuestionDisplayData, subtopicId: string) => {
+      if (!subtopicId) {
+        commitQuestionUpdate(question, {
+          subtopic_id: null,
+          subtopic: ''
+        });
+        return;
+      }
+
+      const selectedSubtopic = taxonomyMaps.subtopicsById.get(subtopicId) ?? null;
+      const parentTopic = selectedSubtopic?.topic_id ? taxonomyMaps.topicsById.get(selectedSubtopic.topic_id) ?? null : null;
+      const parentUnit = parentTopic?.unit_id ? taxonomyMaps.unitsById.get(parentTopic.unit_id) ?? null : null;
+
+      commitQuestionUpdate(question, {
+        subtopic_id: subtopicId,
+        subtopic: selectedSubtopic?.name ?? '',
+        topic_id: parentTopic?.id ?? question.topic_id ?? null,
+        topic: parentTopic?.name ?? question.topic ?? '',
+        unit_id: parentUnit?.id ?? question.unit_id ?? null,
+        unit: parentUnit?.name ?? question.unit ?? ''
+      });
+    },
+    [commitQuestionUpdate, taxonomyMaps.subtopicsById, taxonomyMaps.topicsById, taxonomyMaps.unitsById]
   );
 
   const handleQuestionFieldChange = <K extends keyof QuestionDisplayData>(
@@ -1162,6 +1379,44 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
           const requiresFigure = Boolean(question.figure_required ?? question.figure);
           const attachmentsCount = Array.isArray(question.attachments) ? question.attachments.length : 0;
           const hasFigureAttachment = attachmentsCount > 0;
+          const { unitId: selectedUnitId, topicId: selectedTopicId, subtopicId: selectedSubtopicId } =
+            getEffectiveSelections(question);
+          const selectedUnit = selectedUnitId ? units.find(unit => unit.id === selectedUnitId) : undefined;
+          const selectedTopic = selectedTopicId ? topics.find(topic => topic.id === selectedTopicId) : undefined;
+          const selectedSubtopic = selectedSubtopicId
+            ? subtopics.find(subtopic => subtopic.id === selectedSubtopicId)
+            : undefined;
+          const availableTopics = selectedUnitId
+            ? topics.filter(topic => (topic.unit_id ?? '') === selectedUnitId)
+            : topics;
+          const availableSubtopics = selectedTopicId
+            ? subtopics.filter(subtopic => (subtopic.topic_id ?? '') === selectedTopicId)
+            : subtopics;
+          const unitPlaceholder = isLoadingTaxonomy
+            ? 'Loading units...'
+            : units.length === 0
+            ? 'No units available'
+            : !selectedUnitId && question.unit
+            ? `Current: ${question.unit}`
+            : 'Select unit...';
+          const topicPlaceholder = isLoadingTaxonomy
+            ? 'Loading topics...'
+            : availableTopics.length === 0
+            ? selectedUnitId
+              ? 'No topics for selected unit'
+              : 'No topics available'
+            : !selectedTopicId && question.topic
+            ? `Current: ${question.topic}`
+            : 'Select topic...';
+          const subtopicPlaceholder = isLoadingTaxonomy
+            ? 'Loading subtopics...'
+            : availableSubtopics.length === 0
+            ? selectedTopicId
+              ? 'No subtopics for selected topic'
+              : 'No subtopics available'
+            : !selectedSubtopicId && question.subtopic
+            ? `Current: ${question.subtopic}`
+            : 'Select subtopic...';
           const baseCardClass = status.isReviewed
             ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10'
             : status.hasIssues
@@ -1375,22 +1630,63 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Topic</label>
-                        <input
-                          type="text"
-                          value={question.topic ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'topic', event.target.value)}
+                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Unit</label>
+                        <select
+                          value={selectedUnitId}
+                          onChange={(event) => handleUnitSelect(question, event.target.value)}
+                          disabled={isLoadingTaxonomy || units.length === 0}
                           className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        />
+                        >
+                          <option value="">{unitPlaceholder}</option>
+                          {units.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                              {unit.name}
+                            </option>
+                          ))}
+                          {selectedUnitId && !units.some((unit) => unit.id === selectedUnitId) && (
+                            <option value={selectedUnitId}>{selectedUnit?.name ?? question.unit ?? 'Selected unit unavailable'}</option>
+                          )}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Topic</label>
+                        <select
+                          value={selectedTopicId}
+                          onChange={(event) => handleTopicSelect(question, event.target.value)}
+                          disabled={isLoadingTaxonomy || (selectedUnitId ? availableTopics.length === 0 : topics.length === 0)}
+                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                        >
+                          <option value="">{topicPlaceholder}</option>
+                          {availableTopics.map((topic) => (
+                            <option key={topic.id} value={topic.id}>
+                              {topic.name}
+                            </option>
+                          ))}
+                          {selectedTopicId && !availableTopics.some((topic) => topic.id === selectedTopicId) && (
+                            <option value={selectedTopicId}>{selectedTopic?.name ?? question.topic ?? 'Selected topic unavailable'}</option>
+                          )}
+                        </select>
                       </div>
                       <div>
                         <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subtopic</label>
-                        <input
-                          type="text"
-                          value={question.subtopic ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'subtopic', event.target.value)}
+                        <select
+                          value={selectedSubtopicId}
+                          onChange={(event) => handleSubtopicSelect(question, event.target.value)}
+                          disabled={isLoadingTaxonomy || (selectedTopicId ? availableSubtopics.length === 0 : subtopics.length === 0)}
                           className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        />
+                        >
+                          <option value="">{subtopicPlaceholder}</option>
+                          {availableSubtopics.map((subtopic) => (
+                            <option key={subtopic.id} value={subtopic.id}>
+                              {subtopic.name}
+                            </option>
+                          ))}
+                          {selectedSubtopicId && !availableSubtopics.some((subtopic) => subtopic.id === selectedSubtopicId) && (
+                            <option value={selectedSubtopicId}>
+                              {selectedSubtopic?.name ?? question.subtopic ?? 'Selected subtopic unavailable'}
+                            </option>
+                          )}
+                        </select>
                       </div>
                       <div>
                         <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer format</label>

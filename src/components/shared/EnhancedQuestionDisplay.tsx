@@ -67,10 +67,14 @@ export interface QuestionDisplayData {
   question_text: string;
   question_type: 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay';
   marks: number;
+  unit?: string | null;
+  unit_id?: string | null;
   difficulty?: string;
   unit?: string;
   topic?: string;
+  topic_id?: string | null;
   subtopic?: string;
+  subtopic_id?: string | null;
   answer_format?: string;
   answer_requirement?: string;
   correct_answers?: CorrectAnswer[];
