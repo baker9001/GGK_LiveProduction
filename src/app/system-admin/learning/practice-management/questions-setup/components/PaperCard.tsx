@@ -337,10 +337,6 @@ export function PaperCard({
         clearTimeout(archiveConfirmationTimeoutRef.current);
       }
 
-      toast.warning(
-        'Archiving will remove this paper and its questions from all teacher and student experiences. Click "Archive" again within 5 seconds to confirm.'
-      );
-
       archiveConfirmationTimeoutRef.current = setTimeout(() => {
         setIsArchiveConfirmationActive(false);
         archiveConfirmationTimeoutRef.current = null;
@@ -578,18 +574,34 @@ export function PaperCard({
             </div>
 
             {showQAActions && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+              <div className="flex flex-col gap-2">
                 {canArchivePaper && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleArchivePaper}
-                    leftIcon={<Archive className="h-3 w-3" />}
-                    className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                    disabled={isUpdatingPaperStatus}
-                  >
-                    Archive
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleArchivePaper}
+                      leftIcon={<Archive className="h-3 w-3" />}
+                      className={cn(
+                        "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20",
+                        isArchiveConfirmationActive && "ring-2 ring-red-500 ring-offset-2 dark:ring-offset-gray-900"
+                      )}
+                      disabled={isUpdatingPaperStatus}
+                    >
+                      {isArchiveConfirmationActive ? 'Click Again to Confirm' : 'Archive'}
+                    </Button>
+                    {isArchiveConfirmationActive && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <div className="font-semibold mb-1">Confirm Archive</div>
+                            <p>Archiving will remove this paper and its questions from all teacher and student experiences. Click "Archive" again within 5 seconds to confirm.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {canRestorePaper && (
                   <Button

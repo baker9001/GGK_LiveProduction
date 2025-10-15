@@ -728,9 +728,32 @@ export function useQuestionMutations() {
       const label = STATUS_LABELS[variables.newStatus] || variables.newStatus;
       toast.success(`Paper status updated to "${label}" successfully`);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error updating paper status:', error);
-      toast.error('Failed to update paper status');
+      console.error('Error details:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+        statusCode: error?.statusCode
+      });
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to update paper status';
+
+      if (error?.message) {
+        if (error.message.includes('row-level security') || error.message.includes('policy')) {
+          errorMessage = 'Permission denied: You may not have access to update this paper';
+        } else if (error.message.includes('violates check constraint')) {
+          errorMessage = 'Invalid status value provided';
+        } else if (error.message.includes('not found')) {
+          errorMessage = 'Paper not found';
+        } else {
+          errorMessage = `Failed to update paper status: ${error.message}`;
+        }
+      }
+
+      toast.error(errorMessage);
     }
   });
 
