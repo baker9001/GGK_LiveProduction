@@ -541,10 +541,10 @@ export default function QuestionsSetupPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('edu_topics')
-        .select('id, name')
+        .select('id, name, unit_id')
         .eq('status', 'active')
         .order('name');
-      
+
       if (error) throw error;
       return data || [];
     }

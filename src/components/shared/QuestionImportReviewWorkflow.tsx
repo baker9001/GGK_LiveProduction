@@ -6,7 +6,9 @@ import {
   AlertTriangle,
   Download,
   Eye,
-  Flag
+  Flag,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Button } from './Button';
 import { QuestionReviewStatus, ReviewProgress, ReviewStatus } from './QuestionReviewStatus';
@@ -373,11 +375,14 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
               Question Review & Validation
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                {questions.length} question{questions.length !== 1 ? 's' : ''}
+              </span>
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Review each question carefully before importing to the question bank
+              Click any question card to expand/collapse. Review each question carefully before importing to the question bank.
             </p>
           </div>
           <div className="flex gap-2">
@@ -459,16 +464,23 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
               )}
             >
               {/* Question Header */}
-              <div className="px-6 py-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+              <div
+                className="px-6 py-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                onClick={() => toggleQuestionExpansion(question.id)}
+              >
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={() => toggleQuestionExpansion(question.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleQuestionExpansion(question.id);
+                    }}
                     className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    aria-label={isExpanded ? 'Collapse question' : 'Expand question'}
                   >
                     {isExpanded ? (
-                      <Eye className="h-5 w-5" />
+                      <ChevronUp className="h-5 w-5" />
                     ) : (
-                      <Eye className="h-5 w-5" />
+                      <ChevronDown className="h-5 w-5" />
                     )}
                   </button>
                   <div>
@@ -491,7 +503,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
               {/* Question Content */}
               {isExpanded && (
-                <div className="p-6">
+                <div className="p-6 animate-in fade-in duration-200">
                   <EnhancedQuestionDisplay
                     question={question}
                     showAnswers={true}

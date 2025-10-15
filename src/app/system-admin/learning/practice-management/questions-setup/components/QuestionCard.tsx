@@ -55,7 +55,7 @@ export function QuestionCard({
   showQAActions = false,
   readOnly = false
 }: QuestionCardProps) {
-  const [expandedParts, setExpandedParts] = useState(false);
+  const [expandedParts, setExpandedParts] = useState(true); // Default to expanded for better UX
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   
   const queryClient = useQueryClient();
@@ -129,6 +129,27 @@ export function QuestionCard({
   };
   
   const handleFieldUpdate = async (field: string, value: any) => {
+    // If topic is being changed, auto-populate unit_id
+    if (field === 'topic_id' && value) {
+      const selectedTopic = topics.find(t => t.id === value);
+      if (selectedTopic && 'unit_id' in selectedTopic) {
+        // Update both topic_id and unit_id
+        await updateField.mutateAsync({
+          id: question.id,
+          isSubQuestion: false,
+          field: 'topic_id',
+          value
+        });
+        await updateField.mutateAsync({
+          id: question.id,
+          isSubQuestion: false,
+          field: 'unit_id',
+          value: (selectedTopic as any).unit_id
+        });
+        return;
+      }
+    }
+
     await updateField.mutateAsync({
       id: question.id,
       isSubQuestion: false,
@@ -339,20 +360,47 @@ export function QuestionCard({
       )}
     >
       {/* Question Header */}
-      <div className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-gray-200 dark:border-gray-800">
+      <div className="px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex flex-col gap-4 border-b border-gray-200 dark:border-gray-800">
         <div className="flex flex-1 flex-wrap items-center gap-4">
           <div className="flex items-center justify-center w-12 h-12 rounded-xl border border-[#8CC63F]/30 bg-[#8CC63F]/10 text-[#356B1B] dark:text-[#A6E36A] dark:bg-[#8CC63F]/20">
             <span className="font-semibold text-lg">{question.question_number}</span>
           </div>
-          <div className="min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
               Question {question.question_number}
             </h3>
-            {question.parts.length > 0 && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {question.parts.length} part{question.parts.length !== 1 ? 's' : ''}
-              </p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {question.parts.length > 0 && (
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {question.parts.length} part{question.parts.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {(question.unit_name || question.topic_name || (question.subtopics && question.subtopics.length > 0)) && (
+                <span className="text-gray-400 dark:text-gray-500">•</span>
+              )}
+              {question.unit_name && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  Unit: {question.unit_name}
+                </span>
+              )}
+              {question.topic_name && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  Topic: {question.topic_name}
+                </span>
+              )}
+              {question.subtopics && question.subtopics.length > 0 && (
+                <>
+                  {question.subtopics.map((subtopic) => (
+                    <span
+                      key={subtopic.id}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                    >
+                      {subtopic.name}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge
@@ -371,6 +419,12 @@ export function QuestionCard({
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/80 px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-200">
                 <AlertCircle className="h-3.5 w-3.5" />
                 Figure required
+              </span>
+            )}
+            {question.attachments && question.attachments.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-300/60 bg-blue-100/80 px-3 py-1 text-xs font-medium text-blue-800 dark:border-blue-500/60 dark:bg-blue-500/10 dark:text-blue-200">
+                <FileText className="h-3.5 w-3.5" />
+                {question.attachments.length} attachment{question.attachments.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
@@ -398,14 +452,14 @@ export function QuestionCard({
 
             {question.parts.length > 0 && (
               <Button
-                size="icon-sm"
+                size="sm"
                 variant="ghost"
-                rounded="full"
-                className="text-gray-600 hover:text-[#8CC63F] dark:text-gray-300"
+                className="text-gray-600 hover:text-[#8CC63F] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 onClick={() => setExpandedParts(!expandedParts)}
                 leftIcon={expandedParts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                tooltip={expandedParts ? 'Hide sub-questions' : 'Show sub-questions'}
-              />
+              >
+                {expandedParts ? 'Hide' : 'Show'} parts
+              </Button>
             )}
           </div>
           
@@ -660,6 +714,7 @@ export function QuestionCard({
             questionId={question.id}
             onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
             readOnly={readOnly}
+            questionDescription={question.question_description}
           />
         </div>
         
@@ -811,8 +866,11 @@ export function QuestionCard({
       )}
 
       {/* Sub-questions */}
-      {expandedParts && question.parts.length > 0 && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-800/30">
+      {question.parts.length > 0 && (
+        <div className={cn(
+          "border-t border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300",
+          expandedParts ? "max-h-[100000px] p-6 bg-gray-50 dark:bg-gray-800/30" : "max-h-0"
+        )}>
           <div className="space-y-4">
             {question.parts.map((subQuestion) => {
               const subNeedsAttachmentWarning = subQuestionNeedsAttachment(subQuestion);
@@ -1092,6 +1150,7 @@ export function QuestionCard({
                       subQuestionId={subQuestion.id}
                       onUpdate={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}
                       readOnly={readOnly}
+                      questionDescription={subQuestion.question_description}
                     />
                   </div>
                 </div>
