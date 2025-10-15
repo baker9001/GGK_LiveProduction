@@ -80,6 +80,16 @@ import {
   type PreImportValidationResult
 } from '../../../../../../lib/extraction/preImportValidation';
 
+// Import sub-components and utilities
+import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
+import { QuestionsReviewSection } from './components/QuestionsReviewSection';
+import QuestionSupportMatrix from './components/QuestionSupportMatrix';
+import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
+import { supabase } from '../../../../../../lib/supabase';
+import { cn } from '../../../../../../lib/utils';
+import { ExtractionRules, QuestionSupportSummary } from '../types';
+import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
+
 // Try to import validateQuestionsForImport if it exists
 let validateQuestionsForImport: any;
 try {
@@ -88,16 +98,6 @@ try {
 } catch (e) {
   console.warn('validateQuestionsForImport not available, using fallback validation');
 }
-
-// Import sub-components
-import { FixIncompleteQuestionsButton } from './components/FixIncompleteQuestionsButton';
-import { QuestionsReviewSection } from './components/QuestionsReviewSection';
-import DynamicAnswerField from '../../../../../../components/shared/DynamicAnswerField';
-import { supabase } from '../../../../../../lib/supabase';
-import { cn } from '../../../../../../lib/utils';
-import { ExtractionRules, QuestionSupportSummary } from '../types';
-import QuestionSupportMatrix from './components/QuestionSupportMatrix';
-import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
