@@ -53,16 +53,20 @@ export function UploadTab({
   // Delete current session and start new
   const handleDeleteSession = async () => {
     if (!importSession) return;
-    
+
     setIsDeleting(true);
     try {
       const { error } = await supabase
         .from('past_paper_import_sessions')
         .update({ status: 'failed' })
         .eq('id', importSession.id);
-      
+
       if (error) throw error;
-      
+
+      // Clear URL parameters before reload to ensure fresh start
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState(null, '', cleanUrl);
+
       // Reload page to start fresh
       window.location.reload();
     } catch (err) {

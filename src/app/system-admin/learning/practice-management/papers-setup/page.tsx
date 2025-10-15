@@ -1275,6 +1275,23 @@ export default function PapersSetupPage() {
       if (error) throw error;
 
       if (data) {
+        // Don't restore sessions that are failed or completed
+        if (data.status === 'failed' || data.status === 'completed') {
+          console.log('Session is not in progress, clearing URL and starting fresh');
+          // Clear URL parameters
+          const params = new URLSearchParams(location.search);
+          params.delete('session');
+          params.delete('tab');
+          const newUrl = params.toString()
+            ? `${location.pathname}?${params.toString()}`
+            : location.pathname;
+          navigate(newUrl, { replace: true });
+
+          toast.info('Previous session was closed. Starting a new import.');
+          setIsLoadingSession(false);
+          return;
+        }
+
         setImportSession(data);
         if (data.raw_json) {
           setParsedData(data.raw_json);
@@ -1327,6 +1344,15 @@ export default function PapersSetupPage() {
     } catch (error) {
       console.error('Error loading import session:', error);
       toast.error('Failed to load import session');
+
+      // Clear URL parameters on error
+      const params = new URLSearchParams(location.search);
+      params.delete('session');
+      params.delete('tab');
+      const newUrl = params.toString()
+        ? `${location.pathname}?${params.toString()}`
+        : location.pathname;
+      navigate(newUrl, { replace: true });
     } finally {
       setIsLoadingSession(false);
       if (tabTransitionTimeoutRef.current) {
