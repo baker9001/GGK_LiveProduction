@@ -1,33 +1,32 @@
 import React from 'react';
 import { Hash, FileText, BookOpen, Calculator, CheckCircle, AlertCircle } from 'lucide-react';
-
-interface QuestionSupportSummary {
-  totalQuestions: number;
-  mcqCount: number;
-  descriptiveCount: number;
-  multiPartCount: number;
-  withFigures: number;
-  withAttachments: number;
-  manualMarkingRequired: number;
-  averageMarks: number;
-}
+import type { QuestionSupportSummary } from '../../types';
 
 interface QuestionSupportMatrixProps {
   summary: QuestionSupportSummary;
+  averageMarks?: number;
 }
 
-const QuestionSupportMatrix: React.FC<QuestionSupportMatrixProps> = ({ summary }) => {
+const QuestionSupportMatrix: React.FC<QuestionSupportMatrixProps> = ({ summary, averageMarks = 0 }) => {
   if (!summary || summary.totalQuestions === 0) {
     return null;
   }
 
+  // Extract counts from the summary structure
+  const mcqCount = (summary.questionTypeCounts?.['mcq'] || 0) + (summary.questionTypeCounts?.['MCQ'] || 0);
+  const descriptiveCount = (summary.questionTypeCounts?.['descriptive'] || 0) + (summary.questionTypeCounts?.['Descriptive'] || 0);
+  const multiPartCount = summary.structureFlags?.hasParts ?
+    Object.values(summary.questionTypeCounts || {}).reduce((sum, count) => sum + count, 0) - mcqCount : 0;
+  const withFigures = summary.structureFlags?.hasFigures ? summary.totalQuestions : 0;
+  const manualMarkingRequired = summary.logicFlags?.manualMarking ? summary.totalQuestions : 0;
+
   const stats = [
     { label: 'Total Questions', value: summary.totalQuestions, icon: Hash, color: 'blue' },
-    { label: 'MCQ', value: summary.mcqCount, icon: CheckCircle, color: 'green' },
-    { label: 'Descriptive', value: summary.descriptiveCount, icon: FileText, color: 'purple' },
-    { label: 'Multi-part', value: summary.multiPartCount, icon: BookOpen, color: 'indigo' },
-    { label: 'With Figures', value: summary.withFigures, icon: AlertCircle, color: 'orange' },
-    { label: 'Avg Marks', value: summary.averageMarks.toFixed(1), icon: Calculator, color: 'teal' }
+    { label: 'MCQ', value: mcqCount, icon: CheckCircle, color: 'green' },
+    { label: 'Descriptive', value: descriptiveCount, icon: FileText, color: 'purple' },
+    { label: 'Multi-part', value: multiPartCount, icon: BookOpen, color: 'indigo' },
+    { label: 'With Figures', value: withFigures, icon: AlertCircle, color: 'orange' },
+    { label: 'Avg Marks', value: (averageMarks || 0).toFixed(1), icon: Calculator, color: 'teal' }
   ];
 
   return (
@@ -56,11 +55,11 @@ const QuestionSupportMatrix: React.FC<QuestionSupportMatrixProps> = ({ summary }
         })}
       </div>
 
-      {summary.manualMarkingRequired > 0 && (
+      {manualMarkingRequired > 0 && (
         <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             <AlertCircle className="h-4 w-4 inline mr-1" />
-            {summary.manualMarkingRequired} question{summary.manualMarkingRequired !== 1 ? 's' : ''} require manual marking
+            {manualMarkingRequired} question{manualMarkingRequired !== 1 ? 's' : ''} require manual marking
           </p>
         </div>
       )}

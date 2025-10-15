@@ -781,6 +781,13 @@ function QuestionsTabInner({
     [questions]
   );
 
+  // Calculate average marks for display
+  const averageMarks = useMemo(() => {
+    if (questions.length === 0) return 0;
+    const totalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+    return totalMarks / questions.length;
+  }, [questions]);
+
   // Add global error handler for debugging - MUST BE AFTER STATE DECLARATIONS
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
@@ -4083,7 +4090,7 @@ function QuestionsTabInner({
       {renderMetadataSummary()}
 
       {questions.length > 0 && (
-        <QuestionSupportMatrix summary={questionSupportSummary} />
+        <QuestionSupportMatrix summary={questionSupportSummary} averageMarks={averageMarks} />
       )}
 
       {/* PDF Upload Section */}
