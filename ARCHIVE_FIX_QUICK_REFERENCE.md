@@ -1,95 +1,93 @@
-# Archive Questions Fix - Quick Reference
+# Archive Error - Quick Fix Reference
 
 ## Problem
-Archive button in Questions Setup was failing due to RLS policy conflicts.
+Archive button fails with error: `invalid input syntax for type uuid: "system"`
+
+## Root Cause
+Database trigger `track_paper_status_change()` was trying to insert the string `'system'` into a UUID column when no user was authenticated.
 
 ## Solution Applied
-Two database migrations removed conflicting RLS policies:
-1. `fix_papers_setup_archive_rls_policy_conflict.sql`
-2. `fix_questions_related_tables_rls_conflicts.sql`
+✅ Database migration created and applied successfully
 
-## What Was Fixed
-✅ Archive papers (any status → inactive)
-✅ Restore papers (inactive → draft)
-✅ Publish papers (qa_review → active)
-✅ All question status updates
-✅ Cascading status changes
+### Changes Made:
+1. Made `paper_status_history.changed_by` column nullable
+2. Updated trigger to use NULL instead of 'system' string
 
-## Test Archive Now
+## Test the Fix
 
-### Steps:
-1. Log in as system admin
-2. Go to: **System Admin → Learning → Practice Management → Questions Setup**
-3. Find any paper card
-4. Click **"Archive"** button
-5. Click **"Archive"** again within 5 seconds to confirm
-6. Paper status should change to "inactive" ✅
+### Quick Test Steps:
+1. Go to Questions Setup & QA page
+2. Find any paper (Draft, QA Review, or Published)
+3. Click "Archive" button
+4. Click "Archive" again to confirm
+5. **Expected Result:** Paper archives successfully without errors
 
-### What Happens:
-- Paper moves to "Archived" tab
-- All questions become inactive
-- Status history is logged
-- Can be restored later using "Restore to Draft" button
+### Verify in Database:
+```sql
+-- Check recent status changes
+SELECT paper_id, previous_status, new_status, changed_by, changed_at
+FROM paper_status_history
+ORDER BY changed_at DESC
+LIMIT 5;
+```
+
+## What Now Works
+- ✅ Archive papers
+- ✅ Restore papers from archive
+- ✅ All status transitions (Draft → QA → Published → Archived)
+- ✅ Status changes without user authentication
+- ✅ System-initiated status changes
+
+## Files Modified
+- `supabase/migrations/fix_paper_status_history_changed_by_column.sql`
+
+## Status
+✅ **FIXED** - Ready to use immediately
+
+## No Code Changes Needed
+The fix was entirely in the database layer. No frontend or backend code changes required.
+
+---
+
+## For Developers
+
+### The Technical Issue:
+```sql
+-- BEFORE (Broken):
+COALESCE(NEW.last_status_change_by, 'system')  -- ❌ Can't insert string into UUID column
+
+-- AFTER (Fixed):
+NEW.last_status_change_by  -- ✅ NULL is valid for UUID columns
+```
+
+### Migration Applied:
+```sql
+ALTER TABLE paper_status_history ALTER COLUMN changed_by DROP NOT NULL;
+-- Now NULL represents "no user" or "system change"
+```
+
+## Common Questions
+
+**Q: Will this affect existing data?**
+A: No, existing records are unchanged. Only future status changes are affected.
+
+**Q: What about security?**
+A: No change to security. RLS policies and foreign keys remain intact.
+
+**Q: Can I rollback this change?**
+A: Yes, but you'd need to provide a default UUID first for NULL values.
+
+**Q: Why NULL instead of a "system" user?**
+A: NULL is semantically correct and doesn't require creating fake user accounts.
 
 ## Troubleshooting
 
-### Still Getting Error?
-1. **Hard refresh browser**: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)
-2. **Check user type**: Must be logged in as system admin
-3. **Check console**: Open browser DevTools (F12) → Console tab for errors
-
-### Common Issues:
-- **"Permission denied"** → Not logged in as admin user
-- **"Policy violation"** → Contact support (shouldn't happen after fix)
-- **Button disabled** → Already archived or permission issue
-
-## Technical Details
-
-### Root Cause:
-Conflicting RLS policies on `papers_setup` table:
-- Old policy used direct `auth.uid()` check
-- New policy used `is_admin_user()` function
-- Both were active, causing UPDATE operations to fail
-
-### Fix:
-- Removed old conflicting policies
-- Kept optimized policies using `is_admin_user()` function
-- Function correctly validates admin users through proper JOIN
-
-### Tables Fixed:
-- papers_setup
-- questions_master_admin
-- sub_questions
-- question_options
-- question_correct_answers
-- questions_attachments
-- question_subtopics
-- paper_status_history
-- question_confirmations
-
-## Diagnostic Query
-
-Run this in Supabase SQL Editor to check your admin user:
-```sql
-SELECT * FROM admin_user_auth_mapping
-WHERE auth_user_id = auth.uid();
-```
-
-Should show your admin user details with "Linked" status.
-
-## Related Operations That Also Work Now
-
-✅ **Mark Question as Active** (QA Review → Active)
-✅ **Return to Draft** (QA Review → Draft)
-✅ **Delete Questions** (with proper confirmation)
-✅ **Update Question Metadata** (topics, subtopics, difficulty)
-✅ **Batch Confirm Questions** (multiple at once)
+If the archive still doesn't work:
+1. Check console for errors
+2. Verify you have the latest migration applied
+3. Check user permissions for the papers_setup table
+4. Verify paper status is in a valid state for archiving
 
 ## Support
 
-For detailed information, see: `ARCHIVE_QUESTIONS_FIX_COMPLETE.md`
-
----
-**Status**: Fixed ✅
-**Date**: October 14, 2025
-**Tested**: Database migrations applied and verified
+See `ARCHIVE_FIX_COMPLETE.md` for full technical details and analysis.
