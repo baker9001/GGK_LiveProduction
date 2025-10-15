@@ -23,6 +23,13 @@ import { TestSimulationMode } from './TestSimulationMode';
 import { supabase } from '../../lib/supabase';
 import { toast } from './Toast';
 import { cn } from '../../lib/utils';
+import { FormField, Input, Select, Textarea } from './FormField';
+
+const formatOptionLabel = (value: string) =>
+  value
+    .split('_')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
 type EditableCorrectAnswer = NonNullable<QuestionDisplayData['correct_answers']>[number];
 type EditableOption = NonNullable<QuestionDisplayData['options']>[number];
@@ -677,61 +684,73 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3"
           >
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer text</label>
-                <textarea
+              <FormField
+                id={`${config.keyPrefix}-answer-${index}-text`}
+                label="Answer text"
+                className="mb-0"
+              >
+                <Textarea
+                  id={`${config.keyPrefix}-answer-${index}-text`}
                   value={answer?.answer ?? ''}
                   onChange={event => config.onChange(index, { answer: event.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
-              <div className="flex flex-col gap-2 md:w-24">
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Marks</label>
-                <input
+              </FormField>
+              <FormField
+                id={`${config.keyPrefix}-answer-${index}-marks`}
+                label="Marks"
+                className="mb-0 md:w-24"
+              >
+                <Input
+                  id={`${config.keyPrefix}-answer-${index}-marks`}
                   type="number"
                   min={0}
-                  value={answer?.marks ?? 0}
+                  value={(answer?.marks ?? 0).toString()}
                   onChange={event => {
                     const value = Number(event.target.value);
                     config.onChange(index, { marks: Number.isNaN(value) ? undefined : value });
                   }}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
+              </FormField>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Unit / context</label>
-                <input
-                  type="text"
+              <FormField
+                id={`${config.keyPrefix}-answer-${index}-unit`}
+                label="Unit / context"
+                className="mb-0"
+              >
+                <Input
+                  id={`${config.keyPrefix}-answer-${index}-unit`}
                   value={answer?.unit ?? ''}
                   onChange={event => config.onChange(index, { unit: event.target.value })}
                   placeholder="e.g. cm, kg"
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer requirement</label>
-                <input
-                  type="text"
+              </FormField>
+              <FormField
+                id={`${config.keyPrefix}-answer-${index}-requirement`}
+                label="Answer requirement"
+                className="mb-0"
+              >
+                <Input
+                  id={`${config.keyPrefix}-answer-${index}-requirement`}
                   value={answer?.answer_requirement ?? ''}
                   onChange={event => config.onChange(index, { answer_requirement: event.target.value })}
                   placeholder="e.g. 2 significant figures"
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Notes</label>
-                <input
-                  type="text"
+              </FormField>
+              <FormField
+                id={`${config.keyPrefix}-answer-${index}-notes`}
+                label="Notes"
+                className="mb-0"
+              >
+                <Input
+                  id={`${config.keyPrefix}-answer-${index}-notes`}
                   value={answer?.context ?? ''}
                   onChange={event => config.onChange(index, { context: event.target.value })}
                   placeholder="Marker notes or context"
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
+              </FormField>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -741,7 +760,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                     type="checkbox"
                     checked={Boolean(answer?.accepts_equivalent_phrasing)}
                     onChange={event => config.onChange(index, { accepts_equivalent_phrasing: event.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   Accept equivalent phrasing
                 </label>
@@ -750,7 +769,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                     type="checkbox"
                     checked={Boolean(answer?.error_carried_forward)}
                     onChange={event => config.onChange(index, { error_carried_forward: event.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
                   />
                   Allow error carried forward
                 </label>
@@ -815,24 +834,29 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             )}
           >
             <div className="grid gap-3 md:grid-cols-[80px_minmax(0,1fr)]">
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Label</label>
-                <input
-                  type="text"
+              <FormField
+                id={`${config.keyPrefix}-option-${index}-label`}
+                label="Label"
+                className="mb-0"
+              >
+                <Input
+                  id={`${config.keyPrefix}-option-${index}-label`}
                   value={option?.label ?? String.fromCharCode(65 + index)}
                   onChange={event => config.onChange(index, { label: event.target.value })}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Option text</label>
-                <textarea
+              </FormField>
+              <FormField
+                id={`${config.keyPrefix}-option-${index}-text`}
+                label="Option text"
+                className="mb-0"
+              >
+                <Textarea
+                  id={`${config.keyPrefix}-option-${index}-text`}
                   value={option?.text ?? ''}
                   onChange={event => config.onChange(index, { text: event.target.value })}
                   rows={2}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
-              </div>
+              </FormField>
             </div>
 
             <div className="flex items-center justify-between">
@@ -869,6 +893,57 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
       { value: 'diagram' as const, label: 'Diagram' },
       { value: 'essay' as const, label: 'Essay' }
     ],
+    []
+  );
+
+  const difficultyOptions = useMemo(
+    () =>
+      ['Easy', 'Medium', 'Hard'].map(value => ({
+        value,
+        label: value,
+      })),
+    []
+  );
+
+  const answerFormatOptions = useMemo(
+    () =>
+      [
+        'single_word',
+        'single_line',
+        'two_items',
+        'two_items_connected',
+        'multi_line',
+        'multi_line_labeled',
+        'calculation',
+        'equation',
+        'chemical_structure',
+        'structural_diagram',
+        'diagram',
+        'table',
+        'graph',
+        'code',
+        'audio',
+        'file_upload',
+      ].map(value => ({
+        value,
+        label: formatOptionLabel(value),
+      })),
+    []
+  );
+
+  const answerRequirementOptions = useMemo(
+    () =>
+      [
+        'single_choice',
+        'both_required',
+        'any_2_from',
+        'any_3_from',
+        'all_required',
+        'alternative_methods',
+      ].map(value => ({
+        value,
+        label: formatOptionLabel(value),
+      })),
     []
   );
   // Memoize questions array to prevent unnecessary re-renders
@@ -1417,6 +1492,58 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
             : !selectedSubtopicId && question.subtopic
             ? `Current: ${question.subtopic}`
             : 'Select subtopic...';
+          const questionTypeSelectOptions = [...questionTypeOptions];
+          if (
+            question.question_type &&
+            !questionTypeSelectOptions.some(option => option.value === question.question_type)
+          ) {
+            questionTypeSelectOptions.push({
+              value: question.question_type,
+              label: formatOptionLabel(question.question_type),
+            });
+          }
+          const difficultyValue = question.difficulty ?? '';
+          const difficultySelectOptions = [...difficultyOptions];
+          if (difficultyValue && !difficultySelectOptions.some(option => option.value === difficultyValue)) {
+            difficultySelectOptions.push({ value: difficultyValue, label: formatOptionLabel(difficultyValue) });
+          }
+          const unitOptions = units.map(unit => ({ value: unit.id, label: unit.name }));
+          if (selectedUnitId && !unitOptions.some(option => option.value === selectedUnitId)) {
+            unitOptions.push({
+              value: selectedUnitId,
+              label: selectedUnit?.name ?? question.unit ?? 'Selected unit unavailable',
+            });
+          }
+          const topicOptions = availableTopics.map(topic => ({ value: topic.id, label: topic.name }));
+          if (selectedTopicId && !topicOptions.some(option => option.value === selectedTopicId)) {
+            topicOptions.push({
+              value: selectedTopicId,
+              label: selectedTopic?.name ?? question.topic ?? 'Selected topic unavailable',
+            });
+          }
+          const subtopicOptions = availableSubtopics.map(subtopic => ({ value: subtopic.id, label: subtopic.name }));
+          if (selectedSubtopicId && !subtopicOptions.some(option => option.value === selectedSubtopicId)) {
+            subtopicOptions.push({
+              value: selectedSubtopicId,
+              label: selectedSubtopic?.name ?? question.subtopic ?? 'Selected subtopic unavailable',
+            });
+          }
+          const answerFormatValue = question.answer_format ?? '';
+          const answerFormatSelectOptions = [...answerFormatOptions];
+          if (answerFormatValue && !answerFormatSelectOptions.some(option => option.value === answerFormatValue)) {
+            answerFormatSelectOptions.push({ value: answerFormatValue, label: formatOptionLabel(answerFormatValue) });
+          }
+          const answerRequirementValue = question.answer_requirement ?? '';
+          const answerRequirementSelectOptions = [...answerRequirementOptions];
+          if (
+            answerRequirementValue &&
+            !answerRequirementSelectOptions.some(option => option.value === answerRequirementValue)
+          ) {
+            answerRequirementSelectOptions.push({
+              value: answerRequirementValue,
+              label: formatOptionLabel(answerRequirementValue),
+            });
+          }
           const baseCardClass = status.isReviewed
             ? 'border-green-300 dark:border-green-700 bg-green-50/30 dark:bg-green-900/10'
             : status.hasIssues
@@ -1573,142 +1700,202 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
 
                   <section className="space-y-4">
                     <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Question details</h4>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="md:col-span-2">
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Question text</label>
-                        <textarea
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <FormField
+                        id={`${question.id}-question-text`}
+                        label="Question text"
+                        className="mb-0 md:col-span-2 lg:col-span-3"
+                      >
+                        <Textarea
+                          id={`${question.id}-question-text`}
                           value={question.question_text}
                           onChange={(event) => handleQuestionFieldChange(question, 'question_text', event.target.value)}
                           rows={4}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                         />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Marks</label>
-                        <input
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-marks`}
+                        label="Marks"
+                        className="mb-0"
+                      >
+                        <Input
+                          id={`${question.id}-marks`}
                           type="number"
                           min={0}
-                          value={question.marks}
+                          value={(question.marks ?? 0).toString()}
                           onChange={(event) => {
                             const value = Number(event.target.value);
                             handleQuestionFieldChange(question, 'marks', Number.isNaN(value) ? question.marks : value);
                           }}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                         />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Question type</label>
-                        <select
-                          value={question.question_type}
-                          onChange={(event) =>
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-question-type`}
+                        label="Question type"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-question-type`}
+                          value={question.question_type ?? ''}
+                          onChange={(value) =>
                             handleQuestionFieldChange(
                               question,
                               'question_type',
-                              event.target.value as QuestionDisplayData['question_type']
+                              (value || undefined) as QuestionDisplayData['question_type']
                             )
                           }
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        >
-                          {questionTypeOptions.map((type) => (
-                            <option key={type.value} value={type.value}>
-                              {type.label}
-                            </option>
-                          ))}
-                          {!questionTypeOptions.some((type) => type.value === question.question_type) && (
-                            <option value={question.question_type}>{question.question_type}</option>
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Difficulty</label>
-                        <input
-                          type="text"
-                          value={question.difficulty ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'difficulty', event.target.value)}
-                          placeholder="e.g. Easy, Medium, Hard"
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                          options={questionTypeSelectOptions}
+                          placeholder="Select question type"
+                          usePortal={false}
                         />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Unit</label>
-                        <select
-                          value={selectedUnitId}
-                          onChange={(event) => handleUnitSelect(question, event.target.value)}
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-difficulty`}
+                        label="Difficulty"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-difficulty`}
+                          value={difficultyValue}
+                          onChange={(value) =>
+                            handleQuestionFieldChange(
+                              question,
+                              'difficulty',
+                              (value || null) as QuestionDisplayData['difficulty']
+                            )
+                          }
+                          options={difficultySelectOptions}
+                          placeholder="Select difficulty"
+                          usePortal={false}
+                        />
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-unit`}
+                        label="Unit"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-unit`}
+                          value={selectedUnitId ?? ''}
+                          onChange={(value) => handleUnitSelect(question, value)}
+                          options={unitOptions}
                           disabled={isLoadingTaxonomy || units.length === 0}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        >
-                          <option value="">{unitPlaceholder}</option>
-                          {units.map((unit) => (
-                            <option key={unit.id} value={unit.id}>
-                              {unit.name}
-                            </option>
-                          ))}
-                          {selectedUnitId && !units.some((unit) => unit.id === selectedUnitId) && (
-                            <option value={selectedUnitId}>{selectedUnit?.name ?? question.unit ?? 'Selected unit unavailable'}</option>
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Topic</label>
-                        <select
-                          value={selectedTopicId}
-                          onChange={(event) => handleTopicSelect(question, event.target.value)}
-                          disabled={isLoadingTaxonomy || (selectedUnitId ? availableTopics.length === 0 : topics.length === 0)}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        >
-                          <option value="">{topicPlaceholder}</option>
-                          {availableTopics.map((topic) => (
-                            <option key={topic.id} value={topic.id}>
-                              {topic.name}
-                            </option>
-                          ))}
-                          {selectedTopicId && !availableTopics.some((topic) => topic.id === selectedTopicId) && (
-                            <option value={selectedTopicId}>{selectedTopic?.name ?? question.topic ?? 'Selected topic unavailable'}</option>
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subtopic</label>
-                        <select
-                          value={selectedSubtopicId}
-                          onChange={(event) => handleSubtopicSelect(question, event.target.value)}
-                          disabled={isLoadingTaxonomy || (selectedTopicId ? availableSubtopics.length === 0 : subtopics.length === 0)}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        >
-                          <option value="">{subtopicPlaceholder}</option>
-                          {availableSubtopics.map((subtopic) => (
-                            <option key={subtopic.id} value={subtopic.id}>
-                              {subtopic.name}
-                            </option>
-                          ))}
-                          {selectedSubtopicId && !availableSubtopics.some((subtopic) => subtopic.id === selectedSubtopicId) && (
-                            <option value={selectedSubtopicId}>
-                              {selectedSubtopic?.name ?? question.subtopic ?? 'Selected subtopic unavailable'}
-                            </option>
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer format</label>
-                        <input
-                          type="text"
-                          value={question.answer_format ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'answer_format', event.target.value)}
-                          placeholder="e.g. multi_line"
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                          placeholder={unitPlaceholder}
+                          usePortal={false}
                         />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer requirement</label>
-                        <input
-                          type="text"
-                          value={question.answer_requirement ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'answer_requirement', event.target.value)}
-                          placeholder="e.g. Include working"
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-topic`}
+                        label="Topic"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-topic`}
+                          value={selectedTopicId ?? ''}
+                          onChange={(value) => handleTopicSelect(question, value)}
+                          options={topicOptions}
+                          disabled={
+                            isLoadingTaxonomy ||
+                            (selectedUnitId ? availableTopics.length === 0 : topics.length === 0)
+                          }
+                          placeholder={topicPlaceholder}
+                          usePortal={false}
                         />
-                      </div>
-                      <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-subtopic`}
+                        label="Subtopic"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-subtopic`}
+                          value={selectedSubtopicId ?? ''}
+                          onChange={(value) => handleSubtopicSelect(question, value)}
+                          options={subtopicOptions}
+                          disabled={
+                            isLoadingTaxonomy ||
+                            (selectedTopicId ? availableSubtopics.length === 0 : subtopics.length === 0)
+                          }
+                          placeholder={subtopicPlaceholder}
+                          usePortal={false}
+                        />
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-answer-format`}
+                        label="Answer format"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-answer-format`}
+                          value={answerFormatValue}
+                          onChange={(value) =>
+                            handleQuestionFieldChange(
+                              question,
+                              'answer_format',
+                              (value || null) as QuestionDisplayData['answer_format']
+                            )
+                          }
+                          options={answerFormatSelectOptions}
+                          placeholder="Select answer format"
+                          usePortal={false}
+                        />
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-answer-requirement`}
+                        label="Answer requirement"
+                        className="mb-0"
+                      >
+                        <Select
+                          id={`${question.id}-answer-requirement`}
+                          value={answerRequirementValue}
+                          onChange={(value) =>
+                            handleQuestionFieldChange(
+                              question,
+                              'answer_requirement',
+                              (value || null) as QuestionDisplayData['answer_requirement']
+                            )
+                          }
+                          options={answerRequirementSelectOptions}
+                          placeholder="Select requirement"
+                          usePortal={false}
+                        />
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-hint`}
+                        label="Hint"
+                        className="mb-0 md:col-span-2 lg:col-span-3"
+                      >
+                        <Textarea
+                          id={`${question.id}-hint`}
+                          value={question.hint ?? ''}
+                          onChange={(event) => handleQuestionFieldChange(question, 'hint', event.target.value)}
+                          rows={2}
+                        />
+                      </FormField>
+
+                      <FormField
+                        id={`${question.id}-explanation`}
+                        label="Explanation"
+                        className="mb-0 md:col-span-2 lg:col-span-3"
+                      >
+                        <Textarea
+                          id={`${question.id}-explanation`}
+                          value={question.explanation ?? ''}
+                          onChange={(event) => handleQuestionFieldChange(question, 'explanation', event.target.value)}
+                          rows={3}
+                        />
+                      </FormField>
+
+                      <div className="md:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-3">
                         <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                           <input
                             type="checkbox"
@@ -1719,33 +1906,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                 figure: event.target.checked
                               })
                             }
-                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
                           />
                           Figure attachment required
                         </label>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           Toggle off if the question no longer needs an accompanying image.
                         </span>
-                      </div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Hint</label>
-                        <textarea
-                          value={question.hint ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'hint', event.target.value)}
-                          rows={2}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Explanation</label>
-                        <textarea
-                          value={question.explanation ?? ''}
-                          onChange={(event) => handleQuestionFieldChange(question, 'explanation', event.target.value)}
-                          rows={2}
-                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                        />
                       </div>
                     </div>
                   </section>
@@ -1780,6 +1947,28 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                       {question.parts.map((part, partIndex) => {
                         const partRequiresFigure = Boolean(part.figure_required ?? part.figure);
                         const partHasAttachments = Array.isArray(part.attachments) ? part.attachments.length > 0 : false;
+                        const partAnswerFormatValue = part.answer_format ?? '';
+                        const partAnswerFormatOptions = [...answerFormatOptions];
+                        if (
+                          partAnswerFormatValue &&
+                          !partAnswerFormatOptions.some(option => option.value === partAnswerFormatValue)
+                        ) {
+                          partAnswerFormatOptions.push({
+                            value: partAnswerFormatValue,
+                            label: formatOptionLabel(partAnswerFormatValue),
+                          });
+                        }
+                        const partAnswerRequirementValue = part.answer_requirement ?? '';
+                        const partAnswerRequirementOptions = [...answerRequirementOptions];
+                        if (
+                          partAnswerRequirementValue &&
+                          !partAnswerRequirementOptions.some(option => option.value === partAnswerRequirementValue)
+                        ) {
+                          partAnswerRequirementOptions.push({
+                            value: partAnswerRequirementValue,
+                            label: formatOptionLabel(partAnswerRequirementValue),
+                          });
+                        }
 
                         return (
                           <div
@@ -1816,10 +2005,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2">
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Part label</label>
-                                <input
-                                  type="text"
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-label`}
+                                label="Part label"
+                                className="mb-0"
+                              >
+                                <Input
+                                  id={`question-${question.id}-part-${partIndex}-label`}
                                   value={part.part_label ?? part.part ?? ''}
                                   onChange={(event) =>
                                     handlePartFieldChange(question, partIndex, {
@@ -1827,73 +2019,98 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                       part: event.target.value
                                     })
                                   }
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                 />
-                              </div>
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Marks</label>
-                                <input
+                              </FormField>
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-marks`}
+                                label="Marks"
+                                className="mb-0"
+                              >
+                                <Input
+                                  id={`question-${question.id}-part-${partIndex}-marks`}
                                   type="number"
                                   min={0}
-                                  value={part.marks ?? 0}
+                                  value={(part.marks ?? 0).toString()}
                                   onChange={(event) => {
                                     const value = Number(event.target.value);
                                     handlePartFieldChange(question, partIndex, {
                                       marks: Number.isNaN(value) ? part.marks : value
                                     });
                                   }}
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                 />
-                              </div>
+                              </FormField>
                             </div>
-                            <div>
-                              <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Part question text</label>
-                              <textarea
+                            <FormField
+                              id={`question-${question.id}-part-${partIndex}-text`}
+                              label="Part question text"
+                              className="mb-0"
+                            >
+                              <Textarea
+                                id={`question-${question.id}-part-${partIndex}-text`}
                                 value={part.question_text ?? ''}
                                 onChange={(event) => handlePartFieldChange(question, partIndex, { question_text: event.target.value })}
                                 rows={3}
-                                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                               />
+                            </FormField>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-format`}
+                                label="Answer format"
+                                className="mb-0"
+                              >
+                                <Select
+                                  id={`question-${question.id}-part-${partIndex}-format`}
+                                  value={partAnswerFormatValue}
+                                  onChange={(value) =>
+                                    handlePartFieldChange(question, partIndex, { answer_format: value || null })
+                                  }
+                                  options={partAnswerFormatOptions}
+                                  placeholder="Select answer format"
+                                  usePortal={false}
+                                />
+                              </FormField>
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-requirement`}
+                                label="Answer requirement"
+                                className="mb-0"
+                              >
+                                <Select
+                                  id={`question-${question.id}-part-${partIndex}-requirement`}
+                                  value={partAnswerRequirementValue}
+                                  onChange={(value) =>
+                                    handlePartFieldChange(question, partIndex, { answer_requirement: value || null })
+                                  }
+                                  options={partAnswerRequirementOptions}
+                                  placeholder="Select requirement"
+                                  usePortal={false}
+                                />
+                              </FormField>
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer format</label>
-                                <input
-                                  type="text"
-                                  value={part.answer_format ?? ''}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { answer_format: event.target.value })}
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer requirement</label>
-                                <input
-                                  type="text"
-                                  value={part.answer_requirement ?? ''}
-                                  onChange={(event) => handlePartFieldChange(question, partIndex, { answer_requirement: event.target.value })}
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Hint</label>
-                                <textarea
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-hint`}
+                                label="Hint"
+                                className="mb-0"
+                              >
+                                <Textarea
+                                  id={`question-${question.id}-part-${partIndex}-hint`}
                                   value={part.hint ?? ''}
                                   onChange={(event) => handlePartFieldChange(question, partIndex, { hint: event.target.value })}
                                   rows={2}
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                 />
-                              </div>
-                              <div>
-                                <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Explanation</label>
-                                <textarea
+                              </FormField>
+                              <FormField
+                                id={`question-${question.id}-part-${partIndex}-explanation`}
+                                label="Explanation"
+                                className="mb-0"
+                              >
+                                <Textarea
+                                  id={`question-${question.id}-part-${partIndex}-explanation`}
                                   value={part.explanation ?? ''}
                                   onChange={(event) => handlePartFieldChange(question, partIndex, { explanation: event.target.value })}
                                   rows={2}
-                                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                 />
-                              </div>
+                              </FormField>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                               <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -1901,7 +2118,7 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                   type="checkbox"
                                   checked={partRequiresFigure}
                                   onChange={(event) => handlePartFieldChange(question, partIndex, { figure_required: event.target.checked })}
-                                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  className="h-4 w-4 rounded border-gray-300 text-[#8CC63F] focus:ring-[#8CC63F]"
                                 />
                                 Figure required for this part
                               </label>
@@ -1934,6 +2151,28 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                   const subHasAttachments = Array.isArray(subpart.attachments)
                                     ? subpart.attachments.length > 0
                                     : false;
+                                  const subAnswerFormatValue = subpart.answer_format ?? '';
+                                  const subAnswerFormatOptions = [...answerFormatOptions];
+                                  if (
+                                    subAnswerFormatValue &&
+                                    !subAnswerFormatOptions.some(option => option.value === subAnswerFormatValue)
+                                  ) {
+                                    subAnswerFormatOptions.push({
+                                      value: subAnswerFormatValue,
+                                      label: formatOptionLabel(subAnswerFormatValue),
+                                    });
+                                  }
+                                  const subAnswerRequirementValue = subpart.answer_requirement ?? '';
+                                  const subAnswerRequirementOptions = [...answerRequirementOptions];
+                                  if (
+                                    subAnswerRequirementValue &&
+                                    !subAnswerRequirementOptions.some(option => option.value === subAnswerRequirementValue)
+                                  ) {
+                                    subAnswerRequirementOptions.push({
+                                      value: subAnswerRequirementValue,
+                                      label: formatOptionLabel(subAnswerRequirementValue),
+                                    });
+                                  }
 
                                   return (
                                     <div
@@ -1965,10 +2204,13 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                       </div>
 
                                       <div className="grid gap-3 md:grid-cols-2">
-                                        <div>
-                                          <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subpart label</label>
-                                          <input
-                                            type="text"
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-label`}
+                                          label="Subpart label"
+                                          className="mb-0"
+                                        >
+                                          <Input
+                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-label`}
                                             value={subpart.part_label ?? subpart.part ?? ''}
                                             onChange={(event) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
@@ -1976,28 +2218,34 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                                 part: event.target.value
                                               })
                                             }
-                                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                           />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Marks</label>
-                                          <input
+                                        </FormField>
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-marks`}
+                                          label="Marks"
+                                          className="mb-0"
+                                        >
+                                          <Input
+                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-marks`}
                                             type="number"
                                             min={0}
-                                            value={subpart.marks ?? 0}
+                                            value={(subpart.marks ?? 0).toString()}
                                             onChange={(event) => {
                                               const value = Number(event.target.value);
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
                                                 marks: Number.isNaN(value) ? subpart.marks : value
                                               });
                                             }}
-                                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                           />
-                                        </div>
+                                        </FormField>
                                       </div>
-                                      <div>
-                                        <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subpart question text</label>
-                                        <textarea
+                                      <FormField
+                                        id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-text`}
+                                        label="Subpart question text"
+                                        className="mb-0"
+                                      >
+                                        <Textarea
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-text`}
                                           value={subpart.question_text ?? ''}
                                           onChange={(event) =>
                                             handleSubpartFieldChange(question, partIndex, subIndex, {
@@ -2005,36 +2253,45 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                                             })
                                           }
                                           rows={2}
-                                          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                                         />
-                                      </div>
+                                      </FormField>
                                       <div className="grid gap-3 md:grid-cols-2">
-                                        <div>
-                                          <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer format</label>
-                                          <input
-                                            type="text"
-                                            value={subpart.answer_format ?? ''}
-                                            onChange={(event) =>
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
+                                          label="Answer format"
+                                          className="mb-0"
+                                        >
+                                          <Select
+                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-format`}
+                                            value={subAnswerFormatValue}
+                                            onChange={(value) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_format: event.target.value
+                                                answer_format: value || null
                                               })
                                             }
-                                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                            options={subAnswerFormatOptions}
+                                            placeholder="Select answer format"
+                                            usePortal={false}
                                           />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Answer requirement</label>
-                                          <input
-                                            type="text"
-                                            value={subpart.answer_requirement ?? ''}
-                                            onChange={(event) =>
+                                        </FormField>
+                                        <FormField
+                                          id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
+                                          label="Answer requirement"
+                                          className="mb-0"
+                                        >
+                                          <Select
+                                            id={`question-${question.id}-part-${partIndex}-sub-${subIndex}-requirement`}
+                                            value={subAnswerRequirementValue}
+                                            onChange={(value) =>
                                               handleSubpartFieldChange(question, partIndex, subIndex, {
-                                                answer_requirement: event.target.value
+                                                answer_requirement: value || null
                                               })
                                             }
-                                            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                            options={subAnswerRequirementOptions}
+                                            placeholder="Select requirement"
+                                            usePortal={false}
                                           />
-                                        </div>
+                                        </FormField>
                                       </div>
 
                                       {renderAnswerEditorList(subpart.correct_answers, {
