@@ -4277,6 +4277,7 @@ function QuestionsTabInner({
           question_type: q.question_type as 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay',
           marks: q.marks || 0,
           difficulty: q.difficulty,
+          unit: q.original_unit,
           topic: q.topic,
           subtopic: q.subtopic,
           answer_format: q.answer_format,

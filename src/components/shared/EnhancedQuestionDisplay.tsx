@@ -68,6 +68,7 @@ export interface QuestionDisplayData {
   question_type: 'mcq' | 'tf' | 'descriptive' | 'calculation' | 'diagram' | 'essay';
   marks: number;
   difficulty?: string;
+  unit?: string;
   topic?: string;
   subtopic?: string;
   answer_format?: string;

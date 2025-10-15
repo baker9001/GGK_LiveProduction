@@ -1216,6 +1216,40 @@ export const QuestionImportReviewWorkflow: React.FC<QuestionImportReviewWorkflow
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {question.marks} mark{question.marks === 1 ? '' : 's'} • {question.question_type}
                     </p>
+                    {(question.unit || question.topic || question.subtopic || question.difficulty || question.answer_requirement || question.answer_format) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {question.unit && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                            Unit: {question.unit}
+                          </span>
+                        )}
+                        {question.topic && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-200">
+                            Topic: {question.topic}
+                          </span>
+                        )}
+                        {question.subtopic && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
+                            {question.subtopic}
+                          </span>
+                        )}
+                        {question.difficulty && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium capitalize text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                            {question.difficulty} difficulty
+                          </span>
+                        )}
+                        {question.answer_requirement && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800/60 dark:text-slate-200">
+                            Requirement: {question.answer_requirement}
+                          </span>
+                        )}
+                        {question.answer_format && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                            Format: {question.answer_format}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
