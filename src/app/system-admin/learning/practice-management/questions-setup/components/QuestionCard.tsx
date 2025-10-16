@@ -688,7 +688,8 @@ export function QuestionCard({
               <EditableField
                 value={question.question_description}
                 onSave={(value) => handleFieldUpdate('question_description', value)}
-                type="richtext"
+                type="textarea"
+                rows={5}
                 minLength={10}
                 required
                 disabled={readOnly}
@@ -809,12 +810,13 @@ export function QuestionCard({
               <EditableField
                 value={question.hint || ''}
                 onSave={(value) => handleFieldUpdate('hint', value)}
-                type="richtext"
+                type="textarea"
+                rows={4}
                 placeholder="Add a hint to help students..."
                 minLength={5}
                 required
                 disabled={readOnly}
-                className="text-base leading-relaxed text-gray-900 dark:text-white"
+                className="text-base text-gray-900 dark:text-white"
               />
             </div>
           </div>
@@ -828,12 +830,13 @@ export function QuestionCard({
               <EditableField
                 value={question.explanation || ''}
                 onSave={(value) => handleFieldUpdate('explanation', value)}
-                type="richtext"
+                type="textarea"
+                rows={4}
                 placeholder="Explain the correct answer..."
                 minLength={10}
                 required
                 disabled={readOnly}
-                className="text-base leading-relaxed text-gray-900 dark:text-white"
+                className="text-base text-gray-900 dark:text-white"
               />
             </div>
           </div>
@@ -949,11 +952,12 @@ export function QuestionCard({
                     <EditableField
                       value={subQuestion.question_description}
                       onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'question_description', value)}
-                      type="richtext"
+                      type="textarea"
+                      rows={3}
                       minLength={10}
                       required
                       disabled={readOnly}
-                      className="text-base leading-relaxed text-gray-900 dark:text-white"
+                      className="text-base text-gray-900 dark:text-white"
                     />
                   </div>
                   
@@ -1121,11 +1125,12 @@ export function QuestionCard({
                         <EditableField
                           value={subQuestion.hint || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'hint', value)}
-                          type="richtext"
+                          type="textarea"
+                          rows={3}
                           placeholder="Add a hint..."
                           minLength={5}
                           disabled={readOnly}
-                          className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          className="text-sm text-gray-900 dark:text-white"
                         />
                       </div>
                     </div>
@@ -1138,11 +1143,12 @@ export function QuestionCard({
                         <EditableField
                           value={subQuestion.explanation || ''}
                           onSave={(value) => handleSubQuestionFieldUpdate(subQuestion.id, 'explanation', value)}
-                          type="richtext"
+                          type="textarea"
+                          rows={3}
                           placeholder="Explain the answer..."
                           minLength={10}
                           disabled={readOnly}
-                          className="text-sm leading-relaxed text-gray-900 dark:text-white"
+                          className="text-sm text-gray-900 dark:text-white"
                         />
                       </div>
                     </div>

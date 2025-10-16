@@ -4,13 +4,11 @@ import { Edit, Save, X, Check, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '../../../../../../components/shared/Button';
 import { cn } from '../../../../../../lib/utils';
 import { toast } from '../../../../../../components/shared/Toast';
-import { RichTextEditor } from '../../../../../../components/shared/RichTextEditor';
-import { getPlainTextFromRichText, sanitizeRichText } from '../../../../../../utils/richText';
 
 interface EditableFieldProps {
   value: any;
   onSave: (value: any) => void;
-  type?: 'text' | 'number' | 'textarea' | 'select' | 'multiselect' | 'richtext';
+  type?: 'text' | 'number' | 'textarea' | 'select' | 'multiselect';
   options?: { value: string; label: string }[];
   placeholder?: string;
   displayValue?: React.ReactNode;
@@ -48,10 +46,6 @@ export function EditableField({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setEditValue(value);
-  }, [value]);
-
-  useEffect(() => {
     if (type === 'multiselect' && Array.isArray(value)) {
       setSelectedValues(value);
     }
@@ -78,37 +72,6 @@ export function EditableField({
   }, []);
 
   const handleSave = async () => {
-    if (type === 'richtext') {
-      const rawValue = typeof editValue === 'string' ? editValue : String(editValue ?? '');
-      const sanitized = sanitizeRichText(rawValue);
-      const plain = getPlainTextFromRichText(sanitized).trim();
-
-      if (required && plain.length === 0) {
-        toast.error('This field is required');
-        return;
-      }
-
-      if (minLength !== undefined && plain.length < minLength) {
-        toast.error(`Must be at least ${minLength} characters`);
-        return;
-      }
-
-      if (maxLength !== undefined && plain.length > maxLength) {
-        toast.error(`Must be at most ${maxLength} characters`);
-        return;
-      }
-
-      try {
-        await onSave(sanitized);
-        setIsEditing(false);
-        toast.success('Updated successfully');
-      } catch (error) {
-        console.error('Error saving:', error);
-        toast.error('Failed to update');
-      }
-      return;
-    }
-
     if (type === 'multiselect') {
       if (required && selectedValues.length === 0) {
         toast.error('Please select at least one option');
@@ -274,37 +237,6 @@ export function EditableField({
       );
     }
 
-    if (type === 'richtext') {
-      return (
-        <div className="space-y-3 w-full">
-          <RichTextEditor
-            value={typeof editValue === 'string' ? editValue : String(editValue ?? '')}
-            onChange={(content) => setEditValue(content)}
-            placeholder={placeholder}
-            className={cn('border-0 shadow-none', className)}
-          />
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={handleSave}
-              leftIcon={<Save className="h-3 w-3" />}
-            >
-              Save
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleCancel}
-              leftIcon={<X className="h-3 w-3" />}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="flex items-center space-x-2">
         {type === 'textarea' ? (
@@ -387,43 +319,10 @@ export function EditableField({
   }
 
   // Display mode
-  if (type === 'richtext') {
-    const sanitizedValue = sanitizeRichText(typeof value === 'string' ? value : String(value ?? ''));
-    const plainText = getPlainTextFromRichText(sanitizedValue).trim();
-    const hasContent = plainText.length > 0;
-
-    return (
-      <div
-        className={cn(
-          'group relative w-full',
-          !disabled && 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors',
-          className
-        )}
-        onClick={() => !disabled && setIsEditing(true)}
-      >
-        {hasContent ? (
-          <div
-            className={cn(
-              'rich-text-display text-gray-900 dark:text-white leading-relaxed'
-            )}
-            dangerouslySetInnerHTML={{ __html: sanitizedValue }}
-          />
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400 italic">
-            {placeholder}
-          </span>
-        )}
-        {!disabled && (
-          <Edit className="absolute right-2 top-2 h-3 w-3 text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-        )}
-      </div>
-    );
-  }
-
   const displayContent = displayValue || (
-    type === 'multiselect'
-      ? (Array.isArray(value) && value.length > 0
-          ? options.filter(opt => value.includes(opt.value)).map(opt => opt.label).join(', ')
+    type === 'multiselect' 
+      ? (Array.isArray(value) && value.length > 0 
+          ? options.filter(opt => value.includes(opt.value)).map(opt => opt.label).join(', ') 
           : placeholder)
       : (value || placeholder)
   );
