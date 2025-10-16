@@ -24,6 +24,7 @@ import {
   type UserRole
 } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
+import { getPreferredName, getTimeBasedGreeting } from '../../lib/greeting';
 
 export default function SignInPage() {
   const navigate = useNavigate();
@@ -320,7 +321,12 @@ export default function SignInPage() {
       setAuthenticatedUser(authenticatedUser);
       
       // Success
-      toast.success(`Welcome back, ${authenticatedUser.name}!`);
+      const friendlyGreeting = getTimeBasedGreeting();
+      const displayName = getPreferredName(authenticatedUser.name);
+      const personalizedGreeting = displayName
+        ? `${friendlyGreeting}, ${displayName}.`
+        : `${friendlyGreeting}.`;
+      toast.success(`${personalizedGreeting} You're now signed in and ready to go.`);
       
       // Redirect based on user type
       const redirectPath = getRedirectPath(userType, userRole);
