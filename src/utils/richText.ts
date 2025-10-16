@@ -5,6 +5,8 @@ const allowedTags = new Set([
   'em',
   'u',
   's',
+  'sup',
+  'sub',
   'ul',
   'ol',
   'li',
@@ -30,6 +32,7 @@ const allowedTags = new Set([
   'img'
 ]);
 
+const globalAllowedAttributes = new Set<string>(['data-equation']);
 const globalAllowedAttributes = new Set<string>();
 
 const tagSpecificAllowedAttributes: Record<string, Set<string>> = {

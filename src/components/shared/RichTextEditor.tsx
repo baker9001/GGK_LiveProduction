@@ -29,6 +29,20 @@ const blockCommands: Array<{ label: string; value: string }> = [
   { label: 'Heading 4', value: 'h4' },
 ];
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const escapeAttribute = (value: string) => escapeHtml(value).replace(/\n/g, '&#10;');
+
+const commonSymbols = [
+  '±', '÷', '×', '√', '∞', 'π', '∑', '∫', '≈', '≠', '≤', '≥', '→', '←', '↑', '↓', 'α', 'β', 'γ', 'δ', 'θ', 'λ', 'μ', 'σ', 'Ω', '°'
+];
+
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   id,
   value = '',
@@ -39,6 +53,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className,
 }) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const symbolButtonRef = useRef<HTMLButtonElement | null>(null);
+  const symbolPickerRef = useRef<HTMLDivElement | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
+  const [currentBlock, setCurrentBlock] = useState('p');
+  const [showSymbolPicker, setShowSymbolPicker] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
   const [currentBlock, setCurrentBlock] = useState('p');
@@ -74,6 +94,36 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     document.execCommand('insertHTML', false, sanitized);
   }, []);
 
+  const insertHtml = useCallback((html: string) => {
+    if (readOnly || !editorRef.current) return;
+    document.execCommand('insertHTML', false, html);
+    handleInput();
+    editorRef.current.focus({ preventScroll: true });
+  }, [handleInput, readOnly]);
+
+  const insertSymbol = useCallback((symbol: string) => {
+    if (readOnly || !editorRef.current) return;
+    document.execCommand('insertText', false, symbol);
+    handleInput();
+    editorRef.current.focus({ preventScroll: true });
+  }, [handleInput, readOnly]);
+
+  const handleEquationInsert = useCallback(() => {
+    if (readOnly) return;
+    const input = window.prompt('Enter equation (LaTeX or plain text)');
+    const equation = input?.trim();
+    if (!equation) return;
+
+    const normalized = equation.replace(/\r?\n/g, '\n');
+    const content = normalized
+      .split('\n')
+      .map(segment => escapeHtml(segment))
+      .join('<br />');
+    const html = `<span data-equation="${escapeAttribute(normalized)}">${content}</span>`;
+    insertHtml(html);
+    setShowSymbolPicker(false);
+  }, [insertHtml, readOnly]);
+
   const toolbarButtons: ToolbarButtonConfig[] = useMemo(() => [
     {
       icon: <Bold className="h-4 w-4" />, label: 'Bold', command: () => applyFormat('bold'),
@@ -86,6 +136,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     {
       icon: <Strikethrough className="h-4 w-4" />, label: 'Strikethrough', command: () => applyFormat('strikeThrough'),
+    },
+    {
+      icon: <Superscript className="h-4 w-4" />, label: 'Superscript', command: () => applyFormat('superscript'),
+    },
+    {
+      icon: <Subscript className="h-4 w-4" />, label: 'Subscript', command: () => applyFormat('subscript'),
     },
     {
       icon: <List className="h-4 w-4" />, label: 'Bulleted list', command: () => applyFormat('insertUnorderedList'),
@@ -149,6 +205,41 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [handleSelectionChange, readOnly]);
 
+  useEffect(() => {
+    if (!showSymbolPicker) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!symbolPickerRef.current || symbolPickerRef.current.contains(target)) {
+        return;
+      }
+      if (symbolButtonRef.current && symbolButtonRef.current.contains(target)) {
+        return;
+      }
+      setShowSymbolPicker(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSymbolPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showSymbolPicker]);
+
+  useEffect(() => {
+    if (readOnly && showSymbolPicker) {
+      setShowSymbolPicker(false);
+    }
+  }, [readOnly, showSymbolPicker]);
+
   return (
     <div className={cn('rich-text-editor', readOnly && 'pointer-events-none opacity-90', className)}>
       <div className="rich-text-editor__toolbar">
@@ -176,6 +267,49 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               {button.icon}
             </button>
           ))}
+          <div className="rich-text-editor__toolbar-group">
+            <button
+              ref={symbolButtonRef}
+              type="button"
+              className="rich-text-editor__toolbar-button"
+              onClick={() => setShowSymbolPicker(prev => !prev)}
+              title="Insert symbol"
+              aria-label="Insert symbol"
+              aria-haspopup="listbox"
+              aria-expanded={showSymbolPicker}
+              disabled={readOnly}
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+            {showSymbolPicker && !readOnly && (
+              <div ref={symbolPickerRef} className="rich-text-editor__symbol-popover" role="listbox">
+                {commonSymbols.map(symbol => (
+                  <button
+                    key={symbol}
+                    type="button"
+                    role="option"
+                    aria-label={`Insert symbol ${symbol}`}
+                    onClick={() => {
+                      insertSymbol(symbol);
+                      setShowSymbolPicker(false);
+                    }}
+                  >
+                    {symbol}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="rich-text-editor__toolbar-button"
+            onClick={handleEquationInsert}
+            title="Insert equation"
+            aria-label="Insert equation"
+            disabled={readOnly}
+          >
+            <Sigma className="h-4 w-4" />
+          </button>
         </div>
       </div>
       <div

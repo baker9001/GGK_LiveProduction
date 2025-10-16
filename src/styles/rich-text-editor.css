@@ -1,4 +1,5 @@
 .rich-text-editor {
+  @apply relative border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900;
   @apply border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900;
 }
 
@@ -16,6 +17,10 @@
 
 .rich-text-editor__toolbar-buttons {
   @apply flex items-center gap-1;
+}
+
+.rich-text-editor__toolbar-group {
+  @apply relative;
 }
 
 .rich-text-editor__toolbar-button {
@@ -37,6 +42,22 @@
 .rich-text-editor__content:empty::before {
   content: attr(data-placeholder);
   @apply text-gray-400 dark:text-gray-500 pointer-events-none block;
+}
+
+.rich-text-editor__symbol-popover {
+  @apply absolute left-0 top-10 z-20 grid max-h-48 w-44 grid-cols-4 gap-1 overflow-y-auto rounded-md border border-gray-200 bg-white p-2 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800;
+}
+
+.rich-text-editor__symbol-popover button {
+  @apply rounded px-2 py-1 text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-200 dark:hover:bg-gray-700;
+}
+
+.rich-text-editor__content [data-equation] {
+  @apply inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-blue-700 dark:bg-blue-900/40 dark:text-blue-200;
+}
+
+.rich-text-renderer [data-equation] {
+  @apply inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 font-mono text-blue-700 dark:bg-blue-900/40 dark:text-blue-200;
 }
 
 .rich-text-renderer {
