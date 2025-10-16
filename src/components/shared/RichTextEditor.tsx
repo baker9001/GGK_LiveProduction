@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bold, Italic, Underline, Strikethrough, Superscript, Subscript, ListOrdered, List, Quote, Link, Code, Minus, Sigma, Sparkles, Type } from 'lucide-react';
+import { Bold, Italic, Underline, Strikethrough, ListOrdered, List, Quote, Link, Code, Minus, Type } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { mergeRichTextChange, sanitizeRichText } from '../../utils/richText';
 import '../../styles/rich-text-editor.css';
@@ -59,6 +59,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
   const [currentBlock, setCurrentBlock] = useState('p');
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [currentValue, setCurrentValue] = useState(() => sanitizeRichText(value));
+  const [currentBlock, setCurrentBlock] = useState('p');
 
   useEffect(() => {
     const sanitized = sanitizeRichText(value);

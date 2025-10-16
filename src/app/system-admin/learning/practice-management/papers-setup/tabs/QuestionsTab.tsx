@@ -3964,9 +3964,9 @@ function QuestionsTabInner({
       mcq: questions.filter(q => q.question_type === 'mcq').length,
       descriptive: questions.filter(q => q.question_type === 'descriptive').length,
       complex: questions.filter(q => q.parts && q.parts.length > 0).length,
-      withFigures: questions.filter(q => q.figure || (q.parts && q.parts.some((p: any) => p.figure))).length,
-      withDynamicAnswers: questions.filter(q => 
-        q.answer_requirement || 
+      withFigures: questions.filter(q => q.figure_required || (q.parts && q.parts.some((p: any) => p.figure_required))).length,
+      withDynamicAnswers: questions.filter(q =>
+        q.answer_requirement ||
         (q.parts && q.parts.some((p: any) => p.answer_requirement))
       ).length,
       flaggedInSimulation: questions.filter(q => q.simulation_flags?.includes('flagged')).length
@@ -4362,10 +4362,6 @@ function QuestionsTabInner({
 
       {/* Paper Metadata Summary */}
       {renderMetadataSummary()}
-
-      {questions.length > 0 && (
-        <QuestionSupportMatrix summary={questionSupportSummary} averageMarks={averageMarks} />
-      )}
 
       {/* PDF Upload Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">

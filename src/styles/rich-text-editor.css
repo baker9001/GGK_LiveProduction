@@ -1,5 +1,6 @@
 .rich-text-editor {
   @apply relative border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900;
+  @apply border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900;
 }
 
 .rich-text-editor__toolbar {
