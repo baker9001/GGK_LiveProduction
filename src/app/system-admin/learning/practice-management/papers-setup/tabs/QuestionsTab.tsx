@@ -60,6 +60,7 @@ import {
   detectAnswerFormat,
   ensureArray,
   ensureString,
+  validateQuestionsForImport,
   type QuestionMapping,
   type DataStructureInfo,
   type ImportResult
@@ -101,15 +102,6 @@ import { supabase } from '../../../../../../lib/supabase';
 import { cn } from '../../../../../../lib/utils';
 import { ExtractionRules, QuestionSupportSummary } from '../types';
 import { ErrorBoundary } from '../../../../../../components/shared/ErrorBoundary';
-
-// Try to import validateQuestionsForImport if it exists
-let validateQuestionsForImport: any;
-try {
-  const dataOps = require('../../../../../../lib/data-operations/questionsDataOperations');
-  validateQuestionsForImport = dataOps.validateQuestionsForImport;
-} catch (e) {
-  console.warn('validateQuestionsForImport not available, using fallback validation');
-}
 
 // Answer format configuration for better UI/UX
 const answerFormatConfig = {
@@ -480,7 +472,6 @@ function QuestionsTabInner({
   const requestInlineConfirmation = useCallback(
     (options: InlineConfirmationOptions) =>
       new Promise<boolean>(resolve => {
-        console.log('📋 Requesting inline confirmation:', options.title);
         setPendingConfirmation({
           ...options,
           resolve,
@@ -816,19 +807,10 @@ function QuestionsTabInner({
     
     // Test function for debugging - accessible from console
     (window as any).testImportButton = () => {
-      console.log('=== TEST IMPORT BUTTON ===');
-      console.log('Questions:', questions);
-      console.log('Mappings:', questionMappings);
-      console.log('Attachments:', attachments);
-      console.log('DataStructure:', dataStructureInfo);
-      console.log('ExistingPaperId:', existingPaperId);
-      console.log('RequiresFigure function exists:', typeof requiresFigure === 'function');
-      console.log('ValidateQuestionsForImport exists:', typeof validateQuestionsForImport === 'function');
       
       // Try to run validation
       try {
         const errors = validateQuestionsWithAttachments();
-        console.log('Validation successful, errors:', errors);
       } catch (err) {
         console.error('Validation failed:', err);
       }
@@ -997,14 +979,6 @@ function QuestionsTabInner({
       // Set all topics and subtopics
       setTopics(allTopics);
       setSubtopics(allSubtopics);
-
-      console.log('Loaded data structure:', {
-        units: units.length,
-        topics: allTopics.length,
-        subtopics: allSubtopics.length,
-        topicSample: allTopics[0],
-        subtopicSample: allSubtopics[0]
-      });
 
       if (units.length === 0) {
         console.warn('No units loaded - this may cause mapping issues');
@@ -1518,8 +1492,6 @@ function QuestionsTabInner({
         };
       });
 
-      console.log('Final question mappings:', mappings);
-      console.log('Sample mapping for first question:', mappings[questions[0]?.id]);
 
       setQuestionMappings(mappings);
     }
@@ -1799,15 +1771,6 @@ function QuestionsTabInner({
           simulation_flags: [],
           simulation_notes: ''
         };
-
-        console.log(`Processing question ${index + 1}:`, {
-          topic: processedQuestion.topic,
-          original_topics: processedQuestion.original_topics,
-          subtopic: processedQuestion.subtopic,
-          original_subtopics: processedQuestion.original_subtopics,
-          unit: processedQuestion.original_unit,
-          answer_requirement: processedQuestion.answer_requirement
-        });
 
         // Process parts if available
         if (Array.isArray(q.parts) && q.parts.length > 0) {
@@ -2195,7 +2158,6 @@ function QuestionsTabInner({
         }
       });
       setExistingQuestionNumbers(numberSet);
-      console.log('Loaded existing question numbers:', numberSet);
     } catch (error) {
       console.error('Error checking existing questions:', error);
     }
@@ -2708,13 +2670,6 @@ function QuestionsTabInner({
       questions.forEach(question => {
         const questionErrors: string[] = [];
 
-        // Debug log for tracking
-        console.log(`Validating question ${question.id}`, {
-          figure_required: (question as any).figure_required,
-          figure: question.figure,
-          resolvedRequirement: resolveFigureRequirement(question)
-        });
-
         // Check if question requires figure - RESPECT THE TOGGLE and JSON data!
         const shouldValidateFigure = resolveFigureRequirement(question);
 
@@ -2796,20 +2751,13 @@ function QuestionsTabInner({
       console.error('Error during validation:', error);
       // Return errors collected so far even if there was an exception
     }
-    
+
     return errors;
   };
 
   // FIXED IMPORT FUNCTIONS with comprehensive error handling and fallbacks
   const handleImportQuestions = async () => {
     // Add visual feedback immediately
-    console.log('=== IMPORT BUTTON CLICKED ===');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Questions to import:', questions.length);
-    console.log('Existing paper ID:', existingPaperId);
-    console.log('Data structure info loaded:', !!dataStructureInfo);
-    console.log('Attachments:', Object.keys(attachments));
-    console.log('Question mappings:', questionMappings);
     
     // Show immediate feedback to user
     toast.info('Starting import process...', { duration: 1000 });
@@ -2834,7 +2782,6 @@ function QuestionsTabInner({
         return;
       }
 
-      console.log('Prerequisites check passed');
 
       if (reviewLoading) {
         toast.info('Review progress is still syncing. Please wait a moment.');
@@ -2852,12 +2799,10 @@ function QuestionsTabInner({
       }
 
       if (extractionRules && (extractionRules.forwardSlashHandling || extractionRules.alternativeLinking)) {
-        console.log('Running extraction rules validation...');
         const subject = savedPaperDetails?.subject || parsedData?.subject;
         const preImportValidation = validateQuestionsBeforeImport(questions, subject);
 
         if (!preImportValidation.canProceed) {
-          console.log('Pre-import validation failed:', preImportValidation.summary);
           const report = getValidationReportSummary(preImportValidation);
           const errorDetails = formatValidationErrors(preImportValidation.errors.slice(0, 10));
 
@@ -2882,22 +2827,12 @@ function QuestionsTabInner({
           });
 
           if (showFullReport) {
-            console.log('=== FULL EXTRACTION VALIDATION REPORT ===');
-            console.log(report);
-            console.log('\n=== DETAILED ERRORS ===');
-            console.log(formatValidationErrors(preImportValidation.errors));
-            console.log('\n=== DETAILED WARNINGS ===');
-            console.log(formatValidationErrors(preImportValidation.warnings));
           }
 
           return;
         } else if (preImportValidation.warnings.length > 0) {
-          console.log('Pre-import validation has warnings:', preImportValidation.summary.totalWarnings);
           toast.warning(`${preImportValidation.summary.totalWarnings} warnings found. Check console for details.`, { duration: 5000 });
-          console.log('=== EXTRACTION VALIDATION WARNINGS ===');
-          console.log(formatValidationErrors(preImportValidation.warnings));
         } else {
-          console.log('Pre-import validation passed successfully');
           toast.success('Extraction validation passed', { duration: 2000 });
         }
       }
@@ -2907,28 +2842,23 @@ function QuestionsTabInner({
       
       try {
         // Try our custom validation first
-        console.log('Running custom validation...');
         errors = validateQuestionsWithAttachments();
-        console.log('Custom validation completed, errors found:', Object.keys(errors).length);
       } catch (customValidationError) {
         console.error('Custom validation failed:', customValidationError);
         
         // Fallback: Try imported validation if available
         if (typeof validateQuestionsForImport === 'function') {
           try {
-            console.log('Trying imported validation function...');
             errors = validateQuestionsForImport(
               questions,
               questionMappings,
               existingQuestionNumbers,
               attachments
             );
-            console.log('Imported validation completed');
           } catch (importedValidationError) {
             console.error('Imported validation also failed:', importedValidationError);
             
             // Final fallback: Basic validation
-            console.log('Using basic validation fallback...');
             errors = {};
             questions.forEach(q => {
               const qErrors = [];
@@ -2959,11 +2889,9 @@ function QuestionsTabInner({
       }
       
       setValidationErrors(errors);
-      console.log('Validation errors set:', errors);
       
       // Check validation results
       if (Object.keys(errors).length > 0) {
-        console.log('Validation errors found, showing error dialog');
         setShowValidation(true);
         
         const errorMessages = Object.entries(errors).map(([qId, errs]) => {
@@ -2978,7 +2906,6 @@ function QuestionsTabInner({
         return;
       }
       
-      console.log('No validation errors found');
 
       // Check for unmapped questions (excluding already imported ones)
       const unmappedQuestions = questions.filter(q => {
@@ -2991,11 +2918,9 @@ function QuestionsTabInner({
       });
       
       if (unmappedQuestions.length > 0) {
-        console.log('Unmapped questions found:', unmappedQuestions.map(q => q.question_number));
         const unmappedNumbers = unmappedQuestions.map(q => q.question_number).join(', ');
         
         // Show unmapped questions warning
-        console.log('⚠️ Showing unmapped questions dialog...');
 
         try {
           const proceedWithUnmapped = await requestInlineConfirmation({
@@ -3017,7 +2942,6 @@ function QuestionsTabInner({
             confirmVariant: 'primary',
           });
 
-          console.log('User choice:', proceedWithUnmapped ? 'Proceed' : 'Cancel');
 
           if (!proceedWithUnmapped) {
             toast.info(`Please map questions to units/topics: ${unmappedNumbers.substring(0, 50)}...`, { duration: 5000 });
@@ -3056,12 +2980,9 @@ function QuestionsTabInner({
       
       if (questionsNeedingFigures.length > 0) {
         const needsFiguresNumbers = questionsNeedingFigures.map(q => q.question_number).join(', ');
-        console.log('Questions needing figures:', needsFiguresNumbers);
         toast.warning(`Questions ${needsFiguresNumbers} may need figure attachments.`, { duration: 3000 });
       }
 
-      console.log('=== ALL VALIDATIONS PASSED ===');
-      console.log('Showing confirmation dialog...');
       
       // Show confirmation dialog
       setShowConfirmDialog(true);
@@ -3075,44 +2996,26 @@ function QuestionsTabInner({
       const errorMessage = error?.message || 'Unknown error occurred';
       toast.error(`Import failed: ${errorMessage}. Check console for details.`, { duration: 7000 });
       
-      // Log current state for debugging
-      console.log('Current state at error:', {
-        questionsCount: questions?.length,
-        mappingsCount: Object.keys(questionMappings || {}).length,
-        attachmentsCount: Object.keys(attachments || {}).length,
-        dataStructureLoaded: !!dataStructureInfo,
-        existingPaperId: existingPaperId
-      });
     }
   };
 
   const confirmImport = async () => {
-    console.log('Starting import process');
     setShowConfirmDialog(false);
     setIsImporting(true);
     setImportProgress({ current: 0, total: questions.length });
 
     try {
       // Prepare the correct parameters for importQuestions
-      const importParams = {
-        questions: questions,
-        mappings: questionMappings,
-        attachments: attachments,
-        paperId: existingPaperId!,
-        dataStructureInfo: dataStructureInfo!,
-        importSessionId: importSession?.id,
-        yearOverride: paperMetadata.exam_year ? parseInt(paperMetadata.exam_year) : undefined,
-        existingQuestionNumbers: existingQuestionNumbers
-      };
-      
-      console.log('Import parameters:', {
-        questionCount: importParams.questions.length,
-        paperId: importParams.paperId,
-        dataStructureId: importParams.dataStructureInfo.id,
-        mappingsCount: Object.keys(importParams.mappings).length,
-        attachmentsCount: Object.keys(importParams.attachments).length,
-        existingCount: importParams.existingQuestionNumbers.size
-      });
+        const importParams = {
+          questions: questions,
+          mappings: questionMappings,
+          attachments: attachments,
+          paperId: existingPaperId!,
+          dataStructureInfo: dataStructureInfo!,
+          importSessionId: importSession?.id,
+          yearOverride: paperMetadata.exam_year ? parseInt(paperMetadata.exam_year) : undefined,
+          existingQuestionNumbers: existingQuestionNumbers
+        };
       
       // Call the import function with the correct signature
       const result: ImportResult = await importQuestions({
@@ -3122,7 +3025,6 @@ function QuestionsTabInner({
         }
       });
       
-      console.log('Import result:', result);
       
       // Handle the result
       if (result.importedQuestions.length > 0) {
@@ -3165,7 +3067,6 @@ function QuestionsTabInner({
               })
               .eq('id', importParams.paperId);
 
-            console.log('Paper status updated to draft with qa_status=pending');
           } catch (error) {
             console.error('Error updating paper status:', error);
             // Don't fail the import if this update fails
@@ -3448,7 +3349,6 @@ function QuestionsTabInner({
   };
 
   const handleDeleteAttachment = (attachmentKey: string, attachmentId: string) => {
-    console.log('🗑️ Deleting attachment:', { attachmentKey, attachmentId });
 
     // Safety check: ensure attachmentKey exists
     if (!attachments[attachmentKey]) {
@@ -3466,26 +3366,19 @@ function QuestionsTabInner({
       return;
     }
 
-    console.log('✅ Found attachment to delete:', attachmentToDelete);
 
-    setAttachments(prev => {
-      const updated = {
-        ...prev,
-        [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
-      };
-      console.log('📦 Updated attachments state:', {
-        key: attachmentKey,
-        before: prev[attachmentKey]?.length,
-        after: updated[attachmentKey].length
+      setAttachments(prev => {
+        const updated = {
+          ...prev,
+          [attachmentKey]: (prev[attachmentKey] || []).filter(att => att.id !== attachmentId)
+        };
+        return updated;
       });
-      return updated;
-    });
 
     // Update staged attachments
     if (updateStagedAttachments) {
       const filteredAttachments = attachments[attachmentKey].filter(att => att.id !== attachmentId);
       updateStagedAttachments(attachmentKey, filteredAttachments);
-      console.log('📤 Updated staged attachments');
     }
 
     toast.success('Attachment deleted successfully');
@@ -4046,7 +3939,6 @@ function QuestionsTabInner({
         isQAMode={true}
         onPaperStatusChange={(newStatus) => {
           // Handle paper status changes during simulation
-          console.log('Paper status changed to:', newStatus);
         }}
       />
     );
@@ -4232,7 +4124,6 @@ function QuestionsTabInner({
           unit: q.unit ?? q.original_unit ?? null,
           unit_id: q.unit_id ?? null,
           difficulty: q.difficulty,
-          unit: q.original_unit,
           topic: q.topic,
           topic_id: q.topic_id ?? null,
           subtopic: q.subtopic,
@@ -4258,10 +4149,8 @@ function QuestionsTabInner({
         onQuestionUpdate={handleQuestionUpdateFromReview}
         onRequestSnippingTool={handleRequestSnippingTool}
         onAllQuestionsReviewed={() => {
-          console.log('All questions reviewed');
         }}
         onImportReady={(canImport) => {
-          console.log('Import ready status:', canImport);
         }}
       />
 
@@ -4318,12 +4207,10 @@ function QuestionsTabInner({
         <ConfirmationDialog
           isOpen={true}
           onCancel={() => {
-            console.log('📋 Confirmation dialog closed (cancel)');
             pendingConfirmation.resolve(false);
             setPendingConfirmation(null);
           }}
           onConfirm={() => {
-            console.log('📋 Confirmation dialog confirmed');
             pendingConfirmation.resolve(true);
             setPendingConfirmation(null);
           }}
@@ -4529,11 +4416,6 @@ function QuestionsTabInner({
             </Button>
             <Button
               onClick={() => {
-                console.log('=== NAVIGATION IMPORT BUTTON CLICKED ===');
-                console.log('Button enabled:', canImport);
-                console.log('Questions count:', questions.length);
-                console.log('Is importing:', isImporting);
-                console.log('Simulation completed:', simulationCompleted);
 
                 handleImportQuestions().catch(error => {
                   console.error('Error caught in button handler:', error);
