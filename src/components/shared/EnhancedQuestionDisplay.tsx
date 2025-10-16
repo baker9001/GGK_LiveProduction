@@ -17,8 +17,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './Button';
-import { RichTextRenderer } from './RichTextRenderer';
-import { extractPlainText } from '../../utils/richText';
 
 interface CorrectAnswer {
   answer: string;
@@ -259,10 +257,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                   {option.label}
                 </div>
                 <div className="flex-1">
-                  <RichTextRenderer
-                    value={option.text}
-                    className="text-sm text-gray-900 dark:text-white"
-                  />
+                  <p className="text-sm text-gray-900 dark:text-white">{option.text}</p>
                 </div>
                 {showAnswers && option.is_correct && highlightCorrect && (
                   <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
@@ -315,15 +310,14 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                     <div className="flex items-start gap-3">
                       <Award className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <div className="flex flex-wrap items-baseline gap-2">
-                          <RichTextRenderer
-                            value={answer.answer}
-                            className="text-sm font-medium text-green-900 dark:text-green-100 [&>*]:inline [&>*]:mr-1"
-                          />
+                        <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                          {answer.answer}
                           {answer.unit && (
-                            <span className="text-green-700 dark:text-green-300">({answer.unit})</span>
+                            <span className="ml-2 text-green-700 dark:text-green-300">
+                              ({answer.unit})
+                            </span>
                           )}
-                        </div>
+                        </p>
                         {answer.marks !== undefined && (
                           <p className="text-xs text-green-700 dark:text-green-300 mt-1">
                             {answer.marks} mark{answer.marks !== 1 ? 's' : ''}
@@ -530,7 +524,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
               </p>
               {!isExpanded && part.question_text && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
-                  {extractPlainText(part.question_text)}
+                  {part.question_text}
                 </p>
               )}
             </div>
@@ -553,10 +547,9 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
             {/* Question Text */}
             {part.question_text && (
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                <RichTextRenderer
-                  value={part.question_text}
-                  className="text-sm text-gray-900 dark:text-white"
-                />
+                <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                  {part.question_text}
+                </p>
               </div>
             )}
 
@@ -593,10 +586,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
                         {option.label}
                       </div>
                       <div className="flex-1">
-                        <RichTextRenderer
-                          value={option.text}
-                          className="text-sm text-gray-900 dark:text-white"
-                        />
+                        <p className="text-sm text-gray-900 dark:text-white">{option.text}</p>
                       </div>
                       {showAnswers && option.is_correct && highlightCorrect && (
                         <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
@@ -783,7 +773,7 @@ export const EnhancedQuestionDisplay: React.FC<EnhancedQuestionDisplayProps> = (
       {/* Question Text */}
       <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
         <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-          <RichTextRenderer value={question.question_text} />
+          {question.question_text}
         </p>
       </div>
 
