@@ -40,6 +40,7 @@ import {
 import { cn } from '../../lib/utils';
 import { getDyslexiaPreference, setDyslexiaPreference } from '../../lib/accessibility';
 import { ModuleNavigation } from '../shared/ModuleNavigation';
+import { WelcomeBanner } from '../shared/WelcomeBanner';
 import {
   clearAuthenticatedUser,
   clearSessionExpiredNotice,
@@ -52,6 +53,7 @@ import { useUser } from '../../contexts/UserContext';
 import { getSubmenusForModule, type SubMenuItem } from '../../lib/constants/moduleSubmenus';
 import { supabase } from '../../lib/supabase';
 import { getPublicUrl } from '../../lib/storageHelpers';
+import { clearWelcomeNotice, loadWelcomeNotice, type WelcomeNotice } from '../../lib/welcomeNotice';
 
 // Icon mapping
 const iconMap: Record<string, LucideIcon> = {
@@ -98,6 +100,7 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   });
   const [isDyslexiaEnabled, setIsDyslexiaEnabled] = useState(() => getDyslexiaPreference());
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [welcomeNotice, setWelcomeNotice] = useState<WelcomeNotice | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -116,6 +119,18 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
   useEffect(() => {
     setDyslexiaPreference(isDyslexiaEnabled);
   }, [isDyslexiaEnabled]);
+
+  useEffect(() => {
+    const notice = loadWelcomeNotice();
+    if (notice) {
+      setWelcomeNotice(notice);
+      clearWelcomeNotice();
+    }
+  }, []);
+
+  const handleDismissWelcome = () => {
+    setWelcomeNotice(null);
+  };
 
   const { data: sidebarProfile } = useQuery<SidebarProfileData>(
     ['userSidebarProfile', user?.id],
@@ -651,6 +666,11 @@ export function AdminLayout({ children, moduleKey }: AdminLayoutProps) {
         </header>
 
         <main className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-900">
+          {welcomeNotice && (
+            <div className="px-6 pb-2 pt-6">
+              <WelcomeBanner notice={welcomeNotice} onDismiss={handleDismissWelcome} />
+            </div>
+          )}
           {children}
         </main>
       </div>
