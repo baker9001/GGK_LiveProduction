@@ -331,7 +331,7 @@ export default function SignInPage() {
       const formattedGreeting = personalizedGreeting.replace(/\.$/, '!');
       saveWelcomeNotice({
         greeting: formattedGreeting,
-        message: "You're now signed in and ready to go.",
+        message: 'We refreshed your workspace with the latest insights.',
         timestamp: Date.now()
       });
       
