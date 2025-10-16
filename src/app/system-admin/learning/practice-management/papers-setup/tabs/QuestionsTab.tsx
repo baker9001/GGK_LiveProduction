@@ -34,8 +34,8 @@ import { DataTableSkeleton } from '../../../../../../components/shared/DataTable
 import { Select } from '../../../../../../components/shared/Select';
 import { SearchableMultiSelect } from '../../../../../../components/shared/SearchableMultiSelect';
 
-// Import ExamSimulation component
-import { ExamSimulation } from '../../questions-setup/components/ExamSimulation';
+// Import UnifiedTestSimulation component
+import { UnifiedTestSimulation } from '../../../../../../components/shared/UnifiedTestSimulation';
 
 // Import data operations (with optional validateQuestionsForImport)
 import {
@@ -4329,7 +4329,7 @@ function QuestionsTabInner({
   // Show simulation if active
   if (showSimulation && simulationPaper) {
     return (
-      <ExamSimulation
+      <UnifiedTestSimulation
         paper={simulationPaper}
         onExit={(result) => handleSimulationExit(result)}
         isQAMode={true}
