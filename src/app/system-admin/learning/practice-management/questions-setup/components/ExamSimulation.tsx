@@ -1,5 +1,5 @@
 // src/app/system-admin/learning/practice-management/questions-setup/components/ExamSimulation.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import {
   X,
   ChevronLeft,
@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useAnswerValidation } from '@/hooks/useAnswerValidation';
 import DynamicAnswerField from '@/components/shared/DynamicAnswerField';
 import { ResultsDashboard } from './ResultsDashboard';
+import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import toast from 'react-hot-toast';
 
 interface AttachmentAsset {
@@ -63,6 +64,13 @@ interface SimulationIssue {
   questionId?: string;
   type: 'info' | 'warning' | 'error';
   message: string;
+}
+
+interface ExitDialogConfig {
+  title: string;
+  message: ReactNode;
+  confirmText?: string;
+  confirmVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link' | 'warning' | 'primary';
 }
 
 interface QAReviewResultPayload {
@@ -579,6 +587,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   const [examMode, setExamMode] = useState<'practice' | 'timed' | 'review'>('practice');
   const [showQuestionNavigation, setShowQuestionNavigation] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [exitDialogConfig, setExitDialogConfig] = useState<ExitDialogConfig | null>(null);
   const [questionStartTimes, setQuestionStartTimes] = useState<Record<string, number>>({});
   const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(() => {
     const initialSet = new Set<string>();
@@ -589,6 +598,7 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   });
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const exitActionRef = useRef<(() => void) | null>(null);
   const { validateAnswer } = useAnswerValidation();
 
   const currentQuestion = paper.questions[currentQuestionIndex];
@@ -734,30 +744,73 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
     onExit(qaResult);
   }, [allQuestionsVisited, generateQAReviewResult, onExit]);
 
+  const openExitDialog = useCallback((config: ExitDialogConfig, action: () => void) => {
+    exitActionRef.current = action;
+    setExitDialogConfig(config);
+  }, []);
+
+  const handleConfirmExitDialog = useCallback(() => {
+    const action = exitActionRef.current;
+    exitActionRef.current = null;
+    setExitDialogConfig(null);
+    if (action) {
+      action();
+    }
+  }, []);
+
+  const handleCancelExitDialog = useCallback(() => {
+    exitActionRef.current = null;
+    setExitDialogConfig(null);
+  }, []);
+
   // Navigation and control functions - MUST be defined before useEffects that use them
   const handleExit = useCallback(() => {
     if (isQAMode && !showResults) {
       if (!allQuestionsVisited) {
-        if (window.confirm('You have not reviewed every question. Exit without completing the QA review?')) {
-          onExit();
-        }
+        openExitDialog({
+          title: 'Exit QA Review?',
+          message: (
+            <div className="space-y-2">
+              <p className="font-medium text-gray-900 dark:text-white">You have not reviewed every question.</p>
+              <p className="text-sm">If you exit now, the QA review will remain incomplete.</p>
+            </div>
+          ),
+          confirmText: 'Exit without completing',
+          confirmVariant: 'warning'
+        }, () => onExit());
         return;
       }
 
-      if (window.confirm('Use "Complete QA Review" to mark this simulation as finished. Exit without completing?')) {
-        onExit();
-      }
+      openExitDialog({
+        title: 'Exit QA Review?',
+        message: (
+          <div className="space-y-2">
+            <p className="font-medium text-gray-900 dark:text-white">Use "Complete QA Review" to mark this simulation as finished.</p>
+            <p className="text-sm">Exit now to leave without completing the QA review.</p>
+          </div>
+        ),
+        confirmText: 'Exit without completing',
+        confirmVariant: 'warning'
+      }, () => onExit());
       return;
     }
 
     if (isRunning && !showResults) {
-      if (window.confirm('Are you sure you want to exit? Your progress will be lost.')) {
-        onExit();
-      }
+      openExitDialog({
+        title: 'Exit Test?',
+        message: (
+          <div className="space-y-2">
+            <p className="font-medium text-gray-900 dark:text-white">Are you sure you want to exit?</p>
+            <p className="text-sm">Your progress will be lost and cannot be recovered.</p>
+          </div>
+        ),
+        confirmText: 'Exit test',
+        confirmVariant: 'destructive'
+      }, () => onExit());
     } else {
       onExit();
     }
-  }, [allQuestionsVisited, isQAMode, isRunning, onExit, showResults]);
+  }, [allQuestionsVisited, isQAMode, isRunning, onExit, openExitDialog, showResults]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -1026,7 +1079,8 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
   }
 
   return (
-    <div className={cn(
+    <>
+      <div className={cn(
       "min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col",
       isFullscreen && "fixed inset-0 z-50"
     )}>
@@ -1678,5 +1732,16 @@ export function ExamSimulation({ paper, onExit, isQAMode = false, onPaperStatusC
         </div>
       </div>
     </div>
+
+      <ConfirmationDialog
+        isOpen={Boolean(exitDialogConfig)}
+        title={exitDialogConfig?.title ?? ''}
+        message={exitDialogConfig?.message ?? null}
+        confirmText={exitDialogConfig?.confirmText}
+        confirmVariant={exitDialogConfig?.confirmVariant}
+        onConfirm={handleConfirmExitDialog}
+        onCancel={handleCancelExitDialog}
+      />
+    </>
   );
 }
